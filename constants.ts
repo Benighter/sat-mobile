@@ -7,6 +7,7 @@ export const FIXED_TABS: TabOption[] = [
   { id: TabKeys.DASHBOARD, name: 'Dashboard' },
   { id: TabKeys.ALL_CONGREGATIONS, name: 'All Members' }, // ID remains, name updated
   { id: TabKeys.CRITICAL_MEMBERS, name: 'Critical Alerts' },
+  { id: TabKeys.ATTENDANCE_ANALYTICS, name: 'Attendance Analytics' },
 ];
 
 export const CONSECUTIVE_ABSENCE_THRESHOLD = 2;

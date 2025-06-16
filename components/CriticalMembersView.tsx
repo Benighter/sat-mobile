@@ -27,8 +27,8 @@ const CriticalMembersView: React.FC = () => {
         <div className="glass p-8 rounded-3xl shadow-2xl">
           <div className="flex flex-col items-center space-y-4">
             <div className="relative">
-              <LoadingSpinnerIcon className="w-12 h-12 text-red-500 animate-spin" />
-              <div className="absolute inset-0 w-12 h-12 border-4 border-red-200 rounded-full animate-pulse"></div>
+              <LoadingSpinnerIcon className="w-12 h-12 text-red-500" />
+              <div className="absolute inset-0 w-12 h-12 border-4 border-red-200 rounded-full"></div>
             </div>
             <div className="text-center">
               <p className="text-lg font-semibold text-red-600">Loading Critical Alerts...</p>

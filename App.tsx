@@ -5,6 +5,7 @@ import Navbar from './components/Navbar';
 import DashboardView from './components/DashboardView';
 import MemberListView from './components/MemberListView';
 import CriticalMembersView from './components/CriticalMembersView';
+import AttendanceAnalyticsView from './components/AttendanceAnalyticsView';
 import { LoadingSpinnerIcon, RefreshIcon, PlusIcon as AddMemberIcon, CogIcon } from './components/icons'; // Renamed PlusIcon for clarity
 import { TabKeys } from './types';
 import MemberFormModal from './components/MemberFormModal';
@@ -55,8 +56,8 @@ const App: React.FC = () => {
           <div className="glass rounded-3xl p-8 shadow-2xl">
             <div className="flex flex-col items-center space-y-4">
               <div className="relative">
-                <LoadingSpinnerIcon className="w-16 h-16 text-gray-500 animate-spin" />
-                <div className="absolute inset-0 w-16 h-16 border-4 border-gray-200 rounded-full animate-pulse"></div>
+                <LoadingSpinnerIcon className="w-16 h-16 text-gray-500" />
+                <div className="absolute inset-0 w-16 h-16 border-4 border-gray-200 rounded-full"></div>
               </div>
               <div className="text-center">
                 <p className="text-lg font-semibold gradient-text">Loading Church Data...</p>
@@ -94,10 +95,12 @@ const App: React.FC = () => {
         return <DashboardView />;
       case TabKeys.CRITICAL_MEMBERS:
         return <CriticalMembersView />;
-      case TabKeys.ALL_CONGREGATIONS: 
+      case TabKeys.ALL_CONGREGATIONS:
         return <MemberListView bacentaFilter={null} />;
-      default: 
-        return <MemberListView bacentaFilter={null} />; 
+      case TabKeys.ATTENDANCE_ANALYTICS:
+        return <AttendanceAnalyticsView />;
+      default:
+        return <MemberListView bacentaFilter={null} />;
     }
   };
 
@@ -111,11 +114,11 @@ const App: React.FC = () => {
         <div className="container mx-auto px-4 py-4 flex justify-between items-center">
           <button
             onClick={() => changeTab('dashboard')}
-            className="flex items-center space-x-3 hover:scale-105 transition-all duration-300 group"
+            className="flex items-center space-x-3 transition-all duration-300 group"
             aria-label="Go to Dashboard"
             title="Go to Dashboard"
           >
-            <div className="w-10 h-10 bg-gradient-to-br from-gray-600 to-gray-700 rounded-xl flex items-center justify-center shadow-lg floating group-hover:shadow-xl group-hover:from-gray-700 group-hover:to-gray-800 transition-all duration-300">
+            <div className="w-10 h-10 bg-gradient-to-br from-gray-600 to-gray-700 rounded-xl flex items-center justify-center shadow-lg group-hover:shadow-xl group-hover:from-gray-700 group-hover:to-gray-800 transition-all duration-300">
               <span className="text-white font-bold text-lg">⛪</span>
             </div>
             <div>
@@ -126,29 +129,29 @@ const App: React.FC = () => {
           <div className="flex items-center space-x-2">
             <button
               onClick={() => openMemberForm(null)}
-              className="p-3 rounded-xl glass hover:glass-dark hover:scale-110 transition-all duration-300 group shadow-lg relative overflow-hidden"
+              className="p-3 rounded-xl glass hover:glass-dark transition-all duration-300 group shadow-lg relative overflow-hidden"
               aria-label="Add New Member"
               title="Add New Member"
             >
               {/* Subtle primary action indicator */}
               <div className="absolute inset-0 bg-gradient-to-br from-blue-500/8 via-transparent to-blue-600/8 opacity-0 group-hover:opacity-100 transition-all duration-300 rounded-xl"></div>
-              <AddMemberIcon className="w-6 h-6 text-gray-600 group-hover:text-blue-100 group-hover:rotate-45 transition-all duration-500 relative z-10" />
+              <AddMemberIcon className="w-6 h-6 text-gray-600 group-hover:text-blue-100 transition-all duration-300 relative z-10" />
             </button>
             <button
               onClick={() => setIsDataManagementOpen(true)}
-              className="p-3 rounded-xl glass hover:glass-dark hover:scale-110 transition-all duration-300 group shadow-lg"
+              className="p-3 rounded-xl glass hover:glass-dark transition-all duration-300 group shadow-lg"
               aria-label="Data Management"
               title="Backup & Restore Data"
             >
-              <CogIcon className="w-6 h-6 text-gray-600 group-hover:text-white group-hover:rotate-180 transition-all duration-500" />
+              <CogIcon className="w-6 h-6 text-gray-600 group-hover:text-white transition-all duration-300" />
             </button>
             <button
               onClick={refreshData}
-              className="p-3 rounded-xl glass hover:glass-dark hover:scale-110 transition-all duration-300 group shadow-lg"
+              className="p-3 rounded-xl glass hover:glass-dark transition-all duration-300 group shadow-lg"
               aria-label="Refresh Data"
               title="Refresh Data"
             >
-              <RefreshIcon className="w-6 h-6 text-gray-600 group-hover:text-white group-hover:rotate-180 transition-all duration-500" />
+              <RefreshIcon className="w-6 h-6 text-gray-600 group-hover:text-white transition-all duration-300" />
             </button>
           </div>
         </div>
@@ -156,7 +159,7 @@ const App: React.FC = () => {
       </header>
 
       {/* Scrollable Main Content */}
-      <main className="flex-1 overflow-y-auto pt-32 pb-24 relative z-10">
+      <main className="flex-1 overflow-y-auto pt-32 pb-6 relative z-10">
         <div className="container mx-auto px-2 sm:px-4 py-6">
           <div className="animate-fade-in">
             {renderView()}
@@ -164,16 +167,7 @@ const App: React.FC = () => {
         </div>
       </main>
 
-      {/* Fixed Footer */}
-      <footer className="glass-dark text-white text-center p-6 text-sm border-t border-white/10 fixed bottom-0 left-0 right-0 z-40">
-        <div className="flex flex-col items-center space-y-2">
-          <div className="flex items-center space-x-2">
-            <span className="text-2xl">🙏</span>
-            <span className="font-medium">&copy; {new Date().getFullYear()} Church Connect Mobile</span>
-          </div>
-          <p className="text-xs text-gray-300">All data is stored locally • Built with ❤️ for the Kingdom</p>
-        </div>
-      </footer>
+
       
       {isMemberFormOpen && (
         <MemberFormModal

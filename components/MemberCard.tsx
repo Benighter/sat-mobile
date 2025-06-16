@@ -62,13 +62,13 @@ const MemberCard: React.FC<MemberCardProps> = ({ member, isCritical }) => {
 
 
   return (
-    <div className={`group glass shadow-2xl rounded-2xl p-6 mb-6 border-l-4 hover:scale-102 hover:-translate-y-1 transition-all duration-300 relative overflow-hidden animate-fade-in ${isCritical ? 'border-red-500' : 'border-gray-500'}`}>
+    <div className={`group glass shadow-2xl rounded-2xl p-6 mb-6 border-l-4 transition-all duration-300 relative overflow-hidden animate-fade-in ${isCritical ? 'border-red-500' : 'border-gray-500'}`}>
       {/* Animated background gradient */}
       <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
 
-      {/* Critical alert pulse effect */}
+      {/* Critical alert background */}
       {isCritical && (
-        <div className="absolute inset-0 bg-red-500/5 animate-pulse-slow"></div>
+        <div className="absolute inset-0 bg-red-500/5"></div>
       )}
 
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between relative z-10">
@@ -85,7 +85,7 @@ const MemberCard: React.FC<MemberCardProps> = ({ member, isCritical }) => {
                 {member.firstName} {member.lastName}
               </h3>
               {isCritical && (
-                <div className="flex items-center space-x-1 bg-red-100 px-2 py-1 rounded-full animate-bounce-gentle">
+                <div className="flex items-center space-x-1 bg-red-100 px-2 py-1 rounded-full">
                   <WarningIcon className="w-4 h-4 text-red-500" />
                   <span className="text-xs font-bold text-red-600">CRITICAL</span>
                 </div>
@@ -111,18 +111,18 @@ const MemberCard: React.FC<MemberCardProps> = ({ member, isCritical }) => {
         <div className="flex space-x-2 mt-2 sm:mt-0 self-start sm:self-center">
           <button
             onClick={() => openMemberForm(member)}
-            className="group/btn flex items-center space-x-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 hover:text-gray-800 rounded-xl transition-all duration-200 hover:scale-105 shadow-sm"
+            className="group/btn flex items-center space-x-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 hover:text-gray-800 rounded-xl transition-all duration-200 shadow-sm"
             aria-label="Edit Member"
           >
-            <EditIcon className="w-4 h-4 group-hover/btn:rotate-12 transition-transform" />
+            <EditIcon className="w-4 h-4 transition-colors" />
             <span className="hidden sm:inline font-medium">Edit</span>
           </button>
           <button
             onClick={() => deleteMemberHandler(member.id)}
-            className="group/btn flex items-center space-x-2 px-4 py-2 bg-red-100 hover:bg-red-200 text-red-700 hover:text-red-800 rounded-xl transition-all duration-200 hover:scale-105 shadow-sm"
+            className="group/btn flex items-center space-x-2 px-4 py-2 bg-red-100 hover:bg-red-200 text-red-700 hover:text-red-800 rounded-xl transition-all duration-200 shadow-sm"
             aria-label="Delete Member"
           >
-            <TrashIcon className="w-4 h-4 group-hover/btn:scale-110 transition-transform" />
+            <TrashIcon className="w-4 h-4 transition-colors" />
             <span className="hidden sm:inline font-medium">Delete</span>
           </button>
         </div>
