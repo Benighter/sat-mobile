@@ -1,0 +1,5 @@
+
+{
+  "name": "Church Connect Mobile",
+  "description": "A mobile-first church membership management application. This demonstration uses browser localStorage for data persistence instead of a live SQLite database. Features include member management, attendance tracking, congregation grouping, and critical member alerts."
+}

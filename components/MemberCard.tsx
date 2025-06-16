@@ -1,0 +1,288 @@
+
+import React from 'react';
+import { Member } from '../types'; 
+import { useAppData } from '../hooks/useAppData';
+import AttendanceMarker from './AttendanceMarker';
+import { formatDisplayDate, formatFullDate } from '../utils/dateUtils';
+import { UserIcon, EditIcon, TrashIcon, WarningIcon, PhoneIcon, HomeIcon, CalendarIcon } from './icons';
+import Button from './ui/Button';
+import Badge from './ui/Badge';
+
+interface MemberCardProps {
+  member: Member;
+  isCritical?: boolean;
+}
+
+const MemberCard: React.FC<MemberCardProps> = ({ member, isCritical }) => {
+  const { displayedSundays, attendanceRecords, markAttendanceHandler, deleteMemberHandler, openMemberForm, bacentas, criticalMemberIds } = useAppData(); 
+
+  const getAttendanceStatus = (date: string) => {
+    const record = attendanceRecords.find(ar => ar.memberId === member.id && ar.date === date);
+    return record?.status;
+  };
+
+  const getAttendanceStats = () => {
+    const totalServices = displayedSundays.length;
+    const presentCount = displayedSundays.filter(date => getAttendanceStatus(date) === 'Present').length;
+    const absentCount = displayedSundays.filter(date => getAttendanceStatus(date) === 'Absent').length;
+    return `${presentCount} Present • ${absentCount} Absent • ${totalServices - presentCount - absentCount} Unmarked`;
+  };
+
+  const getAttendancePercentage = () => {
+    const totalServices = displayedSundays.length;
+    if (totalServices === 0) return 0;
+    const presentCount = displayedSundays.filter(date => getAttendanceStatus(date) === 'Present').length;
+    return Math.round((presentCount / totalServices) * 100);
+  };
+
+  const memberBacenta = bacentas.find(b => b.id === member.bacentaId);
+
+  const formatPhoneNumber = (phone: string) => {
+    if(!phone) return 'N/A';
+    const cleaned = ('' + phone).replace(/\D/g, '');
+    // Basic US-like formatting, can be enhanced
+    const matchNA = cleaned.match(/^(\d{3})(\d{3})(\d{4})$/);
+    if (matchNA) return `(${matchNA[1]}) ${matchNA[2]}-${matchNA[3]}`;
+    if (cleaned.length > 6) return `${cleaned.slice(0,3)}-${cleaned.slice(3,6)}-${cleaned.slice(6)}`;
+    return phone;
+  };
+
+  const formatDateForTimestamp = (isoString: string): string => {
+    if (!isoString || isoString === 'Invalid Date') return 'N/A';
+    try {
+      return new Date(isoString).toLocaleDateString(undefined, {
+        year: 'numeric',
+        month: 'numeric',
+        day: 'numeric',
+      });
+    } catch (e) {
+      return 'Invalid Date';
+    }
+  };
+
+
+  return (
+    <div className={`group glass shadow-2xl rounded-2xl p-6 mb-6 border-l-4 hover:scale-102 hover:-translate-y-1 transition-all duration-300 relative overflow-hidden animate-fade-in ${isCritical ? 'border-red-500' : 'border-gray-500'}`}>
+      {/* Animated background gradient */}
+      <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+
+      {/* Critical alert pulse effect */}
+      {isCritical && (
+        <div className="absolute inset-0 bg-red-500/5 animate-pulse-slow"></div>
+      )}
+
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between relative z-10">
+        <div className="flex items-start mb-4 sm:mb-0 flex-1">
+          <div className={`relative p-3 rounded-2xl mr-4 shadow-lg floating ${isCritical ? 'bg-gradient-to-br from-red-100 to-red-200' : 'bg-gradient-to-br from-gray-100 to-gray-200'}`}>
+            <UserIcon className={`w-10 h-10 ${isCritical ? 'text-red-600' : 'text-gray-600'}`} />
+            {isCritical && (
+              <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full animate-bounce-gentle"></div>
+            )}
+          </div>
+          <div className="flex-1">
+            <div className="flex items-center space-x-2 mb-2">
+              <h3 className="text-xl font-bold text-gray-800 group-hover:text-gray-900 transition-colors">
+                {member.firstName} {member.lastName}
+              </h3>
+              {isCritical && (
+                <div className="flex items-center space-x-1 bg-red-100 px-2 py-1 rounded-full animate-bounce-gentle">
+                  <WarningIcon className="w-4 h-4 text-red-500" />
+                  <span className="text-xs font-bold text-red-600">CRITICAL</span>
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center space-x-2 mb-2">
+              <span className="text-sm text-gray-600">📍</span>
+              <p className="text-sm font-medium text-gray-600">
+                {memberBacenta?.name || <span className="italic text-gray-400">Unassigned</span>}
+              </p>
+            </div>
+
+            {member.bornAgainStatus && (
+              <div className="inline-flex items-center space-x-1 bg-gradient-to-r from-blue-100 to-blue-200 text-blue-700 px-3 py-1 rounded-full text-sm font-semibold shadow-sm">
+                <span>✨</span>
+                <span>Born Again</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="flex space-x-2 mt-2 sm:mt-0 self-start sm:self-center">
+          <button
+            onClick={() => openMemberForm(member)}
+            className="group/btn flex items-center space-x-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 hover:text-gray-800 rounded-xl transition-all duration-200 hover:scale-105 shadow-sm"
+            aria-label="Edit Member"
+          >
+            <EditIcon className="w-4 h-4 group-hover/btn:rotate-12 transition-transform" />
+            <span className="hidden sm:inline font-medium">Edit</span>
+          </button>
+          <button
+            onClick={() => deleteMemberHandler(member.id)}
+            className="group/btn flex items-center space-x-2 px-4 py-2 bg-red-100 hover:bg-red-200 text-red-700 hover:text-red-800 rounded-xl transition-all duration-200 hover:scale-105 shadow-sm"
+            aria-label="Delete Member"
+          >
+            <TrashIcon className="w-4 h-4 group-hover/btn:scale-110 transition-transform" />
+            <span className="hidden sm:inline font-medium">Delete</span>
+          </button>
+        </div>
+      </div>
+
+      {isCritical && (
+        <div className="mt-4 p-4 bg-gradient-to-r from-red-50 to-red-100 border border-red-200 rounded-xl text-sm text-red-700 animate-fade-in">
+          <div className="flex items-center space-x-2">
+            <div className="w-8 h-8 bg-red-200 rounded-full flex items-center justify-center">
+              <WarningIcon className="w-5 h-5 text-red-600" />
+            </div>
+            <div>
+              <p className="font-semibold">Follow-up Required</p>
+              <p className="text-xs text-red-600">This member has {criticalMemberIds.includes(member.id) ? '2 or more' : ''} consecutive absences for the displayed month.</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Enhanced Member Details */}
+      <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="glass p-4 rounded-xl hover:scale-102 transition-transform duration-200">
+          <div className="flex items-center space-x-3">
+            <div className="w-10 h-10 bg-gradient-to-br from-blue-100 to-blue-200 rounded-xl flex items-center justify-center">
+              <PhoneIcon className="w-5 h-5 text-blue-600"/>
+            </div>
+            <div>
+              <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">Phone</p>
+              <p className="font-semibold text-gray-700">{formatPhoneNumber(member.phoneNumber) || <span className="text-gray-400 italic">No phone</span>}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="glass p-4 rounded-xl hover:scale-102 transition-transform duration-200">
+          <div className="flex items-center space-x-3">
+            <div className="w-10 h-10 bg-gradient-to-br from-green-100 to-green-200 rounded-xl flex items-center justify-center">
+              <HomeIcon className="w-5 h-5 text-green-600"/>
+            </div>
+            <div>
+              <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">Address</p>
+              <p className="font-semibold text-gray-700">{member.buildingAddress || <span className="text-gray-400 italic">No address</span>}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="glass p-4 rounded-xl hover:scale-102 transition-transform duration-200 md:col-span-2">
+          <div className="flex items-center space-x-3">
+            <div className="w-10 h-10 bg-gradient-to-br from-purple-100 to-purple-200 rounded-xl flex items-center justify-center">
+              <CalendarIcon className="w-5 h-5 text-purple-600"/>
+            </div>
+            <div>
+              <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">Member Since</p>
+              <p className="font-semibold text-gray-700">{member.joinedDate ? formatDisplayDate(member.joinedDate) : <span className="text-gray-400 italic">N/A</span>}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+
+      {/* Redesigned Attendance Section */}
+      <div className="mt-6 pt-6 border-t border-white/20">
+        <div className="flex items-center justify-between mb-6">
+          <h4 className="text-lg font-bold gradient-text flex items-center">
+            <span className="text-xl mr-2">📊</span>
+            Attendance Record
+          </h4>
+          <div className="flex items-center space-x-2">
+            <div className="text-sm text-gray-500 bg-white/50 px-3 py-1 rounded-full">
+              {displayedSundays.length} Services
+            </div>
+            <div className="text-xs text-gray-400">
+              {getAttendancePercentage()}% Present
+            </div>
+          </div>
+        </div>
+
+        {displayedSundays.length > 0 ? (
+          <div className="space-y-4">
+            {/* Attendance Summary Bar */}
+            <div className="glass p-4 rounded-xl">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-sm font-medium text-gray-600">Monthly Overview</span>
+                <span className="text-sm font-bold text-gray-700">{getAttendanceStats()}</span>
+              </div>
+              <div className="w-full h-3 bg-gray-200 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-green-400 to-green-600 rounded-full transition-all duration-1000 ease-out"
+                  style={{ width: `${getAttendancePercentage()}%` }}
+                ></div>
+              </div>
+              <div className="flex justify-between text-xs text-gray-500 mt-2">
+                <span>0%</span>
+                <span>50%</span>
+                <span>100%</span>
+              </div>
+            </div>
+
+            {/* Individual Service Records */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {displayedSundays.map((sundayDate, index) => {
+                const status = getAttendanceStatus(sundayDate);
+                return (
+                  <div
+                    key={sundayDate}
+                    className={`glass p-4 rounded-xl hover:scale-102 transition-all duration-200 animate-fade-in border-l-4 ${
+                      status === 'Present' ? 'border-green-500 bg-green-50/50' :
+                      status === 'Absent' ? 'border-red-500 bg-red-50/50' :
+                      'border-gray-300'
+                    }`}
+                    style={{ animationDelay: `${index * 0.1}s` }}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-semibold text-gray-700">{formatDisplayDate(sundayDate)}</p>
+                        <p className={`text-xs font-medium ${
+                          status === 'Present' ? 'text-green-600' :
+                          status === 'Absent' ? 'text-red-600' :
+                          'text-gray-500'
+                        }`}>
+                          {status || 'Not Marked'}
+                        </p>
+                      </div>
+                      <div className="flex items-center space-x-1">
+                        <AttendanceMarker
+                          memberId={member.id}
+                          date={sundayDate}
+                          currentStatus={status}
+                          onMarkAttendance={markAttendanceHandler}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ) : (
+          <div className="text-center py-12">
+            <div className="w-20 h-20 bg-gradient-to-br from-gray-200 to-gray-300 rounded-full flex items-center justify-center mx-auto mb-4">
+              <span className="text-3xl">📅</span>
+            </div>
+            <h5 className="text-lg font-semibold text-gray-600 mb-2">No Services Scheduled</h5>
+            <p className="text-sm text-gray-500">No Sundays scheduled for the selected month</p>
+          </div>
+        )}
+      </div>
+
+      {/* Enhanced Footer */}
+      <div className="mt-6 pt-4 border-t border-white/10 flex items-center justify-between text-xs text-gray-400">
+        <div className="flex items-center space-x-4">
+          <span>Created: {formatDateForTimestamp(member.createdDate)}</span>
+          <span>•</span>
+          <span>Updated: {formatDateForTimestamp(member.lastUpdated)}</span>
+        </div>
+        <div className="text-gray-500">
+          ID: {member.id.slice(-6)}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default MemberCard;
