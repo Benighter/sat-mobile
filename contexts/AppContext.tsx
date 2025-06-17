@@ -1,5 +1,5 @@
 
-import React, { createContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import React, { createContext, useState, useEffect, useCallback, ReactNode, useMemo } from 'react';
 import { Member, AttendanceRecord, Bacenta, TabOption, AttendanceStatus, TabKeys, NavigationHistoryItem } from '../types'; // Bacenta instead of CongregationGroup
 import { MemberService, AttendanceService, BacentaService, initializeDataIfNeeded } from '../services/dataService'; // BacentaService
 import { FIXED_TABS, CONSECUTIVE_ABSENCE_THRESHOLD, DEFAULT_TAB_ID } from '../constants'; // CONGREGATION_GROUPS removed
@@ -85,8 +85,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [error, setError] = useState<string | null>(null);
 
   const [displayedDate, setDisplayedDate] = useState<Date>(() => appStateStorage.loadDisplayedDate());
-  const [displayedSundays, setDisplayedSundays] = useState<string[]>([]);
-  const [criticalMemberIds, setCriticalMemberIds] = useState<string[]>([]);
+
+  // Memoize displayed sundays calculation
+  const displayedSundays = useMemo(() => {
+    return getSundaysOfMonth(displayedDate.getFullYear(), displayedDate.getMonth());
+  }, [displayedDate]);
   
   const [isMemberFormOpen, setIsMemberFormOpen] = useState(false);
   const [editingMember, setEditingMember] = useState<Member | null>(null);
@@ -119,19 +122,20 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const isNavigatingBack = React.useRef(false);
 
 
-  const calculateCriticalMembers = useCallback((mems: Member[], attRecs: AttendanceRecord[], sundays: string[]) => {
-    if (!sundays.length) return [];
-    
-    const criticalIds: string[] = [];
-    const sortedSundays = [...sundays].sort((a,b) => new Date(a).getTime() - new Date(b).getTime());
+  // Memoize critical members calculation for performance
+  const criticalMemberIds = useMemo(() => {
+    if (!displayedSundays.length || !members.length) return [];
 
-    mems.forEach(member => {
+    const criticalIds: string[] = [];
+    const sortedSundays = [...displayedSundays].sort((a,b) => new Date(a).getTime() - new Date(b).getTime());
+
+    members.forEach(member => {
       let consecutiveAbsences = 0;
       let maxConsecutiveAbsences = 0;
-      
+
       // Check from the most recent Sunday in the displayedSundays list
       for (const sundayDate of sortedSundays.slice().reverse()) {
-        const record = attRecs.find(ar => ar.memberId === member.id && ar.date === sundayDate);
+        const record = attendanceRecords.find(ar => ar.memberId === member.id && ar.date === sundayDate);
         if (record && record.status === 'Absent') {
           consecutiveAbsences++;
         } else if (record && record.status === 'Present') {
@@ -140,7 +144,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
            // No record for this Sunday, can't determine absence for sure for the streak from this point
            // For simplicity, we'll consider no record as breaking the *consecutive* absence streak for *this specific calculation*
            // A more robust system might require records for all Sundays or handle this differently.
-           break; 
+           break;
         }
         if (consecutiveAbsences >= CONSECUTIVE_ABSENCE_THRESHOLD) {
           maxConsecutiveAbsences = consecutiveAbsences;
@@ -153,7 +157,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
     });
     return criticalIds;
-  }, []);
+  }, [members, attendanceRecords, displayedSundays]);
 
   const loadData = useCallback(async (targetDate: Date = displayedDate) => {
     setIsLoading(true);
@@ -169,31 +173,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       setAttendanceRecords(fetchedAttendance);
       setBacentas(fetchedBacentas);
 
-      const sundays = getSundaysOfMonth(targetDate.getFullYear(), targetDate.getMonth());
-      setDisplayedSundays(sundays);
-      
-      const criticalIds = calculateCriticalMembers(fetchedMembers, fetchedAttendance, sundays);
-      setCriticalMemberIds(criticalIds);
-
     } catch (e) {
       console.error("Failed to load data:", e);
       setError("Failed to load data. Please try again.");
     } finally {
       setIsLoading(false);
     }
-  }, [calculateCriticalMembers, displayedDate]); // Add displayedDate to dependency if it's used to determine targetDate
+  }, [displayedDate]);
 
-  const fetchInitialData = () => loadData(new Date()); // Load current month initially
-  const refreshData = () => loadData(displayedDate); // Refresh based on currently displayed date
-
-
-  useEffect(() => {
-    // This effect recalculates sundays and critical members when displayedDate changes
-    const sundays = getSundaysOfMonth(displayedDate.getFullYear(), displayedDate.getMonth());
-    setDisplayedSundays(sundays);
-    const criticalIds = calculateCriticalMembers(members, attendanceRecords, sundays);
-    setCriticalMemberIds(criticalIds);
-  }, [displayedDate, members, attendanceRecords, calculateCriticalMembers]);
+  const fetchInitialData = useCallback(() => loadData(new Date()), [loadData]); // Load current month initially
+  const refreshData = useCallback(() => loadData(displayedDate), [loadData, displayedDate]); // Refresh based on currently displayed date
 
   // Track tab changes for navigation history
   useEffect(() => {
@@ -531,20 +520,35 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     return navigationHistory.length > 1 || currentTab.id !== TabKeys.DASHBOARD;
   }, [navigationHistory, currentTab.id]);
 
+  // Memoize context value to prevent unnecessary re-renders
+  const contextValue = useMemo(() => ({
+    members, attendanceRecords, bacentas, currentTab, isLoading, error,
+    displayedSundays, displayedDate, criticalMemberIds,
+    isMemberFormOpen, editingMember, isBacentaFormOpen, editingBacenta, isBacentaDrawerOpen,
+    confirmationModal, toasts,
+    fetchInitialData, addMemberHandler, updateMemberHandler, deleteMemberHandler, markAttendanceHandler, changeTab,
+    openMemberForm, closeMemberForm, refreshData,
+    addBacentaHandler, updateBacentaHandler, deleteBacentaHandler, openBacentaForm, closeBacentaForm,
+    openBacentaDrawer, closeBacentaDrawer,
+    navigateToPreviousMonth, navigateToNextMonth,
+    exportData, importData, getStorageInfo, showConfirmation, hideConfirmation, showToast,
+    navigationHistory, navigateBack, canNavigateBack, addToNavigationHistory
+  }), [
+    members, attendanceRecords, bacentas, currentTab, isLoading, error,
+    displayedSundays, displayedDate, criticalMemberIds,
+    isMemberFormOpen, editingMember, isBacentaFormOpen, editingBacenta, isBacentaDrawerOpen,
+    confirmationModal, toasts,
+    fetchInitialData, addMemberHandler, updateMemberHandler, deleteMemberHandler, markAttendanceHandler, changeTab,
+    openMemberForm, closeMemberForm, refreshData,
+    addBacentaHandler, updateBacentaHandler, deleteBacentaHandler, openBacentaForm, closeBacentaForm,
+    openBacentaDrawer, closeBacentaDrawer,
+    navigateToPreviousMonth, navigateToNextMonth,
+    exportData, importData, getStorageInfo, showConfirmation, hideConfirmation, showToast,
+    navigationHistory, navigateBack, canNavigateBack, addToNavigationHistory
+  ]);
+
   return (
-    <AppContext.Provider value={{
-      members, attendanceRecords, bacentas, currentTab, isLoading, error,
-      displayedSundays, displayedDate, criticalMemberIds,
-      isMemberFormOpen, editingMember, isBacentaFormOpen, editingBacenta, isBacentaDrawerOpen,
-      confirmationModal, toasts,
-      fetchInitialData, addMemberHandler, updateMemberHandler, deleteMemberHandler, markAttendanceHandler, changeTab,
-      openMemberForm, closeMemberForm, refreshData,
-      addBacentaHandler, updateBacentaHandler, deleteBacentaHandler, openBacentaForm, closeBacentaForm,
-      openBacentaDrawer, closeBacentaDrawer,
-      navigateToPreviousMonth, navigateToNextMonth,
-      exportData, importData, getStorageInfo, showConfirmation, hideConfirmation, showToast,
-      navigationHistory, navigateBack, canNavigateBack, addToNavigationHistory
-    }}>
+    <AppContext.Provider value={contextValue}>
       {children}
     </AppContext.Provider>
   );

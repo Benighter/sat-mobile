@@ -2,6 +2,7 @@
 import { Member, AttendanceRecord, AttendanceStatus, Bacenta } from '../types';
 // CONGREGATION_GROUPS removed from imports
 import { formatDateToYYYYMMDD, getSundaysOfMonth } from '../utils/dateUtils';
+import { memoize } from '../utils/performance';
 
 const MEMBERS_KEY = 'church_members';
 const ATTENDANCE_KEY = 'church_attendance';

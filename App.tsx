@@ -1,13 +1,17 @@
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, memo } from 'react';
+import { PerformanceMonitor } from './utils/performance';
 import { useAppData } from './hooks/useAppData';
 import { useNavigation } from './hooks/useNavigation';
 import Navbar from './components/Navbar';
 import DashboardView from './components/DashboardView';
-import MemberListView from './components/MemberListView';
-import BacentasTableView from './components/BacentasTableView';
-import CriticalMembersView from './components/CriticalMembersView';
-import AttendanceAnalyticsView from './components/AttendanceAnalyticsView';
+import {
+  LazyWrapper,
+  LazyMemberListView,
+  LazyBacentasTableView,
+  LazyCriticalMembersView,
+  LazyAttendanceAnalyticsView
+} from './components/LazyWrapper';
 import GestureWrapper from './components/GestureWrapper';
 import BackButton from './components/BackButton';
 import SwipeIndicator from './components/SwipeIndicator';
@@ -50,7 +54,17 @@ const App: React.FC = () => {
   const [isDataManagementOpen, setIsDataManagementOpen] = useState(false);
 
   useEffect(() => {
-    fetchInitialData();
+    PerformanceMonitor.start('app-initialization');
+    fetchInitialData().finally(() => {
+      PerformanceMonitor.end('app-initialization');
+
+      // Log performance in development
+      if (process.env.NODE_ENV === 'development') {
+        setTimeout(() => {
+          console.log('⚡ Performance Report:', PerformanceMonitor.getReport());
+        }, 1000);
+      }
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // fetchInitialData itself will load current month's data
 
@@ -93,22 +107,46 @@ const App: React.FC = () => {
     const isBacentaTab = bacentas.some(b => b.id === currentTab.id);
 
     if (isBacentaTab) {
-      return <MemberListView bacentaFilter={currentTab.id} />;
+      return (
+        <LazyWrapper>
+          <LazyMemberListView bacentaFilter={currentTab.id} />
+        </LazyWrapper>
+      );
     }
 
     switch (currentTab.id) {
       case TabKeys.DASHBOARD:
         return <DashboardView />;
       case TabKeys.CRITICAL_MEMBERS:
-        return <CriticalMembersView />;
+        return (
+          <LazyWrapper>
+            <LazyCriticalMembersView />
+          </LazyWrapper>
+        );
       case TabKeys.ALL_CONGREGATIONS:
-        return <MemberListView bacentaFilter={null} />;
+        return (
+          <LazyWrapper>
+            <LazyMemberListView bacentaFilter={null} />
+          </LazyWrapper>
+        );
       case TabKeys.ALL_BACENTAS:
-        return <BacentasTableView />;
+        return (
+          <LazyWrapper>
+            <LazyBacentasTableView />
+          </LazyWrapper>
+        );
       case TabKeys.ATTENDANCE_ANALYTICS:
-        return <AttendanceAnalyticsView />;
+        return (
+          <LazyWrapper>
+            <LazyAttendanceAnalyticsView />
+          </LazyWrapper>
+        );
       default:
-        return <MemberListView bacentaFilter={null} />;
+        return (
+          <LazyWrapper>
+            <LazyMemberListView bacentaFilter={null} />
+          </LazyWrapper>
+        );
     }
   };
 

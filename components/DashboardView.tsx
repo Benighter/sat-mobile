@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { memo } from 'react';
 import { useAppData } from '../hooks/useAppData';
 import { PeopleIcon, AttendanceIcon, AlertIcon, ChartBarIcon, ChevronRightIcon } from './icons';
 import { getMonthName } from '../utils/dateUtils';
@@ -13,7 +13,7 @@ interface StatCardProps {
   onClick?: () => void;
 }
 
-const StatCard: React.FC<StatCardProps> = ({ title, value, icon, colorClass, description, onClick }) => (
+const StatCard: React.FC<StatCardProps> = memo(({ title, value, icon, colorClass, description, onClick }) => (
   <div
     className={`glass p-3 sm:p-4 md:p-6 shadow-lg rounded-xl sm:rounded-2xl border-l-4 ${colorClass} relative min-h-[120px] sm:min-h-[140px] md:h-40 flex flex-col justify-between ${
       onClick ? 'cursor-pointer hover:shadow-xl transition-all duration-200' : ''
@@ -52,10 +52,10 @@ const StatCard: React.FC<StatCardProps> = ({ title, value, icon, colorClass, des
       {description && <p className="text-xs sm:text-sm text-gray-500 font-medium">{description}</p>}
     </div>
   </div>
-);
+));
 
 
-const DashboardView: React.FC = () => {
+const DashboardView: React.FC = memo(() => {
   const { members, attendanceRecords, criticalMemberIds, bacentas, displayedSundays, displayedDate, changeTab } = useAppData(); // Use displayedSundays
 
   const totalMembers = members.length;
@@ -192,6 +192,8 @@ const DashboardView: React.FC = () => {
       </div>
     </div>
   );
-};
+});
+
+DashboardView.displayName = 'DashboardView';
 
 export default DashboardView;

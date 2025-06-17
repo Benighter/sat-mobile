@@ -18,21 +18,26 @@ export default defineConfig(({ mode }) => {
         assetsDir: 'assets',
         sourcemap: false,
         minify: 'terser',
+        target: 'es2020',
+        cssCodeSplit: true,
         rollupOptions: {
           output: {
             manualChunks: {
               vendor: ['react', 'react-dom'],
               charts: ['chart.js', 'react-chartjs-2'],
-              utils: ['xlsx', 'framer-motion']
+              utils: ['xlsx', 'framer-motion'],
+              icons: ['lucide-react']
             }
           }
         },
         terserOptions: {
           compress: {
             drop_console: true,
-            drop_debugger: true
+            drop_debugger: true,
+            pure_funcs: ['console.log', 'console.info', 'console.debug', 'console.warn']
           }
-        }
+        },
+        chunkSizeWarningLimit: 1000
       },
       server: {
         port: 3000,
@@ -45,7 +50,12 @@ export default defineConfig(({ mode }) => {
         strictPort: true
       },
       optimizeDeps: {
-        include: ['react', 'react-dom', 'chart.js', 'react-chartjs-2', 'xlsx', 'framer-motion', 'lucide-react']
+        include: ['react', 'react-dom', 'chart.js', 'react-chartjs-2', 'xlsx', 'framer-motion', 'lucide-react'],
+        force: true
+      },
+      esbuild: {
+        target: 'es2020',
+        logOverride: { 'this-is-undefined-in-esm': 'silent' }
       }
     };
 });

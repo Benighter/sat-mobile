@@ -8,11 +8,13 @@
   "homepage": ".",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && node scripts/optimize-build.js",
+    "build:fast": "vite build",
     "preview": "vite preview",
-    "build:mobile": "vite build --mode production",
+    "build:mobile": "vite build --mode production && node scripts/optimize-build.js",
     "serve": "vite preview --host 0.0.0.0 --port 3000",
-    "generate-icons": "open generate-app-icons.html"
+    "generate-icons": "open generate-app-icons.html",
+    "analyze": "vite build --mode analyze"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",

@@ -1,9 +1,9 @@
 
-import React from 'react';
+import React, { memo } from 'react';
 import { useAppData } from '../hooks/useAppData';
 import { ChartBarIcon, UsersIcon, WarningIcon, GroupIcon, Bars3Icon } from './icons';
 
-const Navbar: React.FC = () => {
+const Navbar: React.FC = memo(() => {
   const { bacentas, currentTab, criticalMemberIds, openBacentaDrawer } = useAppData();
 
   const getIconForTab = (tabId: string) => {
@@ -55,6 +55,8 @@ const Navbar: React.FC = () => {
       </div>
     </nav>
   );
-};
+});
+
+Navbar.displayName = 'Navbar';
 
 export default Navbar;

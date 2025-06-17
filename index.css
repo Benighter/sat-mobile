@@ -158,22 +158,23 @@
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
 }
 
-/* Interactive Elements */
+/* Interactive Elements - Optimized for performance */
 .interactive-card {
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s ease;
   cursor: pointer;
+  will-change: transform;
 }
 
 .interactive-card:hover {
-  transform: translateY(-8px) scale(1.02);
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+  transform: translateY(-4px) scale(1.01);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.12);
 }
 
 .interactive-card:active {
-  transform: translateY(-4px) scale(1.01);
+  transform: translateY(-2px) scale(1.005);
 }
 
-/* Button Enhancements */
+/* Button Enhancements - Performance optimized */
 .btn-primary-enhanced {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   border: none;
@@ -181,9 +182,10 @@
   padding: 12px 24px;
   border-radius: 12px;
   font-weight: 600;
-  transition: all 0.3s ease;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
   position: relative;
   overflow: hidden;
+  will-change: transform;
 }
 
 .btn-primary-enhanced::before {
@@ -238,14 +240,14 @@
   transition: transform 0.2s ease-out, opacity 0.2s ease-out;
 }
 
-/* Responsive Enhancements */
+/* Responsive Enhancements - Performance optimized */
 @media (max-width: 768px) {
   .glass {
-    backdrop-filter: blur(8px);
+    backdrop-filter: blur(6px);
   }
 
   .interactive-card:hover {
-    transform: translateY(-4px) scale(1.01);
+    transform: translateY(-2px) scale(1.005);
   }
 
   /* Enhanced touch targets for mobile */
@@ -258,6 +260,11 @@
   .container {
     padding-left: 0.5rem;
     padding-right: 0.5rem;
+  }
+
+  /* Disable expensive animations on mobile */
+  .floating, .shimmer {
+    animation: none;
   }
 }
 
