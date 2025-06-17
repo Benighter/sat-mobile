@@ -16,6 +16,7 @@ Church Connect Mobile is designed specifically for churches that need a modern, 
 
 ## ✨ Core Features
 
+
 ### 👥 Member Management
 - **Complete Member Profiles**: Store detailed information including name, phone, address, born-again status, and join date
 - **Bacenta Assignment**: Organize members into Bacentas (congregation groups) for better management
