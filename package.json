@@ -1,12 +1,18 @@
 {
   "name": "church-connect-mobile",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
+  "description": "A mobile-first church membership management application",
+  "author": "Church Connect Team",
+  "homepage": ".",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "build:mobile": "vite build --mode production",
+    "serve": "vite preview --host 0.0.0.0 --port 3000",
+    "generate-icons": "open generate-app-icons.html"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",

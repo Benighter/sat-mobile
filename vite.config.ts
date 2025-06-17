@@ -12,6 +12,40 @@ export default defineConfig(({ mode }) => {
         alias: {
           '@': path.resolve(__dirname, '.'),
         }
+      },
+      build: {
+        outDir: 'dist',
+        assetsDir: 'assets',
+        sourcemap: false,
+        minify: 'terser',
+        rollupOptions: {
+          output: {
+            manualChunks: {
+              vendor: ['react', 'react-dom'],
+              charts: ['chart.js', 'react-chartjs-2'],
+              utils: ['xlsx', 'framer-motion']
+            }
+          }
+        },
+        terserOptions: {
+          compress: {
+            drop_console: true,
+            drop_debugger: true
+          }
+        }
+      },
+      server: {
+        port: 3000,
+        host: true,
+        strictPort: true
+      },
+      preview: {
+        port: 3000,
+        host: true,
+        strictPort: true
+      },
+      optimizeDeps: {
+        include: ['react', 'react-dom', 'chart.js', 'react-chartjs-2', 'xlsx', 'framer-motion', 'lucide-react']
       }
     };
 });

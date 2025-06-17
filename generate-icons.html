@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Church Connect Mobile - Icon Generator</title>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+        }
+        h1 {
+            text-align: center;
+            color: #334155;
+            margin-bottom: 40px;
+            font-size: 2.5rem;
+        }
+        .icon-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 30px;
+            margin-bottom: 40px;
+        }
+        .icon-item {
+            text-align: center;
+            padding: 20px;
+            border: 2px solid #e2e8f0;
+            border-radius: 15px;
+            transition: all 0.3s ease;
+        }
+        .icon-item:hover {
+            border-color: #667eea;
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.2);
+        }
+        .icon-canvas {
+            border: 1px solid #cbd5e1;
+            border-radius: 10px;
+            margin: 10px 0;
+            background: white;
+        }
+        .download-btn {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+        .download-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        .size-label {
+            font-weight: 600;
+            color: #475569;
+            margin-bottom: 10px;
+        }
+        .instructions {
+            background: #f8fafc;
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 30px;
+        }
+        .instructions h3 {
+            color: #334155;
+            margin-top: 0;
+        }
+        .instructions ul {
+            color: #64748b;
+            line-height: 1.6;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>⛪ Church Connect Mobile Icons</h1>
+        
+        <div class="icon-grid" id="iconGrid">
+            <!-- Icons will be generated here -->
+        </div>
+        
+        <div class="instructions">
+            <h3>📱 How to use with Median.co:</h3>
+            <ul>
+                <li><strong>App Icon (1024x1024):</strong> Use this as your main app icon in app stores</li>
+                <li><strong>Favicon (512x512):</strong> Use for web app favicon and PWA icon</li>
+                <li><strong>Small Icon (256x256):</strong> Use for notifications and small displays</li>
+                <li><strong>Thumbnail (128x128):</strong> Use for app listings and thumbnails</li>
+                <li><strong>Upload to Median.co:</strong> Go to your app settings and upload the 1024x1024 icon as your primary app icon</li>
+                <li><strong>PWA Icons:</strong> Use multiple sizes for Progressive Web App manifest</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        const iconSizes = [
+            { size: 1024, name: 'App Icon', filename: 'app-icon-1024.png' },
+            { size: 512, name: 'Favicon', filename: 'favicon-512.png' },
+            { size: 256, name: 'Small Icon', filename: 'icon-256.png' },
+            { size: 128, name: 'Thumbnail', filename: 'icon-128.png' },
+            { size: 64, name: 'Mini Icon', filename: 'icon-64.png' },
+            { size: 32, name: 'Tiny Icon', filename: 'icon-32.png' }
+        ];
+
+        function createChurchIcon(canvas, size) {
+            const ctx = canvas.getContext('2d');
+            canvas.width = size;
+            canvas.height = size;
+            
+            // Clear canvas
+            ctx.clearRect(0, 0, size, size);
+            
+            // Background gradient
+            const gradient = ctx.createLinearGradient(0, 0, size, size);
+            gradient.addColorStop(0, '#667eea');
+            gradient.addColorStop(0.5, '#764ba2');
+            gradient.addColorStop(1, '#5a67d8');
+            
+            // Rounded rectangle background
+            const radius = size * 0.15;
+            ctx.fillStyle = gradient;
+            ctx.beginPath();
+            ctx.roundRect(0, 0, size, size, radius);
+            ctx.fill();
+            
+            // Church building
+            const centerX = size / 2;
+            const centerY = size / 2;
+            const buildingWidth = size * 0.4;
+            const buildingHeight = size * 0.35;
+            
+            // Main building body
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(
+                centerX - buildingWidth/2, 
+                centerY - buildingHeight/2 + size * 0.1, 
+                buildingWidth, 
+                buildingHeight
+            );
+            
+            // Church roof (triangle)
+            ctx.beginPath();
+            ctx.moveTo(centerX - buildingWidth/2 - size * 0.05, centerY - buildingHeight/2 + size * 0.1);
+            ctx.lineTo(centerX, centerY - buildingHeight/2 - size * 0.1);
+            ctx.lineTo(centerX + buildingWidth/2 + size * 0.05, centerY - buildingHeight/2 + size * 0.1);
+            ctx.closePath();
+            ctx.fill();
+            
+            // Cross on top
+            const crossSize = size * 0.08;
+            const crossTop = centerY - buildingHeight/2 - size * 0.1 - crossSize;
+            
+            // Vertical part of cross
+            ctx.fillRect(
+                centerX - crossSize/6, 
+                crossTop, 
+                crossSize/3, 
+                crossSize
+            );
+            
+            // Horizontal part of cross
+            ctx.fillRect(
+                centerX - crossSize/2, 
+                crossTop + crossSize/4, 
+                crossSize, 
+                crossSize/3
+            );
+            
+            // Church door
+            const doorWidth = buildingWidth * 0.25;
+            const doorHeight = buildingHeight * 0.6;
+            ctx.fillStyle = '#4a5568';
+            ctx.fillRect(
+                centerX - doorWidth/2,
+                centerY + buildingHeight/2 + size * 0.1 - doorHeight,
+                doorWidth,
+                doorHeight
+            );
+            
+            // Door arch (top)
+            ctx.beginPath();
+            ctx.arc(
+                centerX,
+                centerY + buildingHeight/2 + size * 0.1 - doorHeight,
+                doorWidth/2,
+                Math.PI,
+                0
+            );
+            ctx.fill();
+            
+            // Windows
+            const windowSize = size * 0.04;
+            ctx.fillStyle = '#4a5568';
+            
+            // Left window
+            ctx.fillRect(
+                centerX - buildingWidth/2 + windowSize,
+                centerY - size * 0.05,
+                windowSize,
+                windowSize
+            );
+            
+            // Right window
+            ctx.fillRect(
+                centerX + buildingWidth/2 - windowSize * 2,
+                centerY - size * 0.05,
+                windowSize,
+                windowSize
+            );
+            
+            // Add subtle shadow/depth
+            ctx.fillStyle = 'rgba(0,0,0,0.1)';
+            ctx.fillRect(
+                centerX + buildingWidth/2, 
+                centerY - buildingHeight/2 + size * 0.1 + size * 0.02, 
+                size * 0.02, 
+                buildingHeight - size * 0.02
+            );
+        }
+
+        function generateIcons() {
+            const iconGrid = document.getElementById('iconGrid');
+            
+            iconSizes.forEach(iconInfo => {
+                const iconItem = document.createElement('div');
+                iconItem.className = 'icon-item';
+                
+                const sizeLabel = document.createElement('div');
+                sizeLabel.className = 'size-label';
+                sizeLabel.textContent = `${iconInfo.name} (${iconInfo.size}x${iconInfo.size})`;
+                
+                const canvas = document.createElement('canvas');
+                canvas.className = 'icon-canvas';
+                
+                const downloadBtn = document.createElement('button');
+                downloadBtn.className = 'download-btn';
+                downloadBtn.textContent = `Download ${iconInfo.filename}`;
+                
+                // Generate the icon
+                createChurchIcon(canvas, iconInfo.size);
+                
+                // Add download functionality
+                downloadBtn.onclick = () => {
+                    const link = document.createElement('a');
+                    link.download = iconInfo.filename;
+                    link.href = canvas.toDataURL('image/png');
+                    link.click();
+                };
+                
+                iconItem.appendChild(sizeLabel);
+                iconItem.appendChild(canvas);
+                iconItem.appendChild(downloadBtn);
+                iconGrid.appendChild(iconItem);
+            });
+        }
+
+        // Generate icons when page loads
+        window.onload = generateIcons;
+    </script>
+</body>
+</html>

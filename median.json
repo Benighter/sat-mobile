@@ -1,0 +1,111 @@
+{
+  "general": {
+    "appName": "Church Connect Mobile",
+    "publicName": "Church Connect",
+    "displayName": "Church Connect",
+    "description": "A mobile-first church membership management application with member tracking, attendance management, and congregation organization.",
+    "language": "en",
+    "enableWindowOpen": true,
+    "forceUserAgent": "mobile"
+  },
+  "styling": {
+    "theme": "light",
+    "statusBarBackgroundColor": "#334155",
+    "statusBarStyle": "light",
+    "navigationBarBackgroundColor": "#334155",
+    "navigationBarStyle": "light",
+    "splashBackgroundColor": "#f8fafc",
+    "androidPullToRefresh": true,
+    "iosPullToRefresh": true,
+    "hideWebviewAlpha": 0.5,
+    "interactiveDelay": 200,
+    "androidShowSplashUntilPageLoadComplete": true,
+    "iosShowSplashUntilPageLoadComplete": true
+  },
+  "navigation": {
+    "tabNavigation": {
+      "enabled": false
+    },
+    "sidebarNavigation": {
+      "enabled": false
+    },
+    "androidPullToRefresh": true,
+    "swipeGestures": true,
+    "androidBackButtonHandling": true
+  },
+  "permissions": {
+    "usesPermission": [
+      "android.permission.INTERNET",
+      "android.permission.ACCESS_NETWORK_STATE",
+      "android.permission.WRITE_EXTERNAL_STORAGE",
+      "android.permission.READ_EXTERNAL_STORAGE"
+    ]
+  },
+  "security": {
+    "allowHTTP": false,
+    "enableMixedContent": false,
+    "allowUniversalAccessFromFileURLs": false,
+    "allowFileAccessFromFileURLs": false,
+    "allowFileAccess": true
+  },
+  "performance": {
+    "androidHardwareAcceleration": true,
+    "webviewPool": {
+      "enabled": true,
+      "size": 2
+    }
+  },
+  "contextMenu": {
+    "enabled": false,
+    "linkActions": ["copyLink", "shareLink"],
+    "imageActions": ["saveImage", "copyImage", "shareImage"]
+  },
+  "forms": {
+    "keyboardDisplayRequiresUserAction": false,
+    "keyboardAppearanceDark": false,
+    "suppressesIncrementalRendering": false
+  },
+  "developmentTools": {
+    "enableWebInspector": false,
+    "allowsInlineMediaPlayback": true,
+    "mediaPlaybackRequiresUserAction": false
+  },
+  "urlNavigation": {
+    "allowedUrls": ["*"],
+    "regexInternalExternal": {
+      "rules": [
+        {
+          "regex": ".*",
+          "internal": true
+        }
+      ]
+    }
+  },
+  "androidCustomizations": {
+    "applicationId": "com.churchconnect.mobile",
+    "versionCode": 1,
+    "versionName": "1.0.0",
+    "minSdkVersion": 21,
+    "targetSdkVersion": 34,
+    "compileSdkVersion": 34,
+    "orientation": "portrait",
+    "allowBackup": true,
+    "largeHeap": true,
+    "hardwareAccelerated": true,
+    "theme": "@android:style/Theme.NoTitleBar.Fullscreen",
+    "launchMode": "singleTop",
+    "screenOrientation": "portrait",
+    "configChanges": "orientation|screenSize|keyboardHidden"
+  },
+  "iosCustomizations": {
+    "bundleId": "com.churchconnect.mobile",
+    "version": "1.0.0",
+    "buildNumber": "1",
+    "minimumOSVersion": "12.0",
+    "deviceFamily": "1",
+    "orientation": "portrait",
+    "statusBarHidden": false,
+    "requiresFullScreen": false,
+    "supportedInterfaceOrientations": ["UIInterfaceOrientationPortrait"]
+  }
+}
