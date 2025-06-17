@@ -40,19 +40,19 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, size = 
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm flex items-center justify-center p-4 z-[100]">
-      <div className={`bg-white rounded-lg shadow-xl w-full ${sizeClasses[size]} flex flex-col max-h-[90vh]`}>
-        <div className="flex items-center justify-between p-4 border-b">
-          <h3 className="text-lg font-semibold text-gray-800">{title}</h3>
+    <div className="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 z-[100]">
+      <div className={`bg-white rounded-lg sm:rounded-xl shadow-xl w-full ${sizeClasses[size]} flex flex-col max-h-[95vh] sm:max-h-[90vh] mx-2 sm:mx-0`}>
+        <div className="flex items-center justify-between p-3 sm:p-4 border-b">
+          <h3 className="text-base sm:text-lg font-semibold text-gray-800 truncate pr-2">{title}</h3>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 p-1 rounded-full hover:bg-gray-100"
+            className="text-gray-400 hover:text-gray-600 p-1 rounded-full hover:bg-gray-100 flex-shrink-0"
             aria-label="Close modal"
           >
-            <XMarkIcon className="w-6 h-6" />
+            <XMarkIcon className="w-5 h-5 sm:w-6 sm:h-6" />
           </button>
         </div>
-        <div className="p-4 overflow-y-auto">
+        <div className="p-3 sm:p-4 overflow-y-auto flex-1">
           {children}
         </div>
       </div>

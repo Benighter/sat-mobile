@@ -119,50 +119,50 @@ const App: React.FC = () => {
 
       {/* Fixed Header */}
       <header className="glass fixed top-0 left-0 right-0 z-50 border-b border-white/20 shadow-xl">
-        <div className="container mx-auto px-4 py-4 flex justify-between items-center">
-          <div className="flex items-center space-x-3">
+        <div className="container mx-auto px-2 sm:px-4 py-2 sm:py-3 md:py-4 flex justify-between items-center">
+          <div className="flex items-center space-x-2 sm:space-x-3 flex-1 min-w-0">
             {/* {canNavigateBack() && <BackButton />} */}
             <button
               onClick={() => changeTab('dashboard')}
-              className="flex items-center space-x-3 transition-all duration-300 group"
+              className="flex items-center space-x-2 sm:space-x-3 transition-all duration-300 group min-w-0"
               aria-label="Go to Dashboard"
               title="Go to Dashboard"
             >
-              <div className="w-10 h-10 bg-gradient-to-br from-gray-600 to-gray-700 rounded-xl flex items-center justify-center shadow-lg group-hover:shadow-xl group-hover:from-gray-700 group-hover:to-gray-800 transition-all duration-300">
-                <span className="text-white font-bold text-lg">⛪</span>
+              <div className="w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 bg-gradient-to-br from-gray-600 to-gray-700 rounded-lg sm:rounded-xl flex items-center justify-center shadow-lg group-hover:shadow-xl group-hover:from-gray-700 group-hover:to-gray-800 transition-all duration-300 flex-shrink-0">
+                <span className="text-white font-bold text-sm sm:text-base md:text-lg">⛪</span>
               </div>
-              <div>
-                <h1 className="text-xl font-bold gradient-text font-serif group-hover:text-gray-700 transition-colors duration-300">Church Connect</h1>
-                <p className="text-xs text-gray-600 font-medium group-hover:text-gray-700 transition-colors duration-300">Faith • Community • Growth</p>
+              <div className="min-w-0 hidden sm:block">
+                <h1 className="text-base sm:text-lg md:text-xl font-bold gradient-text font-serif group-hover:text-gray-700 transition-colors duration-300 truncate">Church Connect</h1>
+                <p className="text-xs text-gray-600 font-medium group-hover:text-gray-700 transition-colors duration-300 hidden md:block">Faith • Community • Growth</p>
               </div>
             </button>
           </div>
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center space-x-1 sm:space-x-2 flex-shrink-0">
             <button
               onClick={() => openMemberForm(null)}
-              className="p-3 rounded-xl glass hover:glass-dark transition-all duration-300 group shadow-lg relative overflow-hidden"
+              className="p-2 sm:p-2.5 md:p-3 rounded-lg sm:rounded-xl glass hover:glass-dark transition-all duration-300 group shadow-lg relative overflow-hidden"
               aria-label="Add New Member"
               title="Add New Member"
             >
               {/* Subtle primary action indicator */}
-              <div className="absolute inset-0 bg-gradient-to-br from-blue-500/8 via-transparent to-blue-600/8 opacity-0 group-hover:opacity-100 transition-all duration-300 rounded-xl"></div>
-              <AddMemberIcon className="w-6 h-6 text-gray-600 group-hover:text-blue-100 transition-all duration-300 relative z-10" />
+              <div className="absolute inset-0 bg-gradient-to-br from-blue-500/8 via-transparent to-blue-600/8 opacity-0 group-hover:opacity-100 transition-all duration-300 rounded-lg sm:rounded-xl"></div>
+              <AddMemberIcon className="w-5 h-5 sm:w-6 sm:h-6 text-gray-600 group-hover:text-blue-100 transition-all duration-300 relative z-10" />
             </button>
             <button
               onClick={() => setIsDataManagementOpen(true)}
-              className="p-3 rounded-xl glass hover:glass-dark transition-all duration-300 group shadow-lg"
+              className="p-2 sm:p-2.5 md:p-3 rounded-lg sm:rounded-xl glass hover:glass-dark transition-all duration-300 group shadow-lg"
               aria-label="Data Management"
               title="Backup & Restore Data"
             >
-              <CogIcon className="w-6 h-6 text-gray-600 group-hover:text-white transition-all duration-300" />
+              <CogIcon className="w-5 h-5 sm:w-6 sm:h-6 text-gray-600 group-hover:text-white transition-all duration-300" />
             </button>
             <button
               onClick={refreshData}
-              className="p-3 rounded-xl glass hover:glass-dark transition-all duration-300 group shadow-lg"
+              className="p-2 sm:p-2.5 md:p-3 rounded-lg sm:rounded-xl glass hover:glass-dark transition-all duration-300 group shadow-lg"
               aria-label="Refresh Data"
               title="Refresh Data"
             >
-              <RefreshIcon className="w-6 h-6 text-gray-600 group-hover:text-white transition-all duration-300" />
+              <RefreshIcon className="w-5 h-5 sm:w-6 sm:h-6 text-gray-600 group-hover:text-white transition-all duration-300" />
             </button>
           </div>
         </div>
@@ -170,9 +170,9 @@ const App: React.FC = () => {
       </header>
 
       {/* Scrollable Main Content */}
-      <main className="flex-1 overflow-y-auto pt-32 pb-6 relative z-10">
+      <main className="flex-1 overflow-y-auto pt-24 sm:pt-28 md:pt-32 pb-4 sm:pb-6 relative z-10">
         {/* <GestureWrapper className="h-full"> */}
-          <div className="container mx-auto px-2 sm:px-4 py-6">
+          <div className="container mx-auto px-2 sm:px-4 py-3 sm:py-4 md:py-6">
             <div className="animate-fade-in">
               {renderView()}
             </div>
@@ -246,23 +246,23 @@ const App: React.FC = () => {
       {toasts.map((toast) => (
         <div
           key={toast.id}
-          className="fixed top-4 right-4 z-50 max-w-sm w-full transform transition-all duration-300 ease-out translate-x-0 opacity-100 scale-100"
+          className="fixed top-2 sm:top-4 right-2 sm:right-4 z-50 max-w-xs sm:max-w-sm w-full transform transition-all duration-300 ease-out translate-x-0 opacity-100 scale-100"
         >
           <div className={`
             ${toast.type === 'success' ? 'bg-green-50 border-green-200' :
               toast.type === 'error' ? 'bg-red-50 border-red-200' :
               toast.type === 'warning' ? 'bg-yellow-50 border-yellow-200' :
               'bg-blue-50 border-blue-200'
-            } border rounded-xl shadow-lg backdrop-blur-sm p-4 relative overflow-hidden
+            } border rounded-lg sm:rounded-xl shadow-lg backdrop-blur-sm p-3 sm:p-4 relative overflow-hidden
           `}>
-            <div className="flex items-start space-x-3">
-              <div className={`flex-shrink-0 w-8 h-8 ${
+            <div className="flex items-start space-x-2 sm:space-x-3">
+              <div className={`flex-shrink-0 w-6 h-6 sm:w-8 sm:h-8 ${
                 toast.type === 'success' ? 'bg-green-100' :
                 toast.type === 'error' ? 'bg-red-100' :
                 toast.type === 'warning' ? 'bg-yellow-100' :
                 'bg-blue-100'
               } rounded-full flex items-center justify-center`}>
-                <span className={`text-sm ${
+                <span className={`text-xs sm:text-sm ${
                   toast.type === 'success' ? 'text-green-600' :
                   toast.type === 'error' ? 'text-red-600' :
                   toast.type === 'warning' ? 'text-yellow-600' :
@@ -274,7 +274,7 @@ const App: React.FC = () => {
                 </span>
               </div>
               <div className="flex-1 min-w-0">
-                <h4 className={`font-semibold text-sm ${
+                <h4 className={`font-semibold text-xs sm:text-sm ${
                   toast.type === 'success' ? 'text-green-800' :
                   toast.type === 'error' ? 'text-red-800' :
                   toast.type === 'warning' ? 'text-yellow-800' :
@@ -283,7 +283,7 @@ const App: React.FC = () => {
                   {toast.title}
                 </h4>
                 {toast.message && (
-                  <p className={`mt-1 text-sm ${
+                  <p className={`mt-1 text-xs sm:text-sm ${
                     toast.type === 'success' ? 'text-green-700' :
                     toast.type === 'error' ? 'text-red-700' :
                     toast.type === 'warning' ? 'text-yellow-700' :

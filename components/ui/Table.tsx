@@ -67,47 +67,51 @@ function Table<T extends Record<string, any>>({
   }
 
   return (
-    <table className={`w-full ${className}`}>
-      <thead>
-        <tr className="bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200">
-          {columns.map((column, index) => (
-            <th
-              key={index}
-              className={`px-3 py-3 text-xs font-semibold text-gray-700 uppercase tracking-wider ${getAlignmentClass(column.align)}`}
-              style={{ width: column.width, minWidth: column.width }}
-            >
-              {column.header}
-            </th>
-          ))}
-        </tr>
-      </thead>
-      <tbody className="divide-y divide-gray-200">
-        {data.map((item, rowIndex) => (
-          <tr
-            key={rowIndex}
-            className={`
-              ${striped && rowIndex % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}
-              ${hoverable ? 'hover:bg-blue-50/50 transition-colors duration-200' : ''}
-              ${onRowClick ? 'cursor-pointer' : ''}
-            `}
-            onClick={() => onRowClick?.(item)}
-          >
-            {columns.map((column, colIndex) => {
-              const value = getCellValue(item, column);
-              return (
-                <td
-                  key={colIndex}
-                  className={`px-3 py-3 text-sm text-gray-900 ${getAlignmentClass(column.align)}`}
-                  style={{ width: column.width, minWidth: column.width }}
-                >
-                  {column.render ? column.render(item, value) : value || '-'}
-                </td>
-              );
-            })}
+    <div className="overflow-x-auto">
+      <table className={`w-full min-w-full ${className}`}>
+        <thead>
+          <tr className="bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200">
+            {columns.map((column, index) => (
+              <th
+                key={index}
+                className={`px-2 sm:px-3 py-2 sm:py-3 text-xs font-semibold text-gray-700 uppercase tracking-wider ${getAlignmentClass(column.align)}`}
+                style={{ width: column.width, minWidth: column.width || '80px' }}
+              >
+                <div className="truncate">{column.header}</div>
+              </th>
+            ))}
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody className="divide-y divide-gray-200">
+          {data.map((item, rowIndex) => (
+            <tr
+              key={rowIndex}
+              className={`
+                ${striped && rowIndex % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}
+                ${hoverable ? 'hover:bg-blue-50/50 transition-colors duration-200' : ''}
+                ${onRowClick ? 'cursor-pointer' : ''}
+              `}
+              onClick={() => onRowClick?.(item)}
+            >
+              {columns.map((column, colIndex) => {
+                const value = getCellValue(item, column);
+                return (
+                  <td
+                    key={colIndex}
+                    className={`px-2 sm:px-3 py-2 sm:py-3 text-xs sm:text-sm text-gray-900 ${getAlignmentClass(column.align)}`}
+                    style={{ width: column.width, minWidth: column.width || '80px' }}
+                  >
+                    <div className="truncate">
+                      {column.render ? column.render(item, value) : value || '-'}
+                    </div>
+                  </td>
+                );
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 

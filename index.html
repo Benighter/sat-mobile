@@ -3,7 +3,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Church Connect Mobile</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -163,6 +163,18 @@
     /* Smooth transitions for all elements */
     * {
       transition: all 0.2s ease-in-out;
+    }
+
+    /* Prevent horizontal scroll on mobile */
+    html, body {
+      overflow-x: hidden;
+      width: 100%;
+      max-width: 100vw;
+    }
+
+    /* Ensure proper box sizing */
+    *, *::before, *::after {
+      box-sizing: border-box;
     }
 
     /* Custom gradient text */

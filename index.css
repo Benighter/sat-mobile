@@ -253,6 +253,36 @@
     min-height: 44px;
     min-width: 44px;
   }
+
+  /* Reduce container padding on mobile */
+  .container {
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+  }
+}
+
+/* Extra small screens */
+@media (max-width: 480px) {
+  .glass {
+    backdrop-filter: blur(6px);
+  }
+
+  /* Further reduce spacing on very small screens */
+  .container {
+    padding-left: 0.25rem;
+    padding-right: 0.25rem;
+  }
+
+  /* Ensure text doesn't get too small */
+  .text-xs {
+    font-size: 0.75rem;
+  }
+
+  /* Compact buttons on small screens */
+  button {
+    min-height: 40px;
+    min-width: 40px;
+  }
 }
 
 /* Accessibility Enhancements */
