@@ -15,9 +15,40 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="Church Connect">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="application-name" content="Church Connect">
   <link rel="apple-touch-icon" href="/icon-192.svg">
   <link rel="apple-touch-icon" sizes="192x192" href="/icon-192.svg">
   <link rel="apple-touch-icon" sizes="512x512" href="/icon-512.svg">
+
+  <!-- Mobile app back button handling -->
+  <script>
+    // Prevent default back button behavior on mobile
+    document.addEventListener('DOMContentLoaded', function() {
+      // Add initial history state to prevent app closure
+      if (window.history.length === 1) {
+        window.history.pushState({ page: 'app' }, '', window.location.href);
+      }
+
+      // Handle mobile back button
+      window.addEventListener('popstate', function(event) {
+        // This will be handled by the React app's navigation system
+        // The event is prevented in the useNavigation hook
+      });
+
+      // Prevent context menu on long press (mobile)
+      document.addEventListener('contextmenu', function(e) {
+        e.preventDefault();
+      });
+
+      // Prevent text selection on mobile
+      document.addEventListener('selectstart', function(e) {
+        if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
+          e.preventDefault();
+        }
+      });
+    });
+  </script>
   <script>
     tailwind.config = {
       theme: {

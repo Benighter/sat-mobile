@@ -492,12 +492,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const navigateBack = useCallback(() => {
     if (navigationHistory.length <= 1) {
-      // If no history, go to dashboard
+      // If no history, go to dashboard if not already there
       if (currentTab.id !== TabKeys.DASHBOARD) {
         isNavigatingBack.current = true;
         changeTab(TabKeys.DASHBOARD);
         return true;
       }
+      // If already on dashboard with no history, don't allow back navigation
+      // This prevents the app from closing
       return false;
     }
 
@@ -513,10 +515,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       return true;
     }
 
+    // Fallback to dashboard if no valid previous item
+    if (currentTab.id !== TabKeys.DASHBOARD) {
+      isNavigatingBack.current = true;
+      changeTab(TabKeys.DASHBOARD);
+      return true;
+    }
+
     return false;
   }, [navigationHistory, changeTab, currentTab.id]);
 
   const canNavigateBack = useCallback(() => {
+    // Can navigate back if there's history or if not on dashboard
     return navigationHistory.length > 1 || currentTab.id !== TabKeys.DASHBOARD;
   }, [navigationHistory, currentTab.id]);
 

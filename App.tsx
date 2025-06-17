@@ -209,17 +209,17 @@ const App: React.FC = () => {
 
       {/* Scrollable Main Content */}
       <main className="flex-1 overflow-y-auto pt-24 sm:pt-28 md:pt-32 pb-4 sm:pb-6 relative z-10">
-        {/* <GestureWrapper className="h-full"> */}
+        <GestureWrapper className="h-full">
           <div className="container mx-auto px-2 sm:px-4 py-3 sm:py-4 md:py-6">
             <div className="animate-fade-in">
               {renderView()}
             </div>
           </div>
-        {/* </GestureWrapper> */}
+        </GestureWrapper>
       </main>
 
       {/* Swipe Indicator */}
-      {/* <SwipeIndicator /> */}
+      <SwipeIndicator />
 
       {isMemberFormOpen && (
         <MemberFormModal
