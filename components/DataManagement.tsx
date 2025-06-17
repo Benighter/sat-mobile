@@ -3,13 +3,15 @@ import { useAppData } from '../hooks/useAppData';
 import { storageInfo, backupStorage } from '../utils/localStorage';
 import Button from './ui/Button';
 import Modal from './ui/Modal';
-import { 
-  CloudArrowDownIcon, 
-  CloudArrowUpIcon, 
-  TrashIcon, 
+import ExcelExportModal from './ExcelExportModal';
+import {
+  CloudArrowDownIcon,
+  CloudArrowUpIcon,
+  TrashIcon,
   InformationCircleIcon,
   CheckCircleIcon,
-  ExclamationTriangleIcon 
+  ExclamationTriangleIcon,
+  DocumentArrowDownIcon
 } from './icons';
 
 interface DataManagementProps {
@@ -22,6 +24,7 @@ const DataManagement: React.FC<DataManagementProps> = ({ isOpen, onClose }) => {
   const [isImporting, setIsImporting] = useState(false);
   const [importStatus, setImportStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [importMessage, setImportMessage] = useState('');
+  const [isExcelExportOpen, setIsExcelExportOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleExport = () => {
@@ -150,10 +153,31 @@ const DataManagement: React.FC<DataManagementProps> = ({ isOpen, onClose }) => {
           </div>
         </div>
 
+        {/* Excel Export */}
+        <div className="space-y-4">
+          <h3 className="text-lg font-semibold text-gray-800">Excel Reports</h3>
+
+          <div className="bg-green-50 border border-green-200 rounded-xl p-4">
+            <h4 className="font-medium text-green-800 mb-2">📊 Comprehensive Excel Reports</h4>
+            <p className="text-sm text-green-700 mb-3">
+              Generate detailed Excel reports with multiple tabs for each bacenta, including attendance analytics,
+              member directories, and visual charts.
+            </p>
+            <Button
+              onClick={() => setIsExcelExportOpen(true)}
+              variant="primary"
+              className="flex items-center space-x-2 bg-green-600 hover:bg-green-700"
+            >
+              <DocumentArrowDownIcon className="w-5 h-5" />
+              <span>Create Excel Report</span>
+            </Button>
+          </div>
+        </div>
+
         {/* Import/Export Actions */}
         <div className="space-y-4">
           <h3 className="text-lg font-semibold text-gray-800">Backup & Restore</h3>
-          
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Button
               onClick={handleExport}
@@ -163,7 +187,7 @@ const DataManagement: React.FC<DataManagementProps> = ({ isOpen, onClose }) => {
               <CloudArrowDownIcon className="w-5 h-5" />
               <span>Export Data</span>
             </Button>
-            
+
             <Button
               onClick={handleImportClick}
               variant="secondary"
@@ -248,6 +272,12 @@ const DataManagement: React.FC<DataManagementProps> = ({ isOpen, onClose }) => {
           </ul>
         </div>
       </div>
+
+      {/* Excel Export Modal */}
+      <ExcelExportModal
+        isOpen={isExcelExportOpen}
+        onClose={() => setIsExcelExportOpen(false)}
+      />
     </Modal>
   );
 };
