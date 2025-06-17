@@ -6,6 +6,7 @@ import { TabOption, TabKeys } from './types';
 export const FIXED_TABS: TabOption[] = [
   { id: TabKeys.DASHBOARD, name: 'Dashboard' },
   { id: TabKeys.ALL_CONGREGATIONS, name: 'All Members' }, // ID remains, name updated
+  { id: TabKeys.ALL_BACENTAS, name: 'All Bacentas' },
   { id: TabKeys.CRITICAL_MEMBERS, name: 'Critical Alerts' },
   { id: TabKeys.ATTENDANCE_ANALYTICS, name: 'Attendance Analytics' },
 ];

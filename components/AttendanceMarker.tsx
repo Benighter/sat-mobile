@@ -1,7 +1,7 @@
-
 import React from 'react';
 import { AttendanceStatus } from '../types';
 import { CheckIcon, XMarkIcon } from './icons';
+import { formatDateToYYYYMMDD } from '../utils/dateUtils';
 
 interface AttendanceMarkerProps {
   memberId: string;
@@ -12,16 +12,47 @@ interface AttendanceMarkerProps {
 }
 
 const AttendanceMarker: React.FC<AttendanceMarkerProps> = ({ memberId, date, currentStatus, onMarkAttendance, disabled }) => {
+  // Check if a date is editable (not in future, not in past months)
+  const isDateEditable = (dateString: string) => {
+    const today = new Date();
+    const todayStr = formatDateToYYYYMMDD(today);
+    const targetDate = new Date(dateString + 'T00:00:00'); // Parse as local date
+    const currentMonth = today.getMonth();
+    const currentYear = today.getFullYear();
+    const targetMonth = targetDate.getMonth();
+    const targetYear = targetDate.getFullYear();
+
+    // Don't allow editing past months
+    if (targetYear < currentYear || (targetYear === currentYear && targetMonth < currentMonth)) {
+      return false;
+    }
+
+    // Don't allow editing future Sundays (compare date strings to avoid timezone issues)
+    if (dateString > todayStr) {
+      return false;
+    }
+
+    return true;
+  };
+
+  const isEditable = !disabled && isDateEditable(date);
+  const today = new Date();
+  const todayStr = formatDateToYYYYMMDD(today);
+  const targetDate = new Date(date + 'T00:00:00');
+  const isFuture = date > todayStr;
+  const isPastMonth = targetDate.getFullYear() < today.getFullYear() ||
+                    (targetDate.getFullYear() === today.getFullYear() && targetDate.getMonth() < today.getMonth());
+
   const handlePresent = () => {
-    if(!disabled) onMarkAttendance(memberId, date, 'Present');
+    if(isEditable) onMarkAttendance(memberId, date, 'Present');
   };
 
   const handleAbsent = () => {
-    if(!disabled) onMarkAttendance(memberId, date, 'Absent');
+    if(isEditable) onMarkAttendance(memberId, date, 'Absent');
   };
   
   const handleToggle = () => {
-    if (disabled) return;
+    if (!isEditable) return;
     if (currentStatus === 'Present') {
       onMarkAttendance(memberId, date, 'Absent');
     } else if (currentStatus === 'Absent') {
@@ -31,37 +62,74 @@ const AttendanceMarker: React.FC<AttendanceMarkerProps> = ({ memberId, date, cur
     }
   };
 
+  // Get tooltip message for disabled states
+  const getTooltipMessage = (action: 'Present' | 'Absent') => {
+    if (!isEditable) {
+      if (isPastMonth) {
+        return `Past month - cannot mark ${action.toLowerCase()}`;
+      } else if (isFuture) {
+        return `Future date - cannot mark ${action.toLowerCase()}`;
+      }
+    }
+    return action;
+  };
 
   return (
     <div className="flex items-center space-x-1">
       {/* Present Button */}
       <button
         onClick={handlePresent}
-        disabled={disabled}
-        className={`group relative p-1.5 rounded-lg transition-all duration-200 transform hover:scale-105 ${
-          currentStatus === 'Present'
+        disabled={!isEditable}
+        className={`group relative p-1.5 rounded-lg transition-all duration-200 transform ${
+          isEditable ? 'hover:scale-105' : ''
+        } ${
+          currentStatus === 'Present' && isEditable
             ? 'bg-green-500 text-white shadow-md'
-            : 'bg-gray-100 hover:bg-green-100 text-gray-400 hover:text-green-600'
-        } disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100`}
+            : isEditable
+            ? 'bg-gray-100 hover:bg-green-100 text-gray-400 hover:text-green-600'
+            : isPastMonth
+            ? 'bg-gray-200 text-gray-400 cursor-not-allowed opacity-60'
+            : 'bg-blue-50 text-blue-400 cursor-not-allowed opacity-60'
+        } ${!isEditable ? 'cursor-not-allowed' : ''}`}
         aria-label={`Mark ${memberId} Present on ${date}`}
-        title="Present"
+        title={getTooltipMessage('Present')}
       >
-        <CheckIcon className="w-4 h-4" />
+        {/* Only show checkmark if editable and present */}
+        {isEditable && currentStatus === 'Present' ? (
+          <CheckIcon className="w-4 h-4" />
+        ) : isEditable ? (
+          <CheckIcon className="w-4 h-4" />
+        ) : (
+          <div className="w-4 h-4"></div>
+        )}
       </button>
 
       {/* Absent Button */}
       <button
         onClick={handleAbsent}
-        disabled={disabled}
-        className={`group relative p-1.5 rounded-lg transition-all duration-200 transform hover:scale-105 ${
-          currentStatus === 'Absent'
+        disabled={!isEditable}
+        className={`group relative p-1.5 rounded-lg transition-all duration-200 transform ${
+          isEditable ? 'hover:scale-105' : ''
+        } ${
+          currentStatus === 'Absent' && isEditable
             ? 'bg-red-500 text-white shadow-md'
-            : 'bg-gray-100 hover:bg-red-100 text-gray-400 hover:text-red-600'
-        } disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100`}
+            : isEditable
+            ? 'bg-gray-100 hover:bg-red-100 text-gray-400 hover:text-red-600'
+            : isPastMonth
+            ? 'bg-gray-200 text-gray-400 cursor-not-allowed opacity-60'
+            : 'bg-blue-50 text-blue-400 cursor-not-allowed opacity-60'
+        } ${!isEditable ? 'cursor-not-allowed' : ''}`}
         aria-label={`Mark ${memberId} Absent on ${date}`}
-        title="Absent"
+        title={getTooltipMessage('Absent')}
       >
-        <XMarkIcon className="w-4 h-4" />
+        {/* Only show X mark if editable and absent */}
+        {isEditable && currentStatus === 'Absent' ? (
+          <XMarkIcon className="w-4 h-4" />
+        ) : isEditable ? (
+          <XMarkIcon className="w-4 h-4" />
+        ) : (
+          <div className="w-4 h-4"></div>
+        )}
       </button>
     </div>
   );

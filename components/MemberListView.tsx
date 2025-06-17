@@ -2,7 +2,8 @@
 import React, { useState, useMemo } from 'react';
 import { useAppData } from '../hooks/useAppData';
 import MemberCard from './MemberCard';
-import { LoadingSpinnerIcon, SearchIcon, UsersIcon, CalendarIcon, ChevronLeftIcon, ChevronRightIcon } from './icons'; // Added Calendar, Chevron icons
+import MembersTableView from './MembersTableView';
+import { LoadingSpinnerIcon, SearchIcon, UsersIcon, CalendarIcon, ChevronLeftIcon, ChevronRightIcon } from './icons';
 import Input from './ui/Input';
 import Button from './ui/Button';
 import { getMonthName } from '../utils/dateUtils';
@@ -13,17 +14,18 @@ interface MemberListViewProps {
 }
 
 const MemberListView: React.FC<MemberListViewProps> = ({ bacentaFilter }) => {
-  const { 
-    members, 
-    isLoading, 
-    criticalMemberIds, 
-    bacentas, 
+  const {
+    members,
+    isLoading,
+    criticalMemberIds,
+    bacentas,
     currentTab,
-    displayedDate, // For month navigation
-    navigateToPreviousMonth, // For month navigation
-    navigateToNextMonth, // For month navigation
+    displayedDate,
+    navigateToPreviousMonth,
+    navigateToNextMonth,
   } = useAppData();
   const [searchTerm, setSearchTerm] = useState('');
+  const [viewMode, setViewMode] = useState<'cards' | 'table'>('table');
 
   const filteredMembers = useMemo(() => {
     return members
@@ -55,6 +57,7 @@ const MemberListView: React.FC<MemberListViewProps> = ({ bacentaFilter }) => {
     );
   }
   
+  // Get displayed month info
   const currentMonthName = getMonthName(displayedDate.getMonth());
   const currentYear = displayedDate.getFullYear();
 
@@ -76,69 +79,111 @@ const MemberListView: React.FC<MemberListViewProps> = ({ bacentaFilter }) => {
             </div>
           </div>
 
-          {/* Enhanced Search */}
-          <div className="mt-4 sm:mt-0 w-full sm:w-auto sm:max-w-sm">
-            <div className="relative group">
-              <Input
-                type="text"
-                placeholder="Search members..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-12 pr-4 py-3 glass border-0 rounded-xl text-gray-700 placeholder-gray-500 focus:ring-2 focus:ring-gray-500/50 transition-all duration-200"
-                wrapperClassName="relative mb-0"
-                aria-label="Search members"
-              />
-              <SearchIcon className="w-5 h-5 text-gray-500 absolute left-4 top-1/2 transform -translate-y-1/2 group-hover:scale-110 transition-transform" />
-              {searchTerm && (
-                <button
-                  onClick={() => setSearchTerm('')}
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
-                >
-                  ✕
-                </button>
-              )}
+          {/* Enhanced Search and View Toggle */}
+          <div className="mt-4 sm:mt-0 flex flex-col sm:flex-row items-center space-y-3 sm:space-y-0 sm:space-x-4">
+            {/* Search */}
+            <div className="w-full sm:w-auto sm:max-w-sm">
+              <div className="relative group">
+                <Input
+                  type="text"
+                  placeholder="Search members..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-12 pr-4 py-3 glass border-0 rounded-xl text-gray-700 placeholder-gray-500 focus:ring-2 focus:ring-gray-500/50 transition-all duration-200"
+                  wrapperClassName="relative mb-0"
+                  aria-label="Search members"
+                />
+                <SearchIcon className="w-5 h-5 text-gray-500 absolute left-4 top-1/2 transform -translate-y-1/2 group-hover:scale-110 transition-transform" />
+                {searchTerm && (
+                  <button
+                    onClick={() => setSearchTerm('')}
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* View Toggle */}
+            <div className="flex items-center glass rounded-xl p-1 shadow-lg">
+              <button
+                onClick={() => setViewMode('cards')}
+                className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-all duration-200 ${
+                  viewMode === 'cards'
+                    ? 'bg-white shadow-md text-gray-900'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                <div className="w-4 h-4 grid grid-cols-1 gap-1">
+                  <div className="bg-current rounded-sm"></div>
+                  <div className="bg-current rounded-sm"></div>
+                  <div className="bg-current rounded-sm"></div>
+                </div>
+                <span className="text-sm font-medium">Cards</span>
+              </button>
+              <button
+                onClick={() => setViewMode('table')}
+                className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-all duration-200 ${
+                  viewMode === 'table'
+                    ? 'bg-white shadow-md text-gray-900'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                <div className="w-4 h-4 grid grid-cols-3 gap-0.5">
+                  <div className="bg-current rounded-sm"></div>
+                  <div className="bg-current rounded-sm"></div>
+                  <div className="bg-current rounded-sm"></div>
+                  <div className="bg-current rounded-sm"></div>
+                  <div className="bg-current rounded-sm"></div>
+                  <div className="bg-current rounded-sm"></div>
+                </div>
+                <span className="text-sm font-medium">Table</span>
+              </button>
             </div>
           </div>
         </div>
         
-        {/* Enhanced Month Navigation */}
-        <div className="mt-6 pt-6 border-t border-white/20">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-purple-100 to-purple-200 rounded-xl flex items-center justify-center">
-                <CalendarIcon className="w-5 h-5 text-purple-600" />
+        {/* Month Navigation - Only for Cards View */}
+        {viewMode === 'cards' && (
+          <div className="mt-6 pt-6 border-t border-white/20">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 bg-gradient-to-br from-purple-100 to-purple-200 rounded-xl flex items-center justify-center">
+                  <CalendarIcon className="w-5 h-5 text-purple-600" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold gradient-text">Attendance Period</h3>
+                  <p className="text-sm text-gray-600">{currentMonthName} {currentYear}</p>
+                </div>
               </div>
-              <div>
-                <h3 className="text-lg font-bold gradient-text">Attendance Period</h3>
-                <p className="text-sm text-gray-600">{currentMonthName} {currentYear}</p>
-              </div>
-            </div>
 
-            <div className="flex items-center space-x-2">
-              <button
-                onClick={navigateToPreviousMonth}
-                className="group flex items-center space-x-2 px-4 py-2 glass hover:bg-white/20 rounded-xl transition-all duration-200 hover:scale-105"
-                aria-label="Previous month for attendance"
-              >
-                <ChevronLeftIcon className="w-5 h-5 text-gray-600 group-hover:-translate-x-1 transition-transform" />
-                <span className="hidden sm:inline font-medium text-gray-700">Previous</span>
-              </button>
-              <button
-                onClick={navigateToNextMonth}
-                className="group flex items-center space-x-2 px-4 py-2 glass hover:bg-white/20 rounded-xl transition-all duration-200 hover:scale-105"
-                aria-label="Next month for attendance"
-              >
-                <span className="hidden sm:inline font-medium text-gray-700">Next</span>
-                <ChevronRightIcon className="w-5 h-5 text-gray-600 group-hover:translate-x-1 transition-transform" />
-              </button>
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={navigateToPreviousMonth}
+                  className="group flex items-center space-x-2 px-4 py-2 glass hover:bg-white/20 rounded-xl transition-all duration-200 hover:scale-105"
+                  aria-label="Previous month for attendance"
+                >
+                  <ChevronLeftIcon className="w-5 h-5 text-gray-600 group-hover:-translate-x-1 transition-transform" />
+                  <span className="hidden sm:inline font-medium text-gray-700">Previous</span>
+                </button>
+                <button
+                  onClick={navigateToNextMonth}
+                  className="group flex items-center space-x-2 px-4 py-2 glass hover:bg-white/20 rounded-xl transition-all duration-200 hover:scale-105"
+                  aria-label="Next month for attendance"
+                >
+                  <span className="hidden sm:inline font-medium text-gray-700">Next</span>
+                  <ChevronRightIcon className="w-5 h-5 text-gray-600 group-hover:translate-x-1 transition-transform" />
+                </button>
+              </div>
+            </div>
+            <div className="bg-gradient-to-r from-gray-100 to-gray-200 p-3 rounded-xl">
+              <p className="text-sm text-gray-700 text-center">
+                📊 Attendance data shown for <span className="font-semibold">{currentMonthName} {currentYear}</span>
+              </p>
             </div>
           </div>
-          <div className="bg-gradient-to-r from-gray-100 to-gray-200 p-3 rounded-xl">
-            <p className="text-sm text-gray-700 text-center">
-              📊 Attendance data shown for <span className="font-semibold">{currentMonthName} {currentYear}</span>
-            </p>
-          </div>
-        </div>
+        )}
       </div>
 
       {/* Enhanced Empty State */}
@@ -169,21 +214,27 @@ const MemberListView: React.FC<MemberListViewProps> = ({ bacentaFilter }) => {
         </div>
       )}
 
-      {/* Enhanced Member List */}
-      <div className="space-y-6">
-        {filteredMembers.map((member, index) => (
-          <div
-            key={member.id}
-            className="animate-fade-in"
-            style={{ animationDelay: `${index * 0.1}s` }}
-          >
-            <MemberCard
-              member={member}
-              isCritical={criticalMemberIds.includes(member.id)}
-            />
-          </div>
-        ))}
-      </div>
+      {/* Member List - Cards or Table View */}
+      {viewMode === 'cards' ? (
+        <div className="space-y-6">
+          {filteredMembers.map((member, index) => (
+            <div
+              key={member.id}
+              className="animate-fade-in"
+              style={{ animationDelay: `${index * 0.1}s` }}
+            >
+              <MemberCard
+                member={member}
+                isCritical={criticalMemberIds.includes(member.id)}
+              />
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="animate-fade-in">
+          <MembersTableView bacentaFilter={bacentaFilter} />
+        </div>
+      )}
     </div>
   );
 };

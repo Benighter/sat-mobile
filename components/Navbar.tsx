@@ -10,6 +10,7 @@ const Navbar: React.FC = () => {
     switch (tabId) {
       case 'dashboard': return <ChartBarIcon className="w-5 h-5 mr-1 sm:mr-2" />;
       case 'all_members': return <UsersIcon className="w-5 h-5 mr-1 sm:mr-2" />;
+      case 'all_bacentas': return <GroupIcon className="w-5 h-5 mr-1 sm:mr-2" />;
       case 'critical_members': return <WarningIcon className="w-5 h-5 mr-1 sm:mr-2" />;
       case 'attendance_analytics': return <ChartBarIcon className="w-5 h-5 mr-1 sm:mr-2" />;
       default: return <GroupIcon className="w-5 h-5 mr-1 sm:mr-2" />;

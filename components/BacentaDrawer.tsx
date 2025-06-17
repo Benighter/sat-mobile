@@ -194,6 +194,15 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
                 }}
               />
               <NavigationItem
+                icon={<GroupIcon className="w-4 h-4" />}
+                label="All Bacentas"
+                isActive={currentTab.id === TabKeys.ALL_BACENTAS}
+                onClick={() => {
+                  changeTab(TabKeys.ALL_BACENTAS);
+                  onClose();
+                }}
+              />
+              <NavigationItem
                 icon={<WarningIcon className="w-4 h-4" />}
                 label="Critical Alerts"
                 isActive={currentTab.id === TabKeys.CRITICAL_MEMBERS}

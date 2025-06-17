@@ -3,7 +3,7 @@ import React from 'react';
 import { Member } from '../types'; 
 import { useAppData } from '../hooks/useAppData';
 import AttendanceMarker from './AttendanceMarker';
-import { formatDisplayDate, formatFullDate } from '../utils/dateUtils';
+import { formatDisplayDate, formatFullDate, formatDateToYYYYMMDD } from '../utils/dateUtils';
 import { UserIcon, EditIcon, TrashIcon, WarningIcon, PhoneIcon, HomeIcon, CalendarIcon } from './icons';
 import Button from './ui/Button';
 import Badge from './ui/Badge';
@@ -33,6 +33,29 @@ const MemberCard: React.FC<MemberCardProps> = ({ member, isCritical }) => {
     if (totalServices === 0) return 0;
     const presentCount = displayedSundays.filter(date => getAttendanceStatus(date) === 'Present').length;
     return Math.round((presentCount / totalServices) * 100);
+  };
+
+  // Check if a date is editable (not in future, not in past months)
+  const isDateEditable = (dateString: string) => {
+    const today = new Date();
+    const todayStr = formatDateToYYYYMMDD(today);
+    const targetDate = new Date(dateString + 'T00:00:00'); // Parse as local date
+    const currentMonth = today.getMonth();
+    const currentYear = today.getFullYear();
+    const targetMonth = targetDate.getMonth();
+    const targetYear = targetDate.getFullYear();
+
+    // Don't allow editing past months
+    if (targetYear < currentYear || (targetYear === currentYear && targetMonth < currentMonth)) {
+      return false;
+    }
+
+    // Don't allow editing future Sundays (compare date strings to avoid timezone issues)
+    if (dateString > todayStr) {
+      return false;
+    }
+
+    return true;
   };
 
   const memberBacenta = bacentas.find(b => b.id === member.bacentaId);
@@ -224,25 +247,69 @@ const MemberCard: React.FC<MemberCardProps> = ({ member, isCritical }) => {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {displayedSundays.map((sundayDate, index) => {
                 const status = getAttendanceStatus(sundayDate);
+                const isEditable = isDateEditable(sundayDate);
+                const today = new Date();
+                const todayStr = formatDateToYYYYMMDD(today);
+                const targetDate = new Date(sundayDate + 'T00:00:00');
+                const isFuture = sundayDate > todayStr;
+                const isPastMonth = targetDate.getFullYear() < today.getFullYear() ||
+                                  (targetDate.getFullYear() === today.getFullYear() && targetDate.getMonth() < today.getMonth());
+
                 return (
                   <div
                     key={sundayDate}
-                    className={`glass p-4 rounded-xl hover:scale-102 transition-all duration-200 animate-fade-in border-l-4 ${
-                      status === 'Present' ? 'border-green-500 bg-green-50/50' :
-                      status === 'Absent' ? 'border-red-500 bg-red-50/50' :
-                      'border-gray-300'
+                    className={`glass p-4 rounded-xl transition-all duration-200 animate-fade-in border-l-4 relative ${
+                      !isEditable
+                        ? isPastMonth
+                          ? 'border-gray-400 bg-gray-50/50 opacity-75'
+                          : 'border-blue-400 bg-blue-50/50 opacity-75'
+                        : status === 'Present'
+                        ? 'border-green-500 bg-green-50/50 hover:scale-102'
+                        : status === 'Absent'
+                        ? 'border-red-500 bg-red-50/50 hover:scale-102'
+                        : 'border-gray-300 hover:scale-102'
                     }`}
                     style={{ animationDelay: `${index * 0.1}s` }}
                   >
+                    {/* Visual indicator for non-editable dates - REMOVED */}
+                    {false && !isEditable && (
+                      <div className="absolute top-2 right-2">
+                        {isFuture ? (
+                          <div className="w-4 h-4 bg-blue-100 rounded-full flex items-center justify-center" title="Future date - cannot edit">
+                            <svg className="w-2.5 h-2.5 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
+                            </svg>
+                          </div>
+                        ) : (
+                          <div className="w-4 h-4 bg-gray-200 rounded-full flex items-center justify-center" title="Past month - cannot edit">
+                            <svg className="w-2.5 h-2.5 text-gray-500" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+                            </svg>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm font-semibold text-gray-700">{formatDisplayDate(sundayDate)}</p>
+                        <p className={`text-sm font-semibold ${!isEditable ? 'text-gray-500' : 'text-gray-700'}`}>
+                          {formatDisplayDate(sundayDate)}
+                        </p>
                         <p className={`text-xs font-medium ${
-                          status === 'Present' ? 'text-green-600' :
-                          status === 'Absent' ? 'text-red-600' :
-                          'text-gray-500'
+                          !isEditable
+                            ? 'text-gray-400'
+                            : status === 'Present'
+                            ? 'text-green-600'
+                            : status === 'Absent'
+                            ? 'text-red-600'
+                            : 'text-gray-500'
                         }`}>
                           {status || 'Not Marked'}
+                          {!isEditable && (
+                            <span className="ml-1 text-xs">
+                              {isFuture ? '(Future)' : '(Past Month)'}
+                            </span>
+                          )}
                         </p>
                       </div>
                       <div className="flex items-center space-x-1">

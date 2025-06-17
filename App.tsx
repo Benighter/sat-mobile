@@ -4,6 +4,7 @@ import { useAppData } from './hooks/useAppData';
 import Navbar from './components/Navbar';
 import DashboardView from './components/DashboardView';
 import MemberListView from './components/MemberListView';
+import BacentasTableView from './components/BacentasTableView';
 import CriticalMembersView from './components/CriticalMembersView';
 import AttendanceAnalyticsView from './components/AttendanceAnalyticsView';
 import { LoadingSpinnerIcon, RefreshIcon, PlusIcon as AddMemberIcon, CogIcon } from './components/icons'; // Renamed PlusIcon for clarity
@@ -97,6 +98,8 @@ const App: React.FC = () => {
         return <CriticalMembersView />;
       case TabKeys.ALL_CONGREGATIONS:
         return <MemberListView bacentaFilter={null} />;
+      case TabKeys.ALL_BACENTAS:
+        return <BacentasTableView />;
       case TabKeys.ATTENDANCE_ANALYTICS:
         return <AttendanceAnalyticsView />;
       default:
