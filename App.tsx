@@ -1,12 +1,16 @@
 
 import React, { useEffect, useState } from 'react';
 import { useAppData } from './hooks/useAppData';
+import { useNavigation } from './hooks/useNavigation';
 import Navbar from './components/Navbar';
 import DashboardView from './components/DashboardView';
 import MemberListView from './components/MemberListView';
 import BacentasTableView from './components/BacentasTableView';
 import CriticalMembersView from './components/CriticalMembersView';
 import AttendanceAnalyticsView from './components/AttendanceAnalyticsView';
+import GestureWrapper from './components/GestureWrapper';
+import BackButton from './components/BackButton';
+import SwipeIndicator from './components/SwipeIndicator';
 import { LoadingSpinnerIcon, RefreshIcon, PlusIcon as AddMemberIcon, CogIcon } from './components/icons'; // Renamed PlusIcon for clarity
 import { TabKeys } from './types';
 import MemberFormModal from './components/MemberFormModal';
@@ -42,6 +46,7 @@ const App: React.FC = () => {
     changeTab,
   } = useAppData();
 
+  // const { canNavigateBack } = useNavigation();
   const [isDataManagementOpen, setIsDataManagementOpen] = useState(false);
 
   useEffect(() => {
@@ -115,20 +120,23 @@ const App: React.FC = () => {
       {/* Fixed Header */}
       <header className="glass fixed top-0 left-0 right-0 z-50 border-b border-white/20 shadow-xl">
         <div className="container mx-auto px-4 py-4 flex justify-between items-center">
-          <button
-            onClick={() => changeTab('dashboard')}
-            className="flex items-center space-x-3 transition-all duration-300 group"
-            aria-label="Go to Dashboard"
-            title="Go to Dashboard"
-          >
-            <div className="w-10 h-10 bg-gradient-to-br from-gray-600 to-gray-700 rounded-xl flex items-center justify-center shadow-lg group-hover:shadow-xl group-hover:from-gray-700 group-hover:to-gray-800 transition-all duration-300">
-              <span className="text-white font-bold text-lg">⛪</span>
-            </div>
-            <div>
-              <h1 className="text-xl font-bold gradient-text font-serif group-hover:text-gray-700 transition-colors duration-300">Church Connect</h1>
-              <p className="text-xs text-gray-600 font-medium group-hover:text-gray-700 transition-colors duration-300">Faith • Community • Growth</p>
-            </div>
-          </button>
+          <div className="flex items-center space-x-3">
+            {/* {canNavigateBack() && <BackButton />} */}
+            <button
+              onClick={() => changeTab('dashboard')}
+              className="flex items-center space-x-3 transition-all duration-300 group"
+              aria-label="Go to Dashboard"
+              title="Go to Dashboard"
+            >
+              <div className="w-10 h-10 bg-gradient-to-br from-gray-600 to-gray-700 rounded-xl flex items-center justify-center shadow-lg group-hover:shadow-xl group-hover:from-gray-700 group-hover:to-gray-800 transition-all duration-300">
+                <span className="text-white font-bold text-lg">⛪</span>
+              </div>
+              <div>
+                <h1 className="text-xl font-bold gradient-text font-serif group-hover:text-gray-700 transition-colors duration-300">Church Connect</h1>
+                <p className="text-xs text-gray-600 font-medium group-hover:text-gray-700 transition-colors duration-300">Faith • Community • Growth</p>
+              </div>
+            </button>
+          </div>
           <div className="flex items-center space-x-2">
             <button
               onClick={() => openMemberForm(null)}
@@ -163,15 +171,18 @@ const App: React.FC = () => {
 
       {/* Scrollable Main Content */}
       <main className="flex-1 overflow-y-auto pt-32 pb-6 relative z-10">
-        <div className="container mx-auto px-2 sm:px-4 py-6">
-          <div className="animate-fade-in">
-            {renderView()}
+        {/* <GestureWrapper className="h-full"> */}
+          <div className="container mx-auto px-2 sm:px-4 py-6">
+            <div className="animate-fade-in">
+              {renderView()}
+            </div>
           </div>
-        </div>
+        {/* </GestureWrapper> */}
       </main>
 
+      {/* Swipe Indicator */}
+      {/* <SwipeIndicator /> */}
 
-      
       {isMemberFormOpen && (
         <MemberFormModal
           isOpen={isMemberFormOpen}

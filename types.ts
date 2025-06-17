@@ -38,3 +38,15 @@ export enum TabKeys {
   CRITICAL_MEMBERS = 'critical_members',
   ATTENDANCE_ANALYTICS = 'attendance_analytics',
 }
+
+export interface NavigationHistoryItem {
+  tabId: string;
+  timestamp: number;
+  data?: any; // For storing additional context like bacenta filters
+}
+
+export interface NavigationHistoryItem {
+  tabId: string;
+  timestamp: number;
+  data?: any; // For storing additional context like bacenta filters
+}

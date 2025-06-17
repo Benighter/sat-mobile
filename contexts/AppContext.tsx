@@ -1,6 +1,6 @@
 
 import React, { createContext, useState, useEffect, useCallback, ReactNode } from 'react';
-import { Member, AttendanceRecord, Bacenta, TabOption, AttendanceStatus, TabKeys } from '../types'; // Bacenta instead of CongregationGroup
+import { Member, AttendanceRecord, Bacenta, TabOption, AttendanceStatus, TabKeys, NavigationHistoryItem } from '../types'; // Bacenta instead of CongregationGroup
 import { MemberService, AttendanceService, BacentaService, initializeDataIfNeeded } from '../services/dataService'; // BacentaService
 import { FIXED_TABS, CONSECUTIVE_ABSENCE_THRESHOLD, DEFAULT_TAB_ID } from '../constants'; // CONGREGATION_GROUPS removed
 import { getSundaysOfMonth, formatDateToYYYYMMDD } from '../utils/dateUtils';
@@ -63,6 +63,11 @@ interface AppContextType {
   showConfirmation: (type: 'deleteMember' | 'deleteBacenta' | 'clearData', data: any, onConfirm: () => void) => void;
   hideConfirmation: () => void;
   showToast: (type: 'success' | 'error' | 'warning' | 'info', title: string, message?: string) => void;
+  // Navigation functions
+  navigationHistory: NavigationHistoryItem[];
+  navigateBack: () => boolean;
+  canNavigateBack: () => boolean;
+  addToNavigationHistory: (tabId: string, data?: any) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -108,6 +113,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     title: string;
     message?: string;
   }>>([]);
+
+  // Navigation state
+  const [navigationHistory, setNavigationHistory] = useState<NavigationHistoryItem[]>([]);
+  const isNavigatingBack = React.useRef(false);
 
 
   const calculateCriticalMembers = useCallback((mems: Member[], attRecs: AttendanceRecord[], sundays: string[]) => {
@@ -185,6 +194,25 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const criticalIds = calculateCriticalMembers(members, attendanceRecords, sundays);
     setCriticalMemberIds(criticalIds);
   }, [displayedDate, members, attendanceRecords, calculateCriticalMembers]);
+
+  // Track tab changes for navigation history
+  useEffect(() => {
+    if (currentTab.id && !isNavigatingBack.current) {
+      // Don't add duplicate consecutive entries
+      const lastEntry = navigationHistory[navigationHistory.length - 1];
+      if (!lastEntry || lastEntry.tabId !== currentTab.id) {
+        const newItem: NavigationHistoryItem = {
+          tabId: currentTab.id,
+          timestamp: Date.now()
+        };
+        setNavigationHistory(prev => {
+          const newHistory = [...prev, newItem];
+          // Keep history size manageable
+          return newHistory.length > 10 ? newHistory.slice(-10) : newHistory;
+        });
+      }
+    }
+  }, [currentTab.id]); // Removed navigationHistory dependency to prevent infinite loop
 
 
   const addMemberHandler = async (memberData: Omit<Member, 'id' | 'createdDate' | 'lastUpdated'>) => {
@@ -467,6 +495,42 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }, 5000);
   };
 
+  // Navigation Functions
+  const addToNavigationHistory = useCallback((tabId: string, data?: any) => {
+    // This function is now handled by useEffect to avoid circular dependencies
+    // Keeping it for API compatibility
+  }, []);
+
+  const navigateBack = useCallback(() => {
+    if (navigationHistory.length <= 1) {
+      // If no history, go to dashboard
+      if (currentTab.id !== TabKeys.DASHBOARD) {
+        isNavigatingBack.current = true;
+        changeTab(TabKeys.DASHBOARD);
+        return true;
+      }
+      return false;
+    }
+
+    // Remove current item and go to previous
+    const newHistory = [...navigationHistory];
+    newHistory.pop();
+    const previousItem = newHistory[newHistory.length - 1];
+
+    if (previousItem) {
+      isNavigatingBack.current = true;
+      setNavigationHistory(newHistory);
+      changeTab(previousItem.tabId);
+      return true;
+    }
+
+    return false;
+  }, [navigationHistory, changeTab, currentTab.id]);
+
+  const canNavigateBack = useCallback(() => {
+    return navigationHistory.length > 1 || currentTab.id !== TabKeys.DASHBOARD;
+  }, [navigationHistory, currentTab.id]);
+
   return (
     <AppContext.Provider value={{
       members, attendanceRecords, bacentas, currentTab, isLoading, error,
@@ -478,7 +542,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       addBacentaHandler, updateBacentaHandler, deleteBacentaHandler, openBacentaForm, closeBacentaForm,
       openBacentaDrawer, closeBacentaDrawer,
       navigateToPreviousMonth, navigateToNextMonth,
-      exportData, importData, getStorageInfo, showConfirmation, hideConfirmation, showToast
+      exportData, importData, getStorageInfo, showConfirmation, hideConfirmation, showToast,
+      navigationHistory, navigateBack, canNavigateBack, addToNavigationHistory
     }}>
       {children}
     </AppContext.Provider>
