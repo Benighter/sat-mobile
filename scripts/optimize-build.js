@@ -5,8 +5,12 @@
  * This script runs after the build to optimize the output
  */
 
-const fs = require('fs');
-const path = require('path');
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const DIST_DIR = path.join(__dirname, '..', 'dist');
 
@@ -155,8 +159,8 @@ self.addEventListener('fetch', event => {
 }
 
 // Run optimization if called directly
-if (require.main === module) {
+if (import.meta.url === `file://${process.argv[1]}`) {
   optimizeBuild();
 }
 
-module.exports = { optimizeBuild };
+export { optimizeBuild };
