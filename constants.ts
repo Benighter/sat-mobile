@@ -9,8 +9,32 @@ export const FIXED_TABS: TabOption[] = [
   { id: TabKeys.ALL_BACENTAS, name: 'All Bacentas' },
   { id: TabKeys.CRITICAL_MEMBERS, name: 'Critical Alerts' },
   { id: TabKeys.ATTENDANCE_ANALYTICS, name: 'Attendance Analytics' },
+  { id: TabKeys.NEW_BELIEVERS, name: 'New Believers' },
 ];
 
 export const CONSECUTIVE_ABSENCE_THRESHOLD = 2;
 
 export const DEFAULT_TAB_ID = TabKeys.DASHBOARD;
+
+// Ministry options for New Believers dropdown
+export const MINISTRY_OPTIONS = [
+  'Choir',
+  'Dancing Stars',
+  'Ushers',
+  'Arrival Stars',
+  'Airport Stars',
+  'Media',
+  'Youth Ministry',
+  'Children Ministry',
+  'Prayer Ministry',
+  'Evangelism Team',
+  'Hospitality Ministry',
+  'Counseling Ministry',
+  'Teaching Ministry',
+  'Outreach Ministry',
+  'Security Ministry',
+  'Cleaning Ministry',
+  'Finance Ministry',
+  'Administration',
+  'Other'
+];

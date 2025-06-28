@@ -1,13 +1,14 @@
 
 import React, { createContext, useState, useEffect, useCallback, ReactNode, useMemo } from 'react';
-import { Member, AttendanceRecord, Bacenta, TabOption, AttendanceStatus, TabKeys, NavigationHistoryItem } from '../types'; // Bacenta instead of CongregationGroup
-import { MemberService, AttendanceService, BacentaService, initializeDataIfNeeded } from '../services/dataService'; // BacentaService
+import { Member, AttendanceRecord, Bacenta, TabOption, AttendanceStatus, TabKeys, NavigationHistoryItem, NewBeliever } from '../types'; // Bacenta instead of CongregationGroup
+import { MemberService, AttendanceService, BacentaService, NewBelieverService, initializeDataIfNeeded } from '../services/dataService'; // BacentaService
 import { FIXED_TABS, CONSECUTIVE_ABSENCE_THRESHOLD, DEFAULT_TAB_ID } from '../constants'; // CONGREGATION_GROUPS removed
 import { getSundaysOfMonth, formatDateToYYYYMMDD } from '../utils/dateUtils';
 import {
   membersStorage,
   bacentasStorage,
   attendanceStorage,
+  newBelieversStorage,
   appStateStorage,
   backupStorage
 } from '../utils/localStorage';
@@ -16,6 +17,7 @@ interface AppContextType {
   members: Member[];
   attendanceRecords: AttendanceRecord[];
   bacentas: Bacenta[]; // Renamed from congregations
+  newBelievers: NewBeliever[];
   currentTab: TabOption;
   isLoading: boolean;
   error: string | null;
@@ -27,9 +29,11 @@ interface AppContextType {
   isBacentaFormOpen: boolean; // New state for Bacenta form
   editingBacenta: Bacenta | null; // New state for Bacenta form
   isBacentaDrawerOpen: boolean; // New state for Bacenta drawer
+  isNewBelieverFormOpen: boolean; // New state for New Believer form
+  editingNewBeliever: NewBeliever | null; // New state for New Believer form
   confirmationModal: {
     isOpen: boolean;
-    type: 'deleteMember' | 'deleteBacenta' | 'clearData' | null;
+    type: 'deleteMember' | 'deleteBacenta' | 'deleteNewBeliever' | 'clearData' | null;
     data: any;
     onConfirm: () => void;
   };
@@ -41,9 +45,11 @@ interface AppContextType {
   }>;
   fetchInitialData: () => Promise<void>;
   addMemberHandler: (memberData: Omit<Member, 'id' | 'createdDate' | 'lastUpdated'>) => Promise<void>;
+  addMultipleMembersHandler: (membersData: Omit<Member, 'id' | 'createdDate' | 'lastUpdated'>[]) => Promise<{ successful: Member[], failed: { data: Omit<Member, 'id' | 'createdDate' | 'lastUpdated'>, error: string }[] }>;
   updateMemberHandler: (memberData: Member) => Promise<void>;
   deleteMemberHandler: (memberId: string) => Promise<void>;
   markAttendanceHandler: (memberId: string, date: string, status: AttendanceStatus) => Promise<void>;
+  markNewBelieverAttendanceHandler: (newBelieverId: string, date: string, status: AttendanceStatus) => Promise<void>;
   changeTab: (tabId: string) => void;
   openMemberForm: (member: Member | null) => void;
   closeMemberForm: () => void;
@@ -55,12 +61,17 @@ interface AppContextType {
   closeBacentaForm: () => void; // New function
   openBacentaDrawer: () => void; // New function for Bacenta drawer
   closeBacentaDrawer: () => void; // New function for Bacenta drawer
+  addNewBelieverHandler: (newBelieverData: Omit<NewBeliever, 'id' | 'createdDate' | 'lastUpdated'>) => Promise<void>; // New handler
+  updateNewBelieverHandler: (newBeliever: NewBeliever) => Promise<void>; // New handler
+  deleteNewBelieverHandler: (newBelieverId: string) => Promise<void>; // New handler
+  openNewBelieverForm: (newBeliever: NewBeliever | null) => void; // New function
+  closeNewBelieverForm: () => void; // New function
   navigateToPreviousMonth: () => void; // For month navigation
   navigateToNextMonth: () => void; // For month navigation
   exportData: () => string; // Export all data as JSON
   importData: (jsonData: string) => Promise<boolean>; // Import data from JSON
   getStorageInfo: () => { used: number; available: number; percentage: number };
-  showConfirmation: (type: 'deleteMember' | 'deleteBacenta' | 'clearData', data: any, onConfirm: () => void) => void;
+  showConfirmation: (type: 'deleteMember' | 'deleteBacenta' | 'deleteNewBeliever' | 'clearData', data: any, onConfirm: () => void) => void;
   hideConfirmation: () => void;
   showToast: (type: 'success' | 'error' | 'warning' | 'info', title: string, message?: string) => void;
   // Navigation functions
@@ -77,6 +88,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [members, setMembers] = useState<Member[]>(() => membersStorage.load());
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>(() => attendanceStorage.load());
   const [bacentas, setBacentas] = useState<Bacenta[]>(() => bacentasStorage.load());
+  const [newBelievers, setNewBelievers] = useState<NewBeliever[]>(() => newBelieversStorage.load());
   const [currentTab, setCurrentTab] = useState<TabOption>(() => {
     const savedTab = appStateStorage.loadCurrentTab();
     return savedTab || FIXED_TABS.find(t => t.id === DEFAULT_TAB_ID) || FIXED_TABS[0];
@@ -98,9 +110,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [editingBacenta, setEditingBacenta] = useState<Bacenta | null>(null);
   const [isBacentaDrawerOpen, setIsBacentaDrawerOpen] = useState(false);
 
+  const [isNewBelieverFormOpen, setIsNewBelieverFormOpen] = useState(false);
+  const [editingNewBeliever, setEditingNewBeliever] = useState<NewBeliever | null>(null);
+
   const [confirmationModal, setConfirmationModal] = useState<{
     isOpen: boolean;
-    type: 'deleteMember' | 'deleteBacenta' | 'clearData' | null;
+    type: 'deleteMember' | 'deleteBacenta' | 'deleteNewBeliever' | 'clearData' | null;
     data: any;
     onConfirm: () => void;
   }>({
@@ -215,12 +230,45 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       // Show success toast
       const bacentaName = memberData.bacentaId ? bacentas.find(b => b.id === memberData.bacentaId)?.name : null;
       const message = bacentaName
-        ? `${newMember.name} has been added to ${bacentaName}!`
-        : `${newMember.name} has been added successfully!`;
+        ? `${newMember.firstName} ${newMember.lastName} has been added to ${bacentaName}!`
+        : `${newMember.firstName} ${newMember.lastName} has been added successfully!`;
       showToast('success', 'Member Added!', message);
     } catch (e) {
       setError("Failed to add member.");
       showToast('error', 'Failed to Add Member', 'Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const addMultipleMembersHandler = async (membersData: Omit<Member, 'id' | 'createdDate' | 'lastUpdated'>[]) => {
+    setIsLoading(true);
+    try {
+      const result = await MemberService.addMultipleMembers(membersData);
+
+      if (result.successful.length > 0) {
+        const updatedMembers = [...members, ...result.successful];
+        setMembers(updatedMembers);
+        membersStorage.save(updatedMembers);
+
+        // Show success toast
+        const bacentaName = membersData[0]?.bacentaId ? bacentas.find(b => b.id === membersData[0].bacentaId)?.name : null;
+        const message = bacentaName
+          ? `${result.successful.length} member${result.successful.length !== 1 ? 's' : ''} added to ${bacentaName}!`
+          : `${result.successful.length} member${result.successful.length !== 1 ? 's' : ''} added successfully!`;
+
+        if (result.failed.length > 0) {
+          showToast('warning', 'Partially Complete', `${result.successful.length} added, ${result.failed.length} failed.`);
+        } else {
+          showToast('success', 'Members Added!', message);
+        }
+      }
+
+      return result;
+    } catch (e) {
+      setError("Failed to add members.");
+      showToast('error', 'Failed to Add Members', 'Please try again.');
+      return { successful: [], failed: membersData.map(data => ({ data, error: 'Unknown error' })) };
     } finally {
       setIsLoading(false);
     }
@@ -279,6 +327,25 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       // Critical members will be recalculated by the useEffect due to attendanceRecords change
     } catch (e) {
       setError("Failed to mark attendance.");
+    }
+  };
+
+  const markNewBelieverAttendanceHandler = async (newBelieverId: string, date: string, status: AttendanceStatus) => {
+    try {
+      const updatedRecord = await AttendanceService.markNewBelieverAttendance(newBelieverId, date, status);
+      const updatedRecords = (() => {
+        const existingIndex = attendanceRecords.findIndex(ar => ar.id === updatedRecord.id);
+        if (existingIndex > -1) {
+          const newRecords = [...attendanceRecords];
+          newRecords[existingIndex] = updatedRecord;
+          return newRecords;
+        }
+        return [...attendanceRecords, updatedRecord];
+      })();
+      setAttendanceRecords(updatedRecords);
+      attendanceStorage.save(updatedRecords); // Save to localStorage
+    } catch (e) {
+      setError("Failed to mark new believer attendance.");
     }
   };
 
@@ -388,6 +455,67 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setIsBacentaDrawerOpen(false);
   };
 
+  // New Believer Handlers
+  const addNewBelieverHandler = async (newBelieverData: Omit<NewBeliever, 'id' | 'createdDate' | 'lastUpdated'>) => {
+    setIsLoading(true);
+    try {
+      const newBeliever = await NewBelieverService.addNewBeliever(newBelieverData);
+      const updatedNewBelievers = [...newBelievers, newBeliever];
+      setNewBelievers(updatedNewBelievers);
+      newBelieversStorage.save(updatedNewBelievers); // Save to localStorage
+
+      // Show success toast
+      showToast('success', 'New Believer Added!', `${newBeliever.name} has been added successfully!`);
+    } catch (e) {
+      setError("Failed to add new believer.");
+      showToast('error', 'Failed to Add New Believer', 'Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const updateNewBelieverHandler = async (newBelieverData: NewBeliever) => {
+    setIsLoading(true);
+    try {
+      const updatedNewBeliever = await NewBelieverService.updateNewBeliever(newBelieverData);
+      const updatedNewBelievers = newBelievers.map(nb => nb.id === updatedNewBeliever.id ? updatedNewBeliever : nb);
+      setNewBelievers(updatedNewBelievers);
+      newBelieversStorage.save(updatedNewBelievers); // Save to localStorage
+      showToast('success', 'New Believer Updated!', `${updatedNewBeliever.name} has been updated successfully!`);
+    } catch (e) {
+      setError("Failed to update new believer.");
+      showToast('error', 'Failed to Update New Believer', 'Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const deleteNewBelieverHandler = async (newBelieverId: string) => {
+    setIsLoading(true);
+    try {
+      await NewBelieverService.deleteNewBeliever(newBelieverId);
+      const updatedNewBelievers = newBelievers.filter(nb => nb.id !== newBelieverId);
+      setNewBelievers(updatedNewBelievers);
+      newBelieversStorage.save(updatedNewBelievers); // Save to localStorage
+      showToast('success', 'New Believer Deleted', 'The new believer has been removed successfully.');
+    } catch (e) {
+      setError("Failed to delete new believer.");
+      showToast('error', 'Failed to Delete New Believer', 'Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const openNewBelieverForm = (newBeliever: NewBeliever | null) => {
+    setEditingNewBeliever(newBeliever);
+    setIsNewBelieverFormOpen(true);
+  };
+
+  const closeNewBelieverForm = () => {
+    setEditingNewBeliever(null);
+    setIsNewBelieverFormOpen(false);
+  };
+
   // Month Navigation Handlers
   const navigateToPreviousMonth = () => {
     setDisplayedDate(prevDate => {
@@ -420,12 +548,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         const importedMembers = membersStorage.load();
         const importedBacentas = bacentasStorage.load();
         const importedAttendance = attendanceStorage.load();
+        const importedNewBelievers = newBelieversStorage.load();
         const importedTab = appStateStorage.loadCurrentTab();
         const importedDate = appStateStorage.loadDisplayedDate();
 
         setMembers(importedMembers);
         setBacentas(importedBacentas);
         setAttendanceRecords(importedAttendance);
+        setNewBelievers(importedNewBelievers);
         if (importedTab) setCurrentTab(importedTab);
         setDisplayedDate(importedDate);
 
@@ -454,7 +584,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   // Confirmation Modal Functions
-  const showConfirmation = (type: 'deleteMember' | 'deleteBacenta' | 'clearData', data: any, onConfirm: () => void) => {
+  const showConfirmation = (type: 'deleteMember' | 'deleteBacenta' | 'deleteNewBeliever' | 'clearData', data: any, onConfirm: () => void) => {
     setConfirmationModal({
       isOpen: true,
       type,
@@ -532,26 +662,30 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   // Memoize context value to prevent unnecessary re-renders
   const contextValue = useMemo(() => ({
-    members, attendanceRecords, bacentas, currentTab, isLoading, error,
+    members, attendanceRecords, bacentas, newBelievers, currentTab, isLoading, error,
     displayedSundays, displayedDate, criticalMemberIds,
     isMemberFormOpen, editingMember, isBacentaFormOpen, editingBacenta, isBacentaDrawerOpen,
+    isNewBelieverFormOpen, editingNewBeliever,
     confirmationModal, toasts,
-    fetchInitialData, addMemberHandler, updateMemberHandler, deleteMemberHandler, markAttendanceHandler, changeTab,
+    fetchInitialData, addMemberHandler, addMultipleMembersHandler, updateMemberHandler, deleteMemberHandler, markAttendanceHandler, markNewBelieverAttendanceHandler, changeTab,
     openMemberForm, closeMemberForm, refreshData,
     addBacentaHandler, updateBacentaHandler, deleteBacentaHandler, openBacentaForm, closeBacentaForm,
     openBacentaDrawer, closeBacentaDrawer,
+    addNewBelieverHandler, updateNewBelieverHandler, deleteNewBelieverHandler, openNewBelieverForm, closeNewBelieverForm,
     navigateToPreviousMonth, navigateToNextMonth,
     exportData, importData, getStorageInfo, showConfirmation, hideConfirmation, showToast,
     navigationHistory, navigateBack, canNavigateBack, addToNavigationHistory
   }), [
-    members, attendanceRecords, bacentas, currentTab, isLoading, error,
+    members, attendanceRecords, bacentas, newBelievers, currentTab, isLoading, error,
     displayedSundays, displayedDate, criticalMemberIds,
     isMemberFormOpen, editingMember, isBacentaFormOpen, editingBacenta, isBacentaDrawerOpen,
+    isNewBelieverFormOpen, editingNewBeliever,
     confirmationModal, toasts,
-    fetchInitialData, addMemberHandler, updateMemberHandler, deleteMemberHandler, markAttendanceHandler, changeTab,
+    fetchInitialData, addMemberHandler, addMultipleMembersHandler, updateMemberHandler, deleteMemberHandler, markAttendanceHandler, markNewBelieverAttendanceHandler, changeTab,
     openMemberForm, closeMemberForm, refreshData,
     addBacentaHandler, updateBacentaHandler, deleteBacentaHandler, openBacentaForm, closeBacentaForm,
     openBacentaDrawer, closeBacentaDrawer,
+    addNewBelieverHandler, updateNewBelieverHandler, deleteNewBelieverHandler, openNewBelieverForm, closeNewBelieverForm,
     navigateToPreviousMonth, navigateToNextMonth,
     exportData, importData, getStorageInfo, showConfirmation, hideConfirmation, showToast,
     navigationHistory, navigateBack, canNavigateBack, addToNavigationHistory

@@ -10,18 +10,22 @@ import {
   LazyMemberListView,
   LazyBacentasTableView,
   LazyCriticalMembersView,
-  LazyAttendanceAnalyticsView
+  LazyAttendanceAnalyticsView,
+  LazyNewBelieversView
 } from './components/LazyWrapper';
 import GestureWrapper from './components/GestureWrapper';
 import BackButton from './components/BackButton';
 import SwipeIndicator from './components/SwipeIndicator';
 import { LoadingSpinnerIcon, RefreshIcon, PlusIcon as AddMemberIcon, CogIcon } from './components/icons'; // Renamed PlusIcon for clarity
+import { ClipboardIcon } from 'lucide-react';
 import { TabKeys } from './types';
 import MemberFormModal from './components/MemberFormModal';
+import BulkMemberAddModal from './components/BulkMemberAddModal';
 import BacentaFormModal from './components/BacentaFormModal'; // Import BacentaFormModal
 import BacentaDrawer from './components/BacentaDrawer'; // Import BacentaDrawer
+import NewBelieverFormModal from './components/NewBelieverFormModal'; // Import NewBelieverFormModal
 import DataManagement from './components/DataManagement';
-import { DeleteMemberModal, DeleteBacentaModal, ClearAllDataModal } from './components/ConfirmationModal';
+import { DeleteMemberModal, DeleteBacentaModal, DeleteNewBelieverModal, ClearAllDataModal } from './components/ConfirmationModal';
 import { ToastContainer } from './components/Toast';
 
 const App: React.FC = () => {
@@ -41,8 +45,12 @@ const App: React.FC = () => {
     closeBacentaForm,
     isBacentaDrawerOpen,
     closeBacentaDrawer,
+    isNewBelieverFormOpen,
+    editingNewBeliever,
+    closeNewBelieverForm,
     bacentas,
     members, // Added members to destructuring
+    newBelievers,
     confirmationModal,
     hideConfirmation,
     attendanceRecords,
@@ -52,6 +60,7 @@ const App: React.FC = () => {
 
   // const { canNavigateBack } = useNavigation();
   const [isDataManagementOpen, setIsDataManagementOpen] = useState(false);
+  const [isBulkMemberModalOpen, setIsBulkMemberModalOpen] = useState(false);
 
   useEffect(() => {
     PerformanceMonitor.start('app-initialization');
@@ -141,6 +150,12 @@ const App: React.FC = () => {
             <LazyAttendanceAnalyticsView />
           </LazyWrapper>
         );
+      case TabKeys.NEW_BELIEVERS:
+        return (
+          <LazyWrapper>
+            <LazyNewBelieversView />
+          </LazyWrapper>
+        );
       default:
         return (
           <LazyWrapper>
@@ -187,6 +202,16 @@ const App: React.FC = () => {
               <AddMemberIcon className="w-5 h-5 sm:w-6 sm:h-6 text-gray-600 group-hover:text-blue-100 transition-all duration-300 relative z-10" />
             </button>
             <button
+              onClick={() => setIsBulkMemberModalOpen(true)}
+              className="p-2 sm:p-2.5 md:p-3 rounded-lg sm:rounded-xl glass hover:glass-dark transition-all duration-300 group shadow-lg relative overflow-hidden"
+              aria-label="Paste Multiple Members"
+              title="Paste Multiple Members"
+            >
+              {/* Subtle secondary action indicator */}
+              <div className="absolute inset-0 bg-gradient-to-br from-green-500/8 via-transparent to-green-600/8 opacity-0 group-hover:opacity-100 transition-all duration-300 rounded-lg sm:rounded-xl"></div>
+              <ClipboardIcon className="w-5 h-5 sm:w-6 sm:h-6 text-gray-600 group-hover:text-green-100 transition-all duration-300 relative z-10" />
+            </button>
+            <button
               onClick={() => setIsDataManagementOpen(true)}
               className="p-2 sm:p-2.5 md:p-3 rounded-lg sm:rounded-xl glass hover:glass-dark transition-all duration-300 group shadow-lg"
               aria-label="Data Management"
@@ -229,11 +254,28 @@ const App: React.FC = () => {
         />
       )}
 
+      {isBulkMemberModalOpen && (
+        <BulkMemberAddModal
+          isOpen={isBulkMemberModalOpen}
+          onClose={() => setIsBulkMemberModalOpen(false)}
+          bacentaId={currentTab.id !== 'dashboard' && currentTab.id !== 'all_members' && currentTab.id !== 'all_bacentas' && currentTab.id !== 'critical_members' && currentTab.id !== 'attendance_analytics' && currentTab.id !== 'new_believers' ? currentTab.id : undefined}
+          bacentaName={currentTab.id !== 'dashboard' && currentTab.id !== 'all_members' && currentTab.id !== 'all_bacentas' && currentTab.id !== 'critical_members' && currentTab.id !== 'attendance_analytics' && currentTab.id !== 'new_believers' ? currentTab.name : undefined}
+        />
+      )}
+
       {isBacentaFormOpen && (
         <BacentaFormModal
           isOpen={isBacentaFormOpen}
           onClose={closeBacentaForm}
           bacenta={editingBacenta}
+        />
+      )}
+
+      {isNewBelieverFormOpen && (
+        <NewBelieverFormModal
+          isOpen={isNewBelieverFormOpen}
+          onClose={closeNewBelieverForm}
+          newBeliever={editingNewBeliever}
         />
       )}
 
@@ -266,6 +308,15 @@ const App: React.FC = () => {
           onConfirm={confirmationModal.onConfirm}
           bacentaName={confirmationModal.data?.bacenta?.name || 'Unknown Bacenta'}
           memberCount={confirmationModal.data?.memberCount || 0}
+        />
+      )}
+
+      {confirmationModal.type === 'deleteNewBeliever' && (
+        <DeleteNewBelieverModal
+          isOpen={confirmationModal.isOpen}
+          onClose={hideConfirmation}
+          onConfirm={confirmationModal.onConfirm}
+          newBelieverName={confirmationModal.data?.name || 'Unknown New Believer'}
         />
       )}
 

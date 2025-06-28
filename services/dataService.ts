@@ -1,5 +1,5 @@
 
-import { Member, AttendanceRecord, AttendanceStatus, Bacenta } from '../types';
+import { Member, AttendanceRecord, AttendanceStatus, Bacenta, NewBeliever } from '../types';
 // CONGREGATION_GROUPS removed from imports
 import { formatDateToYYYYMMDD, getSundaysOfMonth } from '../utils/dateUtils';
 import { memoize } from '../utils/performance';
@@ -7,6 +7,7 @@ import { memoize } from '../utils/performance';
 const MEMBERS_KEY = 'church_members';
 const ATTENDANCE_KEY = 'church_attendance';
 const BACENTAS_KEY = 'church_bacentas'; // New key for Bacentas
+const NEW_BELIEVERS_KEY = 'church_connect_new_believers'; // New key for New Believers - match localStorage key
 
 const getInitialMembers = (): Member[] => {
   // const now = new Date().toISOString();
@@ -76,6 +77,61 @@ export const MemberService = {
     localStorage.setItem(MEMBERS_KEY, JSON.stringify(members));
     return newMember;
   },
+
+  addMultipleMembers: async (membersData: Omit<Member, 'id' | 'createdDate' | 'lastUpdated'>[]): Promise<{
+    successful: Member[],
+    failed: { data: Omit<Member, 'id' | 'createdDate' | 'lastUpdated'>, error: string }[]
+  }> => {
+    const members = await MemberService.getMembers();
+    const now = new Date().toISOString();
+    const successful: Member[] = [];
+    const failed: { data: Omit<Member, 'id' | 'createdDate' | 'lastUpdated'>, error: string }[] = [];
+
+    for (const memberData of membersData) {
+      try {
+        // Validate required fields
+        if (!memberData.firstName?.trim()) {
+          throw new Error('First name is required');
+        }
+
+        // Create unique ID with timestamp and random component to avoid collisions
+        const timestamp = Date.now();
+        const random = Math.random().toString(36).substr(2, 9);
+        const newMember: Member = {
+          ...memberData,
+          id: `m_${timestamp}_${random}`,
+          createdDate: now,
+          lastUpdated: now,
+          joinedDate: memberData.joinedDate || formatDateToYYYYMMDD(new Date()),
+          // Ensure required fields have defaults
+          firstName: memberData.firstName.trim(),
+          lastName: memberData.lastName?.trim() || '',
+          phoneNumber: memberData.phoneNumber?.trim() || '',
+          buildingAddress: memberData.buildingAddress?.trim() || '',
+          bornAgainStatus: memberData.bornAgainStatus || false,
+          bacentaId: memberData.bacentaId || '',
+        };
+
+        members.push(newMember);
+        successful.push(newMember);
+
+        // Small delay to ensure unique timestamps
+        await new Promise(resolve => setTimeout(resolve, 1));
+      } catch (error) {
+        failed.push({
+          data: memberData,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        });
+      }
+    }
+
+    // Save all successful members at once
+    if (successful.length > 0) {
+      localStorage.setItem(MEMBERS_KEY, JSON.stringify(members));
+    }
+
+    return { successful, failed };
+  },
   updateMember: async (updatedMember: Member): Promise<Member> => {
     let members = await MemberService.getMembers();
     updatedMember.lastUpdated = new Date().toISOString();
@@ -111,7 +167,7 @@ export const AttendanceService = {
     let attendanceRecords = await AttendanceService.getAttendance();
     const recordId = `${memberId}_${date}`;
     const existingRecordIndex = attendanceRecords.findIndex(ar => ar.id === recordId);
-    
+
     let updatedRecord: AttendanceRecord;
     if (existingRecordIndex > -1) {
       attendanceRecords[existingRecordIndex].status = status;
@@ -123,9 +179,29 @@ export const AttendanceService = {
     localStorage.setItem(ATTENDANCE_KEY, JSON.stringify(attendanceRecords));
     return updatedRecord;
   },
+  markNewBelieverAttendance: async (newBelieverId: string, date: string, status: AttendanceStatus): Promise<AttendanceRecord> => {
+    let attendanceRecords = await AttendanceService.getAttendance();
+    const recordId = `newbeliever_${newBelieverId}_${date}`;
+    const existingRecordIndex = attendanceRecords.findIndex(ar => ar.id === recordId);
+
+    let updatedRecord: AttendanceRecord;
+    if (existingRecordIndex > -1) {
+      attendanceRecords[existingRecordIndex].status = status;
+      updatedRecord = attendanceRecords[existingRecordIndex];
+    } else {
+      updatedRecord = { id: recordId, newBelieverId, date, status };
+      attendanceRecords.push(updatedRecord);
+    }
+    localStorage.setItem(ATTENDANCE_KEY, JSON.stringify(attendanceRecords));
+    return updatedRecord;
+  },
   getAttendanceForMember: async (memberId: string): Promise<AttendanceRecord[]> => {
     const attendanceRecords = await AttendanceService.getAttendance();
     return attendanceRecords.filter(ar => ar.memberId === memberId);
+  },
+  getAttendanceForNewBeliever: async (newBelieverId: string): Promise<AttendanceRecord[]> => {
+    const attendanceRecords = await AttendanceService.getAttendance();
+    return attendanceRecords.filter(ar => ar.newBelieverId === newBelieverId);
   },
 };
 
@@ -170,8 +246,41 @@ export const BacentaService = { // Renamed from CongregationService
   },
 };
 
+export const NewBelieverService = {
+  getNewBelievers: async (): Promise<NewBeliever[]> => {
+    const data = localStorage.getItem(NEW_BELIEVERS_KEY);
+    return data ? JSON.parse(data) : [];
+  },
+  addNewBeliever: async (newBelieverData: Omit<NewBeliever, 'id' | 'createdDate' | 'lastUpdated'>): Promise<NewBeliever> => {
+    const newBelievers = await NewBelieverService.getNewBelievers();
+    const now = new Date().toISOString();
+    const newBeliever: NewBeliever = {
+      ...newBelieverData,
+      id: `newbeliever_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+      createdDate: now,
+      lastUpdated: now,
+    };
+    newBelievers.push(newBeliever);
+    localStorage.setItem(NEW_BELIEVERS_KEY, JSON.stringify(newBelievers));
+    return newBeliever;
+  },
+  updateNewBeliever: async (updatedNewBeliever: NewBeliever): Promise<NewBeliever> => {
+    let newBelievers = await NewBelieverService.getNewBelievers();
+    const updatedData = { ...updatedNewBeliever, lastUpdated: new Date().toISOString() };
+    newBelievers = newBelievers.map(nb => nb.id === updatedData.id ? updatedData : nb);
+    localStorage.setItem(NEW_BELIEVERS_KEY, JSON.stringify(newBelievers));
+    return updatedData;
+  },
+  deleteNewBeliever: async (newBelieverId: string): Promise<void> => {
+    let newBelievers = await NewBelieverService.getNewBelievers();
+    newBelievers = newBelievers.filter(nb => nb.id !== newBelieverId);
+    localStorage.setItem(NEW_BELIEVERS_KEY, JSON.stringify(newBelievers));
+  },
+};
+
 export const initializeDataIfNeeded = async () => {
   await MemberService.getMembers();
-  await AttendanceService.getAttendance(); 
+  await AttendanceService.getAttendance();
   await BacentaService.getBacentas(); // Ensure Bacenta storage is initialized if needed
+  await NewBelieverService.getNewBelievers(); // Ensure New Believer storage is initialized if needed
 };

@@ -38,6 +38,12 @@ export const formatFullDate = (dateInput: string | Date): string => {
    return date.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
 };
 
+// Formats a YYYY-MM-DD string to a display format like 'Jan 15, 2024'
+export const formatDateToDisplay = (dateString: string): string => {
+  const date = new Date(dateString + 'T00:00:00'); // Ensure parsing as local date
+  return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+};
+
 export const isSameDate = (date1Str: string, date2Str: string): boolean => {
   return date1Str === date2Str;
 };

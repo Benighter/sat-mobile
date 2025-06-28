@@ -1,11 +1,12 @@
 // Local Storage Utility for Church Connect Mobile
-import { Member, Bacenta, AttendanceRecord, TabOption } from '../types';
+import { Member, Bacenta, AttendanceRecord, TabOption, NewBeliever } from '../types';
 
 // Storage keys
 const STORAGE_KEYS = {
   MEMBERS: 'church_connect_members',
   BACENTAS: 'church_connect_bacentas',
   ATTENDANCE_RECORDS: 'church_connect_attendance',
+  NEW_BELIEVERS: 'church_connect_new_believers',
   CURRENT_TAB: 'church_connect_current_tab',
   DISPLAYED_DATE: 'church_connect_displayed_date',
   APP_VERSION: 'church_connect_version',
@@ -185,6 +186,43 @@ export const attendanceStorage = {
   }
 };
 
+// New believers storage
+export const newBelieversStorage = {
+  save: (newBelievers: NewBeliever[]): void => {
+    setItem(STORAGE_KEYS.NEW_BELIEVERS, newBelievers);
+    updateLastBackup();
+  },
+
+  load: (): NewBeliever[] => {
+    return getItem<NewBeliever[]>(STORAGE_KEYS.NEW_BELIEVERS, []);
+  },
+
+  add: (newBeliever: NewBeliever): void => {
+    const newBelievers = newBelieversStorage.load();
+    newBelievers.push(newBeliever);
+    newBelieversStorage.save(newBelievers);
+  },
+
+  update: (updatedNewBeliever: NewBeliever): void => {
+    const newBelievers = newBelieversStorage.load();
+    const index = newBelievers.findIndex(nb => nb.id === updatedNewBeliever.id);
+    if (index !== -1) {
+      newBelievers[index] = updatedNewBeliever;
+      newBelieversStorage.save(newBelievers);
+    }
+  },
+
+  remove: (newBelieverId: string): void => {
+    const newBelievers = newBelieversStorage.load();
+    const filteredNewBelievers = newBelievers.filter(nb => nb.id !== newBelieverId);
+    newBelieversStorage.save(filteredNewBelievers);
+  },
+
+  clear: (): void => {
+    removeItem(STORAGE_KEYS.NEW_BELIEVERS);
+  }
+};
+
 // App state storage
 export const appStateStorage = {
   saveCurrentTab: (tab: TabOption): void => {
@@ -219,6 +257,7 @@ export const backupStorage = {
       members: membersStorage.load(),
       bacentas: bacentasStorage.load(),
       attendanceRecords: attendanceStorage.load(),
+      newBelievers: newBelieversStorage.load(),
       currentTab: appStateStorage.loadCurrentTab(),
       displayedDate: appStateStorage.loadDisplayedDate().toISOString(),
     };
@@ -234,11 +273,16 @@ export const backupStorage = {
       if (!data.version || !data.members || !data.bacentas || !data.attendanceRecords) {
         throw new Error('Invalid backup data structure');
       }
-      
+
       // Import data
       membersStorage.save(data.members);
       bacentasStorage.save(data.bacentas);
       attendanceStorage.save(data.attendanceRecords);
+
+      // Import new believers if available (for backward compatibility)
+      if (data.newBelievers) {
+        newBelieversStorage.save(data.newBelievers);
+      }
       
       if (data.currentTab) {
         appStateStorage.saveCurrentTab(data.currentTab);

@@ -13,6 +13,7 @@ const Navbar: React.FC = memo(() => {
       case 'all_bacentas': return <GroupIcon className="w-full h-full mr-1 sm:mr-2" />;
       case 'critical_members': return <WarningIcon className="w-full h-full mr-1 sm:mr-2" />;
       case 'attendance_analytics': return <ChartBarIcon className="w-full h-full mr-1 sm:mr-2" />;
+      case 'new_believers': return <UsersIcon className="w-full h-full mr-1 sm:mr-2" />;
       default: return <GroupIcon className="w-full h-full mr-1 sm:mr-2" />;
     }
   };

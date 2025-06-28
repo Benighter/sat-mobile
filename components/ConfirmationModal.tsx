@@ -201,6 +201,28 @@ export const DeleteBacentaModal: React.FC<{
   />
 );
 
+export const DeleteNewBelieverModal: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+  newBelieverName: string;
+}> = ({ isOpen, onClose, onConfirm, newBelieverName }) => (
+  <ConfirmationModal
+    isOpen={isOpen}
+    onClose={onClose}
+    onConfirm={onConfirm}
+    title="Delete New Believer"
+    message={`Are you sure you want to delete ${newBelieverName}?`}
+    confirmText="Delete"
+    cancelText="Cancel"
+    type="danger"
+    details={[
+      "This will permanently remove this new believer from your records",
+      "This action cannot be undone"
+    ]}
+  />
+);
+
 export const ClearAllDataModal: React.FC<{
   isOpen: boolean;
   onClose: () => void;
