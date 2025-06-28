@@ -136,7 +136,8 @@ const BulkMemberAddModal: React.FC<BulkMemberAddModalProps> = ({
                 <div>
                   <h4 className="font-medium text-blue-800 mb-1">Smart Paste Feature</h4>
                   <p className="text-sm text-blue-700">
-                    Paste member information and we'll automatically detect names, phone numbers, and addresses.
+                    Paste member information and we'll automatically detect names and phone numbers.
+                    Supports numbered lists, various formats, and ignores irrelevant symbols.
                     Each line should contain one member's information.
                   </p>
                   <p className="text-xs text-blue-600 mt-2">
@@ -171,10 +172,11 @@ const BulkMemberAddModal: React.FC<BulkMemberAddModalProps> = ({
                       variant="secondary"
                       size="sm"
                       onClick={() => {
-                        const sampleData = `John Smith 0821234567 123 Main Street
-Jane Doe +27823456789 456 Oak Avenue
-Bennet Nkolele 0834567890 789 Pine Road
-Mary Johnson +27821234567 321 Elm Street, Cape Town`;
+                        const sampleData = `1. Tlaki - +27 81 872 6246
+2. Sphokuhle - +27 60 122 7828
+3. Abigail - +27 84 769 5228
+4. Lindokuhle - +27 67 009 8496
+5. Ntalo - +27 60 513 7069`;
                         setPastedText(sampleData);
                         const result = SmartTextParser.parseText(sampleData);
                         setParseResult(result);
