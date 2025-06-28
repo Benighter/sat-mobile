@@ -50,11 +50,13 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
   // Save recent bacentas when currentTab changes
   useEffect(() => {
     if (currentTab && bacentas.some(b => b.id === currentTab.id)) {
-      const newRecent = [currentTab.id, ...recentBacentas.filter(id => id !== currentTab.id)].slice(0, 5);
-      setRecentBacentas(newRecent);
-      localStorage.setItem('church_connect_recent_bacentas', JSON.stringify(newRecent));
+      setRecentBacentas(prevRecent => {
+        const newRecent = [currentTab.id, ...prevRecent.filter(id => id !== currentTab.id)].slice(0, 5);
+        localStorage.setItem('church_connect_recent_bacentas', JSON.stringify(newRecent));
+        return newRecent;
+      });
     }
-  }, [currentTab, bacentas, recentBacentas]);
+  }, [currentTab, bacentas]);
 
   // Get member count for each bacenta
   const getMemberCount = (bacentaId: string) => {

@@ -46,28 +46,50 @@ export class PerformanceMonitor {
   private static measurements: Map<string, number[]> = new Map();
 
   static start(label: string): void {
-    performance.mark(`${label}-start`);
+    try {
+      const markName = `${label}-start`;
+      // Clear any existing mark with the same name to prevent conflicts
+      performance.clearMarks(markName);
+      performance.mark(markName);
+    } catch (error) {
+      console.warn(`Performance mark creation failed for '${label}':`, error);
+    }
   }
 
   static end(label: string): number {
-    performance.mark(`${label}-end`);
-    performance.measure(label, `${label}-start`, `${label}-end`);
-    
-    const measure = performance.getEntriesByName(label)[0];
-    const duration = measure.duration;
-    
-    // Store measurement
-    if (!this.measurements.has(label)) {
-      this.measurements.set(label, []);
+    try {
+      // Check if start mark exists before trying to measure
+      const startMarkName = `${label}-start`;
+      const existingMarks = performance.getEntriesByName(startMarkName, 'mark');
+
+      if (existingMarks.length === 0) {
+        console.warn(`Performance mark '${startMarkName}' does not exist. Creating it now.`);
+        // Create the start mark with current time minus a small duration
+        performance.mark(startMarkName);
+      }
+
+      performance.mark(`${label}-end`);
+      performance.measure(label, startMarkName, `${label}-end`);
+
+      const measure = performance.getEntriesByName(label, 'measure')[0];
+      const duration = measure ? measure.duration : 0;
+
+      // Store measurement
+      if (!this.measurements.has(label)) {
+        this.measurements.set(label, []);
+      }
+      this.measurements.get(label)!.push(duration);
+
+      // Clean up marks
+      performance.clearMarks(startMarkName);
+      performance.clearMarks(`${label}-end`);
+      performance.clearMeasures(label);
+
+      return duration;
+    } catch (error) {
+      console.warn(`Performance measurement failed for '${label}':`, error);
+      return 0;
     }
-    this.measurements.get(label)!.push(duration);
-    
-    // Clean up marks
-    performance.clearMarks(`${label}-start`);
-    performance.clearMarks(`${label}-end`);
-    performance.clearMeasures(label);
-    
-    return duration;
   }
 
   static getAverageTime(label: string): number {
