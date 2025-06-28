@@ -1,10 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useAppData } from '../hooks/useAppData';
 import { SmartTextParser, ParsedMemberData, ParseResult } from '../utils/smartTextParser';
-import { formatDateToYYYYMMDD } from '../utils/dateUtils';
 import Modal from './ui/Modal';
 import Button from './ui/Button';
-import Input from './ui/Input';
 import { ClipboardIcon, CheckCircleIcon, AlertTriangleIcon as ExclamationTriangleIcon, XCircleIcon } from 'lucide-react';
 
 interface BulkMemberAddModalProps {
@@ -24,7 +22,6 @@ const BulkMemberAddModal: React.FC<BulkMemberAddModalProps> = ({
   const [pastedText, setPastedText] = useState('');
   const [parseResult, setParseResult] = useState<ParseResult | null>(null);
   const [selectedBacentaId, setSelectedBacentaId] = useState(bacentaId || '');
-  const [joinedDate, setJoinedDate] = useState(formatDateToYYYYMMDD(new Date()));
   const [isProcessing, setIsProcessing] = useState(false);
   const [step, setStep] = useState<'input' | 'preview' | 'processing' | 'complete'>('input');
   const [addedCount, setAddedCount] = useState(0);
@@ -36,7 +33,6 @@ const BulkMemberAddModal: React.FC<BulkMemberAddModalProps> = ({
       setPastedText('');
       setParseResult(null);
       setSelectedBacentaId(bacentaId || (bacentas.length > 0 ? bacentas[0].id : ''));
-      setJoinedDate(formatDateToYYYYMMDD(new Date()));
       setStep('input');
       setAddedCount(0);
       setErrors([]);
@@ -85,7 +81,7 @@ const BulkMemberAddModal: React.FC<BulkMemberAddModalProps> = ({
 
     try {
       const membersData = parseResult.members.map(parsedMember =>
-        SmartTextParser.convertToMember(parsedMember, selectedBacentaId, joinedDate)
+        SmartTextParser.convertToMember(parsedMember, selectedBacentaId)
       );
 
       const result = await addMultipleMembersHandler(membersData);
@@ -142,10 +138,10 @@ const BulkMemberAddModal: React.FC<BulkMemberAddModalProps> = ({
                   </p>
                   <p className="text-xs text-blue-600 mt-2">
                     Examples:<br/>
-                    • "John Smith 0821234567 123 Main Street"<br/>
-                    • "Jane Doe +27823456789"<br/>
-                    • "Bennet Nkolele 0834567890 456 Oak Avenue"<br/>
-                    • "Mary Johnson +27821234567 789 Pine Road, Cape Town"
+                    • "1. Tlaki - +27 81 872 6246"<br/>
+                    • "2. Sphokuhle - +27 60 122 7828"<br/>
+                    • "3. John Smith - +27 84 769 5228"<br/>
+                    • "4. Mary Jane Watson - +27 67 009 8496"
                   </p>
                 </div>
               </div>
@@ -157,34 +153,15 @@ const BulkMemberAddModal: React.FC<BulkMemberAddModalProps> = ({
                   <label className="block text-sm font-medium text-gray-700">
                     Member Information
                   </label>
-                  <div className="flex space-x-2">
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      size="sm"
-                      onClick={handlePasteFromClipboard}
-                      leftIcon={<ClipboardIcon className="w-4 h-4" />}
-                    >
-                      Paste from Clipboard
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => {
-                        const sampleData = `1. Tlaki - +27 81 872 6246
-2. Sphokuhle - +27 60 122 7828
-3. Abigail - +27 84 769 5228
-4. Lindokuhle - +27 67 009 8496
-5. Ntalo - +27 60 513 7069`;
-                        setPastedText(sampleData);
-                        const result = SmartTextParser.parseText(sampleData);
-                        setParseResult(result);
-                      }}
-                    >
-                      Try Sample Data
-                    </Button>
-                  </div>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={handlePasteFromClipboard}
+                    leftIcon={<ClipboardIcon className="w-4 h-4" />}
+                  >
+                    Paste from Clipboard
+                  </Button>
                 </div>
                 <textarea
                   value={pastedText}
@@ -194,41 +171,31 @@ const BulkMemberAddModal: React.FC<BulkMemberAddModalProps> = ({
                 />
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Bacenta
-                  </label>
-                  {bacentaId ? (
-                    <div className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm bg-gray-50 text-gray-700">
-                      <div className="flex items-center justify-between">
-                        <span className="font-medium">{bacentaName}</span>
-                        <span className="text-xs text-gray-500 bg-blue-100 text-blue-700 px-2 py-1 rounded-full">
-                          Current Bacenta
-                        </span>
-                      </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Bacenta
+                </label>
+                {bacentaId ? (
+                  <div className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm bg-gray-50 text-gray-700">
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium">{bacentaName}</span>
+                      <span className="text-xs text-gray-500 bg-blue-100 text-blue-700 px-2 py-1 rounded-full">
+                        Current Bacenta
+                      </span>
                     </div>
-                  ) : (
-                    <select
-                      value={selectedBacentaId}
-                      onChange={(e) => setSelectedBacentaId(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    >
-                      <option value="">Select Bacenta</option>
-                      {bacentas.map(b => (
-                        <option key={b.id} value={b.id}>{b.name}</option>
-                      ))}
-                    </select>
-                  )}
-                </div>
-
-                <Input
-                  label="Joined Date"
-                  type="date"
-                  value={joinedDate}
-                  onChange={(e) => setJoinedDate(e.target.value)}
-                  required
-                />
+                  </div>
+                ) : (
+                  <select
+                    value={selectedBacentaId}
+                    onChange={(e) => setSelectedBacentaId(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="">Select Bacenta</option>
+                    {bacentas.map(b => (
+                      <option key={b.id} value={b.id}>{b.name}</option>
+                    ))}
+                  </select>
+                )}
               </div>
             </div>
 
@@ -302,7 +269,6 @@ const BulkMemberAddModal: React.FC<BulkMemberAddModalProps> = ({
               <p className="text-sm text-green-700">
                 Review the parsed information below. Members will be added to{' '}
                 <strong>{selectedBacenta?.name}</strong> with joined date{' '}
-                <strong>{new Date(joinedDate).toLocaleDateString()}</strong>.
               </p>
             </div>
 
