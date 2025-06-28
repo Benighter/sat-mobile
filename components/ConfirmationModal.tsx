@@ -223,6 +223,36 @@ export const DeleteNewBelieverModal: React.FC<{
   />
 );
 
+export const ClearSelectedDataModal: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+  selectedBacentaNames: string[];
+  totalMembers: number;
+  totalAttendance: number;
+  totalNewBelievers: number;
+  includeUnassigned: boolean;
+}> = ({ isOpen, onClose, onConfirm, selectedBacentaNames, totalMembers, totalAttendance, totalNewBelievers, includeUnassigned }) => (
+  <ConfirmationModal
+    isOpen={isOpen}
+    onClose={onClose}
+    onConfirm={onConfirm}
+    title="Clear Selected Bacenta Data"
+    message={`This will permanently delete data from ${selectedBacentaNames.length} selected bacenta${selectedBacentaNames.length !== 1 ? 's' : ''}${includeUnassigned ? ' and unassigned data' : ''}!`}
+    confirmText="Delete Selected Data"
+    cancelText="Keep Data"
+    type="danger"
+    details={[
+      `${selectedBacentaNames.length} bacenta${selectedBacentaNames.length !== 1 ? 's' : ''} will be permanently deleted: ${selectedBacentaNames.join(', ')}`,
+      `${totalMembers} member${totalMembers !== 1 ? 's' : ''} will be permanently deleted`,
+      `${totalAttendance} attendance record${totalAttendance !== 1 ? 's' : ''} will be permanently deleted`,
+      `${totalNewBelievers} new believer${totalNewBelievers !== 1 ? 's' : ''} will be permanently deleted`,
+      ...(includeUnassigned ? ["All unassigned members and new believers will also be deleted"] : []),
+      "This action cannot be undone"
+    ]}
+  />
+);
+
 export const ClearAllDataModal: React.FC<{
   isOpen: boolean;
   onClose: () => void;

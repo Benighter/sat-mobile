@@ -21,6 +21,7 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
     deleteMemberHandler,
     attendanceRecords,
     markAttendanceHandler,
+    clearAttendanceHandler,
     isLoading
   } = useAppContext();
 
@@ -78,15 +79,29 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
     return true;
   };
 
-  // Handle attendance toggle
+  // Handle attendance toggle with three states: empty -> Present -> Absent -> empty
   const handleAttendanceToggle = async (memberId: string, date: string) => {
     if (!isDateEditable(date)) {
       return; // Don't allow editing
     }
 
     const currentStatus = getAttendanceStatus(memberId, date);
-    const newStatus = currentStatus === 'Present' ? 'Absent' : 'Present';
-    await markAttendanceHandler(memberId, date, newStatus);
+    console.log('🔄 Toggle attendance:', memberId, date, 'Current:', currentStatus);
+
+    // Three-state cycle: empty -> Present -> Absent -> empty
+    if (!currentStatus) {
+      // Empty state: mark as Present
+      console.log('➡️ Empty -> Present');
+      await markAttendanceHandler(memberId, date, 'Present');
+    } else if (currentStatus === 'Present') {
+      // Present state: mark as Absent
+      console.log('➡️ Present -> Absent');
+      await markAttendanceHandler(memberId, date, 'Absent');
+    } else if (currentStatus === 'Absent') {
+      // Absent state: clear/remove the record (back to empty)
+      console.log('➡️ Absent -> Empty');
+      await clearAttendanceHandler(memberId, date);
+    }
   };
 
   // Filter and search members
@@ -275,7 +290,7 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
                   ? isPastMonth
                     ? `Past month - cannot edit ${formatDisplayDate(sundayDate)}`
                     : `Future date - cannot edit ${formatDisplayDate(sundayDate)}`
-                  : `Mark ${isPresent ? 'absent' : status === 'Absent' ? 'not marked' : 'present'} for ${formatDisplayDate(sundayDate)}`
+                  : `Click to ${!status ? 'mark present' : status === 'Present' ? 'mark absent' : 'clear attendance'} for ${formatDisplayDate(sundayDate)}`
               }
             >
               {isPresent && (

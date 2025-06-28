@@ -5,6 +5,7 @@ import { initializeSampleData } from '../utils/sampleData';
 import Button from './ui/Button';
 import Modal from './ui/Modal';
 import ExcelExportModal from './ExcelExportModal';
+import SelectiveDataClearingModal from './SelectiveDataClearingModal';
 import {
   CloudArrowDownIcon,
   CloudArrowUpIcon,
@@ -13,7 +14,8 @@ import {
   CheckCircleIcon,
   ExclamationTriangleIcon,
   DocumentArrowDownIcon,
-  UsersIcon
+  UsersIcon,
+  FilterIcon
 } from './icons';
 
 interface DataManagementProps {
@@ -27,6 +29,7 @@ const DataManagement: React.FC<DataManagementProps> = ({ isOpen, onClose }) => {
   const [importStatus, setImportStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [importMessage, setImportMessage] = useState('');
   const [isExcelExportOpen, setIsExcelExportOpen] = useState(false);
+  const [isSelectiveDataClearingOpen, setIsSelectiveDataClearingOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleExport = () => {
@@ -278,13 +281,40 @@ const DataManagement: React.FC<DataManagementProps> = ({ isOpen, onClose }) => {
         {/* Danger Zone */}
         <div className="border-t border-gray-200 pt-6">
           <h3 className="text-lg font-semibold text-red-600 mb-4">Danger Zone</h3>
+
+          {/* Selective Data Clearing */}
+          {bacentas.length > 0 && (
+            <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 mb-4">
+              <div className="flex items-start space-x-3">
+                <FilterIcon className="w-5 h-5 text-orange-500 mt-0.5" />
+                <div className="flex-1">
+                  <p className="font-medium text-orange-800">Clear Specific Bacenta Data</p>
+                  <p className="text-sm text-orange-700 mb-3">
+                    Choose specific bacentas to clear data from. This will delete the selected bacentas,
+                    their members, attendance records, and new believers.
+                  </p>
+                  <Button
+                    onClick={() => setIsSelectiveDataClearingOpen(true)}
+                    variant="secondary"
+                    size="sm"
+                    className="flex items-center space-x-2 border-orange-300 text-orange-700 hover:bg-orange-100"
+                  >
+                    <FilterIcon className="w-4 h-4" />
+                    <span>Select Bacentas to Clear</span>
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Clear All Data */}
           <div className="bg-red-50 border border-red-200 rounded-xl p-4">
             <div className="flex items-start space-x-3">
               <ExclamationTriangleIcon className="w-5 h-5 text-red-500 mt-0.5" />
               <div className="flex-1">
                 <p className="font-medium text-red-800">Clear All Data</p>
                 <p className="text-sm text-red-700 mb-3">
-                  This will permanently delete all members, bacentas, and attendance records. 
+                  This will permanently delete all members, bacentas, and attendance records.
                   This action cannot be undone.
                 </p>
                 <Button
@@ -317,6 +347,12 @@ const DataManagement: React.FC<DataManagementProps> = ({ isOpen, onClose }) => {
       <ExcelExportModal
         isOpen={isExcelExportOpen}
         onClose={() => setIsExcelExportOpen(false)}
+      />
+
+      {/* Selective Data Clearing Modal */}
+      <SelectiveDataClearingModal
+        isOpen={isSelectiveDataClearingOpen}
+        onClose={() => setIsSelectiveDataClearingOpen(false)}
       />
     </Modal>
   );

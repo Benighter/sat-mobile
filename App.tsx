@@ -26,7 +26,7 @@ import BacentaDrawer from './components/BacentaDrawer'; // Import BacentaDrawer
 import NewBelieverFormModal from './components/NewBelieverFormModal'; // Import NewBelieverFormModal
 import DataManagement from './components/DataManagement';
 import EnhancedProfileDropdown from './components/EnhancedProfileDropdown';
-import { DeleteMemberModal, DeleteBacentaModal, DeleteNewBelieverModal, ClearAllDataModal } from './components/ConfirmationModal';
+import { DeleteMemberModal, DeleteBacentaModal, DeleteNewBelieverModal, ClearAllDataModal, ClearSelectedDataModal } from './components/ConfirmationModal';
 
 const AppContent: React.FC = memo(() => {
   const {
@@ -51,6 +51,7 @@ const AppContent: React.FC = memo(() => {
     members,
     newBelievers,
     confirmationModal,
+    closeConfirmation,
     attendanceRecords,
     toasts,
     user,
@@ -63,10 +64,12 @@ const AppContent: React.FC = memo(() => {
   const [isDataManagementOpen, setIsDataManagementOpen] = useState(false);
   const [isBulkMemberModalOpen, setIsBulkMemberModalOpen] = useState(false);
 
+  // Check if current tab is a bacenta tab
+  const isBacentaTab = bacentas.some(b => b.id === currentTab.id);
+
   // Simple confirmation modal close handler
   const closeConfirmationModal = () => {
-    // For now, we'll just ignore confirmation modals since they're not implemented in SimpleFirebaseContext
-    console.log('Confirmation modal close requested');
+    closeConfirmation();
   };
 
   useEffect(() => {
@@ -119,8 +122,6 @@ const AppContent: React.FC = memo(() => {
         </div>
       );
     }
-
-    const isBacentaTab = bacentas.some(b => b.id === currentTab.id);
 
     if (isBacentaTab) {
       return (
@@ -192,8 +193,12 @@ const AppContent: React.FC = memo(() => {
                 <span className="text-white font-bold text-sm sm:text-base md:text-lg">⛪</span>
               </div>
               <div className="min-w-0 hidden sm:block">
-                <h1 className="text-base sm:text-lg md:text-xl font-bold gradient-text font-serif group-hover:text-gray-700 transition-colors duration-300 truncate">SAT Mobile</h1>
-                <p className="text-xs text-gray-600 font-medium group-hover:text-gray-700 transition-colors duration-300 hidden md:block">Faith • Community • Growth</p>
+                <h1 className="text-base sm:text-lg md:text-xl font-bold gradient-text font-serif group-hover:text-gray-700 transition-colors duration-300 truncate">
+                  {isBacentaTab ? currentTab.name : 'SAT Mobile'}
+                </h1>
+                <p className="text-xs text-gray-600 font-medium group-hover:text-gray-700 transition-colors duration-300 hidden md:block">
+                  {isBacentaTab ? 'Bacenta Management' : 'Faith • Community • Growth'}
+                </p>
               </div>
             </button>
           </div>
@@ -337,6 +342,19 @@ const AppContent: React.FC = memo(() => {
           totalMembers={confirmationModal.data?.totalMembers || 0}
           totalBacentas={confirmationModal.data?.totalBacentas || 0}
           totalAttendance={confirmationModal.data?.totalAttendance || 0}
+        />
+      )}
+
+      {confirmationModal.type === 'clearSelectedData' && (
+        <ClearSelectedDataModal
+          isOpen={confirmationModal.isOpen}
+          onClose={closeConfirmationModal}
+          onConfirm={confirmationModal.onConfirm}
+          selectedBacentaNames={confirmationModal.data?.selectedBacentaNames || []}
+          totalMembers={confirmationModal.data?.totalMembers || 0}
+          totalAttendance={confirmationModal.data?.totalAttendance || 0}
+          totalNewBelievers={confirmationModal.data?.totalNewBelievers || 0}
+          includeUnassigned={confirmationModal.data?.includeUnassigned || false}
         />
       )}
 

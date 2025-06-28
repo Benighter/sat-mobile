@@ -5,6 +5,7 @@ import {
   getDocs,
   getDoc,
   addDoc,
+  setDoc,
   updateDoc,
   deleteDoc,
   query,
@@ -57,22 +58,23 @@ export const authService = {
     try {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
-      
+
       // Get user data from Firestore
       const userDoc = await getDoc(doc(db, 'users', user.uid));
       const userData = userDoc.data();
-      
+
       currentUser = {
         uid: user.uid,
         email: user.email,
         displayName: user.displayName,
         churchId: userData?.churchId
       };
-      
+
       currentChurchId = userData?.churchId || null;
       return currentUser;
     } catch (error: any) {
-      throw new Error(`Sign in failed: ${error.message}`);
+      // Pass through the original Firebase error code for better error handling
+      throw error;
     }
   },
 
@@ -125,7 +127,8 @@ export const authService = {
       currentChurchId = userData?.churchId || null;
       return currentUser;
     } catch (error: any) {
-      throw new Error(`Google sign in failed: ${error.message}`);
+      // Pass through the original Firebase error for better error handling
+      throw error;
     }
   },
 
@@ -157,7 +160,8 @@ export const authService = {
       currentChurchId = churchId;
       return currentUser;
     } catch (error: any) {
-      throw new Error(`Sign up failed: ${error.message}`);
+      // Pass through the original Firebase error for better error handling
+      throw error;
     }
   },
 
@@ -527,24 +531,14 @@ export const attendanceFirebaseService = {
     try {
       const attendanceRef = collection(db, getChurchCollectionPath('attendance'));
       const recordId = record.id;
+      const docRef = doc(attendanceRef, recordId);
 
-      // Check if record exists
-      const existingDoc = await getDoc(doc(attendanceRef, recordId));
-
-      if (existingDoc.exists()) {
-        // Update existing record
-        await updateDoc(doc(attendanceRef, recordId), {
-          ...record,
-          recordedAt: Timestamp.now()
-        });
-      } else {
-        // Add new record
-        await addDoc(attendanceRef, {
-          ...record,
-          recordedAt: Timestamp.now(),
-          recordedBy: currentUser?.uid || 'unknown'
-        });
-      }
+      // Use setDoc to create/update with specific document ID
+      await setDoc(docRef, {
+        ...record,
+        recordedAt: Timestamp.now(),
+        recordedBy: currentUser?.uid || 'unknown'
+      }, { merge: true });
     } catch (error: any) {
       throw new Error(`Failed to save attendance record: ${error.message}`);
     }
@@ -554,8 +548,20 @@ export const attendanceFirebaseService = {
   delete: async (recordId: string): Promise<void> => {
     try {
       const recordRef = doc(db, getChurchCollectionPath('attendance'), recordId);
-      await deleteDoc(recordRef);
+      console.log('🗑️ Deleting attendance document:', recordId);
+
+      // Check if document exists before deleting
+      const docSnap = await getDoc(recordRef);
+      if (docSnap.exists()) {
+        console.log('✅ Document exists, deleting...');
+        await deleteDoc(recordRef);
+        console.log('✅ Document deleted successfully');
+      } else {
+        console.log('⚠️ Document does not exist:', recordId);
+        throw new Error(`Attendance record not found: ${recordId}`);
+      }
     } catch (error: any) {
+      console.error('❌ Delete error:', error);
       throw new Error(`Failed to delete attendance record: ${error.message}`);
     }
   },

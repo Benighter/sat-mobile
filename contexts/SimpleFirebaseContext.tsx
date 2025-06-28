@@ -5,13 +5,14 @@ import { FIXED_TABS, CONSECUTIVE_ABSENCE_THRESHOLD, DEFAULT_TAB_ID } from '../co
 import { getSundaysOfMonth, formatDateToYYYYMMDD } from '../utils/dateUtils';
 
 // Simple Firebase services without authentication
-import { 
-  collection, 
-  getDocs, 
-  addDoc, 
-  updateDoc, 
-  deleteDoc, 
-  doc, 
+import {
+  collection,
+  getDocs,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  doc,
+  setDoc,
   onSnapshot,
   query,
   orderBy,
@@ -169,7 +170,6 @@ export const SimpleFirebaseProvider: React.FC<{ children: ReactNode }> = ({ chil
 
     members.forEach(member => {
       let consecutiveAbsences = 0;
-      let maxConsecutiveAbsences = 0;
 
       // Only consider Sundays that occur after the member's join date
       const memberJoinDate = new Date(member.joinedDate);
@@ -180,20 +180,25 @@ export const SimpleFirebaseProvider: React.FC<{ children: ReactNode }> = ({ chil
         return;
       }
 
-      for (const sunday of relevantSundays) {
-        const attendance = attendanceRecords.find(
-          record => record.memberId === member.id && record.date === sunday
-        );
-
-        if (!attendance || attendance.status === 'Absent') {
+      // Check from the most recent Sunday in the relevant Sundays list
+      for (const sundayDate of relevantSundays.slice().reverse()) {
+        const record = attendanceRecords.find(ar => ar.memberId === member.id && ar.date === sundayDate);
+        if (record && record.status === 'Absent') {
           consecutiveAbsences++;
-          maxConsecutiveAbsences = Math.max(maxConsecutiveAbsences, consecutiveAbsences);
+        } else if (record && record.status === 'Present') {
+          break; // Streak broken by presence
         } else {
-          consecutiveAbsences = 0;
+           // No record for this Sunday, can't determine absence for sure for the streak from this point
+           // For simplicity, we'll consider no record as breaking the *consecutive* absence streak for *this specific calculation*
+           // A more robust system might require records for all Sundays or handle this differently.
+           break;
+        }
+        if (consecutiveAbsences >= CONSECUTIVE_ABSENCE_THRESHOLD) {
+          break;
         }
       }
 
-      if (maxConsecutiveAbsences >= CONSECUTIVE_ABSENCE_THRESHOLD) {
+      if (consecutiveAbsences >= CONSECUTIVE_ABSENCE_THRESHOLD) {
         criticalIds.push(member.id);
       }
     });
@@ -495,9 +500,13 @@ export const SimpleFirebaseProvider: React.FC<{ children: ReactNode }> = ({ chil
         status
       };
 
-      await addDoc(collection(db, 'attendance'), record);
+      // Use setDoc with specific document ID instead of addDoc
+      const docRef = doc(db, 'attendance', recordId);
+      await setDoc(docRef, record, { merge: true });
+      console.log('✅ Attendance marked:', recordId, status);
       showToast('success', 'Attendance marked successfully');
     } catch (error: any) {
+      console.error('❌ Mark attendance error:', error);
       setError(error.message);
       showToast('error', 'Failed to mark attendance', error.message);
       throw error;
@@ -514,11 +523,45 @@ export const SimpleFirebaseProvider: React.FC<{ children: ReactNode }> = ({ chil
         status
       };
 
-      await addDoc(collection(db, 'attendance'), record);
+      // Use setDoc with specific document ID instead of addDoc
+      const docRef = doc(db, 'attendance', recordId);
+      await setDoc(docRef, record, { merge: true });
+      console.log('✅ New believer attendance marked:', recordId, status);
       showToast('success', 'New believer attendance marked successfully');
     } catch (error: any) {
+      console.error('❌ Mark new believer attendance error:', error);
       setError(error.message);
       showToast('error', 'Failed to mark new believer attendance', error.message);
+      throw error;
+    }
+  }, [showToast]);
+
+  const clearAttendanceHandler = useCallback(async (memberId: string, date: string) => {
+    try {
+      const recordId = `${memberId}_${date}`;
+      const docRef = doc(db, 'attendance', recordId);
+      await deleteDoc(docRef);
+      console.log('✅ Attendance cleared:', recordId);
+      showToast('success', 'Attendance cleared successfully');
+    } catch (error: any) {
+      console.error('❌ Clear attendance error:', error);
+      setError(error.message);
+      showToast('error', 'Failed to clear attendance', error.message);
+      throw error;
+    }
+  }, [showToast]);
+
+  const clearNewBelieverAttendanceHandler = useCallback(async (newBelieverId: string, date: string) => {
+    try {
+      const recordId = `${newBelieverId}_${date}`;
+      const docRef = doc(db, 'attendance', recordId);
+      await deleteDoc(docRef);
+      console.log('✅ New believer attendance cleared:', recordId);
+      showToast('success', 'New believer attendance cleared successfully');
+    } catch (error: any) {
+      console.error('❌ Clear new believer attendance error:', error);
+      setError(error.message);
+      showToast('error', 'Failed to clear new believer attendance', error.message);
       throw error;
     }
   }, [showToast]);
@@ -699,6 +742,8 @@ export const SimpleFirebaseProvider: React.FC<{ children: ReactNode }> = ({ chil
     // Attendance Operations
     markAttendanceHandler,
     markNewBelieverAttendanceHandler,
+    clearAttendanceHandler,
+    clearNewBelieverAttendanceHandler,
 
     // UI Handlers
     openMemberForm,

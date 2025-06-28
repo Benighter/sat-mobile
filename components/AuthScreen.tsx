@@ -5,6 +5,43 @@ import { LoginForm } from './LoginForm';
 import RegisterForm from './RegisterForm';
 import OptimizedLoader from './OptimizedLoader';
 
+// Utility function to convert Firebase errors to user-friendly messages
+const getErrorMessage = (error: string): string => {
+  if (error.includes('auth/invalid-credential') || error.includes('auth/wrong-password')) {
+    return 'Invalid email or password. Please check your credentials and try again.';
+  }
+  if (error.includes('auth/user-not-found')) {
+    return 'No account found with this email address. Please check your email or create a new account.';
+  }
+  if (error.includes('auth/invalid-email')) {
+    return 'Please enter a valid email address.';
+  }
+  if (error.includes('auth/user-disabled')) {
+    return 'This account has been disabled. Please contact support for assistance.';
+  }
+  if (error.includes('auth/too-many-requests')) {
+    return 'Too many failed attempts. Please wait a few minutes before trying again.';
+  }
+  if (error.includes('auth/network-request-failed')) {
+    return 'Network error. Please check your internet connection and try again.';
+  }
+  if (error.includes('auth/operation-not-allowed')) {
+    return 'Email/password sign-in is not enabled. Please contact support.';
+  }
+  if (error.includes('auth/popup-closed-by-user')) {
+    return 'Sign-in was cancelled. Please try again.';
+  }
+  if (error.includes('auth/popup-blocked')) {
+    return 'Pop-up was blocked by your browser. Please allow pop-ups and try again.';
+  }
+  if (error.includes('auth/cancelled-popup-request')) {
+    return 'Sign-in was cancelled. Please try again.';
+  }
+
+  // Default fallback for unknown errors
+  return 'Authentication failed. Please try again or contact support if the problem persists.';
+};
+
 interface AuthScreenProps {
   children: ReactNode;
   showToast: (type: 'success' | 'error' | 'warning' | 'info', title: string, message?: string) => void;
@@ -34,8 +71,9 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ children, showToast }) =
       setUser(user);
       showToast('success', 'Welcome Back!', `Signed in as ${user.displayName || user.email}`);
     } catch (error: any) {
-      setError(error.message);
-      showToast('error', 'Sign In Failed', error.message);
+      const friendlyMessage = getErrorMessage(error.message || error.code || error.toString());
+      setError(friendlyMessage);
+      showToast('error', 'Sign In Failed', friendlyMessage);
     } finally {
       setLoading(false);
     }
@@ -49,8 +87,9 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ children, showToast }) =
       setUser(user);
       showToast('success', 'Welcome!', `Signed in with Google as ${user.displayName || user.email}`);
     } catch (error: any) {
-      setError(error.message);
-      showToast('error', 'Google Sign In Failed', error.message);
+      const friendlyMessage = getErrorMessage(error.message || error.code || error.toString());
+      setError(friendlyMessage);
+      showToast('error', 'Google Sign In Failed', friendlyMessage);
     } finally {
       setLoading(false);
     }

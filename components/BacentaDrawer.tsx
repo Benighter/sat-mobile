@@ -80,7 +80,7 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
   }, [recentBacentas, bacentas]);
 
   const handleBacentaClick = (bacenta: Bacenta) => {
-    switchTab(bacenta.id);
+    switchTab({ id: bacenta.id, name: bacenta.name });
     onClose();
   };
 
@@ -182,7 +182,7 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
                 label="Dashboard"
                 isActive={currentTab.id === TabKeys.DASHBOARD}
                 onClick={() => {
-                  switchTab(TabKeys.DASHBOARD);
+                  switchTab({ id: TabKeys.DASHBOARD, name: 'Dashboard' });
                   onClose();
                 }}
               />
@@ -191,7 +191,7 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
                 label="All Members"
                 isActive={currentTab.id === TabKeys.ALL_CONGREGATIONS}
                 onClick={() => {
-                  switchTab(TabKeys.ALL_CONGREGATIONS);
+                  switchTab({ id: TabKeys.ALL_CONGREGATIONS, name: 'All Members' });
                   onClose();
                 }}
               />
@@ -200,7 +200,7 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
                 label="All Bacentas"
                 isActive={currentTab.id === TabKeys.ALL_BACENTAS}
                 onClick={() => {
-                  switchTab(TabKeys.ALL_BACENTAS);
+                  switchTab({ id: TabKeys.ALL_BACENTAS, name: 'All Bacentas' });
                   onClose();
                 }}
               />
@@ -209,7 +209,7 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
                 label="Critical Alerts"
                 isActive={currentTab.id === TabKeys.CRITICAL_MEMBERS}
                 onClick={() => {
-                  switchTab(TabKeys.CRITICAL_MEMBERS);
+                  switchTab({ id: TabKeys.CRITICAL_MEMBERS, name: 'Critical Alerts' });
                   onClose();
                 }}
                 badge={criticalMemberIds.length > 0 ? criticalMemberIds.length : undefined}
@@ -219,7 +219,7 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
                 label="New Believers"
                 isActive={currentTab.id === TabKeys.NEW_BELIEVERS}
                 onClick={() => {
-                  switchTab(TabKeys.NEW_BELIEVERS);
+                  switchTab({ id: TabKeys.NEW_BELIEVERS, name: 'New Believers' });
                   onClose();
                 }}
               />
@@ -345,15 +345,93 @@ const BacentaItem: React.FC<BacentaItemProps> = ({
   onEdit,
   onDelete
 }) => {
+  const [showContextMenu, setShowContextMenu] = useState(false);
+  const [longPressTimer, setLongPressTimer] = useState<NodeJS.Timeout | null>(null);
+  const [contextMenuPosition, setContextMenuPosition] = useState({ x: 0, y: 0 });
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    const touch = e.touches[0];
+    setContextMenuPosition({ x: touch.clientX, y: touch.clientY });
+
+    const timer = setTimeout(() => {
+      setShowContextMenu(true);
+      // Haptic feedback if available
+      if (navigator.vibrate) {
+        navigator.vibrate(50);
+      }
+    }, 500); // 500ms long press
+
+    setLongPressTimer(timer);
+  };
+
+  const handleTouchEnd = () => {
+    if (longPressTimer) {
+      clearTimeout(longPressTimer);
+      setLongPressTimer(null);
+    }
+  };
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    setContextMenuPosition({ x: e.clientX, y: e.clientY });
+
+    const timer = setTimeout(() => {
+      setShowContextMenu(true);
+    }, 500); // 500ms long press
+
+    setLongPressTimer(timer);
+  };
+
+  const handleMouseUp = () => {
+    if (longPressTimer) {
+      clearTimeout(longPressTimer);
+      setLongPressTimer(null);
+    }
+  };
+
+  const handleClick = (e: React.MouseEvent) => {
+    if (!showContextMenu) {
+      onClick();
+    }
+  };
+
+  const closeContextMenu = () => {
+    setShowContextMenu(false);
+  };
+
+  // Close context menu when clicking outside
+  React.useEffect(() => {
+    const handleClickOutside = () => {
+      if (showContextMenu) {
+        setShowContextMenu(false);
+      }
+    };
+
+    if (showContextMenu) {
+      document.addEventListener('click', handleClickOutside);
+      document.addEventListener('touchstart', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('click', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
+  }, [showContextMenu]);
+
   return (
-    <div
-      onClick={onClick}
-      className={`group relative p-3 rounded-xl cursor-pointer transition-all duration-200 ${
-        isActive
-          ? 'bg-blue-50 border-2 border-blue-200 shadow-md'
-          : 'bg-gray-50 hover:bg-gray-100 border border-gray-200'
-      }`}
-    >
+    <>
+      <div
+        onClick={handleClick}
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+        onMouseDown={handleMouseDown}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseUp}
+        className={`group relative p-3 rounded-xl cursor-pointer transition-all duration-200 select-none ${
+          isActive
+            ? 'bg-blue-50 border-2 border-blue-200 shadow-md'
+            : 'bg-gray-50 hover:bg-gray-100 border border-gray-200'
+        } ${showContextMenu ? 'bg-blue-100 border-blue-300' : ''}`}
+      >
       <div className="flex items-center justify-between">
         <div className="flex-1 min-w-0">
           <h4 className={`font-semibold truncate ${isActive ? 'text-blue-800' : 'text-gray-800'}`}>
@@ -364,31 +442,54 @@ const BacentaItem: React.FC<BacentaItemProps> = ({
             <span>{memberCount} member{memberCount !== 1 ? 's' : ''}</span>
           </div>
         </div>
-        
-        {/* Action Buttons */}
-        <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-          <button
-            onClick={onEdit}
-            className="p-1.5 hover:bg-white rounded-lg transition-colors duration-200"
-            title={`Edit ${bacenta.name}`}
-          >
-            <EditIcon className="w-3.5 h-3.5 text-gray-600 hover:text-blue-600" />
-          </button>
-          <button
-            onClick={onDelete}
-            className="p-1.5 hover:bg-white rounded-lg transition-colors duration-200"
-            title={`Delete ${bacenta.name}`}
-          >
-            <TrashIcon className="w-3.5 h-3.5 text-gray-600 hover:text-red-600" />
-          </button>
-        </div>
+
+        {/* Long Press Indicator */}
+        {showContextMenu && (
+          <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
+        )}
       </div>
-      
+
       {/* Active Indicator */}
       {isActive && (
         <div className="absolute left-0 top-1/2 transform -translate-y-1/2 w-1 h-8 bg-blue-500 rounded-r-full" />
       )}
     </div>
+
+    {/* Context Menu */}
+    {showContextMenu && (
+      <div
+        className="fixed z-50 bg-white rounded-xl shadow-2xl border border-gray-200 py-2 min-w-[160px]"
+        style={{
+          left: Math.min(contextMenuPosition.x, window.innerWidth - 180),
+          top: Math.min(contextMenuPosition.y, window.innerHeight - 120),
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onEdit(e);
+            closeContextMenu();
+          }}
+          className="w-full px-4 py-3 text-left hover:bg-gray-50 transition-colors duration-200 flex items-center space-x-3"
+        >
+          <EditIcon className="w-4 h-4 text-blue-600" />
+          <span className="text-sm font-medium text-gray-700">Edit Bacenta</span>
+        </button>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete(e);
+            closeContextMenu();
+          }}
+          className="w-full px-4 py-3 text-left hover:bg-red-50 transition-colors duration-200 flex items-center space-x-3"
+        >
+          <TrashIcon className="w-4 h-4 text-red-600" />
+          <span className="text-sm font-medium text-red-700">Delete Bacenta</span>
+        </button>
+      </div>
+    )}
+  </>
   );
 };
 

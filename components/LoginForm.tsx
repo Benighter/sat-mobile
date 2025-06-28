@@ -9,16 +9,75 @@ interface LoginFormProps {
   loading: boolean;
 }
 
+// Utility function to convert Firebase errors to user-friendly messages
+const getErrorMessage = (error: string): string => {
+  if (error.includes('auth/invalid-credential') || error.includes('auth/wrong-password')) {
+    return 'Invalid email or password. Please check your credentials and try again.';
+  }
+  if (error.includes('auth/user-not-found')) {
+    return 'No account found with this email address. Please check your email or create a new account.';
+  }
+  if (error.includes('auth/invalid-email')) {
+    return 'Please enter a valid email address.';
+  }
+  if (error.includes('auth/user-disabled')) {
+    return 'This account has been disabled. Please contact support for assistance.';
+  }
+  if (error.includes('auth/too-many-requests')) {
+    return 'Too many failed attempts. Please wait a few minutes before trying again.';
+  }
+  if (error.includes('auth/network-request-failed')) {
+    return 'Network error. Please check your internet connection and try again.';
+  }
+  if (error.includes('auth/operation-not-allowed')) {
+    return 'Email/password sign-in is not enabled. Please contact support.';
+  }
+  if (error.includes('auth/weak-password')) {
+    return 'Password is too weak. Please choose a stronger password.';
+  }
+  if (error.includes('auth/email-already-in-use')) {
+    return 'An account with this email already exists. Please sign in instead.';
+  }
+
+  // Default fallback for unknown errors
+  return 'Sign in failed. Please try again or contact support if the problem persists.';
+};
+
 export const LoginForm: React.FC<LoginFormProps> = ({ onSignIn, onGoogleSignIn, error, loading }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [validationErrors, setValidationErrors] = useState<{email?: string; password?: string}>({});
+
+  const validateForm = (): boolean => {
+    const errors: {email?: string; password?: string} = {};
+
+    // Email validation
+    if (!email.trim()) {
+      errors.email = 'Email is required';
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      errors.email = 'Please enter a valid email address';
+    }
+
+    // Password validation
+    if (!password) {
+      errors.password = 'Password is required';
+    } else if (password.length < 6) {
+      errors.password = 'Password must be at least 6 characters';
+    }
+
+    setValidationErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (email && password) {
-      await onSignIn(email, password);
+
+    if (!validateForm()) {
+      return;
     }
+
+    await onSignIn(email, password);
   };
 
   return (
@@ -38,7 +97,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSignIn, onGoogleSignIn, 
         {/* Error Message */}
         {error && (
           <div className="mb-6 p-3 bg-red-50 border border-red-200 rounded-xl">
-            <p className="text-sm text-red-600 text-center">{error}</p>
+            <p className="text-sm text-red-600 text-center">{getErrorMessage(error)}</p>
           </div>
         )}
 
@@ -76,13 +135,24 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSignIn, onGoogleSignIn, 
                 id="email"
                 type="email"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                className="w-full pl-10 pr-4 py-3.5 bg-gray-50/50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:bg-white transition-all duration-200 placeholder-gray-400"
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  if (validationErrors.email) {
+                    setValidationErrors(prev => ({ ...prev, email: undefined }));
+                  }
+                }}
+                className={`w-full pl-10 pr-4 py-3.5 bg-gray-50/50 border rounded-xl focus:outline-none focus:ring-2 focus:bg-white transition-all duration-200 placeholder-gray-400 ${
+                  validationErrors.email
+                    ? 'border-red-300 focus:ring-red-500 focus:border-red-500'
+                    : 'border-gray-200 focus:ring-blue-500 focus:border-blue-500'
+                }`}
                 placeholder="Email address"
                 disabled={loading}
               />
             </div>
+            {validationErrors.email && (
+              <p className="text-red-500 text-xs mt-1">{validationErrors.email}</p>
+            )}
           </div>
 
           <div>
@@ -92,9 +162,17 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSignIn, onGoogleSignIn, 
                 id="password"
                 type={showPassword ? 'text' : 'password'}
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                className="w-full pl-10 pr-12 py-3.5 bg-gray-50/50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:bg-white transition-all duration-200 placeholder-gray-400"
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  if (validationErrors.password) {
+                    setValidationErrors(prev => ({ ...prev, password: undefined }));
+                  }
+                }}
+                className={`w-full pl-10 pr-12 py-3.5 bg-gray-50/50 border rounded-xl focus:outline-none focus:ring-2 focus:bg-white transition-all duration-200 placeholder-gray-400 ${
+                  validationErrors.password
+                    ? 'border-red-300 focus:ring-red-500 focus:border-red-500'
+                    : 'border-gray-200 focus:ring-blue-500 focus:border-blue-500'
+                }`}
                 placeholder="Password"
                 disabled={loading}
               />
@@ -111,6 +189,9 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSignIn, onGoogleSignIn, 
                 )}
               </button>
             </div>
+            {validationErrors.password && (
+              <p className="text-red-500 text-xs mt-1">{validationErrors.password}</p>
+            )}
           </div>
 
           <button

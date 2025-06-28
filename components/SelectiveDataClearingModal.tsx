@@ -28,7 +28,7 @@ const SelectiveDataClearingModal: React.FC<SelectiveDataClearingModalProps> = ({
   isOpen,
   onClose
 }) => {
-  const { bacentas, members, attendanceRecords, newBelievers, showConfirmation } = useAppContext();
+  const { bacentas, members, attendanceRecords, newBelievers, showConfirmation, deleteBacentaHandler, deleteMemberHandler, deleteNewBelieverHandler, showToast } = useAppContext();
   const [selectedBacentas, setSelectedBacentas] = useState<Set<string>>(new Set());
   const [includeUnassigned, setIncludeUnassigned] = useState(false);
 
@@ -115,15 +115,52 @@ const SelectiveDataClearingModal: React.FC<SelectiveDataClearingModalProps> = ({
       .map(id => bacentaDataSummary.find(b => b.id === id)?.name)
       .filter(Boolean);
 
+    const clearSelectedData = async () => {
+      try {
+        const selectedBacentaIds = Array.from(selectedBacentas);
+
+        // Get members to delete (from selected bacentas or unassigned)
+        const membersToDelete = members.filter(member => {
+          if (includeUnassigned && !member.bacentaId) return true;
+          return selectedBacentaIds.includes(member.bacentaId);
+        });
+
+        // Get new believers to delete (from selected bacentas or unassigned)
+        const newBelieversToDelete = newBelievers.filter(nb => {
+          if (includeUnassigned && !nb.bacentaId) return true;
+          return selectedBacentaIds.includes(nb.bacentaId);
+        });
+
+        // Delete all members first (this will also delete their attendance records)
+        for (const member of membersToDelete) {
+          await deleteMemberHandler(member.id);
+        }
+
+        // Delete all new believers
+        for (const newBeliever of newBelieversToDelete) {
+          await deleteNewBelieverHandler(newBeliever.id);
+        }
+
+        // Delete the bacentas themselves
+        for (const bacentaId of selectedBacentaIds) {
+          await deleteBacentaHandler(bacentaId);
+        }
+
+        showToast('success', 'Data cleared successfully',
+          `Cleared data from ${selectedBacentaNames.length} bacenta${selectedBacentaNames.length !== 1 ? 's' : ''}${includeUnassigned ? ' and unassigned data' : ''}`);
+
+        onClose();
+      } catch (error: any) {
+        showToast('error', 'Failed to clear data', error.message);
+      }
+    };
+
     showConfirmation('clearSelectedData', {
       selectedBacentas: Array.from(selectedBacentas),
       selectedBacentaNames,
       includeUnassigned,
       ...selectedTotals
-    }, () => {
-      // The actual clearing will be handled by the confirmation callback
-      onClose();
-    });
+    }, clearSelectedData);
   };
 
   const handleClose = () => {

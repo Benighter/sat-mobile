@@ -3,6 +3,31 @@ import { authService } from '../services/firebaseService';
 import { UserIcon, EyeIcon, EyeSlashIcon, ChurchIcon, PhoneIcon, EnvelopeIcon } from './icons';
 import Button from './ui/Button';
 
+// Utility function to convert Firebase errors to user-friendly messages
+const getErrorMessage = (error: string): string => {
+  if (error.includes('auth/email-already-in-use')) {
+    return 'An account with this email already exists. Please sign in instead.';
+  }
+  if (error.includes('auth/weak-password')) {
+    return 'Password is too weak. Please choose a stronger password (at least 6 characters).';
+  }
+  if (error.includes('auth/invalid-email')) {
+    return 'Please enter a valid email address.';
+  }
+  if (error.includes('auth/operation-not-allowed')) {
+    return 'Account creation is not enabled. Please contact support.';
+  }
+  if (error.includes('auth/network-request-failed')) {
+    return 'Network error. Please check your internet connection and try again.';
+  }
+  if (error.includes('auth/too-many-requests')) {
+    return 'Too many attempts. Please wait a few minutes before trying again.';
+  }
+
+  // Default fallback for unknown errors
+  return 'Registration failed. Please try again or contact support if the problem persists.';
+};
+
 interface RegisterFormProps {
   onSuccess: () => void;
   onSwitchToLogin: () => void;
@@ -104,7 +129,7 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, onSwitchToLogin,
         `Welcome to SAT Church Connect! Your church "${formData.churchName}" has been set up.`);
       onSuccess();
     } catch (error: any) {
-      showToast('error', 'Registration Failed', error.message);
+      showToast('error', 'Registration Failed', getErrorMessage(error.message || error.code || error.toString()));
     } finally {
       setIsLoading(false);
     }

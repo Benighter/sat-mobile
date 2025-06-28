@@ -9,18 +9,28 @@ import Input from './ui/Input';
 import { formatDisplayDate } from '../utils/dateUtils';
 
 const BacentasTableView: React.FC = () => {
-  const { 
-    bacentas, 
+  const {
+    bacentas,
     members,
     attendanceRecords,
     openBacentaForm,
     deleteBacentaHandler,
+    showConfirmation,
     isLoading,
     switchTab,
     displayedSundays
   } = useAppContext();
   
   const [searchTerm, setSearchTerm] = useState('');
+  const [contextMenu, setContextMenu] = useState<{
+    isOpen: boolean;
+    bacenta: Bacenta | null;
+    position: { x: number; y: number };
+  }>({
+    isOpen: false,
+    bacenta: null,
+    position: { x: 0, y: 0 }
+  });
 
   // Filter bacentas by search term
   const filteredBacentas = useMemo(() => {
@@ -34,6 +44,70 @@ const BacentasTableView: React.FC = () => {
       })
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [bacentas, searchTerm]);
+
+  // Handle long press for context menu
+  const handleLongPress = (bacenta: Bacenta, event: React.MouseEvent | React.TouchEvent) => {
+    const clientX = 'clientX' in event ? event.clientX : event.touches[0].clientX;
+    const clientY = 'clientY' in event ? event.clientY : event.touches[0].clientY;
+
+    setContextMenu({
+      isOpen: true,
+      bacenta,
+      position: {
+        x: Math.min(clientX, window.innerWidth - 200),
+        y: Math.min(clientY, window.innerHeight - 120)
+      }
+    });
+  };
+
+  const closeContextMenu = () => {
+    setContextMenu({
+      isOpen: false,
+      bacenta: null,
+      position: { x: 0, y: 0 }
+    });
+  };
+
+  const handleEditBacenta = () => {
+    if (contextMenu.bacenta) {
+      openBacentaForm(contextMenu.bacenta);
+      closeContextMenu();
+    }
+  };
+
+  const handleDeleteBacenta = () => {
+    if (contextMenu.bacenta) {
+      const memberCount = members.filter(m => m.bacentaId === contextMenu.bacenta!.id).length;
+
+      showConfirmation('deleteBacenta', {
+        bacenta: contextMenu.bacenta,
+        memberCount
+      }, () => {
+        deleteBacentaHandler(contextMenu.bacenta!.id);
+      });
+
+      closeContextMenu();
+    }
+  };
+
+  // Close context menu when clicking outside
+  React.useEffect(() => {
+    const handleClickOutside = () => {
+      if (contextMenu.isOpen) {
+        closeContextMenu();
+      }
+    };
+
+    if (contextMenu.isOpen) {
+      document.addEventListener('click', handleClickOutside);
+      document.addEventListener('touchstart', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('click', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
+  }, [contextMenu.isOpen]);
 
   // Get member count for a bacenta
   const getMemberCount = (bacentaId: string) => {
@@ -281,7 +355,8 @@ const BacentasTableView: React.FC = () => {
             ? "No bacentas match your search" 
             : "No bacentas created yet"
         }
-        onRowClick={(bacenta) => switchTab(bacenta.id)}
+        onRowClick={(bacenta) => switchTab({ id: bacenta.id, name: bacenta.name })}
+        onRowLongPress={handleLongPress}
       />
 
       {/* Summary */}
@@ -313,6 +388,33 @@ const BacentasTableView: React.FC = () => {
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Context Menu */}
+      {contextMenu.isOpen && contextMenu.bacenta && (
+        <div
+          className="fixed z-50 bg-white rounded-xl shadow-2xl border border-gray-200 py-2 min-w-[160px]"
+          style={{
+            left: contextMenu.position.x,
+            top: contextMenu.position.y,
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            onClick={handleEditBacenta}
+            className="w-full px-4 py-3 text-left hover:bg-gray-50 transition-colors duration-200 flex items-center space-x-3"
+          >
+            <EditIcon className="w-4 h-4 text-blue-600" />
+            <span className="text-sm font-medium text-gray-700">Edit Bacenta</span>
+          </button>
+          <button
+            onClick={handleDeleteBacenta}
+            className="w-full px-4 py-3 text-left hover:bg-red-50 transition-colors duration-200 flex items-center space-x-3"
+          >
+            <TrashIcon className="w-4 h-4 text-red-600" />
+            <span className="text-sm font-medium text-red-700">Delete Bacenta</span>
+          </button>
         </div>
       )}
     </div>

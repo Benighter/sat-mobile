@@ -108,7 +108,7 @@ const DashboardView: React.FC = memo(() => {
           value={totalMembers}
           icon={<PeopleIcon className="w-full h-full" />}
           colorClass="border-gray-500"
-          onClick={() => switchTab('all_members')}
+          onClick={() => switchTab({ id: 'all_members', name: 'All Members' })}
         />
         <StatCard
           title="Attendance Rate"
@@ -116,7 +116,7 @@ const DashboardView: React.FC = memo(() => {
           icon={<AttendanceIcon className="w-full h-full" />}
           colorClass="border-blue-500"
           description={`For ${monthName}`}
-          onClick={() => switchTab('attendance_analytics')}
+          onClick={() => switchTab({ id: 'attendance_analytics', name: 'Attendance Analytics' })}
         />
         <StatCard
           title="Critical Alerts"
@@ -124,7 +124,7 @@ const DashboardView: React.FC = memo(() => {
           icon={<AlertIcon className="w-full h-full" />}
           colorClass="border-red-500"
           description="Members needing follow-up"
-          onClick={() => switchTab('critical_members')}
+          onClick={() => switchTab({ id: 'critical_members', name: 'Critical Alerts' })}
         />
       </div>
 
@@ -146,7 +146,7 @@ const DashboardView: React.FC = memo(() => {
             {membersPerBacenta.map((item) => (
               <div
                 key={item.id}
-                onClick={() => switchTab(item.id)}
+                onClick={() => switchTab({ id: item.id, name: item.name })}
                 className="flex justify-between items-center p-3 sm:p-4 glass rounded-xl cursor-pointer hover:shadow-xl transition-all duration-200 group"
               >
                 <div className="flex items-center space-x-2 sm:space-x-3 flex-1 min-w-0">

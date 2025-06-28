@@ -13,6 +13,7 @@ interface TableProps<T> {
   data: T[];
   columns: TableColumn<T>[];
   onRowClick?: (item: T) => void;
+  onRowLongPress?: (item: T, event: React.MouseEvent | React.TouchEvent) => void;
   className?: string;
   emptyMessage?: string;
   loading?: boolean;
@@ -24,12 +25,15 @@ function Table<T extends Record<string, any>>({
   data,
   columns,
   onRowClick,
+  onRowLongPress,
   className = '',
   emptyMessage = 'No data available',
   loading = false,
   striped = true,
   hoverable = true,
 }: TableProps<T>) {
+  const [longPressTimer, setLongPressTimer] = React.useState<NodeJS.Timeout | null>(null);
+  const [longPressItem, setLongPressItem] = React.useState<T | null>(null);
   const getCellValue = (item: T, column: TableColumn<T>) => {
     if (typeof column.key === 'string' && column.key.includes('.')) {
       // Handle nested properties like 'user.name'
@@ -43,6 +47,54 @@ function Table<T extends Record<string, any>>({
       case 'center': return 'text-center';
       case 'right': return 'text-right';
       default: return 'text-left';
+    }
+  };
+
+  const handleTouchStart = (item: T, e: React.TouchEvent) => {
+    if (!onRowLongPress) return;
+
+    const timer = setTimeout(() => {
+      onRowLongPress(item, e);
+      // Haptic feedback if available
+      if (navigator.vibrate) {
+        navigator.vibrate(50);
+      }
+    }, 500);
+
+    setLongPressTimer(timer);
+    setLongPressItem(item);
+  };
+
+  const handleTouchEnd = () => {
+    if (longPressTimer) {
+      clearTimeout(longPressTimer);
+      setLongPressTimer(null);
+      setLongPressItem(null);
+    }
+  };
+
+  const handleMouseDown = (item: T, e: React.MouseEvent) => {
+    if (!onRowLongPress) return;
+
+    const timer = setTimeout(() => {
+      onRowLongPress(item, e);
+    }, 500);
+
+    setLongPressTimer(timer);
+    setLongPressItem(item);
+  };
+
+  const handleMouseUp = () => {
+    if (longPressTimer) {
+      clearTimeout(longPressTimer);
+      setLongPressTimer(null);
+      setLongPressItem(null);
+    }
+  };
+
+  const handleRowClick = (item: T) => {
+    if (!longPressTimer && onRowClick) {
+      onRowClick(item);
     }
   };
 
@@ -89,9 +141,16 @@ function Table<T extends Record<string, any>>({
               className={`
                 ${striped && rowIndex % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}
                 ${hoverable ? 'hover:bg-blue-50/50 transition-colors duration-200' : ''}
-                ${onRowClick ? 'cursor-pointer' : ''}
+                ${onRowClick || onRowLongPress ? 'cursor-pointer' : ''}
+                ${longPressItem === item ? 'bg-blue-100' : ''}
+                select-none
               `}
-              onClick={() => onRowClick?.(item)}
+              onClick={() => handleRowClick(item)}
+              onTouchStart={(e) => handleTouchStart(item, e)}
+              onTouchEnd={handleTouchEnd}
+              onMouseDown={(e) => handleMouseDown(item, e)}
+              onMouseUp={handleMouseUp}
+              onMouseLeave={handleMouseUp}
             >
               {columns.map((column, colIndex) => {
                 const value = getCellValue(item, column);

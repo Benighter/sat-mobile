@@ -41,10 +41,12 @@ interface AppContextType {
   // Confirmation Modal
   confirmationModal: {
     isOpen: boolean;
-    type: 'deleteMember' | 'deleteBacenta' | 'deleteNewBeliever' | 'clearData' | null;
+    type: 'deleteMember' | 'deleteBacenta' | 'deleteNewBeliever' | 'clearData' | 'clearSelectedData' | null;
     data: any;
     onConfirm: () => void;
   };
+  showConfirmation: (type: 'deleteMember' | 'deleteBacenta' | 'deleteNewBeliever' | 'clearData' | 'clearSelectedData', data: any, onConfirm: () => void) => void;
+  closeConfirmation: () => void;
   
   // Toasts
   toasts: Array<{
@@ -79,6 +81,7 @@ interface AppContextType {
   // Attendance Operations
   markAttendanceHandler: (memberId: string, date: string, status: AttendanceStatus) => Promise<void>;
   markNewBelieverAttendanceHandler: (newBelieverId: string, date: string, status: AttendanceStatus) => Promise<void>;
+  clearAttendanceHandler: (memberId: string, date: string) => Promise<void>;
   
   // UI Handlers
   openMemberForm: (member?: Member) => void;
@@ -136,7 +139,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
   // Confirmation modal
   const [confirmationModal, setConfirmationModal] = useState<{
     isOpen: boolean;
-    type: 'deleteMember' | 'deleteBacenta' | 'deleteNewBeliever' | 'clearData' | null;
+    type: 'deleteMember' | 'deleteBacenta' | 'deleteNewBeliever' | 'clearData' | 'clearSelectedData' | null;
     data: any;
     onConfirm: () => void;
   }>({
@@ -176,7 +179,6 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
 
     members.forEach(member => {
       let consecutiveAbsences = 0;
-      let maxConsecutiveAbsences = 0;
 
       // Only consider Sundays that occur after the member's join date
       const memberJoinDate = new Date(member.joinedDate);
@@ -187,20 +189,25 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
         return;
       }
 
-      for (const sunday of relevantSundays) {
-        const attendance = attendanceRecords.find(
-          record => record.memberId === member.id && record.date === sunday
-        );
-
-        if (!attendance || attendance.status === 'Absent') {
+      // Check from the most recent Sunday in the relevant Sundays list
+      for (const sundayDate of relevantSundays.slice().reverse()) {
+        const record = attendanceRecords.find(ar => ar.memberId === member.id && ar.date === sundayDate);
+        if (record && record.status === 'Absent') {
           consecutiveAbsences++;
-          maxConsecutiveAbsences = Math.max(maxConsecutiveAbsences, consecutiveAbsences);
+        } else if (record && record.status === 'Present') {
+          break; // Streak broken by presence
         } else {
-          consecutiveAbsences = 0;
+           // No record for this Sunday, can't determine absence for sure for the streak from this point
+           // For simplicity, we'll consider no record as breaking the *consecutive* absence streak for *this specific calculation*
+           // A more robust system might require records for all Sundays or handle this differently.
+           break;
+        }
+        if (consecutiveAbsences >= CONSECUTIVE_ABSENCE_THRESHOLD) {
+          break;
         }
       }
 
-      if (maxConsecutiveAbsences >= CONSECUTIVE_ABSENCE_THRESHOLD) {
+      if (consecutiveAbsences >= CONSECUTIVE_ABSENCE_THRESHOLD) {
         criticalIds.push(member.id);
       }
     });
@@ -328,6 +335,25 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
   
   const removeToast = useCallback((id: string) => {
     setToasts(prev => prev.filter(toast => toast.id !== id));
+  }, []);
+
+  // Confirmation modal functions
+  const showConfirmation = useCallback((type: 'deleteMember' | 'deleteBacenta' | 'deleteNewBeliever' | 'clearData' | 'clearSelectedData', data: any, onConfirm: () => void) => {
+    setConfirmationModal({
+      isOpen: true,
+      type,
+      data,
+      onConfirm
+    });
+  }, []);
+
+  const closeConfirmation = useCallback(() => {
+    setConfirmationModal({
+      isOpen: false,
+      type: null,
+      data: null,
+      onConfirm: () => {}
+    });
   }, []);
 
   // Member handlers
@@ -503,9 +529,11 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
         status
       };
 
+      console.log('📝 Marking attendance:', recordId, status);
       await attendanceFirebaseService.addOrUpdate(record);
       showToast('success', 'Attendance marked successfully');
     } catch (error: any) {
+      console.error('❌ Failed to mark attendance:', error);
       setError(error.message);
       showToast('error', 'Failed to mark attendance', error.message);
       throw error;
@@ -527,6 +555,20 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     } catch (error: any) {
       setError(error.message);
       showToast('error', 'Failed to mark new believer attendance', error.message);
+      throw error;
+    }
+  }, [showToast]);
+
+  const clearAttendanceHandler = useCallback(async (memberId: string, date: string) => {
+    try {
+      const recordId = `${memberId}_${date}`;
+      console.log('🗑️ Clearing attendance record:', recordId);
+      await attendanceFirebaseService.delete(recordId);
+      showToast('success', 'Attendance cleared successfully');
+    } catch (error: any) {
+      console.error('❌ Failed to clear attendance:', error);
+      setError(error.message);
+      showToast('error', 'Failed to clear attendance', error.message);
       throw error;
     }
   }, [showToast]);
@@ -723,6 +765,8 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
 
     // Confirmation Modal
     confirmationModal,
+    showConfirmation,
+    closeConfirmation,
 
     // Toasts
     toasts,
@@ -752,6 +796,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     // Attendance Operations
     markAttendanceHandler,
     markNewBelieverAttendanceHandler,
+    clearAttendanceHandler,
 
     // UI Handlers
     openMemberForm,
