@@ -1,7 +1,8 @@
 
 import React, { useEffect, useState, memo } from 'react';
 import { PerformanceMonitor } from './utils/performance';
-import { SimpleFirebaseProvider, useAppContext } from './contexts/SimpleFirebaseContext';
+import { FirebaseAppProvider, useAppContext } from './contexts/FirebaseAppContext';
+import { AuthScreen } from './components/AuthScreen';
 import Navbar from './components/Navbar';
 import DashboardView from './components/DashboardView';
 import {
@@ -24,6 +25,7 @@ import BacentaFormModal from './components/BacentaFormModal'; // Import BacentaF
 import BacentaDrawer from './components/BacentaDrawer'; // Import BacentaDrawer
 import NewBelieverFormModal from './components/NewBelieverFormModal'; // Import NewBelieverFormModal
 import DataManagement from './components/DataManagement';
+import EnhancedProfileDropdown from './components/EnhancedProfileDropdown';
 import { DeleteMemberModal, DeleteBacentaModal, DeleteNewBelieverModal, ClearAllDataModal } from './components/ConfirmationModal';
 
 const AppContent: React.FC = memo(() => {
@@ -51,6 +53,7 @@ const AppContent: React.FC = memo(() => {
     confirmationModal,
     attendanceRecords,
     toasts,
+    user,
     switchTab,
     showToast,
     removeToast
@@ -175,7 +178,7 @@ const AppContent: React.FC = memo(() => {
       <div className="fixed inset-0 bg-gradient-to-br from-white/50 via-gray-50/30 to-gray-100/20 pointer-events-none"></div>
 
       {/* Fixed Header */}
-      <header className="glass fixed top-0 left-0 right-0 z-50 border-b border-white/20 shadow-xl">
+      <header className="fixed top-0 left-0 right-0 z-50 bg-gradient-to-r from-blue-50/95 via-white/95 to-indigo-50/95 backdrop-blur-md border-b border-gray-200/50 shadow-xl">
         <div className="container mx-auto px-2 sm:px-4 py-2 sm:py-3 md:py-4 flex justify-between items-center">
           <div className="flex items-center space-x-2 sm:space-x-3 flex-1 min-w-0">
             {/* {canNavigateBack() && <BackButton />} */}
@@ -185,55 +188,54 @@ const AppContent: React.FC = memo(() => {
               aria-label="Go to Dashboard"
               title="Go to Dashboard"
             >
-              <div className="w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 bg-gradient-to-br from-gray-600 to-gray-700 rounded-lg sm:rounded-xl flex items-center justify-center shadow-lg group-hover:shadow-xl group-hover:from-gray-700 group-hover:to-gray-800 transition-all duration-300 flex-shrink-0">
+              <div className="w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-lg sm:rounded-xl flex items-center justify-center shadow-lg group-hover:shadow-xl group-hover:from-blue-700 group-hover:to-indigo-800 transition-all duration-300 flex-shrink-0 ring-2 ring-blue-100">
                 <span className="text-white font-bold text-sm sm:text-base md:text-lg">⛪</span>
               </div>
               <div className="min-w-0 hidden sm:block">
-                <h1 className="text-base sm:text-lg md:text-xl font-bold gradient-text font-serif group-hover:text-gray-700 transition-colors duration-300 truncate">Church Connect</h1>
+                <h1 className="text-base sm:text-lg md:text-xl font-bold gradient-text font-serif group-hover:text-gray-700 transition-colors duration-300 truncate">SAT Mobile</h1>
                 <p className="text-xs text-gray-600 font-medium group-hover:text-gray-700 transition-colors duration-300 hidden md:block">Faith • Community • Growth</p>
               </div>
             </button>
           </div>
           <div className="flex items-center space-x-1 sm:space-x-2 flex-shrink-0">
-            <button
-              onClick={() => openMemberForm(null)}
-              className="p-2 sm:p-2.5 md:p-3 rounded-lg sm:rounded-xl glass hover:glass-dark transition-all duration-300 group shadow-lg relative overflow-hidden"
-              aria-label="Add New Member"
-              title="Add New Member"
-            >
-              {/* Subtle primary action indicator */}
-              <div className="absolute inset-0 bg-gradient-to-br from-blue-500/8 via-transparent to-blue-600/8 opacity-0 group-hover:opacity-100 transition-all duration-300 rounded-lg sm:rounded-xl"></div>
-              <AddMemberIcon className="w-5 h-5 sm:w-6 sm:h-6 text-gray-600 group-hover:text-blue-100 transition-all duration-300 relative z-10" />
-            </button>
-            <button
-              onClick={() => setIsBulkMemberModalOpen(true)}
-              className="p-2 sm:p-2.5 md:p-3 rounded-lg sm:rounded-xl glass hover:glass-dark transition-all duration-300 group shadow-lg relative overflow-hidden"
-              aria-label="Paste Multiple Members"
-              title="Paste Multiple Members"
-            >
-              {/* Subtle secondary action indicator */}
-              <div className="absolute inset-0 bg-gradient-to-br from-green-500/8 via-transparent to-green-600/8 opacity-0 group-hover:opacity-100 transition-all duration-300 rounded-lg sm:rounded-xl"></div>
-              <ClipboardIcon className="w-5 h-5 sm:w-6 sm:h-6 text-gray-600 group-hover:text-green-100 transition-all duration-300 relative z-10" />
-            </button>
-            <button
-              onClick={() => setIsDataManagementOpen(true)}
-              className="p-2 sm:p-2.5 md:p-3 rounded-lg sm:rounded-xl glass hover:glass-dark transition-all duration-300 group shadow-lg"
-              aria-label="Data Management"
-              title="Backup & Restore Data"
-            >
-              <CogIcon className="w-5 h-5 sm:w-6 sm:h-6 text-gray-600 group-hover:text-white transition-all duration-300" />
-            </button>
-            <button
-              onClick={() => {
-                fetchInitialData();
-                // Removed toast - data refresh should be silent
-              }}
-              className="p-2 sm:p-2.5 md:p-3 rounded-lg sm:rounded-xl glass hover:glass-dark transition-all duration-300 group shadow-lg"
-              aria-label="Refresh Data"
-              title="Refresh Data"
-            >
-              <RefreshIcon className="w-5 h-5 sm:w-6 sm:h-6 text-gray-600 group-hover:text-white transition-all duration-300" />
-            </button>
+            {/* Quick Actions - Hidden on mobile, shown on larger screens */}
+            <div className="hidden lg:flex items-center space-x-1 mr-2">
+              <button
+                onClick={() => openMemberForm(null)}
+                className="p-2 sm:p-2.5 md:p-3 rounded-lg sm:rounded-xl glass hover:glass-dark transition-all duration-300 group shadow-lg relative overflow-hidden"
+                aria-label="Add New Member"
+                title="Add New Member"
+              >
+                <div className="absolute inset-0 bg-gradient-to-br from-blue-500/8 via-transparent to-blue-600/8 opacity-0 group-hover:opacity-100 transition-all duration-300 rounded-lg sm:rounded-xl"></div>
+                <AddMemberIcon className="w-5 h-5 sm:w-6 sm:h-6 text-gray-600 group-hover:text-blue-100 transition-all duration-300 relative z-10" />
+              </button>
+              <button
+                onClick={() => setIsBulkMemberModalOpen(true)}
+                className="p-2 sm:p-2.5 md:p-3 rounded-lg sm:rounded-xl glass hover:glass-dark transition-all duration-300 group shadow-lg relative overflow-hidden"
+                aria-label="Paste Multiple Members"
+                title="Paste Multiple Members"
+              >
+                <div className="absolute inset-0 bg-gradient-to-br from-green-500/8 via-transparent to-green-600/8 opacity-0 group-hover:opacity-100 transition-all duration-300 rounded-lg sm:rounded-xl"></div>
+                <ClipboardIcon className="w-5 h-5 sm:w-6 sm:h-6 text-gray-600 group-hover:text-green-100 transition-all duration-300 relative z-10" />
+              </button>
+              <button
+                onClick={() => {
+                  fetchInitialData();
+                }}
+                className="p-2 sm:p-2.5 md:p-3 rounded-lg sm:rounded-xl glass hover:glass-dark transition-all duration-300 group shadow-lg"
+                aria-label="Refresh Data"
+                title="Refresh Data"
+              >
+                <RefreshIcon className="w-5 h-5 sm:w-6 sm:h-6 text-gray-600 group-hover:text-white transition-all duration-300" />
+              </button>
+            </div>
+
+            {/* Enhanced Profile Dropdown - Contains all actions and user info */}
+            <EnhancedProfileDropdown
+              user={user}
+              onOpenBulkMemberModal={() => setIsBulkMemberModalOpen(true)}
+              onOpenDataManagement={() => setIsDataManagementOpen(true)}
+            />
           </div>
         </div>
         <Navbar />
@@ -398,11 +400,22 @@ const AppContent: React.FC = memo(() => {
   );
 });
 
+// Wrapper component to access context for AuthScreen
+const AuthenticatedApp: React.FC = () => {
+  const { showToast } = useAppContext();
+
+  return (
+    <AuthScreen showToast={showToast}>
+      <AppContent />
+    </AuthScreen>
+  );
+};
+
 const App: React.FC = () => {
   return (
-    <SimpleFirebaseProvider>
-      <AppContent />
-    </SimpleFirebaseProvider>
+    <FirebaseAppProvider>
+      <AuthenticatedApp />
+    </FirebaseAppProvider>
   );
 };
 

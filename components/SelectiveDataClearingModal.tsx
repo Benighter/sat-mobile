@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { useAppContext } from '../contexts/SimpleFirebaseContext';
+import { useAppContext } from '../contexts/FirebaseAppContext';
 import Modal from './ui/Modal';
 import Button from './ui/Button';
 import {

@@ -63,8 +63,7 @@ export class PerformanceMonitor {
       const existingMarks = performance.getEntriesByName(startMarkName, 'mark');
 
       if (existingMarks.length === 0) {
-        console.warn(`Performance mark '${startMarkName}' does not exist. Creating it now.`);
-        // Create the start mark with current time minus a small duration
+        // Silently create the start mark if it doesn't exist
         performance.mark(startMarkName);
       }
 

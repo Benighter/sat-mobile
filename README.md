@@ -1,4 +1,4 @@
-# Church Connect Mobile
+# SAT Mobile
 
 A comprehensive, mobile-first church membership management application built with React 19, TypeScript, Framer Motion, and Firebase. This application provides churches with a complete solution for managing members, tracking attendance, organizing congregations into Bacentas, and monitoring member engagement with advanced analytics, real-time synchronization, and cloud storage.
 
@@ -29,7 +29,7 @@ npm run migration:guide
 
 ## 🎯 Overview
 
-Church Connect Mobile is designed specifically for churches that need a modern, efficient way to manage their congregation. The application combines powerful member management tools with intuitive mobile-first design, making it easy for church administrators to track attendance, organize members into groups (Bacentas), and identify members who may need additional pastoral care.
+SAT Mobile is designed specifically for churches that need a modern, efficient way to manage their congregation. The application combines powerful member management tools with intuitive mobile-first design, making it easy for church administrators to track attendance, organize members into groups (Bacentas), and identify members who may need additional pastoral care.
 
 **Key Highlights:**
 - 📱 **Mobile-First Design**: Optimized for smartphones and tablets with touch-friendly interfaces
@@ -263,7 +263,7 @@ Church Connect Mobile is designed specifically for churches that need a modern, 
 
 ### Application Structure
 ```
-church-connect-mobile/
+SAT_mobile/
 ├── components/           # Reusable UI components
 │   ├── icons/           # Custom icon components
 │   └── ui/              # Base UI components
@@ -311,7 +311,7 @@ church-connect-mobile/
 
 ## 📱 Mobile App Deployment (APK Generation)
 
-Church Connect Mobile is designed to be deployed as a native Android APK using **Median.co**, providing users with a true mobile app experience while maintaining the flexibility of web technologies.
+SAT Mobile is designed to be deployed as a native Android APK using **Median.co**, providing users with a true mobile app experience while maintaining the flexibility of web technologies.
 
 ### Deployment Overview
 
@@ -402,11 +402,11 @@ See the complete **[DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md)** for detailed ins
 Church Connect Mobile uses a sophisticated local storage system designed for reliability and performance:
 
 #### Storage Structure
-- **Members Data**: `church_connect_members` - Complete member profiles and metadata
-- **Attendance Records**: `church_connect_attendance` - Individual attendance entries with date indexing
-- **Bacentas**: `church_connect_bacentas` - Congregation group definitions and settings
-- **App State**: `church_connect_current_tab`, `church_connect_displayed_date` - UI state persistence
-- **Backup Metadata**: `church_connect_version`, `church_connect_last_backup` - Data versioning
+- **Members Data**: `sat_mobile_members` - Complete member profiles and metadata
+- **Attendance Records**: `sat_mobile_attendance` - Individual attendance entries with date indexing
+- **Bacentas**: `sat_mobile_bacentas` - Congregation group definitions and settings
+- **App State**: `sat_mobile_current_tab`, `sat_mobile_displayed_date` - UI state persistence
+- **Backup Metadata**: `sat_mobile_version`, `sat_mobile_last_backup` - Data versioning
 
 #### Data Persistence Features
 - **Automatic Saving**: All changes are immediately persisted to localStorage
@@ -540,7 +540,7 @@ VITE_DEBUG_STORAGE=false
 
 ## 📄 License & Credits
 
-**Church Connect Mobile** is built with modern web technologies and designed specifically for church communities. The application demonstrates best practices in mobile-first development, progressive web apps, and user experience design.
+**SAT Mobile** is built with modern web technologies and designed specifically for church communities. The application demonstrates best practices in mobile-first development, progressive web apps, and user experience design.
 
 ### Acknowledgments
 

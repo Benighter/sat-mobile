@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { NewBeliever, AttendanceStatus } from '../types';
-import { useAppContext } from '../contexts/SimpleFirebaseContext';
+import { useAppContext } from '../contexts/FirebaseAppContext';
 import { formatDateToDisplay, formatDisplayDate } from '../utils/dateUtils';
 import Modal from './ui/Modal';
 import Button from './ui/Button';

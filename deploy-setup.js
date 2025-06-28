@@ -1,14 +1,14 @@
 #!/usr/bin/env node
 
 /**
- * Church Connect Mobile - Deployment Setup Script
+ * SAT Mobile - Deployment Setup Script
  * This script helps prepare your app for Median.co deployment
  */
 
 const fs = require('fs');
 const path = require('path');
 
-console.log('🏗️  Church Connect Mobile - Deployment Setup');
+console.log('🏗️  SAT Mobile - Deployment Setup');
 console.log('===============================================\n');
 
 // Check if required files exist

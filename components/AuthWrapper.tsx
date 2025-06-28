@@ -36,6 +36,19 @@ export const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
     }
   };
 
+  const handleGoogleSignIn = async () => {
+    try {
+      setError(null);
+      setLoading(true);
+      const user = await authService.signInWithGoogle();
+      setUser(user);
+    } catch (error: any) {
+      setError(error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSignOut = async () => {
     try {
       await authService.signOut();
@@ -55,8 +68,15 @@ export const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
 
   if (!user) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <LoginForm onSignIn={handleSignIn} error={error} loading={loading} />
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 relative overflow-hidden">
+        {/* Background decoration */}
+        <div className="absolute inset-0 overflow-hidden">
+          <div className="absolute -top-40 -right-40 w-80 h-80 bg-gradient-to-br from-blue-400/10 to-purple-400/10 rounded-full blur-3xl"></div>
+          <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-gradient-to-br from-indigo-400/10 to-blue-400/10 rounded-full blur-3xl"></div>
+        </div>
+        <div className="relative z-10 w-full">
+          <LoginForm onSignIn={handleSignIn} onGoogleSignIn={handleGoogleSignIn} error={error} loading={loading} />
+        </div>
       </div>
     );
   }

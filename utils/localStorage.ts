@@ -1,4 +1,4 @@
-// Local Storage Utility for Church Connect Mobile
+// Local Storage Utility for SAT Mobile
 import { Member, Bacenta, AttendanceRecord, TabOption, NewBeliever } from '../types';
 
 // Storage keys

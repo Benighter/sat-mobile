@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { useAppContext } from '../contexts/SimpleFirebaseContext';
+import { useAppContext } from '../contexts/FirebaseAppContext';
 import { NewBeliever } from '../types';
 import { formatDateToDisplay } from '../utils/dateUtils';
 import { PlusIcon, EditIcon, TrashIcon, UserIcon, CalendarIcon, PhoneIcon, MapPinIcon, GridIcon, TableIcon } from './icons';

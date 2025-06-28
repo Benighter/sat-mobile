@@ -1,10 +1,10 @@
 {
-  "name": "church-connect-mobile",
+  "name": "sat-mobile",
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "description": "A mobile-first church membership management application",
-  "author": "Church Connect Team",
+  "description": "SAT Mobile - A mobile-first church membership management application",
+  "author": "SAT Mobile Team",
   "homepage": ".",
   "scripts": {
     "dev": "vite",

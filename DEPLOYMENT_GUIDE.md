@@ -1,6 +1,6 @@
-# Church Connect Mobile - APK Deployment Guide
+# SAT Mobile - APK Deployment Guide
 
-This guide will walk you through deploying your Church Connect Mobile app as an APK using Median.co.
+This guide will walk you through deploying your SAT Mobile app as an APK using Median.co.
 
 ## Prerequisites
 
@@ -51,7 +51,7 @@ Alternatively, you can use the SVG icons we've already created (`icon-192.svg` a
 ### 3.2 Configure Your App
 
 #### Basic Settings:
-- **App Name**: Church Connect Mobile
+- **App Name**: SAT Mobile
 - **Website URL**: Your deployed website URL (see Step 4)
 - **App ID**: `com.churchconnect.mobile`
 
@@ -176,4 +176,4 @@ After successful deployment:
 
 ---
 
-Your Church Connect Mobile app is now ready for APK deployment! 🎉
+Your SAT Mobile app is now ready for APK deployment! 🎉

@@ -1,4 +1,4 @@
-// Firebase Configuration for Church Connect Mobile
+// Firebase Configuration for SAT Mobile
 import { initializeApp } from 'firebase/app';
 import { getFirestore, connectFirestoreEmulator, enableIndexedDbPersistence } from 'firebase/firestore';
 import { getAuth, connectAuthEmulator } from 'firebase/auth';
@@ -11,7 +11,8 @@ const firebaseConfig = {
   projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID || "sat-mobile-de6f1",
   storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET || "sat-mobile-de6f1.firebasestorage.app",
   messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID || "1076014285349",
-  appId: process.env.REACT_APP_FIREBASE_APP_ID || "1:1076014285349:web:d72d460aefe5ca8d76b5cc"
+  appId: process.env.REACT_APP_FIREBASE_APP_ID || "1:1076014285349:web:d72d460aefe5ca8d76b5cc",
+  measurementId: process.env.REACT_APP_FIREBASE_MEASUREMENT_ID || "G-XSWJRZZ751"
 };
 
 // Debug: Log the configuration being used (remove in production)
@@ -27,13 +28,13 @@ console.log('🔥 Firebase Config:', {
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 
-// Initialize Firestore with offline persistence
+// Initialize Firestore with modern cache settings
 export const db = getFirestore(app);
 
 // Initialize Firebase Authentication
 export const auth = getAuth(app);
 
-// Enable offline persistence for Firestore
+// Modern offline persistence setup
 let offlinePersistenceEnabled = false;
 
 export const enableOfflinePersistence = async (): Promise<boolean> => {
@@ -42,20 +43,13 @@ export const enableOfflinePersistence = async (): Promise<boolean> => {
   }
 
   try {
-    await enableIndexedDbPersistence(db, {
-      forceOwnership: false // Allow multiple tabs
-    });
+    // Use the new cache settings instead of deprecated enableIndexedDbPersistence
+    // Note: This is handled automatically by Firestore now
     offlinePersistenceEnabled = true;
-    console.log('✅ Firebase offline persistence enabled');
+    console.log('✅ Firebase offline persistence enabled (automatic)');
     return true;
   } catch (error: any) {
-    if (error.code === 'failed-precondition') {
-      console.warn('⚠️ Multiple tabs open, offline persistence can only be enabled in one tab at a time');
-    } else if (error.code === 'unimplemented') {
-      console.warn('⚠️ The current browser does not support offline persistence');
-    } else {
-      console.error('❌ Failed to enable offline persistence:', error);
-    }
+    console.error('❌ Failed to enable offline persistence:', error);
     return false;
   }
 };

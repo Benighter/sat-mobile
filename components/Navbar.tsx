@@ -1,6 +1,6 @@
 
 import React, { memo } from 'react';
-import { useAppContext } from '../contexts/SimpleFirebaseContext';
+import { useAppContext } from '../contexts/FirebaseAppContext';
 import { ChartBarIcon, UsersIcon, WarningIcon, GroupIcon, Bars3Icon } from './icons';
 
 const Navbar: React.FC = memo(() => {

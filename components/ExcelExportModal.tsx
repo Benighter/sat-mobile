@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useAppContext } from '../contexts/SimpleFirebaseContext';
+import { useAppContext } from '../contexts/FirebaseAppContext';
 import { exportToExcel, ExcelExportOptions } from '../utils/excelExport';
 import Modal from './ui/Modal';
 import Button from './ui/Button';

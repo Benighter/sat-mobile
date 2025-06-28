@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { useAppContext } from '../contexts/SimpleFirebaseContext';
+import { useAppContext } from '../contexts/FirebaseAppContext';
 import MemberCard from './MemberCard';
 import { WarningIcon, LoadingSpinnerIcon, CalendarIcon, ChevronLeftIcon, ChevronRightIcon } from './icons';
 import { CONSECUTIVE_ABSENCE_THRESHOLD } from '../constants';

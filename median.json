@@ -1,9 +1,9 @@
 {
   "general": {
-    "appName": "Church Connect Mobile",
-    "publicName": "Church Connect",
-    "displayName": "Church Connect",
-    "description": "A mobile-first church membership management application with member tracking, attendance management, and congregation organization.",
+    "appName": "SAT Mobile",
+    "publicName": "SAT Mobile",
+    "displayName": "SAT Mobile",
+    "description": "SAT Mobile - A mobile-first church membership management application with member tracking, attendance management, and congregation organization.",
     "language": "en",
     "enableWindowOpen": true,
     "forceUserAgent": "mobile"

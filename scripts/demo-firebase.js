@@ -130,7 +130,7 @@ console.log('5. Switch to FirebaseApp in index.tsx');
 console.log('6. Test login and data migration');
 console.log('');
 
-console.log('✨ Your Church Connect Mobile app is now Firebase-powered! ✨');
+console.log('✨ Your SAT Mobile app is now Firebase-powered! ✨');
 console.log('');
 
 // Check if user wants to see file contents

@@ -1,7 +1,7 @@
 # Firebase Migration Guide
 
 ## Overview
-This guide walks you through migrating your Church Connect Mobile app from localStorage to Firebase Firestore database.
+This guide walks you through migrating your SAT Mobile app from localStorage to Firebase Firestore database.
 
 ## Prerequisites
 

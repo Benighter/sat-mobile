@@ -1,4 +1,4 @@
-// Firebase Service Layer for Church Connect Mobile
+// Firebase Service Layer for SAT Mobile
 import {
   collection,
   doc,
@@ -21,9 +21,11 @@ import {
   DocumentSnapshot,
   Unsubscribe
 } from 'firebase/firestore';
-import { 
+import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
+  signInWithPopup,
+  GoogleAuthProvider,
   signOut,
   onAuthStateChanged,
   User
@@ -74,12 +76,65 @@ export const authService = {
     }
   },
 
+  // Sign in with Google
+  signInWithGoogle: async (): Promise<FirebaseUser> => {
+    try {
+      const provider = new GoogleAuthProvider();
+      provider.addScope('email');
+      provider.addScope('profile');
+
+      const result = await signInWithPopup(auth, provider);
+      const user = result.user;
+
+      // Check if user document exists, create if not
+      const userDocRef = doc(db, 'users', user.uid);
+      const userDoc = await getDoc(userDocRef);
+
+      let userData;
+      if (!userDoc.exists()) {
+        // Create new user document for Google sign-in
+        const newUserData = {
+          uid: user.uid,
+          email: user.email,
+          displayName: user.displayName,
+          photoURL: user.photoURL,
+          role: 'member',
+          createdAt: Timestamp.now(),
+          lastLoginAt: Timestamp.now(),
+          isActive: true,
+          authProvider: 'google'
+        };
+
+        await addDoc(collection(db, 'users'), newUserData);
+        userData = newUserData;
+      } else {
+        userData = userDoc.data();
+        // Update last login
+        await updateDoc(userDocRef, {
+          lastLoginAt: Timestamp.now()
+        });
+      }
+
+      currentUser = {
+        uid: user.uid,
+        email: user.email,
+        displayName: user.displayName,
+        churchId: userData?.churchId
+      };
+
+      currentChurchId = userData?.churchId || null;
+      return currentUser;
+    } catch (error: any) {
+      throw new Error(`Google sign in failed: ${error.message}`);
+    }
+  },
+
   // Sign up new user
   signUp: async (email: string, password: string, displayName: string, churchId: string): Promise<FirebaseUser> => {
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
-      
+
       // Create user document in Firestore
       await addDoc(collection(db, 'users'), {
         uid: user.uid,
@@ -91,18 +146,63 @@ export const authService = {
         lastLoginAt: Timestamp.now(),
         isActive: true
       });
-      
+
       currentUser = {
         uid: user.uid,
         email: user.email,
         displayName,
         churchId
       };
-      
+
       currentChurchId = churchId;
       return currentUser;
     } catch (error: any) {
       throw new Error(`Sign up failed: ${error.message}`);
+    }
+  },
+
+  // Register new user with extended profile
+  register: async (email: string, password: string, profile: {
+    firstName: string;
+    lastName: string;
+    churchName: string;
+    phoneNumber: string;
+    role: string;
+  }): Promise<FirebaseUser> => {
+    try {
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
+
+      const displayName = `${profile.firstName} ${profile.lastName}`;
+      const churchId = profile.churchName.toLowerCase().replace(/\s+/g, '-');
+
+      // Create user document in Firestore
+      await addDoc(collection(db, 'users'), {
+        uid: user.uid,
+        email: user.email,
+        displayName,
+        firstName: profile.firstName,
+        lastName: profile.lastName,
+        churchId,
+        churchName: profile.churchName,
+        phoneNumber: profile.phoneNumber,
+        role: profile.role,
+        createdAt: Timestamp.now(),
+        lastLoginAt: Timestamp.now(),
+        isActive: true
+      });
+
+      currentUser = {
+        uid: user.uid,
+        email: user.email,
+        displayName,
+        churchId
+      };
+
+      currentChurchId = churchId;
+      return currentUser;
+    } catch (error: any) {
+      throw new Error(`Registration failed: ${error.message}`);
     }
   },
 
@@ -216,13 +316,18 @@ export const membersFirebaseService = {
   // Listen to members changes
   onSnapshot: (callback: (members: Member[]) => void): Unsubscribe => {
     const membersRef = collection(db, getChurchCollectionPath('members'));
-    const q = query(membersRef, where('isActive', '==', true), orderBy('lastName'));
+    // Temporarily using simple query to avoid index requirement
+    // TODO: Create composite index for isActive + lastName in Firebase Console
+    const q = query(membersRef, where('isActive', '==', true));
 
     return onSnapshot(q, (querySnapshot) => {
       const members = querySnapshot.docs.map(doc => ({
         ...doc.data(),
         id: doc.id
       })) as Member[];
+
+      // Sort in memory for now
+      members.sort((a, b) => (a.lastName || '').localeCompare(b.lastName || ''));
       callback(members);
     });
   }
@@ -305,12 +410,18 @@ export const newBelieversFirebaseService = {
   getAll: async (): Promise<NewBeliever[]> => {
     try {
       const newBelieversRef = collection(db, getChurchCollectionPath('newBelievers'));
-      const querySnapshot = await getDocs(query(newBelieversRef, where('isActive', '==', true), orderBy('joinedDate', 'desc')));
+      // Temporarily using simple query to avoid index requirement
+      // TODO: Create composite index for isActive + joinedDate in Firebase Console
+      const querySnapshot = await getDocs(query(newBelieversRef, where('isActive', '==', true)));
 
-      return querySnapshot.docs.map(doc => ({
+      const newBelievers = querySnapshot.docs.map(doc => ({
         ...doc.data(),
         id: doc.id
       })) as NewBeliever[];
+
+      // Sort in memory for now
+      newBelievers.sort((a, b) => new Date(b.joinedDate || 0).getTime() - new Date(a.joinedDate || 0).getTime());
+      return newBelievers;
     } catch (error: any) {
       throw new Error(`Failed to fetch new believers: ${error.message}`);
     }
@@ -362,13 +473,18 @@ export const newBelieversFirebaseService = {
   // Listen to new believers changes
   onSnapshot: (callback: (newBelievers: NewBeliever[]) => void): Unsubscribe => {
     const newBelieversRef = collection(db, getChurchCollectionPath('newBelievers'));
-    const q = query(newBelieversRef, where('isActive', '==', true), orderBy('joinedDate', 'desc'));
+    // Temporarily using simple query to avoid index requirement
+    // TODO: Create composite index for isActive + joinedDate in Firebase Console
+    const q = query(newBelieversRef, where('isActive', '==', true));
 
     return onSnapshot(q, (querySnapshot) => {
       const newBelievers = querySnapshot.docs.map(doc => ({
         ...doc.data(),
         id: doc.id
       })) as NewBeliever[];
+
+      // Sort in memory for now
+      newBelievers.sort((a, b) => new Date(b.joinedDate || 0).getTime() - new Date(a.joinedDate || 0).getTime());
       callback(newBelievers);
     });
   }

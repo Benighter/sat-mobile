@@ -1,4 +1,4 @@
-# 📱 Church Connect Mobile - APK Deployment
+# 📱 SAT Mobile - APK Deployment
 
 Transform your React web app into a native Android APK using Median.co!
 

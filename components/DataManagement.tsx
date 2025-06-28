@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { useAppContext } from '../contexts/SimpleFirebaseContext';
+import { useAppContext } from '../contexts/FirebaseAppContext';
 import { storageInfo, backupStorage } from '../utils/localStorage';
 import { initializeSampleData } from '../utils/sampleData';
 import Button from './ui/Button';

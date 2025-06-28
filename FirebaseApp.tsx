@@ -180,7 +180,7 @@ const AppContent: React.FC = memo(() => {
                 <span className="text-white font-bold text-sm sm:text-base md:text-lg">⛪</span>
               </div>
               <div className="min-w-0 hidden sm:block">
-                <h1 className="text-base sm:text-lg md:text-xl font-bold gradient-text font-serif group-hover:text-gray-700 transition-colors duration-300 truncate">Church Connect</h1>
+                <h1 className="text-base sm:text-lg md:text-xl font-bold gradient-text font-serif group-hover:text-gray-700 transition-colors duration-300 truncate">SAT Mobile</h1>
                 <p className="text-xs text-gray-600 font-medium group-hover:text-gray-700 transition-colors duration-300 hidden md:block">Faith • Community • Growth</p>
               </div>
             </button>

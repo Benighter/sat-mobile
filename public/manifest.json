@@ -1,7 +1,7 @@
 {
-  "name": "Church Connect Mobile",
-  "short_name": "Church Connect",
-  "description": "A mobile-first church membership management application with member tracking, attendance management, and congregation organization.",
+  "name": "SAT Mobile",
+  "short_name": "SAT Mobile",
+  "description": "SAT Mobile - A mobile-first church membership management application with member tracking, attendance management, and congregation organization.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#f8fafc",

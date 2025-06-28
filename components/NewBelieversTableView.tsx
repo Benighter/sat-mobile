@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { useAppContext } from '../contexts/SimpleFirebaseContext';
+import { useAppContext } from '../contexts/FirebaseAppContext';
 import { NewBeliever, AttendanceStatus } from '../types';
 import Table from './ui/Table';
 import { UserIcon, EditIcon, TrashIcon, CalendarIcon, PhoneIcon, MapPinIcon } from './icons';

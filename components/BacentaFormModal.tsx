@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Bacenta } from '../types';
-import { useAppContext } from '../contexts/SimpleFirebaseContext';
+import { useAppContext } from '../contexts/FirebaseAppContext';
 import Modal from './ui/Modal';
 import Input from './ui/Input';
 import Button from './ui/Button';

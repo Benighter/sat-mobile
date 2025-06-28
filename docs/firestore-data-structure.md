@@ -1,7 +1,7 @@
 # Firestore Data Structure Design
 
 ## Overview
-This document outlines the Firestore database structure for the Church Connect Mobile application, migrating from localStorage to Firebase Firestore.
+This document outlines the Firestore database structure for the SAT Mobile application, migrating from localStorage to Firebase Firestore.
 
 ## Collections Structure
 

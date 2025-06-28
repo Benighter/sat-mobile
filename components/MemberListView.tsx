@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
-import { useAppContext } from '../contexts/SimpleFirebaseContext';
+import { useAppContext } from '../contexts/FirebaseAppContext';
 import MemberCard from './MemberCard';
 import MembersTableView from './MembersTableView';
 import { LoadingSpinnerIcon, SearchIcon, UsersIcon, CalendarIcon, ChevronLeftIcon, ChevronRightIcon } from './icons';

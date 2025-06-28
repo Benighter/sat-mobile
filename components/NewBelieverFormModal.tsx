@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { NewBeliever } from '../types';
-import { useAppContext } from '../contexts/SimpleFirebaseContext';
+import { useAppContext } from '../contexts/FirebaseAppContext';
 import { formatDateToYYYYMMDD } from '../utils/dateUtils';
 import { MINISTRY_OPTIONS } from '../constants';
 import Modal from './ui/Modal';

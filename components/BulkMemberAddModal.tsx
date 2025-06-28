@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useAppContext } from '../contexts/SimpleFirebaseContext';
+import { useAppContext } from '../contexts/FirebaseAppContext';
 import { SmartTextParser, ParsedMemberData, ParseResult } from '../utils/smartTextParser';
 import Modal from './ui/Modal';
 import Button from './ui/Button';

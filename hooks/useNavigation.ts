@@ -1,5 +1,5 @@
 import { useEffect, useCallback } from 'react';
-import { useAppContext } from '../contexts/SimpleFirebaseContext';
+import { useAppContext } from '../contexts/FirebaseAppContext';
 import { TabKeys } from '../types';
 
 export const useNavigation = () => {

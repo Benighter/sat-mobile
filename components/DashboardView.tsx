@@ -1,6 +1,6 @@
 
 import React, { memo } from 'react';
-import { useAppContext } from '../contexts/SimpleFirebaseContext';
+import { useAppContext } from '../contexts/FirebaseAppContext';
 import { PeopleIcon, AttendanceIcon, AlertIcon, ChartBarIcon, ChevronRightIcon } from './icons';
 import { getMonthName } from '../utils/dateUtils';
 
