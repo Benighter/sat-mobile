@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { useAppData } from '../hooks/useAppData';
+import { useAppContext } from '../contexts/SimpleFirebaseContext';
 import { NewBeliever, AttendanceStatus } from '../types';
 import Table from './ui/Table';
 import { UserIcon, EditIcon, TrashIcon, CalendarIcon, PhoneIcon, MapPinIcon } from './icons';
@@ -19,7 +19,7 @@ const NewBelieversTableView: React.FC = () => {
     markNewBelieverAttendanceHandler,
     isLoading,
     displayedSundays
-  } = useAppData();
+  } = useAppContext();
   
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedMinistry, setSelectedMinistry] = useState('');

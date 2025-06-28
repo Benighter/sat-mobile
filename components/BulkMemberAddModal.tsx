@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useAppData } from '../hooks/useAppData';
+import { useAppContext } from '../contexts/SimpleFirebaseContext';
 import { SmartTextParser, ParsedMemberData, ParseResult } from '../utils/smartTextParser';
 import Modal from './ui/Modal';
 import Button from './ui/Button';
@@ -18,7 +18,7 @@ const BulkMemberAddModal: React.FC<BulkMemberAddModalProps> = ({
   bacentaId,
   bacentaName 
 }) => {
-  const { addMultipleMembersHandler, bacentas } = useAppData();
+  const { addMultipleMembersHandler, bacentas } = useAppContext();
   const [pastedText, setPastedText] = useState('');
   const [parseResult, setParseResult] = useState<ParseResult | null>(null);
   const [selectedBacentaId, setSelectedBacentaId] = useState(bacentaId || '');

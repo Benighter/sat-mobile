@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
-import { useAppData } from '../hooks/useAppData';
+import { useAppContext } from '../contexts/SimpleFirebaseContext';
 import MemberCard from './MemberCard';
 import MembersTableView from './MembersTableView';
 import { LoadingSpinnerIcon, SearchIcon, UsersIcon, CalendarIcon, ChevronLeftIcon, ChevronRightIcon } from './icons';
@@ -23,7 +23,7 @@ const MemberListView: React.FC<MemberListViewProps> = ({ bacentaFilter }) => {
     displayedDate,
     navigateToPreviousMonth,
     navigateToNextMonth,
-  } = useAppData();
+  } = useAppContext();
   const [searchTerm, setSearchTerm] = useState('');
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('table');
 

@@ -1,6 +1,6 @@
 
 import React, { memo } from 'react';
-import { useAppData } from '../hooks/useAppData';
+import { useAppContext } from '../contexts/SimpleFirebaseContext';
 import { PeopleIcon, AttendanceIcon, AlertIcon, ChartBarIcon, ChevronRightIcon } from './icons';
 import { getMonthName } from '../utils/dateUtils';
 
@@ -56,7 +56,7 @@ const StatCard: React.FC<StatCardProps> = memo(({ title, value, icon, colorClass
 
 
 const DashboardView: React.FC = memo(() => {
-  const { members, attendanceRecords, criticalMemberIds, bacentas, displayedSundays, displayedDate, changeTab } = useAppData(); // Use displayedSundays
+  const { members, attendanceRecords, criticalMemberIds, bacentas, displayedSundays, displayedDate, switchTab } = useAppContext(); // Use displayedSundays
 
   const totalMembers = members.length;
   
@@ -108,7 +108,7 @@ const DashboardView: React.FC = memo(() => {
           value={totalMembers}
           icon={<PeopleIcon className="w-full h-full" />}
           colorClass="border-gray-500"
-          onClick={() => changeTab('all_members')}
+          onClick={() => switchTab('all_members')}
         />
         <StatCard
           title="Attendance Rate"
@@ -116,7 +116,7 @@ const DashboardView: React.FC = memo(() => {
           icon={<AttendanceIcon className="w-full h-full" />}
           colorClass="border-blue-500"
           description={`For ${monthName}`}
-          onClick={() => changeTab('attendance_analytics')}
+          onClick={() => switchTab('attendance_analytics')}
         />
         <StatCard
           title="Critical Alerts"
@@ -124,7 +124,7 @@ const DashboardView: React.FC = memo(() => {
           icon={<AlertIcon className="w-full h-full" />}
           colorClass="border-red-500"
           description="Members needing follow-up"
-          onClick={() => changeTab('critical_members')}
+          onClick={() => switchTab('critical_members')}
         />
       </div>
 
@@ -146,7 +146,7 @@ const DashboardView: React.FC = memo(() => {
             {membersPerBacenta.map((item) => (
               <div
                 key={item.id}
-                onClick={() => changeTab(item.id)}
+                onClick={() => switchTab(item.id)}
                 className="flex justify-between items-center p-3 sm:p-4 glass rounded-xl cursor-pointer hover:shadow-xl transition-all duration-200 group"
               >
                 <div className="flex items-center space-x-2 sm:space-x-3 flex-1 min-w-0">

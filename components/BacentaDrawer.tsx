@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useAppData } from '../hooks/useAppData';
+import { useAppContext } from '../contexts/SimpleFirebaseContext';
 import { Bacenta, TabKeys } from '../types';
 import {
   XMarkIcon,
@@ -24,11 +24,11 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
     bacentas,
     members,
     currentTab,
-    changeTab,
+    switchTab,
     openBacentaForm,
     deleteBacentaHandler,
     criticalMemberIds
-  } = useAppData();
+  } = useAppContext();
   
   const [searchQuery, setSearchQuery] = useState('');
   const [recentBacentas, setRecentBacentas] = useState<string[]>([]);
@@ -80,7 +80,7 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
   }, [recentBacentas, bacentas]);
 
   const handleBacentaClick = (bacenta: Bacenta) => {
-    changeTab(bacenta.id);
+    switchTab(bacenta.id);
     onClose();
   };
 
@@ -182,7 +182,7 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
                 label="Dashboard"
                 isActive={currentTab.id === TabKeys.DASHBOARD}
                 onClick={() => {
-                  changeTab(TabKeys.DASHBOARD);
+                  switchTab(TabKeys.DASHBOARD);
                   onClose();
                 }}
               />
@@ -191,7 +191,7 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
                 label="All Members"
                 isActive={currentTab.id === TabKeys.ALL_CONGREGATIONS}
                 onClick={() => {
-                  changeTab(TabKeys.ALL_CONGREGATIONS);
+                  switchTab(TabKeys.ALL_CONGREGATIONS);
                   onClose();
                 }}
               />
@@ -200,7 +200,7 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
                 label="All Bacentas"
                 isActive={currentTab.id === TabKeys.ALL_BACENTAS}
                 onClick={() => {
-                  changeTab(TabKeys.ALL_BACENTAS);
+                  switchTab(TabKeys.ALL_BACENTAS);
                   onClose();
                 }}
               />
@@ -209,7 +209,7 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
                 label="Critical Alerts"
                 isActive={currentTab.id === TabKeys.CRITICAL_MEMBERS}
                 onClick={() => {
-                  changeTab(TabKeys.CRITICAL_MEMBERS);
+                  switchTab(TabKeys.CRITICAL_MEMBERS);
                   onClose();
                 }}
                 badge={criticalMemberIds.length > 0 ? criticalMemberIds.length : undefined}
@@ -219,7 +219,7 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
                 label="New Believers"
                 isActive={currentTab.id === TabKeys.NEW_BELIEVERS}
                 onClick={() => {
-                  changeTab(TabKeys.NEW_BELIEVERS);
+                  switchTab(TabKeys.NEW_BELIEVERS);
                   onClose();
                 }}
               />

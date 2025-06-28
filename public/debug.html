@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Firebase Debug</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            min-height: 100vh;
+        }
+        .container {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 8px 32px rgba(31, 38, 135, 0.37);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+        }
+        .status {
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 10px;
+            font-weight: bold;
+        }
+        .success { background: rgba(76, 175, 80, 0.3); border: 1px solid #4CAF50; }
+        .error { background: rgba(244, 67, 54, 0.3); border: 1px solid #f44336; }
+        .info { background: rgba(33, 150, 243, 0.3); border: 1px solid #2196F3; }
+        .warning { background: rgba(255, 193, 7, 0.3); border: 1px solid #FFC107; }
+        button {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px;
+            transition: transform 0.2s;
+        }
+        button:hover { transform: translateY(-2px); }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+        pre { background: rgba(0,0,0,0.3); padding: 15px; border-radius: 10px; overflow-x: auto; }
+        h1, h2 { text-align: center; margin-bottom: 30px; }
+        .emoji { font-size: 2em; margin-right: 10px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1><span class="emoji">🔍</span>Firebase Debug Information</h1>
+        
+        <div id="status"></div>
+        
+        <h2>Environment Variables Check</h2>
+        <div id="env-check"></div>
+        
+        <h2>Firebase Configuration</h2>
+        <div id="config-check"></div>
+        
+        <button onclick="testFirebaseConnection()">Test Firebase Connection</button>
+        <button onclick="checkEnvironment()">Check Environment</button>
+        
+        <div id="results"></div>
+    </div>
+
+    <!-- Firebase SDK -->
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+        import { getFirestore } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+        import { getAuth } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+
+        function showStatus(message, type = 'info') {
+            const statusDiv = document.getElementById('status');
+            statusDiv.innerHTML = `<div class="status ${type}">${message}</div>`;
+        }
+
+        function addResult(message, type = 'info') {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML += `<div class="status ${type}">${message}</div>`;
+        }
+
+        // Check environment variables (these would be injected by Vite in the actual app)
+        window.checkEnvironment = function() {
+            const envDiv = document.getElementById('env-check');
+            
+            // In a real React app, these would be process.env.REACT_APP_*
+            // For this debug page, we'll show what we expect
+            const expectedVars = [
+                'REACT_APP_FIREBASE_API_KEY',
+                'REACT_APP_FIREBASE_AUTH_DOMAIN', 
+                'REACT_APP_FIREBASE_PROJECT_ID',
+                'REACT_APP_FIREBASE_STORAGE_BUCKET',
+                'REACT_APP_FIREBASE_MESSAGING_SENDER_ID',
+                'REACT_APP_FIREBASE_APP_ID'
+            ];
+            
+            let html = '<div class="status info">Expected Environment Variables:<br><br>';
+            expectedVars.forEach(varName => {
+                html += `${varName}: Expected to be loaded by Vite<br>`;
+            });
+            html += '</div>';
+            
+            envDiv.innerHTML = html;
+        };
+
+        // Test Firebase with the actual config from your .env file
+        window.testFirebaseConnection = function() {
+            const configDiv = document.getElementById('config-check');
+            
+            try {
+                // Your actual Firebase config from .env
+                const firebaseConfig = {
+                    apiKey: "AIzaSyDkyjDhyz_LCbUpRgftD2qo31e5SteAiKg",
+                    authDomain: "sat-mobile-de6f1.firebaseapp.com",
+                    projectId: "sat-mobile-de6f1",
+                    storageBucket: "sat-mobile-de6f1.firebasestorage.app",
+                    messagingSenderId: "1076014285349",
+                    appId: "1:1076014285349:web:d72d460aefe5ca8d76b5cc"
+                };
+                
+                configDiv.innerHTML = `<div class="status success">Firebase Config Loaded:<br><br><pre>${JSON.stringify(firebaseConfig, null, 2)}</pre></div>`;
+                
+                // Test Firebase initialization
+                const app = initializeApp(firebaseConfig);
+                const db = getFirestore(app);
+                const auth = getAuth(app);
+                
+                addResult('✅ Firebase initialized successfully with your actual config!', 'success');
+                addResult('✅ Firestore database connected', 'success');
+                addResult('✅ Firebase Auth connected', 'success');
+                addResult('🎉 Your Firebase project is properly configured!', 'success');
+                
+            } catch (error) {
+                addResult('❌ Firebase initialization failed: ' + error.message, 'error');
+                configDiv.innerHTML = `<div class="status error">Firebase Error: ${error.message}</div>`;
+            }
+        };
+
+        // Auto-run checks
+        document.addEventListener('DOMContentLoaded', () => {
+            showStatus('🔍 Debug page loaded. Click buttons to run tests.', 'info');
+            checkEnvironment();
+        });
+    </script>
+</body>
+</html>

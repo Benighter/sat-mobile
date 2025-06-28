@@ -1,6 +1,31 @@
 # Church Connect Mobile
 
-A comprehensive, mobile-first church membership management application built with React 19, TypeScript, and Framer Motion. This application provides churches with a complete solution for managing members, tracking attendance, organizing congregations into Bacentas, and monitoring member engagement with advanced analytics and reporting capabilities.
+A comprehensive, mobile-first church membership management application built with React 19, TypeScript, Framer Motion, and Firebase. This application provides churches with a complete solution for managing members, tracking attendance, organizing congregations into Bacentas, and monitoring member engagement with advanced analytics, real-time synchronization, and cloud storage.
+
+## 🔥 Firebase Integration
+
+**NEW**: This app now supports **Firebase Firestore** for cloud data storage with real-time synchronization, offline support, and multi-user collaboration.
+
+### Quick Firebase Setup
+
+```bash
+# Run the interactive setup wizard
+npm run setup:firebase
+
+# Test Firebase integration
+npm run test:firebase
+
+# View detailed migration guide
+npm run migration:guide
+```
+
+### Firebase Features
+- 🔐 **Authentication**: Secure user login with Firebase Auth
+- ☁️ **Cloud Storage**: All data stored in Firestore with real-time sync
+- 📱 **Offline Support**: Works offline with automatic sync when online
+- 👥 **Multi-user**: Multiple users can collaborate in real-time
+- 🔄 **Data Migration**: Seamless migration from localStorage to Firebase
+- 🛡️ **Security**: Church-level data isolation and role-based access
 
 ## 🎯 Overview
 
@@ -8,11 +33,12 @@ Church Connect Mobile is designed specifically for churches that need a modern, 
 
 **Key Highlights:**
 - 📱 **Mobile-First Design**: Optimized for smartphones and tablets with touch-friendly interfaces
-- 🏗️ **Modern Architecture**: Built with React 19, TypeScript, and modern web technologies
+- 🏗️ **Modern Architecture**: Built with React 19, TypeScript, Firebase, and modern web technologies
 - 📊 **Advanced Analytics**: Comprehensive attendance tracking with charts and visual reports
-- 🔄 **Real-time Updates**: Instant data synchronization with local storage persistence
+- 🔄 **Real-time Updates**: Instant data synchronization with Firebase Firestore and offline support
 - 📤 **Data Export**: Excel export functionality with detailed reports and charts
 - 🎨 **Polished UI**: Glass morphism design with smooth animations and professional appearance
+- ☁️ **Cloud-First**: Firebase integration with authentication, real-time sync, and multi-user support
 
 ## ✨ Core Features
 
@@ -86,6 +112,8 @@ Church Connect Mobile is designed specifically for churches that need a modern, 
 
 ### Installation & Setup
 
+#### Option 1: Firebase Setup (Recommended)
+
 1. **Clone or download the project**
    ```bash
    git clone <repository-url>
@@ -97,7 +125,36 @@ Church Connect Mobile is designed specifically for churches that need a modern, 
    npm install
    ```
 
-3. **Environment Configuration (Optional)**
+3. **Set up Firebase**
+   ```bash
+   # Interactive Firebase setup wizard
+   npm run setup:firebase
+
+   # Or manually copy .env.example to .env and configure
+   cp .env.example .env
+   ```
+
+4. **Configure Firebase Project**
+   - Create a Firebase project at https://console.firebase.google.com/
+   - Enable Firestore Database and Authentication
+   - Apply security rules from `FIREBASE_MIGRATION_GUIDE.md`
+   - Create initial user and church documents
+
+5. **Start the development server**
+   ```bash
+   npm run dev
+   ```
+
+6. **Test Firebase integration**
+   ```bash
+   npm run test:firebase
+   ```
+
+#### Option 2: Local Storage Setup (Legacy)
+
+1. **Clone and install** (steps 1-2 above)
+
+2. **Environment Configuration (Optional)**
 
    Create a `.env.local` file in the root directory:
    ```bash
@@ -105,6 +162,10 @@ Church Connect Mobile is designed specifically for churches that need a modern, 
    ```
 
    *Note: The app works fully without the API key. This is only needed for future AI-powered features.*
+
+3. **Use original App component**
+   - Keep `index.tsx` using `App` instead of `FirebaseApp`
+   - The application will use localStorage for data persistence
 
 4. **Start the development server**
    ```bash
@@ -117,11 +178,17 @@ Church Connect Mobile is designed specifically for churches that need a modern, 
 
 ### Available Scripts
 
+#### Development
 - `npm run dev` - Start development server with hot reload
 - `npm run build` - Create production build
 - `npm run build:mobile` - Create optimized mobile production build
 - `npm run preview` - Preview production build locally
 - `npm run serve` - Serve production build on network (for mobile testing)
+
+#### Firebase
+- `npm run setup:firebase` - Interactive Firebase setup wizard
+- `npm run test:firebase` - Test Firebase integration and configuration
+- `npm run migration:guide` - View Firebase migration instructions
 
 ## 📱 Mobile Testing & Usage
 

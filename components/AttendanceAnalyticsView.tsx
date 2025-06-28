@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { useAppData } from '../hooks/useAppData';
+import { useAppContext } from '../contexts/SimpleFirebaseContext';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -72,7 +72,7 @@ const StatCard: React.FC<StatCardProps> = ({ title, value, icon, colorClass, tre
 );
 
 const AttendanceAnalyticsView: React.FC = () => {
-  const { members, attendanceRecords, bacentas, displayedDate } = useAppData();
+  const { members, attendanceRecords, bacentas, displayedDate } = useAppContext();
   const [currentView, setCurrentView] = useState<ViewType>('overview');
   const [chartType, setChartType] = useState<ChartType>('bar');
 

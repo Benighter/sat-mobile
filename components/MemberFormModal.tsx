@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Member } from '../types';
-import { useAppData } from '../hooks/useAppData';
+import { useAppContext } from '../contexts/SimpleFirebaseContext';
 import Modal from './ui/Modal';
 import Input from './ui/Input';
 import Checkbox from './ui/Checkbox';
@@ -15,7 +15,7 @@ interface MemberFormModalProps {
 }
 
 const MemberFormModal: React.FC<MemberFormModalProps> = ({ isOpen, onClose, member }) => {
-  const { addMemberHandler, updateMemberHandler, bacentas, currentTab } = useAppData();
+  const { addMemberHandler, updateMemberHandler, bacentas, currentTab } = useAppContext();
 
   // Check if we're currently in a specific bacenta (not dashboard/fixed tabs)
   const isInSpecificBacenta = currentTab && bacentas.some(b => b.id === currentTab.id);

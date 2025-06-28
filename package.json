@@ -14,12 +14,17 @@
     "build:mobile": "vite build --mode production && node scripts/optimize-build.js",
     "serve": "vite preview --host 0.0.0.0 --port 3000",
     "generate-icons": "open generate-app-icons.html",
-    "analyze": "vite build --mode analyze"
+    "analyze": "vite build --mode analyze",
+    "test:firebase": "node scripts/test-firebase.js",
+    "setup:firebase": "node scripts/setup-firebase.js",
+    "demo:firebase": "node scripts/demo-firebase.js",
+    "migration:guide": "echo 'See FIREBASE_MIGRATION_GUIDE.md for detailed migration instructions'"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
     "chart.js": "^4.5.0",
     "chartjs-to-image": "^1.2.2",
+    "firebase": "^11.9.1",
     "framer-motion": "^12.18.1",
     "html2canvas": "^1.4.1",
     "lucide-react": "^0.515.0",
@@ -29,9 +34,12 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
+    "@tailwindcss/postcss": "^4.1.11",
     "@types/node": "^22.14.0",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
+    "autoprefixer": "^10.4.21",
+    "tailwindcss": "^4.1.11",
     "terser": "^5.42.0",
     "typescript": "~5.7.2",
     "vite": "^6.2.0"

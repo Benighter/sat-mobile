@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { useAppData } from '../hooks/useAppData';
+import { useAppContext } from '../contexts/SimpleFirebaseContext';
 import MemberCard from './MemberCard';
 import { WarningIcon, LoadingSpinnerIcon, CalendarIcon, ChevronLeftIcon, ChevronRightIcon } from './icons';
 import { CONSECUTIVE_ABSENCE_THRESHOLD } from '../constants';
@@ -16,7 +16,7 @@ const CriticalMembersView: React.FC = () => {
     navigateToPreviousMonth, // For month navigation
     navigateToNextMonth, // For month navigation
     displayedSundays // To check if any sundays for context
-  } = useAppData();
+  } = useAppContext();
 
   const criticalMembers = members.filter(member => criticalMemberIds.includes(member.id))
     .sort((a,b) => a.lastName.localeCompare(b.lastName) || a.firstName.localeCompare(b.firstName));

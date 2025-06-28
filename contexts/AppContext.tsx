@@ -148,8 +148,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       let consecutiveAbsences = 0;
       let maxConsecutiveAbsences = 0;
 
-      // Check from the most recent Sunday in the displayedSundays list
-      for (const sundayDate of sortedSundays.slice().reverse()) {
+      // Only consider Sundays that occur after the member's join date
+      const memberJoinDate = new Date(member.joinedDate);
+      const relevantSundays = sortedSundays.filter(sunday => new Date(sunday) >= memberJoinDate);
+
+      // Skip if member hasn't been around for at least CONSECUTIVE_ABSENCE_THRESHOLD Sundays
+      if (relevantSundays.length < CONSECUTIVE_ABSENCE_THRESHOLD) {
+        return;
+      }
+
+      // Check from the most recent Sunday in the relevant Sundays list
+      for (const sundayDate of relevantSundays.slice().reverse()) {
         const record = attendanceRecords.find(ar => ar.memberId === member.id && ar.date === sundayDate);
         if (record && record.status === 'Absent') {
           consecutiveAbsences++;

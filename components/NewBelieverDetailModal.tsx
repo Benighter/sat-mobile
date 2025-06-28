@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { NewBeliever, AttendanceStatus } from '../types';
-import { useAppData } from '../hooks/useAppData';
+import { useAppContext } from '../contexts/SimpleFirebaseContext';
 import { formatDateToDisplay, formatDisplayDate } from '../utils/dateUtils';
 import Modal from './ui/Modal';
 import Button from './ui/Button';
@@ -37,7 +37,7 @@ const NewBelieverDetailModal: React.FC<NewBelieverDetailModalProps> = ({
     openNewBelieverForm,
     deleteNewBelieverHandler,
     showConfirmation
-  } = useAppData();
+  } = useAppContext();
 
   if (!newBeliever) return null;
 

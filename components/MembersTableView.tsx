@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { useAppData } from '../hooks/useAppData';
+import { useAppContext } from '../contexts/SimpleFirebaseContext';
 import { Member } from '../types';
 import Table from './ui/Table';
 import { formatDisplayDate, getSundaysOfMonth, getMonthName, formatDateToYYYYMMDD } from '../utils/dateUtils';
@@ -22,7 +22,7 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
     attendanceRecords,
     markAttendanceHandler,
     isLoading
-  } = useAppData();
+  } = useAppContext();
 
   const [searchTerm, setSearchTerm] = useState('');
   const [displayedDate, setDisplayedDate] = useState(new Date());

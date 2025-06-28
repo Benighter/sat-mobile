@@ -1,10 +1,10 @@
 
 import React, { memo } from 'react';
-import { useAppData } from '../hooks/useAppData';
+import { useAppContext } from '../contexts/SimpleFirebaseContext';
 import { ChartBarIcon, UsersIcon, WarningIcon, GroupIcon, Bars3Icon } from './icons';
 
 const Navbar: React.FC = memo(() => {
-  const { bacentas, currentTab, criticalMemberIds, openBacentaDrawer } = useAppData();
+  const { bacentas, currentTab, criticalMemberIds, openBacentaDrawer } = useAppContext();
 
   const getIconForTab = (tabId: string) => {
     switch (tabId) {

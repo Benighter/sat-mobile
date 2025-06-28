@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Bacenta } from '../types';
-import { useAppData } from '../hooks/useAppData';
+import { useAppContext } from '../contexts/SimpleFirebaseContext';
 import Modal from './ui/Modal';
 import Input from './ui/Input';
 import Button from './ui/Button';
@@ -13,7 +13,7 @@ interface BacentaFormModalProps {
 }
 
 const BacentaFormModal: React.FC<BacentaFormModalProps> = ({ isOpen, onClose, bacenta }) => {
-  const { addBacentaHandler, updateBacentaHandler } = useAppData();
+  const { addBacentaHandler, updateBacentaHandler } = useAppContext();
   const [name, setName] = useState('');
   const [error, setError] = useState<string | null>(null);
 
@@ -42,7 +42,7 @@ const BacentaFormModal: React.FC<BacentaFormModalProps> = ({ isOpen, onClose, ba
     if (bacenta) { // Editing existing Bacenta
       await updateBacentaHandler({ ...bacenta, name });
     } else { // Adding new Bacenta
-      await addBacentaHandler(name); // This will automatically switch to the new bacenta
+      await addBacentaHandler({ name }); // Pass object with name property
     }
     onClose();
   };

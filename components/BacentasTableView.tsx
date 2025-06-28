@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { useAppData } from '../hooks/useAppData';
+import { useAppContext } from '../contexts/SimpleFirebaseContext';
 import { Bacenta } from '../types';
 import Table from './ui/Table';
 import { GroupIcon, EditIcon, TrashIcon, UsersIcon, CalendarIcon, TrendingUpIcon } from './icons';
@@ -13,12 +13,12 @@ const BacentasTableView: React.FC = () => {
     bacentas, 
     members,
     attendanceRecords,
-    openBacentaForm, 
+    openBacentaForm,
     deleteBacentaHandler,
     isLoading,
-    changeTab,
+    switchTab,
     displayedSundays
-  } = useAppData();
+  } = useAppContext();
   
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -281,7 +281,7 @@ const BacentasTableView: React.FC = () => {
             ? "No bacentas match your search" 
             : "No bacentas created yet"
         }
-        onRowClick={(bacenta) => changeTab(bacenta.id)}
+        onRowClick={(bacenta) => switchTab(bacenta.id)}
       />
 
       {/* Summary */}

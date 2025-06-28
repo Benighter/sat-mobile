@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { useAppData } from '../hooks/useAppData';
+import { useAppContext } from '../contexts/SimpleFirebaseContext';
 import { NewBeliever } from '../types';
 import { formatDateToDisplay } from '../utils/dateUtils';
 import { PlusIcon, EditIcon, TrashIcon, UserIcon, CalendarIcon, PhoneIcon, MapPinIcon, GridIcon, TableIcon } from './icons';
@@ -16,7 +16,7 @@ const NewBelieversView: React.FC = () => {
     closeNewBelieverForm,
     deleteNewBelieverHandler,
     showConfirmation 
-  } = useAppData();
+  } = useAppContext();
 
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedMinistry, setSelectedMinistry] = useState('');

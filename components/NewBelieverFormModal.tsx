@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { NewBeliever } from '../types';
-import { useAppData } from '../hooks/useAppData';
+import { useAppContext } from '../contexts/SimpleFirebaseContext';
 import { formatDateToYYYYMMDD } from '../utils/dateUtils';
 import { MINISTRY_OPTIONS } from '../constants';
 import Modal from './ui/Modal';
@@ -15,7 +15,7 @@ interface NewBelieverFormModalProps {
 }
 
 const NewBelieverFormModal: React.FC<NewBelieverFormModalProps> = ({ isOpen, onClose, newBeliever }) => {
-  const { addNewBelieverHandler, updateNewBelieverHandler } = useAppData();
+  const { addNewBelieverHandler, updateNewBelieverHandler } = useAppContext();
 
   const initialFormData: Omit<NewBeliever, 'id' | 'createdDate' | 'lastUpdated'> = {
     name: '',

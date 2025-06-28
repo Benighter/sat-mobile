@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { useAppData } from '../hooks/useAppData';
+import { useAppContext } from '../contexts/SimpleFirebaseContext';
 import { storageInfo, backupStorage } from '../utils/localStorage';
 import { initializeSampleData } from '../utils/sampleData';
 import Button from './ui/Button';
@@ -22,7 +22,7 @@ interface DataManagementProps {
 }
 
 const DataManagement: React.FC<DataManagementProps> = ({ isOpen, onClose }) => {
-  const { exportData, importData, members, bacentas, attendanceRecords, showConfirmation } = useAppData();
+  const { exportData, importData, members, bacentas, attendanceRecords, showConfirmation } = useAppContext();
   const [isImporting, setIsImporting] = useState(false);
   const [importStatus, setImportStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [importMessage, setImportMessage] = useState('');

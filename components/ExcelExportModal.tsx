@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useAppData } from '../hooks/useAppData';
+import { useAppContext } from '../contexts/SimpleFirebaseContext';
 import { exportToExcel, ExcelExportOptions } from '../utils/excelExport';
 import Modal from './ui/Modal';
 import Button from './ui/Button';
@@ -18,7 +18,7 @@ interface ExcelExportModalProps {
 }
 
 const ExcelExportModal: React.FC<ExcelExportModalProps> = ({ isOpen, onClose }) => {
-  const { members, bacentas, attendanceRecords, showToast } = useAppData();
+  const { members, bacentas, attendanceRecords, showToast } = useAppContext();
   const [isExporting, setIsExporting] = useState(false);
   
   // Export options state

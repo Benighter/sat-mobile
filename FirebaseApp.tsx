@@ -1,7 +1,8 @@
-
-import React, { useEffect, useState, memo } from 'react';
-import { PerformanceMonitor } from './utils/performance';
-import { SimpleFirebaseProvider, useAppContext } from './contexts/SimpleFirebaseContext';
+// Firebase-enabled App Component
+import React, { useState, memo } from 'react';
+import { FirebaseAppProvider, useAppContext } from './contexts/FirebaseAppContext';
+import { AuthWrapper } from './components/AuthWrapper';
+import { DataMigrationModal } from './components/DataMigrationModal';
 import Navbar from './components/Navbar';
 import DashboardView from './components/DashboardView';
 import {
@@ -13,18 +14,17 @@ import {
   LazyNewBelieversView
 } from './components/LazyWrapper';
 import GestureWrapper from './components/GestureWrapper';
-import BackButton from './components/BackButton';
 import SwipeIndicator from './components/SwipeIndicator';
-import { LoadingSpinnerIcon, RefreshIcon, PlusIcon as AddMemberIcon, CogIcon } from './components/icons'; // Renamed PlusIcon for clarity
-import { ClipboardIcon } from 'lucide-react';
+import { LoadingSpinnerIcon, RefreshIcon, PlusIcon as AddMemberIcon, CogIcon } from './components/icons';
+import { ClipboardIcon, Wifi, WifiOff } from 'lucide-react';
 import { TabKeys } from './types';
 import MemberFormModal from './components/MemberFormModal';
 import BulkMemberAddModal from './components/BulkMemberAddModal';
-import BacentaFormModal from './components/BacentaFormModal'; // Import BacentaFormModal
-import BacentaDrawer from './components/BacentaDrawer'; // Import BacentaDrawer
-import NewBelieverFormModal from './components/NewBelieverFormModal'; // Import NewBelieverFormModal
+import BacentaFormModal from './components/BacentaFormModal';
+import BacentaDrawer from './components/BacentaDrawer';
+import NewBelieverFormModal from './components/NewBelieverFormModal';
 import DataManagement from './components/DataManagement';
-import { DeleteMemberModal, DeleteBacentaModal, DeleteNewBelieverModal, ClearAllDataModal } from './components/ConfirmationModal';
+// import { DeleteMemberModal, DeleteBacentaModal, DeleteNewBelieverModal, ClearAllDataModal } from './components/ConfirmationModal';
 
 const AppContent: React.FC = memo(() => {
   const {
@@ -49,37 +49,28 @@ const AppContent: React.FC = memo(() => {
     members,
     newBelievers,
     confirmationModal,
-    attendanceRecords,
     toasts,
     switchTab,
+    user,
+    isOnline,
+    needsMigration,
+    toggleOfflineMode,
     showToast,
     removeToast
   } = useAppContext();
 
-  // const { canNavigateBack } = useNavigation();
   const [isDataManagementOpen, setIsDataManagementOpen] = useState(false);
   const [isBulkMemberModalOpen, setIsBulkMemberModalOpen] = useState(false);
+  const [isMigrationModalOpen, setIsMigrationModalOpen] = useState(needsMigration);
 
-  // Simple confirmation modal close handler
-  const closeConfirmationModal = () => {
-    // For now, we'll just ignore confirmation modals since they're not implemented in SimpleFirebaseContext
-    console.log('Confirmation modal close requested');
+  const handleRefreshData = async () => {
+    try {
+      await fetchInitialData();
+      // Removed success toast - data refresh should be silent
+    } catch (error: any) {
+      showToast('error', 'Failed to refresh data', error.message);
+    }
   };
-
-  useEffect(() => {
-    PerformanceMonitor.start('app-initialization');
-    fetchInitialData().finally(() => {
-      PerformanceMonitor.end('app-initialization');
-
-      // Log performance in development
-      if (process.env.NODE_ENV === 'development') {
-        setTimeout(() => {
-          console.log('⚡ Performance Report:', PerformanceMonitor.getReport());
-        }, 1000);
-      }
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // fetchInitialData itself will load current month's data
 
   const renderView = () => {
     // Initial loading state check
@@ -94,13 +85,14 @@ const AppContent: React.FC = memo(() => {
               </div>
               <div className="text-center">
                 <p className="text-lg font-semibold gradient-text">Loading Church Data...</p>
-                <p className="text-sm text-gray-600 mt-1">Preparing your spiritual dashboard</p>
+                <p className="text-sm text-gray-600 mt-1">Syncing with Firebase</p>
               </div>
             </div>
           </div>
         </div>
       );
     }
+
     if (error) {
       return (
         <div className="glass border-l-4 border-red-500 p-6 rounded-xl shadow-lg animate-scale-in">
@@ -178,7 +170,6 @@ const AppContent: React.FC = memo(() => {
       <header className="glass fixed top-0 left-0 right-0 z-50 border-b border-white/20 shadow-xl">
         <div className="container mx-auto px-2 sm:px-4 py-2 sm:py-3 md:py-4 flex justify-between items-center">
           <div className="flex items-center space-x-2 sm:space-x-3 flex-1 min-w-0">
-            {/* {canNavigateBack() && <BackButton />} */}
             <button
               onClick={() => switchTab({ id: 'dashboard', name: 'Dashboard' })}
               className="flex items-center space-x-2 sm:space-x-3 transition-all duration-300 group min-w-0"
@@ -194,27 +185,44 @@ const AppContent: React.FC = memo(() => {
               </div>
             </button>
           </div>
+          
           <div className="flex items-center space-x-1 sm:space-x-2 flex-shrink-0">
+            {/* Online/Offline indicator */}
             <button
-              onClick={() => openMemberForm(null)}
+              onClick={toggleOfflineMode}
+              className={`p-2 sm:p-2.5 md:p-3 rounded-lg sm:rounded-xl transition-all duration-300 group shadow-lg ${
+                isOnline ? 'glass hover:glass-dark' : 'bg-orange-100 hover:bg-orange-200'
+              }`}
+              aria-label={isOnline ? 'Go Offline' : 'Go Online'}
+              title={isOnline ? 'Go Offline' : 'Go Online'}
+            >
+              {isOnline ? (
+                <Wifi className="w-5 h-5 sm:w-6 sm:h-6 text-green-600 group-hover:text-green-700 transition-all duration-300" />
+              ) : (
+                <WifiOff className="w-5 h-5 sm:w-6 sm:h-6 text-orange-600 group-hover:text-orange-700 transition-all duration-300" />
+              )}
+            </button>
+
+            <button
+              onClick={() => openMemberForm()}
               className="p-2 sm:p-2.5 md:p-3 rounded-lg sm:rounded-xl glass hover:glass-dark transition-all duration-300 group shadow-lg relative overflow-hidden"
               aria-label="Add New Member"
               title="Add New Member"
             >
-              {/* Subtle primary action indicator */}
               <div className="absolute inset-0 bg-gradient-to-br from-blue-500/8 via-transparent to-blue-600/8 opacity-0 group-hover:opacity-100 transition-all duration-300 rounded-lg sm:rounded-xl"></div>
               <AddMemberIcon className="w-5 h-5 sm:w-6 sm:h-6 text-gray-600 group-hover:text-blue-100 transition-all duration-300 relative z-10" />
             </button>
+            
             <button
               onClick={() => setIsBulkMemberModalOpen(true)}
               className="p-2 sm:p-2.5 md:p-3 rounded-lg sm:rounded-xl glass hover:glass-dark transition-all duration-300 group shadow-lg relative overflow-hidden"
               aria-label="Paste Multiple Members"
               title="Paste Multiple Members"
             >
-              {/* Subtle secondary action indicator */}
               <div className="absolute inset-0 bg-gradient-to-br from-green-500/8 via-transparent to-green-600/8 opacity-0 group-hover:opacity-100 transition-all duration-300 rounded-lg sm:rounded-xl"></div>
               <ClipboardIcon className="w-5 h-5 sm:w-6 sm:h-6 text-gray-600 group-hover:text-green-100 transition-all duration-300 relative z-10" />
             </button>
+            
             <button
               onClick={() => setIsDataManagementOpen(true)}
               className="p-2 sm:p-2.5 md:p-3 rounded-lg sm:rounded-xl glass hover:glass-dark transition-all duration-300 group shadow-lg"
@@ -223,11 +231,9 @@ const AppContent: React.FC = memo(() => {
             >
               <CogIcon className="w-5 h-5 sm:w-6 sm:h-6 text-gray-600 group-hover:text-white transition-all duration-300" />
             </button>
+            
             <button
-              onClick={() => {
-                fetchInitialData();
-                // Removed toast - data refresh should be silent
-              }}
+              onClick={handleRefreshData}
               className="p-2 sm:p-2.5 md:p-3 rounded-lg sm:rounded-xl glass hover:glass-dark transition-all duration-300 group shadow-lg"
               aria-label="Refresh Data"
               title="Refresh Data"
@@ -253,6 +259,7 @@ const AppContent: React.FC = memo(() => {
       {/* Swipe Indicator */}
       <SwipeIndicator />
 
+      {/* Modals */}
       {isMemberFormOpen && (
         <MemberFormModal
           isOpen={isMemberFormOpen}
@@ -286,57 +293,25 @@ const AppContent: React.FC = memo(() => {
         />
       )}
 
-      {/* Bacenta Drawer */}
       <BacentaDrawer
         isOpen={isBacentaDrawerOpen}
         onClose={closeBacentaDrawer}
       />
 
-      {/* Data Management Modal */}
       <DataManagement
         isOpen={isDataManagementOpen}
         onClose={() => setIsDataManagementOpen(false)}
       />
 
-      {/* Confirmation Modals */}
-      {confirmationModal.type === 'deleteMember' && (
-        <DeleteMemberModal
-          isOpen={confirmationModal.isOpen}
-          onClose={closeConfirmationModal}
-          onConfirm={confirmationModal.onConfirm}
-          memberName={confirmationModal.data?.member?.name || 'Unknown Member'}
-        />
-      )}
-
-      {confirmationModal.type === 'deleteBacenta' && (
-        <DeleteBacentaModal
-          isOpen={confirmationModal.isOpen}
-          onClose={closeConfirmationModal}
-          onConfirm={confirmationModal.onConfirm}
-          bacentaName={confirmationModal.data?.bacenta?.name || 'Unknown Bacenta'}
-          memberCount={confirmationModal.data?.memberCount || 0}
-        />
-      )}
-
-      {confirmationModal.type === 'deleteNewBeliever' && (
-        <DeleteNewBelieverModal
-          isOpen={confirmationModal.isOpen}
-          onClose={closeConfirmationModal}
-          onConfirm={confirmationModal.onConfirm}
-          newBelieverName={confirmationModal.data?.name || 'Unknown New Believer'}
-        />
-      )}
-
-      {confirmationModal.type === 'clearData' && (
-        <ClearAllDataModal
-          isOpen={confirmationModal.isOpen}
-          onClose={closeConfirmationModal}
-          onConfirm={confirmationModal.onConfirm}
-          totalMembers={confirmationModal.data?.totalMembers || 0}
-          totalBacentas={confirmationModal.data?.totalBacentas || 0}
-          totalAttendance={confirmationModal.data?.totalAttendance || 0}
-        />
-      )}
+      {/* Data Migration Modal */}
+      <DataMigrationModal
+        isOpen={isMigrationModalOpen}
+        onClose={() => setIsMigrationModalOpen(false)}
+        onMigrationComplete={() => {
+          setIsMigrationModalOpen(false);
+          showToast('success', 'Migration completed successfully');
+        }}
+      />
 
       {/* Toast Notifications */}
       {toasts.map((toast) => (
@@ -398,12 +373,14 @@ const AppContent: React.FC = memo(() => {
   );
 });
 
-const App: React.FC = () => {
+const FirebaseApp: React.FC = () => {
   return (
-    <SimpleFirebaseProvider>
-      <AppContent />
-    </SimpleFirebaseProvider>
+    <FirebaseAppProvider>
+      <AuthWrapper>
+        <AppContent />
+      </AuthWrapper>
+    </FirebaseAppProvider>
   );
 };
 
-export default App;
+export default FirebaseApp;

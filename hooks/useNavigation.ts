@@ -1,16 +1,16 @@
 import { useEffect, useCallback } from 'react';
-import { useAppData } from './useAppData';
+import { useAppContext } from '../contexts/SimpleFirebaseContext';
 import { TabKeys } from '../types';
 
 export const useNavigation = () => {
   const {
     currentTab,
-    changeTab,
+    switchTab,
     navigationHistory,
     navigateBack,
     canNavigateBack,
     addToNavigationHistory
-  } = useAppData();
+  } = useAppContext();
 
   // Handle browser/hardware back button
   useEffect(() => {

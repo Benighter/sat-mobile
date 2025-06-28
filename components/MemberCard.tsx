@@ -1,7 +1,7 @@
 
 import React from 'react';
-import { Member } from '../types'; 
-import { useAppData } from '../hooks/useAppData';
+import { Member } from '../types';
+import { useAppContext } from '../contexts/SimpleFirebaseContext';
 import AttendanceMarker from './AttendanceMarker';
 import { formatDisplayDate, formatFullDate, formatDateToYYYYMMDD } from '../utils/dateUtils';
 import { UserIcon, EditIcon, TrashIcon, WarningIcon, PhoneIcon, HomeIcon, CalendarIcon } from './icons';
@@ -14,7 +14,7 @@ interface MemberCardProps {
 }
 
 const MemberCard: React.FC<MemberCardProps> = ({ member, isCritical }) => {
-  const { displayedSundays, attendanceRecords, markAttendanceHandler, deleteMemberHandler, openMemberForm, bacentas, criticalMemberIds } = useAppData(); 
+  const { displayedSundays, attendanceRecords, markAttendanceHandler, deleteMemberHandler, openMemberForm, bacentas, criticalMemberIds } = useAppContext();
 
   const getAttendanceStatus = (date: string) => {
     const record = attendanceRecords.find(ar => ar.memberId === member.id && ar.date === date);
