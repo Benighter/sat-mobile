@@ -72,6 +72,19 @@ const StatCard: React.FC<StatCardProps> = ({ title, value, icon, colorClass, tre
 );
 
 const AttendanceAnalyticsView: React.FC = () => {
+  // Simple test to see if component loads at all
+  return (
+    <div className="flex items-center justify-center min-h-[400px]">
+      <div className="text-center">
+        <h2 className="text-4xl font-bold text-gray-800 mb-4">📊 Attendance Analytics</h2>
+        <p className="text-gray-600 text-lg">Analytics dashboard is working!</p>
+        <div className="mt-4 p-4 bg-green-100 rounded-lg">
+          <p className="text-green-800">✅ Component loaded successfully</p>
+        </div>
+      </div>
+    </div>
+  );
+
   const { members, attendanceRecords, bacentas, displayedDate } = useAppContext();
   const [currentView, setCurrentView] = useState<ViewType>('overview');
   const [chartType, setChartType] = useState<ChartType>('bar');

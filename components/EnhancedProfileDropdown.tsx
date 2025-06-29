@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useAppContext } from '../contexts/FirebaseAppContext';
 import { authService, FirebaseUser } from '../services/firebaseService';
+import { TabKeys } from '../types';
 import {
   UserIcon,
   CogIcon,
@@ -10,9 +11,7 @@ import {
   ClipboardIcon,
   RefreshIcon,
   ChartBarIcon,
-  BellIcon,
-  MoonIcon,
-  SunIcon
+  BellIcon
 } from './icons';
 
 interface EnhancedProfileDropdownProps {
@@ -33,6 +32,7 @@ const EnhancedProfileDropdown: React.FC<EnhancedProfileDropdownProps> = ({
     showToast,
     openMemberForm,
     fetchInitialData,
+    switchTab,
     members,
     bacentas,
     newBelievers
@@ -151,7 +151,7 @@ const EnhancedProfileDropdown: React.FC<EnhancedProfileDropdownProps> = ({
             <div className="grid grid-cols-2 gap-2">
               <button
                 onClick={() => {
-                  openMemberForm(null);
+                  openMemberForm(undefined);
                   setIsOpen(false);
                 }}
                 className="flex items-center space-x-2 p-3 rounded-lg bg-blue-50 hover:bg-blue-100 transition-colors duration-200 group"
@@ -218,7 +218,7 @@ const EnhancedProfileDropdown: React.FC<EnhancedProfileDropdownProps> = ({
 
             <button
               onClick={() => {
-                // TODO: Implement analytics
+                switchTab({ id: TabKeys.ATTENDANCE_ANALYTICS, name: 'Attendance Analytics' });
                 setIsOpen(false);
               }}
               className="w-full flex items-center space-x-3 px-4 py-3 rounded-lg hover:bg-gray-50 transition-colors duration-200 group"

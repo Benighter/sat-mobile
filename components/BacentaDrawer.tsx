@@ -215,6 +215,15 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
                 badge={criticalMemberIds.length > 0 ? criticalMemberIds.length : undefined}
               />
               <NavigationItem
+                icon={<ChartBarIcon className="w-4 h-4" />}
+                label="Attendance Analytics"
+                isActive={currentTab.id === TabKeys.ATTENDANCE_ANALYTICS}
+                onClick={() => {
+                  switchTab({ id: TabKeys.ATTENDANCE_ANALYTICS, name: 'Attendance Analytics' });
+                  onClose();
+                }}
+              />
+              <NavigationItem
                 icon={<UsersIcon className="w-4 h-4" />}
                 label="New Believers"
                 isActive={currentTab.id === TabKeys.NEW_BELIEVERS}

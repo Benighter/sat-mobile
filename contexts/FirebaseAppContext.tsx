@@ -75,6 +75,7 @@ interface AppContextType {
   
   // New Believer Operations
   addNewBelieverHandler: (newBelieverData: Omit<NewBeliever, 'id' | 'createdDate' | 'lastUpdated'>) => Promise<void>;
+  addMultipleNewBelieversHandler: (newBelieversData: Omit<NewBeliever, 'id' | 'createdDate' | 'lastUpdated'>[]) => Promise<{ successful: NewBeliever[], failed: { data: Omit<NewBeliever, 'id' | 'createdDate' | 'lastUpdated'>, error: string }[] }>;
   updateNewBelieverHandler: (newBelieverData: NewBeliever) => Promise<void>;
   deleteNewBelieverHandler: (newBelieverId: string) => Promise<void>;
   
@@ -490,6 +491,39 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     }
   }, [showToast]);
 
+  const addMultipleNewBelieversHandler = useCallback(async (newBelieversData: Omit<NewBeliever, 'id' | 'createdDate' | 'lastUpdated'>[]) => {
+    const successful: NewBeliever[] = [];
+    const failed: { data: Omit<NewBeliever, 'id' | 'createdDate' | 'lastUpdated'>, error: string }[] = [];
+
+    try {
+      setIsLoading(true);
+
+      for (const newBelieverData of newBelieversData) {
+        try {
+          const newBelieverId = await newBelieversFirebaseService.add(newBelieverData);
+          successful.push({ ...newBelieverData, id: newBelieverId, createdDate: new Date().toISOString(), lastUpdated: new Date().toISOString() });
+        } catch (error: any) {
+          failed.push({ data: newBelieverData, error: error.message });
+        }
+      }
+
+      if (successful.length > 0) {
+        showToast('success', `${successful.length} new believers added successfully`);
+      }
+      if (failed.length > 0) {
+        showToast('warning', `${failed.length} new believers failed to add`);
+      }
+
+      return { successful, failed };
+    } catch (error: any) {
+      setError(error.message);
+      showToast('error', 'Failed to add new believers', error.message);
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [showToast]);
+
   const updateNewBelieverHandler = useCallback(async (newBelieverData: NewBeliever) => {
     try {
       setIsLoading(true);
@@ -790,6 +824,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
 
     // New Believer Operations
     addNewBelieverHandler,
+    addMultipleNewBelieversHandler,
     updateNewBelieverHandler,
     deleteNewBelieverHandler,
 

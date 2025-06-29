@@ -23,18 +23,5 @@ export const MINISTRY_OPTIONS = [
   'Ushers',
   'Arrival Stars',
   'Airport Stars',
-  'Media',
-  'Youth Ministry',
-  'Children Ministry',
-  'Prayer Ministry',
-  'Evangelism Team',
-  'Hospitality Ministry',
-  'Counseling Ministry',
-  'Teaching Ministry',
-  'Outreach Ministry',
-  'Security Ministry',
-  'Cleaning Ministry',
-  'Finance Ministry',
-  'Administration',
-  'Other'
+  'Media'
 ];

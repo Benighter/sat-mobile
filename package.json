@@ -24,6 +24,7 @@
     "@google/generative-ai": "^0.24.1",
     "chart.js": "^4.5.0",
     "chartjs-to-image": "^1.2.2",
+    "date-fns": "^4.1.0",
     "firebase": "^11.9.1",
     "framer-motion": "^12.18.1",
     "html2canvas": "^1.4.1",
@@ -31,6 +32,7 @@
     "react": "^19.1.0",
     "react-chartjs-2": "^5.3.0",
     "react-dom": "^19.1.0",
+    "recharts": "^3.0.2",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {

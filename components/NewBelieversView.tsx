@@ -5,6 +5,7 @@ import { formatDateToDisplay } from '../utils/dateUtils';
 import { PlusIcon, EditIcon, TrashIcon, UserIcon, CalendarIcon, PhoneIcon, MapPinIcon, GridIcon, TableIcon } from './icons';
 import Button from './ui/Button';
 import NewBelieverFormModal from './NewBelieverFormModal';
+import BulkNewBelieverAddModal from './BulkNewBelieverAddModal';
 import NewBelieversTableView from './NewBelieversTableView';
 
 const NewBelieversView: React.FC = () => {
@@ -22,6 +23,7 @@ const NewBelieversView: React.FC = () => {
   const [selectedMinistry, setSelectedMinistry] = useState('');
   const [showFirstTimeOnly, setShowFirstTimeOnly] = useState(false);
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
+  const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
 
   // Get unique ministries for filter dropdown
   const uniqueMinistries = useMemo(() => {
@@ -105,13 +107,25 @@ const NewBelieversView: React.FC = () => {
               <TableIcon className="w-4 h-4" />
             </button>
           </div>
-          <Button
-            onClick={() => openNewBelieverForm(null)}
-            variant="primary"
-            leftIcon={<PlusIcon className="w-5 h-5" />}
-          >
-            Add New Believer
-          </Button>
+          
+          {/* Add Buttons */}
+          <div className="flex items-center space-x-2">
+            <Button
+              onClick={() => setIsBulkModalOpen(true)}
+              variant="secondary"
+              leftIcon={<PlusIcon className="w-4 h-4" />}
+              size="sm"
+            >
+              Bulk Add
+            </Button>
+            <Button
+              onClick={() => openNewBelieverForm(undefined)}
+              variant="primary"
+              leftIcon={<PlusIcon className="w-5 h-5" />}
+            >
+              Add New Believer
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -183,7 +197,7 @@ const NewBelieversView: React.FC = () => {
           </p>
           {newBelievers.length === 0 && (
             <Button
-              onClick={() => openNewBelieverForm(null)}
+              onClick={() => openNewBelieverForm(undefined)}
               variant="primary"
               leftIcon={<PlusIcon className="w-5 h-5" />}
             >
@@ -276,6 +290,11 @@ const NewBelieversView: React.FC = () => {
         isOpen={isNewBelieverFormOpen}
         onClose={closeNewBelieverForm}
         newBeliever={editingNewBeliever}
+      />
+      
+      <BulkNewBelieverAddModal
+        isOpen={isBulkModalOpen}
+        onClose={() => setIsBulkModalOpen(false)}
       />
     </div>
   );
