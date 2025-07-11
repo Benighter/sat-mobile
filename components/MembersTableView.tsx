@@ -3,6 +3,7 @@ import { useAppContext } from '../contexts/FirebaseAppContext';
 import { Member } from '../types';
 import Table from './ui/Table';
 import { formatDisplayDate, getSundaysOfMonth, getMonthName, formatDateToYYYYMMDD } from '../utils/dateUtils';
+import { isDateEditable } from '../utils/attendanceUtils';
 import { UserIcon, EditIcon, TrashIcon, PhoneIcon, HomeIcon, CalendarIcon, WarningIcon, ChevronLeftIcon, ChevronRightIcon } from './icons';
 import Button from './ui/Button';
 import Badge from './ui/Badge';
@@ -22,8 +23,12 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
     attendanceRecords,
     markAttendanceHandler,
     clearAttendanceHandler,
-    isLoading
+    isLoading,
+    userProfile
   } = useAppContext();
+
+  // Get user preference for editing previous Sundays
+  const allowEditPreviousSundays = userProfile?.preferences?.allowEditPreviousSundays ?? false;
 
   const [searchTerm, setSearchTerm] = useState('');
   const [displayedDate, setDisplayedDate] = useState(new Date());
@@ -56,32 +61,11 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
     return record?.status;
   };
 
-  // Check if a date is editable (not in future, not in past months)
-  const isDateEditable = (dateString: string) => {
-    const today = new Date();
-    const todayStr = formatDateToYYYYMMDD(today);
-    const targetDate = new Date(dateString + 'T00:00:00'); // Parse as local date
-    const currentMonth = today.getMonth();
-    const currentYear = today.getFullYear();
-    const targetMonth = targetDate.getMonth();
-    const targetYear = targetDate.getFullYear();
 
-    // Don't allow editing past months
-    if (targetYear < currentYear || (targetYear === currentYear && targetMonth < currentMonth)) {
-      return false;
-    }
-
-    // Don't allow editing future Sundays (compare date strings to avoid timezone issues)
-    if (dateString > todayStr) {
-      return false;
-    }
-
-    return true;
-  };
 
   // Handle attendance toggle with three states: empty -> Present -> Absent -> empty
   const handleAttendanceToggle = async (memberId: string, date: string) => {
-    if (!isDateEditable(date)) {
+    if (!isDateEditable(date, allowEditPreviousSundays)) {
       return; // Don't allow editing
     }
 
@@ -224,7 +208,7 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
 
     // Add attendance columns for each Sunday
     const attendanceColumns = currentMonthSundays.map((sundayDate) => {
-      const isEditable = isDateEditable(sundayDate);
+      const isEditable = isDateEditable(sundayDate, allowEditPreviousSundays);
       const today = new Date();
       const todayStr = formatDateToYYYYMMDD(today);
       const targetDate = new Date(sundayDate + 'T00:00:00'); // Parse as local date
@@ -259,7 +243,7 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
         render: (member: Member) => {
         const status = getAttendanceStatus(member.id, sundayDate);
         const isPresent = status === 'Present';
-        const isEditable = isDateEditable(sundayDate);
+        const isEditable = isDateEditable(sundayDate, allowEditPreviousSundays);
         const today = new Date();
         const todayStr = formatDateToYYYYMMDD(today);
         const targetDate = new Date(sundayDate + 'T00:00:00'); // Parse as local date

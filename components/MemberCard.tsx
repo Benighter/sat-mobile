@@ -4,6 +4,7 @@ import { Member } from '../types';
 import { useAppContext } from '../contexts/FirebaseAppContext';
 import AttendanceMarker from './AttendanceMarker';
 import { formatDisplayDate, formatFullDate, formatDateToYYYYMMDD } from '../utils/dateUtils';
+import { isDateEditable } from '../utils/attendanceUtils';
 import { UserIcon, EditIcon, TrashIcon, WarningIcon, PhoneIcon, HomeIcon, CalendarIcon } from './icons';
 import Button from './ui/Button';
 import Badge from './ui/Badge';
@@ -14,7 +15,10 @@ interface MemberCardProps {
 }
 
 const MemberCard: React.FC<MemberCardProps> = ({ member, isCritical }) => {
-  const { displayedSundays, attendanceRecords, markAttendanceHandler, deleteMemberHandler, openMemberForm, bacentas, criticalMemberIds } = useAppContext();
+  const { displayedSundays, attendanceRecords, markAttendanceHandler, deleteMemberHandler, openMemberForm, bacentas, criticalMemberIds, userProfile } = useAppContext();
+
+  // Get user preference for editing previous Sundays
+  const allowEditPreviousSundays = userProfile?.preferences?.allowEditPreviousSundays ?? false;
 
   const getAttendanceStatus = (date: string) => {
     const record = attendanceRecords.find(ar => ar.memberId === member.id && ar.date === date);
@@ -35,28 +39,7 @@ const MemberCard: React.FC<MemberCardProps> = ({ member, isCritical }) => {
     return Math.round((presentCount / totalServices) * 100);
   };
 
-  // Check if a date is editable (not in future, not in past months)
-  const isDateEditable = (dateString: string) => {
-    const today = new Date();
-    const todayStr = formatDateToYYYYMMDD(today);
-    const targetDate = new Date(dateString + 'T00:00:00'); // Parse as local date
-    const currentMonth = today.getMonth();
-    const currentYear = today.getFullYear();
-    const targetMonth = targetDate.getMonth();
-    const targetYear = targetDate.getFullYear();
 
-    // Don't allow editing past months
-    if (targetYear < currentYear || (targetYear === currentYear && targetMonth < currentMonth)) {
-      return false;
-    }
-
-    // Don't allow editing future Sundays (compare date strings to avoid timezone issues)
-    if (dateString > todayStr) {
-      return false;
-    }
-
-    return true;
-  };
 
   const memberBacenta = bacentas.find(b => b.id === member.bacentaId);
 
@@ -247,7 +230,7 @@ const MemberCard: React.FC<MemberCardProps> = ({ member, isCritical }) => {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {displayedSundays.map((sundayDate, index) => {
                 const status = getAttendanceStatus(sundayDate);
-                const isEditable = isDateEditable(sundayDate);
+                const isEditable = isDateEditable(sundayDate, allowEditPreviousSundays);
                 const today = new Date();
                 const todayStr = formatDateToYYYYMMDD(today);
                 const targetDate = new Date(sundayDate + 'T00:00:00');

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAppContext } from '../contexts/FirebaseAppContext';
+import { userService } from '../services/userService';
 import { Bacenta, TabKeys } from '../types';
 import {
   XMarkIcon,
@@ -11,7 +12,8 @@ import {
   UsersIcon,
   ClockIcon,
   ChartBarIcon,
-  WarningIcon
+  WarningIcon,
+  CogIcon
 } from './icons';
 
 interface BacentaDrawerProps {
@@ -27,13 +29,21 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
     switchTab,
     openBacentaForm,
     deleteBacentaHandler,
-    criticalMemberIds
+    criticalMemberIds,
+    userProfile,
+    user,
+    showToast,
+    showConfirmation,
+    refreshUserProfile
   } = useAppContext();
   
   const [searchQuery, setSearchQuery] = useState('');
   const [recentBacentas, setRecentBacentas] = useState<string[]>([]);
   const [canScrollUp, setCanScrollUp] = useState(false);
   const [canScrollDown, setCanScrollDown] = useState(false);
+
+  // Get user preference for editing previous Sundays
+  const allowEditPreviousSundays = userProfile?.preferences?.allowEditPreviousSundays ?? true;
 
   // Load recent bacentas from localStorage
   useEffect(() => {
@@ -97,6 +107,30 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
   const handleAddBacenta = () => {
     openBacentaForm(null);
     onClose();
+  };
+
+  const handleToggleEditPreviousSundays = async (enabled: boolean) => {
+    try {
+      if (!userProfile || !user) return;
+
+      const updatedPreferences = {
+        ...userProfile.preferences,
+        allowEditPreviousSundays: enabled
+      };
+
+      await userService.updateUserPreferences(user.uid, updatedPreferences);
+
+      // Refresh the user profile to get the updated preferences
+      await refreshUserProfile();
+
+      showToast('success', 'Setting Updated!',
+        enabled
+          ? 'You can now edit attendance for previous months'
+          : 'Editing previous months is now disabled'
+      );
+    } catch (error: any) {
+      showToast('error', 'Update Failed', error.message);
+    }
   };
 
   // Handle scroll to update scroll indicators
@@ -330,11 +364,54 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
               </div>
             )}
           </div>
+
+          {/* Settings Section */}
+          <div className="border-t border-gray-200 p-4 mt-auto">
+            <h3 className="text-sm font-semibold text-gray-600 mb-3 flex items-center">
+              <CogIcon className="w-4 h-4 mr-1" />
+              Quick Settings
+            </h3>
+
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-700">Edit Previous Months</p>
+                  <p className="text-xs text-gray-500">Allow editing attendance for past months</p>
+                </div>
+                <ToggleSwitch
+                  enabled={allowEditPreviousSundays}
+                  onChange={handleToggleEditPreviousSundays}
+                />
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </>
   );
 };
+
+// Toggle Switch Component
+const ToggleSwitch: React.FC<{
+  enabled: boolean;
+  onChange: (enabled: boolean) => void;
+  disabled?: boolean;
+}> = ({ enabled, onChange, disabled = false }) => (
+  <button
+    type="button"
+    onClick={() => !disabled && onChange(!enabled)}
+    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+      enabled ? 'bg-blue-600' : 'bg-gray-200'
+    } ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+    disabled={disabled}
+  >
+    <span
+      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200 ${
+        enabled ? 'translate-x-6' : 'translate-x-1'
+      }`}
+    />
+  </button>
+);
 
 // Bacenta Item Component
 interface BacentaItemProps {

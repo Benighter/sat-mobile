@@ -1,17 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useAppContext } from '../contexts/FirebaseAppContext';
 import { authService } from '../services/firebaseService';
-import { userService } from '../services/userService';
 import {
-  UserIcon,
   CogIcon,
   ArrowRightOnRectangleIcon,
-  CameraIcon,
-  PencilIcon,
   ChevronDownIcon
 } from './icons';
 import Button from './ui/Button';
-import ProfileUpdateModal from './ProfileUpdateModal';
 import SettingsModal from './SettingsModal';
 
 interface ProfileDropdownProps {
@@ -21,7 +16,6 @@ interface ProfileDropdownProps {
 
 const ProfileDropdown: React.FC<ProfileDropdownProps> = ({ currentUser, onProfileUpdate }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -129,22 +123,6 @@ const ProfileDropdown: React.FC<ProfileDropdownProps> = ({ currentUser, onProfil
           <div className="py-2">
             <button
               onClick={() => {
-                setIsProfileModalOpen(true);
-                setIsOpen(false);
-              }}
-              className="w-full flex items-center space-x-3 px-4 py-3 text-gray-700 hover:bg-gray-50 transition-colors duration-200"
-            >
-              <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
-                <PencilIcon className="w-4 h-4 text-blue-600" />
-              </div>
-              <div className="text-left">
-                <p className="font-medium">Update Profile</p>
-                <p className="text-xs text-gray-500">Edit your personal information</p>
-              </div>
-            </button>
-
-            <button
-              onClick={() => {
                 setIsSettingsModalOpen(true);
                 setIsOpen(false);
               }}
@@ -176,16 +154,6 @@ const ProfileDropdown: React.FC<ProfileDropdownProps> = ({ currentUser, onProfil
             </button>
           </div>
         </div>
-      )}
-
-      {/* Profile Update Modal */}
-      {isProfileModalOpen && (
-        <ProfileUpdateModal
-          isOpen={isProfileModalOpen}
-          onClose={() => setIsProfileModalOpen(false)}
-          currentUser={currentUser}
-          onUpdate={onProfileUpdate}
-        />
       )}
 
       {/* Settings Modal */}

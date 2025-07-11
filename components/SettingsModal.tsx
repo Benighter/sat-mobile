@@ -1,18 +1,18 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useAppContext } from '../contexts/FirebaseAppContext';
 import { userService } from '../services/userService';
 import Modal from './ui/Modal';
 import Button from './ui/Button';
+import Input from './ui/Input';
 import DataManagement from './DataManagement';
 import {
   BellIcon,
   MoonIcon,
   SunIcon,
-  ShieldCheckIcon,
   InformationCircleIcon,
-  ExclamationTriangleIcon,
-  TrashIcon,
-  CogIcon
+  CogIcon,
+  UserIcon,
+  CameraIcon
 } from './icons';
 
 interface SettingsModalProps {
@@ -28,6 +28,14 @@ interface UserPreferences {
   emailNotifications: boolean;
   attendanceReminders: boolean;
   weeklyReports: boolean;
+  allowEditPreviousSundays: boolean;
+}
+
+interface ProfileFormData {
+  firstName: string;
+  lastName: string;
+  phoneNumber: string;
+  profilePicture: string;
 }
 
 const SettingsModal: React.FC<SettingsModalProps> = ({ 
@@ -41,27 +49,82 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     theme: currentUser?.preferences?.theme ?? 'light',
     emailNotifications: currentUser?.preferences?.emailNotifications ?? true,
     attendanceReminders: currentUser?.preferences?.attendanceReminders ?? true,
-    weeklyReports: currentUser?.preferences?.weeklyReports ?? false
+    weeklyReports: currentUser?.preferences?.weeklyReports ?? false,
+    allowEditPreviousSundays: currentUser?.preferences?.allowEditPreviousSundays ?? true
   });
-  
+
+  const [profileData, setProfileData] = useState<ProfileFormData>({
+    firstName: currentUser?.firstName || '',
+    lastName: currentUser?.lastName || '',
+    phoneNumber: currentUser?.phoneNumber || '',
+    profilePicture: currentUser?.profilePicture || ''
+  });
+
   const [isLoading, setIsLoading] = useState(false);
-  const [showDataClearConfirm, setShowDataClearConfirm] = useState(false);
   const [showDataManagement, setShowDataManagement] = useState(false);
+  const [imagePreview, setImagePreview] = useState<string>(currentUser?.profilePicture || '');
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const { showToast } = useAppContext();
 
   const handlePreferenceChange = (key: keyof UserPreferences, value: any) => {
     setPreferences(prev => ({ ...prev, [key]: value }));
   };
 
+  const handleProfileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setProfileData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const result = e.target?.result as string;
+        setImagePreview(result);
+        setProfileData(prev => ({ ...prev, profilePicture: result }));
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const validateProfile = (): boolean => {
+    if (!profileData.firstName.trim()) {
+      showToast('error', 'Validation Error', 'First name is required');
+      return false;
+    }
+    if (!profileData.lastName.trim()) {
+      showToast('error', 'Validation Error', 'Last name is required');
+      return false;
+    }
+    if (profileData.phoneNumber && !/^[0-9+\-\s()]+$/.test(profileData.phoneNumber)) {
+      showToast('error', 'Validation Error', 'Please enter a valid phone number');
+      return false;
+    }
+    return true;
+  };
+
   const handleSaveSettings = async () => {
+    if (!validateProfile()) {
+      return;
+    }
+
     setIsLoading(true);
     try {
-      await userService.updateUserProfile(currentUser.uid, {
+      const updates = {
+        firstName: profileData.firstName.trim(),
+        lastName: profileData.lastName.trim(),
+        displayName: `${profileData.firstName.trim()} ${profileData.lastName.trim()}`,
+        phoneNumber: profileData.phoneNumber.trim(),
+        profilePicture: profileData.profilePicture,
         preferences: preferences
-      });
-      
-      showToast('success', 'Settings Saved!', 'Your preferences have been updated successfully');
+      };
+
+      await userService.updateUserProfile(currentUser.uid, updates);
+
+      showToast('success', 'Settings Saved!', 'Your profile and preferences have been updated successfully');
       onUpdate?.();
+      onClose();
     } catch (error: any) {
       showToast('error', 'Save Failed', error.message);
     } finally {
@@ -98,6 +161,89 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
       size="lg"
     >
       <div className="space-y-6">
+        {/* Profile Settings */}
+        <div className="bg-gray-50 p-4 rounded-lg">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center space-x-2">
+            <UserIcon className="w-5 h-5 text-blue-600" />
+            <span>Profile Information</span>
+          </h3>
+
+          <div className="space-y-4">
+            {/* Profile Picture */}
+            <div className="flex items-center space-x-4">
+              <div className="relative">
+                <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center overflow-hidden">
+                  {imagePreview ? (
+                    <img src={imagePreview} alt="Profile" className="w-full h-full object-cover" />
+                  ) : (
+                    <UserIcon className="w-8 h-8 text-gray-400" />
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="absolute -bottom-1 -right-1 w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center text-white hover:bg-blue-600 transition-colors"
+                >
+                  <CameraIcon className="w-3 h-3" />
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageUpload}
+                  className="hidden"
+                />
+              </div>
+              <div>
+                <p className="font-medium text-gray-700">Profile Picture</p>
+                <p className="text-sm text-gray-500">Click the camera icon to upload a new photo</p>
+              </div>
+            </div>
+
+            {/* Name Fields */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  First Name
+                </label>
+                <Input
+                  type="text"
+                  name="firstName"
+                  value={profileData.firstName}
+                  onChange={handleProfileChange}
+                  placeholder="Enter first name"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Last Name
+                </label>
+                <Input
+                  type="text"
+                  name="lastName"
+                  value={profileData.lastName}
+                  onChange={handleProfileChange}
+                  placeholder="Enter last name"
+                />
+              </div>
+            </div>
+
+            {/* Phone Number */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Phone Number
+              </label>
+              <Input
+                type="tel"
+                name="phoneNumber"
+                value={profileData.phoneNumber}
+                onChange={handleProfileChange}
+                placeholder="Enter phone number"
+              />
+            </div>
+          </div>
+        </div>
+
         {/* Notification Settings */}
         <div className="bg-gray-50 p-4 rounded-lg">
           <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center space-x-2">
@@ -152,6 +298,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
           </div>
         </div>
 
+
+
         {/* Theme Settings */}
         <div className="bg-gray-50 p-4 rounded-lg">
           <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center space-x-2">
@@ -191,7 +339,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
         {/* Account Information */}
         <div className="bg-blue-50 p-4 rounded-lg">
           <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center space-x-2">
-            <ShieldCheckIcon className="w-5 h-5 text-blue-600" />
+            <UserIcon className="w-5 h-5 text-blue-600" />
             <span>Account Information</span>
           </h3>
           

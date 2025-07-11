@@ -2,6 +2,8 @@ import React from 'react';
 import { AttendanceStatus } from '../types';
 import { CheckIcon, XMarkIcon } from './icons';
 import { formatDateToYYYYMMDD } from '../utils/dateUtils';
+import { isDateEditable, getAttendanceTooltipMessage } from '../utils/attendanceUtils';
+import { useAppContext } from '../contexts/FirebaseAppContext';
 
 interface AttendanceMarkerProps {
   memberId: string;
@@ -12,30 +14,12 @@ interface AttendanceMarkerProps {
 }
 
 const AttendanceMarker: React.FC<AttendanceMarkerProps> = ({ memberId, date, currentStatus, onMarkAttendance, disabled }) => {
-  // Check if a date is editable (not in future, not in past months)
-  const isDateEditable = (dateString: string) => {
-    const today = new Date();
-    const todayStr = formatDateToYYYYMMDD(today);
-    const targetDate = new Date(dateString + 'T00:00:00'); // Parse as local date
-    const currentMonth = today.getMonth();
-    const currentYear = today.getFullYear();
-    const targetMonth = targetDate.getMonth();
-    const targetYear = targetDate.getFullYear();
+  const { userProfile } = useAppContext();
 
-    // Don't allow editing past months
-    if (targetYear < currentYear || (targetYear === currentYear && targetMonth < currentMonth)) {
-      return false;
-    }
+  // Get user preference for editing previous Sundays
+  const allowEditPreviousSundays = userProfile?.preferences?.allowEditPreviousSundays ?? false;
 
-    // Don't allow editing future Sundays (compare date strings to avoid timezone issues)
-    if (dateString > todayStr) {
-      return false;
-    }
-
-    return true;
-  };
-
-  const isEditable = !disabled && isDateEditable(date);
+  const isEditable = !disabled && isDateEditable(date, allowEditPreviousSundays);
   const today = new Date();
   const todayStr = formatDateToYYYYMMDD(today);
   const targetDate = new Date(date + 'T00:00:00');
@@ -65,11 +49,7 @@ const AttendanceMarker: React.FC<AttendanceMarkerProps> = ({ memberId, date, cur
   // Get tooltip message for disabled states
   const getTooltipMessage = (action: 'Present' | 'Absent') => {
     if (!isEditable) {
-      if (isPastMonth) {
-        return `Past month - cannot mark ${action.toLowerCase()}`;
-      } else if (isFuture) {
-        return `Future date - cannot mark ${action.toLowerCase()}`;
-      }
+      return getAttendanceTooltipMessage(date, action, allowEditPreviousSundays);
     }
     return action;
   };

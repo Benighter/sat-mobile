@@ -13,6 +13,7 @@ import {
   FirebaseUser
 } from '../services/firebaseService';
 import { dataMigrationService } from '../utils/dataMigration';
+import { userService } from '../services/userService';
 
 interface AppContextType {
   // Data
@@ -58,6 +59,7 @@ interface AppContextType {
   
   // Firebase-specific
   user: FirebaseUser | null;
+  userProfile: any;
   isOnline: boolean;
   needsMigration: boolean;
   
@@ -111,6 +113,7 @@ interface AppContextType {
   // Firebase-specific operations
   triggerMigration: () => Promise<void>;
   toggleOfflineMode: () => Promise<void>;
+  refreshUserProfile: () => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -160,6 +163,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
   
   // Firebase-specific state
   const [user, setUser] = useState<FirebaseUser | null>(null);
+  const [userProfile, setUserProfile] = useState<any>(null);
   const [isOnline, setIsOnline] = useState<boolean>(true);
   const [needsMigration, setNeedsMigration] = useState<boolean>(false);
   
@@ -227,13 +231,20 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
         setNeedsMigration(hasMigrationData);
         
         // Listen to auth state changes
-        const unsubscribeAuth = authService.onAuthStateChanged((user) => {
+        const unsubscribeAuth = authService.onAuthStateChanged(async (user) => {
           setUser(user);
           if (user && firebaseUtils.isReady()) {
-            // User is authenticated, set up data listeners
+            // User is authenticated, load profile and set up data listeners
+            try {
+              const profile = await userService.getUserProfile(user.uid);
+              setUserProfile(profile);
+            } catch (error) {
+              console.error('Failed to load user profile:', error);
+            }
             setupDataListeners();
           } else {
             // User not authenticated, clear data
+            setUserProfile(null);
             setMembers([]);
             setBacentas([]);
             setAttendanceRecords([]);
@@ -732,6 +743,17 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     }
   }, [isOnline, showToast]);
 
+  const refreshUserProfile = useCallback(async () => {
+    try {
+      if (user) {
+        const profile = await userService.getUserProfile(user.uid);
+        setUserProfile(profile);
+      }
+    } catch (error: any) {
+      console.error('Failed to refresh user profile:', error);
+    }
+  }, [user]);
+
   // Data export/import (for backup purposes)
   const exportData = useCallback((): string => {
     try {
@@ -807,6 +829,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
 
     // Firebase-specific
     user,
+    userProfile,
     isOnline,
     needsMigration,
 
@@ -859,7 +882,8 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
 
     // Firebase-specific operations
     triggerMigration,
-    toggleOfflineMode
+    toggleOfflineMode,
+    refreshUserProfile
   };
 
   return (

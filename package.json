@@ -21,6 +21,9 @@
     "migration:guide": "echo 'See FIREBASE_MIGRATION_GUIDE.md for detailed migration instructions'"
   },
   "dependencies": {
+    "@capacitor/android": "^7.4.1",
+    "@capacitor/cli": "^7.4.1",
+    "@capacitor/core": "^7.4.1",
     "@google/generative-ai": "^0.24.1",
     "chart.js": "^4.5.0",
     "chartjs-to-image": "^1.2.2",
