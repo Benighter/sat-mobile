@@ -5,7 +5,9 @@ import {
   CalendarIcon,
   UsersIcon,
   TrendingUpIcon,
-  TrendingDownIcon
+  TrendingDownIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon
 } from './icons';
 import { getMonthName, getSundaysOfMonth, formatDateToYYYYMMDD } from '../utils/dateUtils';
 
@@ -115,33 +117,264 @@ const StatCard: React.FC<StatCardProps> = ({
   </div>
 );
 
-// Simple Bar Chart Component
-const SimpleBarChart: React.FC<{
+// Enhanced Interactive Bar Chart Component
+const InteractiveBarChart: React.FC<{
   data: Array<{ label: string; value: number; }>;
   maxValue?: number;
   height?: string;
-}> = ({ data, maxValue, height = "h-80" }) => {
+  showGrid?: boolean;
+  animated?: boolean;
+}> = ({ data, maxValue, height = "h-80", showGrid = true, animated = true }) => {
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+  const [animationComplete, setAnimationComplete] = useState(false);
+
+  // Calculate proper scaling - use 0 as baseline for better visual comparison
   const max = maxValue || Math.max(...data.map(d => d.value));
+  const chartMax = max; // Use actual max without padding for now
+  const chartMin = 0; // Always start from 0 for attendance data
+  const chartRange = chartMax - chartMin;
+
+  // Generate grid lines
+  const gridLines = showGrid ? Array.from({ length: 6 }, (_, i) => {
+    const value = chartMin + (chartRange * i) / 5;
+    return Math.round(value);
+  }).reverse() : [];
+
+  React.useEffect(() => {
+    if (animated) {
+      const timer = setTimeout(() => setAnimationComplete(true), 100);
+      return () => clearTimeout(timer);
+    } else {
+      setAnimationComplete(true);
+    }
+  }, [animated]);
+
+  const getBarHeight = (value: number) => {
+    if (chartRange === 0 || value === 0) return 0;
+    const height = (value / chartMax) * 100;
+    return height;
+  };
+
+  const getBarColor = (index: number, value: number) => {
+    const isHovered = hoveredIndex === index;
+    const intensity = chartRange > 0 ? (value - chartMin) / chartRange : 0;
+
+    if (isHovered) {
+      return `bg-gradient-to-t from-blue-600 to-blue-400`;
+    }
+
+    // Color based on value intensity
+    if (intensity > 0.8) return 'bg-gradient-to-t from-green-600 to-green-400';
+    if (intensity > 0.6) return 'bg-gradient-to-t from-blue-600 to-blue-400';
+    if (intensity > 0.4) return 'bg-gradient-to-t from-yellow-600 to-yellow-400';
+    if (intensity > 0.2) return 'bg-gradient-to-t from-orange-600 to-orange-400';
+    return 'bg-gradient-to-t from-red-600 to-red-400';
+  };
 
   return (
-    <div className={`${height} flex items-end justify-center space-x-2 p-4`}>
-      {data.map((item, index) => (
-        <div key={index} className="flex flex-col items-center space-y-2 flex-1 max-w-16">
-          <div className="text-xs font-medium text-gray-600 text-center">
-            {item.value}
-          </div>
+    <div className={`${height} relative`}>
+      {/* Grid Lines */}
+      {showGrid && (
+        <div className="absolute inset-0 flex flex-col justify-between py-4 pr-4 pl-12">
+          {gridLines.map((value, index) => (
+            <div key={index} className="flex items-center">
+              <span className="text-xs text-gray-400 w-8 text-right mr-2">{value}</span>
+              <div className="flex-1 h-px bg-gray-200"></div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Chart Bars */}
+      <div className="absolute inset-0 flex items-end justify-center space-x-1 p-4 pl-12">
+        {data.map((item, index) => (
           <div
-            className="w-full bg-blue-500 rounded-t-lg transition-all duration-500 hover:bg-blue-600"
-            style={{
-              height: `${max > 0 ? (item.value / max) * 100 : 0}%`,
-              minHeight: item.value > 0 ? '4px' : '0px'
-            }}
-          />
-          <div className="text-xs text-gray-500 text-center">
+            key={index}
+            className="flex flex-col items-center space-y-2 flex-1 max-w-20 group"
+            onMouseEnter={() => setHoveredIndex(index)}
+            onMouseLeave={() => setHoveredIndex(null)}
+          >
+            {/* Value tooltip */}
+            <div className={`text-xs font-bold text-gray-700 transition-all duration-200 ${
+              hoveredIndex === index ? 'opacity-100 scale-110' : 'opacity-70'
+            }`}>
+              {item.value}
+            </div>
+
+            {/* Bar */}
+            <div className="relative w-full flex flex-col justify-end" style={{ height: '280px' }}>
+              <div
+                className={`w-full rounded-t-lg transition-all duration-700 ease-out shadow-lg hover:shadow-xl cursor-pointer ${getBarColor(index, item.value)}`}
+                style={{
+                  height: animationComplete ? `${getBarHeight(item.value)}%` : '0%',
+                  minHeight: item.value > 0 ? '4px' : '0px',
+                  transform: hoveredIndex === index ? 'scale(1.05)' : 'scale(1)',
+                }}
+              >
+                {/* Shine effect */}
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white to-transparent opacity-20 rounded-t-lg"></div>
+              </div>
+            </div>
+
+            {/* Label */}
+            <div className={`text-xs text-gray-600 text-center font-medium transition-all duration-200 ${
+              hoveredIndex === index ? 'text-gray-800 font-bold' : ''
+            }`}>
+              {item.label}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+// Enhanced Interactive Line Chart Component
+const InteractiveLineChart: React.FC<{
+  data: Array<{ label: string; value: number; }>;
+  maxValue?: number;
+  height?: string;
+  showGrid?: boolean;
+  animated?: boolean;
+}> = ({ data, maxValue, height = "h-80", showGrid = true, animated = true }) => {
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+  const [animationComplete, setAnimationComplete] = useState(false);
+
+  // Calculate proper scaling - use 0 as baseline for better visual comparison
+  const max = maxValue || Math.max(...data.map(d => d.value));
+  const chartMax = max; // Use actual max
+  const chartMin = 0; // Always start from 0 for attendance data
+  const chartRange = chartMax - chartMin;
+
+  // Generate grid lines
+  const gridLines = showGrid ? Array.from({ length: 6 }, (_, i) => {
+    const value = chartMin + (chartRange * i) / 5;
+    return Math.round(value);
+  }).reverse() : [];
+
+  React.useEffect(() => {
+    if (animated) {
+      const timer = setTimeout(() => setAnimationComplete(true), 500);
+      return () => clearTimeout(timer);
+    } else {
+      setAnimationComplete(true);
+    }
+  }, [animated]);
+
+  const getPointY = (value: number) => {
+    if (chartRange === 0) return 50;
+    return 90 - ((value - chartMin) / chartRange) * 80; // 90% to 10% of container
+  };
+
+  const getPointX = (index: number) => {
+    return 10 + (index / Math.max(data.length - 1, 1)) * 80; // 10% to 90% of container
+  };
+
+  // Generate SVG path for the line
+  const linePath = data.map((item, index) => {
+    const x = getPointX(index);
+    const y = getPointY(item.value);
+    return `${index === 0 ? 'M' : 'L'} ${x} ${y}`;
+  }).join(' ');
+
+  // Generate area path for gradient fill
+  const areaPath = data.length > 0 ?
+    `${linePath} L ${getPointX(data.length - 1)} 90 L ${getPointX(0)} 90 Z` : '';
+
+  return (
+    <div className={`${height} relative`}>
+      {/* Grid Lines */}
+      {showGrid && (
+        <div className="absolute inset-0 flex flex-col justify-between py-4 pr-4 pl-12">
+          {gridLines.map((value, index) => (
+            <div key={index} className="flex items-center">
+              <span className="text-xs text-gray-400 w-8 text-right mr-2">{value}</span>
+              <div className="flex-1 h-px bg-gray-200"></div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* SVG Chart */}
+      <div className="absolute inset-0 p-4 pl-12">
+        <svg className="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
+          {/* Area gradient */}
+          <defs>
+            <linearGradient id="areaGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stopColor="rgb(59, 130, 246)" stopOpacity="0.3" />
+              <stop offset="100%" stopColor="rgb(59, 130, 246)" stopOpacity="0.05" />
+            </linearGradient>
+          </defs>
+
+          {/* Area fill */}
+          {animationComplete && areaPath && (
+            <path
+              d={areaPath}
+              fill="url(#areaGradient)"
+              className="transition-all duration-1000 ease-out"
+            />
+          )}
+
+          {/* Line */}
+          {animationComplete && linePath && (
+            <path
+              d={linePath}
+              fill="none"
+              stroke="rgb(59, 130, 246)"
+              strokeWidth="0.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="transition-all duration-1000 ease-out"
+              style={{
+                strokeDasharray: animated ? '200' : 'none',
+                strokeDashoffset: animated ? '0' : 'none',
+                animation: animated ? 'drawLine 2s ease-out' : 'none'
+              }}
+            />
+          )}
+        </svg>
+
+        {/* Data Points */}
+        <div className="absolute inset-0">
+          {data.map((item, index) => (
+            <div
+              key={index}
+              className="absolute transform -translate-x-1/2 -translate-y-1/2 cursor-pointer group"
+              style={{
+                left: `${getPointX(index)}%`,
+                top: `${getPointY(item.value)}%`,
+              }}
+              onMouseEnter={() => setHoveredIndex(index)}
+              onMouseLeave={() => setHoveredIndex(null)}
+            >
+              {/* Point */}
+              <div className={`w-3 h-3 rounded-full border-2 border-white shadow-lg transition-all duration-200 ${
+                hoveredIndex === index ? 'bg-blue-600 scale-150' : 'bg-blue-500 scale-100'
+              }`}></div>
+
+              {/* Tooltip */}
+              {hoveredIndex === index && (
+                <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded shadow-lg whitespace-nowrap z-10">
+                  <div className="font-bold">{item.value}</div>
+                  <div className="text-gray-300">{item.label}</div>
+                  <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-2 border-r-2 border-t-2 border-transparent border-t-gray-800"></div>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* X-axis labels */}
+      <div className="absolute bottom-0 left-12 right-4 flex justify-between items-end pb-2">
+        {data.map((item, index) => (
+          <div key={index} className={`text-xs text-gray-600 text-center transition-all duration-200 ${
+            hoveredIndex === index ? 'text-gray-800 font-bold' : ''
+          }`}>
             {item.label}
           </div>
-        </div>
-      ))}
+        ))}
+      </div>
     </div>
   );
 };
@@ -212,7 +445,14 @@ const SimpleDoughnutChart: React.FC<{
 };
 
 const AttendanceAnalyticsView: React.FC = () => {
-  const { members, attendanceRecords, bacentas, displayedDate } = useAppContext();
+  const {
+    members,
+    attendanceRecords,
+    bacentas,
+    displayedDate,
+    navigateToPreviousMonth,
+    navigateToNextMonth
+  } = useAppContext();
   const [currentView, setCurrentView] = useState<ViewType>('overview');
   const [chartType, setChartType] = useState<ChartType>('bar');
   const [timePeriod, setTimePeriod] = useState<TimePeriod>('current');
@@ -446,9 +686,29 @@ const AttendanceAnalyticsView: React.FC = () => {
         <h2 className="text-4xl font-bold gradient-text font-serif mb-2">
           Attendance Analytics
         </h2>
-        <div className="flex items-center justify-center space-x-2 text-gray-600">
+        <div className="flex items-center justify-center space-x-4 text-gray-600 mb-4">
           <span className="text-2xl">📊</span>
-          <p className="text-lg font-medium">{monthName} {year}</p>
+          <div className="flex items-center space-x-3">
+            <button
+              onClick={navigateToPreviousMonth}
+              className="group month-nav-button flex items-center space-x-2 px-4 py-2 rounded-xl"
+              aria-label="Previous month"
+            >
+              <ChevronLeftIcon className="w-5 h-5 text-gray-600 group-hover:-translate-x-1 transition-transform duration-300" />
+              <span className="hidden sm:inline font-medium text-gray-700">Previous</span>
+            </button>
+            <div className="month-display">
+              <p className="text-lg font-semibold">{monthName} {year}</p>
+            </div>
+            <button
+              onClick={navigateToNextMonth}
+              className="group month-nav-button flex items-center space-x-2 px-4 py-2 rounded-xl"
+              aria-label="Next month"
+            >
+              <span className="hidden sm:inline font-medium text-gray-700">Next</span>
+              <ChevronRightIcon className="w-5 h-5 text-gray-600 group-hover:translate-x-1 transition-transform duration-300" />
+            </button>
+          </div>
           <span className="text-2xl">📈</span>
         </div>
         <div className="w-24 h-1 bg-gradient-to-r from-blue-400 to-blue-600 rounded-full mx-auto mt-3"></div>
@@ -541,18 +801,32 @@ const AttendanceAnalyticsView: React.FC = () => {
 
       {/* Chart Display */}
       {currentView === 'overview' && (
-        <div className="glass p-8 shadow-lg rounded-2xl">
+        <div className="glass p-8 shadow-lg rounded-2xl chart-container">
           <h3 className="text-2xl font-bold gradient-text mb-6 flex items-center">
             <ChartBarIcon className="w-8 h-8 mr-3 text-gray-600" />
             Weekly Attendance Overview
           </h3>
-          <SimpleBarChart
-            data={analyticsData.weeklyData.map(d => ({
-              label: d.label,
-              value: d.attendance
-            }))}
-            height="h-80"
-          />
+          {chartType === 'bar' ? (
+            <InteractiveBarChart
+              data={analyticsData.weeklyData.map(d => ({
+                label: d.label,
+                value: d.attendance
+              }))}
+              height="h-80"
+              showGrid={true}
+              animated={true}
+            />
+          ) : (
+            <InteractiveLineChart
+              data={analyticsData.weeklyData.map(d => ({
+                label: d.label,
+                value: d.attendance
+              }))}
+              height="h-80"
+              showGrid={true}
+              animated={true}
+            />
+          )}
         </div>
       )}
 
@@ -787,18 +1061,32 @@ const AttendanceAnalyticsView: React.FC = () => {
 
       {currentView === 'trends' && (
         <div className="space-y-8">
-          <div className="glass p-8 shadow-lg rounded-2xl">
+          <div className="glass p-8 shadow-lg rounded-2xl chart-container">
             <h3 className="text-2xl font-bold gradient-text mb-6 flex items-center">
               <TrendingUpIcon className="w-8 h-8 mr-3 text-gray-600" />
               Attendance Trends & Growth
             </h3>
-            <SimpleBarChart
-              data={analyticsData.weeklyData.map(d => ({
-                label: d.label,
-                value: d.attendance
-              }))}
-              height="h-80"
-            />
+            {chartType === 'bar' ? (
+              <InteractiveBarChart
+                data={analyticsData.weeklyData.map(d => ({
+                  label: d.label,
+                  value: d.attendance
+                }))}
+                height="h-80"
+                showGrid={true}
+                animated={true}
+              />
+            ) : (
+              <InteractiveLineChart
+                data={analyticsData.weeklyData.map(d => ({
+                  label: d.label,
+                  value: d.attendance
+                }))}
+                height="h-80"
+                showGrid={true}
+                animated={true}
+              />
+            )}
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
