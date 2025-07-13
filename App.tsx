@@ -11,6 +11,7 @@ import {
   LazyBacentasTableView,
   LazyCriticalMembersView,
   LazyAttendanceAnalyticsView,
+  LazyWeeklyAttendanceView,
   LazyNewBelieversView
 } from './components/LazyWrapper';
 import ProfileSettingsView from './components/ProfileSettingsView';
@@ -157,6 +158,12 @@ const AppContent: React.FC = memo(() => {
         return (
           <LazyWrapper>
             <LazyAttendanceAnalyticsView />
+          </LazyWrapper>
+        );
+      case TabKeys.WEEKLY_ATTENDANCE:
+        return (
+          <LazyWrapper>
+            <LazyWeeklyAttendanceView />
           </LazyWrapper>
         );
       case TabKeys.NEW_BELIEVERS:

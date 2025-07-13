@@ -57,3 +57,34 @@ export const getMonthName = (monthIndex: number): string => {
   date.setMonth(monthIndex);
   return date.toLocaleString('default', { month: 'long' });
 }
+
+// Get the current Sunday if today is Sunday, otherwise get the most recent past Sunday
+export const getCurrentOrMostRecentSunday = (): string => {
+  const today = new Date();
+  const dayOfWeek = today.getDay(); // 0 = Sunday, 1 = Monday, etc.
+
+  if (dayOfWeek === 0) {
+    // Today is Sunday
+    return formatDateToYYYYMMDD(today);
+  } else {
+    // Go back to the most recent Sunday
+    const daysToSubtract = dayOfWeek;
+    const lastSunday = new Date(today);
+    lastSunday.setDate(today.getDate() - daysToSubtract);
+    return formatDateToYYYYMMDD(lastSunday);
+  }
+};
+
+// Get the next Sunday from a given date
+export const getNextSunday = (dateString: string): string => {
+  const date = new Date(dateString + 'T00:00:00');
+  date.setDate(date.getDate() + 7);
+  return formatDateToYYYYMMDD(date);
+};
+
+// Get the previous Sunday from a given date
+export const getPreviousSunday = (dateString: string): string => {
+  const date = new Date(dateString + 'T00:00:00');
+  date.setDate(date.getDate() - 7);
+  return formatDateToYYYYMMDD(date);
+};

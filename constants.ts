@@ -9,6 +9,7 @@ export const FIXED_TABS: TabOption[] = [
   { id: TabKeys.ALL_BACENTAS, name: 'All Bacentas' },
   { id: TabKeys.CRITICAL_MEMBERS, name: 'Critical Alerts' },
   { id: TabKeys.ATTENDANCE_ANALYTICS, name: 'Attendance Analytics' },
+  { id: TabKeys.WEEKLY_ATTENDANCE, name: 'Weekly Attendance' },
   { id: TabKeys.NEW_BELIEVERS, name: 'New Believers' },
   { id: TabKeys.PROFILE_SETTINGS, name: 'Profile Settings' },
 ];

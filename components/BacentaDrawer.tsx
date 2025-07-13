@@ -260,6 +260,15 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
               />
               <NavigationItem
                 icon={<UsersIcon className="w-4 h-4" />}
+                label="Weekly Attendance"
+                isActive={currentTab.id === TabKeys.WEEKLY_ATTENDANCE}
+                onClick={() => {
+                  switchTab({ id: TabKeys.WEEKLY_ATTENDANCE, name: 'Weekly Attendance' });
+                  onClose();
+                }}
+              />
+              <NavigationItem
+                icon={<UsersIcon className="w-4 h-4" />}
                 label="New Believers"
                 isActive={currentTab.id === TabKeys.NEW_BELIEVERS}
                 onClick={() => {
