@@ -117,6 +117,35 @@ const StatCard: React.FC<StatCardProps> = ({
   </div>
 );
 
+// Helper function to format dates nicely
+const formatDateLabel = (dateString: string) => {
+  try {
+    // Handle different date formats
+    let date: Date;
+    if (dateString.includes('/')) {
+      // Format like "1/6", "8/6" etc.
+      const [day, month] = dateString.split('/');
+      const currentYear = new Date().getFullYear();
+      date = new Date(currentYear, parseInt(month) - 1, parseInt(day));
+    } else {
+      // Try to parse as is
+      date = new Date(dateString);
+    }
+
+    if (isNaN(date.getTime())) {
+      return dateString; // Return original if parsing fails
+    }
+
+    // Format as "04 May", "11 May" etc.
+    return date.toLocaleDateString('en-GB', {
+      day: '2-digit',
+      month: 'short'
+    });
+  } catch (error) {
+    return dateString; // Return original if any error
+  }
+};
+
 // Enhanced Interactive Bar Chart Component
 const InteractiveBarChart: React.FC<{
   data: Array<{ label: string; value: number; }>;
@@ -157,18 +186,36 @@ const InteractiveBarChart: React.FC<{
 
   const getBarColor = (index: number, value: number) => {
     const isHovered = hoveredIndex === index;
-    const intensity = chartRange > 0 ? (value - chartMin) / chartRange : 0;
 
+    // Define a set of beautiful gradient colors for variety
+    const colorPalette = [
+      'bg-gradient-to-t from-blue-600 to-blue-400',      // Blue
+      'bg-gradient-to-t from-emerald-600 to-emerald-400', // Emerald
+      'bg-gradient-to-t from-purple-600 to-purple-400',   // Purple
+      'bg-gradient-to-t from-rose-600 to-rose-400',       // Rose
+      'bg-gradient-to-t from-amber-600 to-amber-400',     // Amber
+      'bg-gradient-to-t from-teal-600 to-teal-400',       // Teal
+      'bg-gradient-to-t from-indigo-600 to-indigo-400',   // Indigo
+      'bg-gradient-to-t from-cyan-600 to-cyan-400',       // Cyan
+    ];
+
+    // Hover state - make it brighter
     if (isHovered) {
-      return `bg-gradient-to-t from-blue-600 to-blue-400`;
+      const hoverColors = [
+        'bg-gradient-to-t from-blue-500 to-blue-300',
+        'bg-gradient-to-t from-emerald-500 to-emerald-300',
+        'bg-gradient-to-t from-purple-500 to-purple-300',
+        'bg-gradient-to-t from-rose-500 to-rose-300',
+        'bg-gradient-to-t from-amber-500 to-amber-300',
+        'bg-gradient-to-t from-teal-500 to-teal-300',
+        'bg-gradient-to-t from-indigo-500 to-indigo-300',
+        'bg-gradient-to-t from-cyan-500 to-cyan-300',
+      ];
+      return hoverColors[index % hoverColors.length];
     }
 
-    // Color based on value intensity
-    if (intensity > 0.8) return 'bg-gradient-to-t from-green-600 to-green-400';
-    if (intensity > 0.6) return 'bg-gradient-to-t from-blue-600 to-blue-400';
-    if (intensity > 0.4) return 'bg-gradient-to-t from-yellow-600 to-yellow-400';
-    if (intensity > 0.2) return 'bg-gradient-to-t from-orange-600 to-orange-400';
-    return 'bg-gradient-to-t from-red-600 to-red-400';
+    // Use different color for each bar based on index
+    return colorPalette[index % colorPalette.length];
   };
 
   return (
@@ -186,11 +233,11 @@ const InteractiveBarChart: React.FC<{
       )}
 
       {/* Chart Bars */}
-      <div className="absolute inset-0 flex items-end justify-center space-x-1 p-4 pl-12">
+      <div className="absolute inset-0 flex items-end justify-center space-x-4 p-4 pl-12">
         {data.map((item, index) => (
           <div
             key={index}
-            className="flex flex-col items-center space-y-2 flex-1 max-w-20 group"
+            className="flex flex-col items-center space-y-3 flex-1 max-w-24 group"
             onMouseEnter={() => setHoveredIndex(index)}
             onMouseLeave={() => setHoveredIndex(null)}
           >
@@ -220,7 +267,7 @@ const InteractiveBarChart: React.FC<{
             <div className={`text-xs text-gray-600 text-center font-medium transition-all duration-200 ${
               hoveredIndex === index ? 'text-gray-800 font-bold' : ''
             }`}>
-              {item.label}
+              {formatDateLabel(item.label)}
             </div>
           </div>
         ))}
@@ -280,6 +327,35 @@ const InteractiveLineChart: React.FC<{
   // Generate area path for gradient fill
   const areaPath = data.length > 0 ?
     `${linePath} L ${getPointX(data.length - 1)} 90 L ${getPointX(0)} 90 Z` : '';
+
+  // Get point color based on index
+  const getPointColor = (index: number) => {
+    const colors = [
+      'bg-blue-500',      // Blue
+      'bg-emerald-500',   // Emerald
+      'bg-purple-500',    // Purple
+      'bg-rose-500',      // Rose
+      'bg-amber-500',     // Amber
+      'bg-teal-500',      // Teal
+      'bg-indigo-500',    // Indigo
+      'bg-cyan-500',      // Cyan
+    ];
+    return colors[index % colors.length];
+  };
+
+  const getPointHoverColor = (index: number) => {
+    const colors = [
+      'bg-blue-600',      // Blue
+      'bg-emerald-600',   // Emerald
+      'bg-purple-600',    // Purple
+      'bg-rose-600',      // Rose
+      'bg-amber-600',     // Amber
+      'bg-teal-600',      // Teal
+      'bg-indigo-600',    // Indigo
+      'bg-cyan-600',      // Cyan
+    ];
+    return colors[index % colors.length];
+  };
 
   return (
     <div className={`${height} relative`}>
@@ -349,7 +425,7 @@ const InteractiveLineChart: React.FC<{
             >
               {/* Point */}
               <div className={`w-3 h-3 rounded-full border-2 border-white shadow-lg transition-all duration-200 ${
-                hoveredIndex === index ? 'bg-blue-600 scale-150' : 'bg-blue-500 scale-100'
+                hoveredIndex === index ? `${getPointHoverColor(index)} scale-150` : `${getPointColor(index)} scale-100`
               }`}></div>
 
               {/* Tooltip */}
@@ -366,12 +442,12 @@ const InteractiveLineChart: React.FC<{
       </div>
 
       {/* X-axis labels */}
-      <div className="absolute bottom-0 left-12 right-4 flex justify-between items-end pb-2">
+      <div className="absolute bottom-0 left-12 right-4 flex justify-between items-end pb-3">
         {data.map((item, index) => (
-          <div key={index} className={`text-xs text-gray-600 text-center transition-all duration-200 ${
+          <div key={index} className={`text-xs text-gray-600 text-center font-medium transition-all duration-200 px-1 ${
             hoveredIndex === index ? 'text-gray-800 font-bold' : ''
           }`}>
-            {item.label}
+            {formatDateLabel(item.label)}
           </div>
         ))}
       </div>
@@ -802,31 +878,33 @@ const AttendanceAnalyticsView: React.FC = () => {
       {/* Chart Display */}
       {currentView === 'overview' && (
         <div className="glass p-8 shadow-lg rounded-2xl chart-container">
-          <h3 className="text-2xl font-bold gradient-text mb-6 flex items-center">
+          <h3 className="text-2xl font-bold gradient-text mb-8 flex items-center">
             <ChartBarIcon className="w-8 h-8 mr-3 text-gray-600" />
             Weekly Attendance Overview
           </h3>
-          {chartType === 'bar' ? (
-            <InteractiveBarChart
-              data={analyticsData.weeklyData.map(d => ({
-                label: d.label,
-                value: d.attendance
-              }))}
-              height="h-80"
-              showGrid={true}
-              animated={true}
-            />
-          ) : (
-            <InteractiveLineChart
-              data={analyticsData.weeklyData.map(d => ({
-                label: d.label,
-                value: d.attendance
-              }))}
-              height="h-80"
-              showGrid={true}
-              animated={true}
-            />
-          )}
+          <div className="px-2">
+            {chartType === 'bar' ? (
+              <InteractiveBarChart
+                data={analyticsData.weeklyData.map(d => ({
+                  label: d.label,
+                  value: d.attendance
+                }))}
+                height="h-96"
+                showGrid={true}
+                animated={true}
+              />
+            ) : (
+              <InteractiveLineChart
+                data={analyticsData.weeklyData.map(d => ({
+                  label: d.label,
+                  value: d.attendance
+                }))}
+                height="h-96"
+                showGrid={true}
+                animated={true}
+              />
+            )}
+          </div>
         </div>
       )}
 
@@ -1062,31 +1140,33 @@ const AttendanceAnalyticsView: React.FC = () => {
       {currentView === 'trends' && (
         <div className="space-y-8">
           <div className="glass p-8 shadow-lg rounded-2xl chart-container">
-            <h3 className="text-2xl font-bold gradient-text mb-6 flex items-center">
+            <h3 className="text-2xl font-bold gradient-text mb-8 flex items-center">
               <TrendingUpIcon className="w-8 h-8 mr-3 text-gray-600" />
               Attendance Trends & Growth
             </h3>
-            {chartType === 'bar' ? (
-              <InteractiveBarChart
-                data={analyticsData.weeklyData.map(d => ({
-                  label: d.label,
-                  value: d.attendance
-                }))}
-                height="h-80"
-                showGrid={true}
-                animated={true}
-              />
-            ) : (
-              <InteractiveLineChart
-                data={analyticsData.weeklyData.map(d => ({
-                  label: d.label,
-                  value: d.attendance
-                }))}
-                height="h-80"
-                showGrid={true}
-                animated={true}
-              />
-            )}
+            <div className="px-2">
+              {chartType === 'bar' ? (
+                <InteractiveBarChart
+                  data={analyticsData.weeklyData.map(d => ({
+                    label: d.label,
+                    value: d.attendance
+                  }))}
+                  height="h-96"
+                  showGrid={true}
+                  animated={true}
+                />
+              ) : (
+                <InteractiveLineChart
+                  data={analyticsData.weeklyData.map(d => ({
+                    label: d.label,
+                    value: d.attendance
+                  }))}
+                  height="h-96"
+                  showGrid={true}
+                  animated={true}
+                />
+              )}
+            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
