@@ -32,6 +32,7 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
 
   const [searchTerm, setSearchTerm] = useState('');
   const [displayedDate, setDisplayedDate] = useState(new Date());
+  const [roleFilter, setRoleFilter] = useState<'all' | 'Bacenta Leader' | 'Fellowship Leader' | 'Member'>('all');
 
   // Get displayed month's Sundays
   const currentMonthSundays = useMemo(() => {
@@ -90,13 +91,28 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
 
   // Filter and search members
   const filteredMembers = useMemo(() => {
+    // Define role priority for sorting (lower number = higher priority)
+    const getRolePriority = (role: string | undefined) => {
+      switch (role) {
+        case 'Bacenta Leader': return 1;
+        case 'Fellowship Leader': return 2;
+        case 'Member': return 3;
+        default: return 4; // For any undefined roles
+      }
+    };
+
     return members
       .filter(member => {
         // Filter by bacenta if specified
         if (bacentaFilter && member.bacentaId !== bacentaFilter) {
           return false;
         }
-        
+
+        // Filter by role
+        if (roleFilter !== 'all' && (member.role || 'Member') !== roleFilter) {
+          return false;
+        }
+
         // Filter by search term
         if (searchTerm) {
           const searchLower = searchTerm.toLowerCase();
@@ -107,11 +123,22 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
             member.buildingAddress.toLowerCase().includes(searchLower)
           );
         }
-        
+
         return true;
       })
-      .sort((a, b) => a.lastName.localeCompare(b.lastName) || a.firstName.localeCompare(b.firstName));
-  }, [members, bacentaFilter, searchTerm]);
+      .sort((a, b) => {
+        // First sort by role priority (Bacenta Leaders first, then Fellowship Leaders, then Members)
+        const rolePriorityA = getRolePriority(a.role);
+        const rolePriorityB = getRolePriority(b.role);
+
+        if (rolePriorityA !== rolePriorityB) {
+          return rolePriorityA - rolePriorityB;
+        }
+
+        // Then sort by last name, then first name within the same role
+        return a.lastName.localeCompare(b.lastName) || a.firstName.localeCompare(b.firstName);
+      });
+  }, [members, bacentaFilter, searchTerm, roleFilter]);
 
   // Get bacenta name by ID
   const getBacentaName = (bacentaId: string) => {
@@ -137,7 +164,7 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
                 {member.firstName} {member.lastName}
               </div>
               {criticalMemberIds.includes(member.id) && (
-                <Badge variant="danger" size="sm" className="mt-1">
+                <Badge color="red" size="sm" className="mt-1">
                   <WarningIcon className="w-3 h-3 mr-1" />
                   Critical
                 </Badge>
@@ -175,10 +202,30 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
         header: 'Bacenta',
         width: '120px',
         render: (member: Member) => (
-          <Badge variant="secondary" size="sm">
+          <Badge color="gray" size="sm">
             {getBacentaName(member.bacentaId)}
           </Badge>
         ),
+      },
+      {
+        key: 'role',
+        header: 'Role',
+        width: '120px',
+        align: 'center' as const,
+        render: (member: Member) => {
+          const roleConfig = {
+            'Bacenta Leader': { color: 'green' as const, icon: '💚' },
+            'Fellowship Leader': { color: 'red' as const, icon: '❤️' },
+            'Member': { color: 'gray' as const, icon: '👤' }
+          };
+          const config = roleConfig[member.role || 'Member'];
+          return (
+            <Badge color={config.color} size="sm">
+              <span className="mr-1">{config.icon}</span>
+              {member.role || 'Member'}
+            </Badge>
+          );
+        },
       },
       {
         key: 'bornAgainStatus',
@@ -187,7 +234,7 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
         align: 'center' as const,
         render: (member: Member) => (
           <Badge
-            variant={member.bornAgainStatus ? 'success' : 'warning'}
+            color={member.bornAgainStatus ? 'green' : 'yellow'}
             size="sm"
           >
             {member.bornAgainStatus ? 'Yes' : 'No'}
@@ -384,8 +431,30 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-3 sm:space-y-0">
             <div className="flex flex-col space-y-2">
               <p className="text-sm text-gray-600">
-                {currentMonthSundays.length} Sunday{currentMonthSundays.length !== 1 ? 's' : ''} in {currentMonthName}
+                {currentMonthSundays.length} Sunday{currentMonthSundays.length !== 1 ? 's' : ''} in {currentMonthName} • {filteredMembers.length} member(s)
               </p>
+
+              {/* Role Statistics */}
+              <div className="flex flex-wrap items-center gap-2 text-xs">
+                <div className="flex items-center space-x-1 bg-green-100 px-2 py-1 rounded">
+                  <span>💚</span>
+                  <span className="font-semibold text-green-700">
+                    {filteredMembers.filter(m => (m.role || 'Member') === 'Bacenta Leader').length} BL
+                  </span>
+                </div>
+                <div className="flex items-center space-x-1 bg-red-100 px-2 py-1 rounded">
+                  <span>❤️</span>
+                  <span className="font-semibold text-red-700">
+                    {filteredMembers.filter(m => (m.role || 'Member') === 'Fellowship Leader').length} FL
+                  </span>
+                </div>
+                <div className="flex items-center space-x-1 bg-gray-100 px-2 py-1 rounded">
+                  <span>👤</span>
+                  <span className="font-semibold text-gray-700">
+                    {filteredMembers.filter(m => (m.role || 'Member') === 'Member').length} M
+                  </span>
+                </div>
+              </div>
               {/* Smart editing status */}
               <div className="flex items-center space-x-4 text-xs">
                 <div className="flex items-center space-x-1">
@@ -406,13 +475,27 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
                 </div>
               </div>
             </div>
-            <div className="w-full sm:w-64">
-              <Input
-                placeholder="Search members..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="border-0 bg-white/50 focus:bg-white/80 transition-colors"
-              />
+            <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3 w-full sm:w-auto">
+              <div className="w-full sm:w-64">
+                <Input
+                  placeholder="Search members..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="border-0 bg-white/50 focus:bg-white/80 transition-colors"
+                />
+              </div>
+              <div className="w-full sm:w-48">
+                <select
+                  value={roleFilter}
+                  onChange={(e) => setRoleFilter(e.target.value as 'all' | 'Bacenta Leader' | 'Fellowship Leader' | 'Member')}
+                  className="w-full px-3 py-2 border-0 bg-white/50 focus:bg-white/80 rounded-lg transition-colors cursor-pointer"
+                >
+                  <option value="all">All Roles</option>
+                  <option value="Bacenta Leader">💚 Bacenta Leaders</option>
+                  <option value="Fellowship Leader">❤️ Fellowship Leaders</option>
+                  <option value="Member">👤 Members</option>
+                </select>
+              </div>
             </div>
           </div>
         </div>

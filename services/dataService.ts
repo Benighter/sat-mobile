@@ -72,6 +72,8 @@ export const MemberService = {
       lastUpdated: now,
       // Ensure joinedDate is set, defaulting to today if not provided (though form should provide it)
       joinedDate: memberData.joinedDate || formatDateToYYYYMMDD(new Date()),
+      // Ensure role is set, defaulting to Member if not provided
+      role: memberData.role || 'Member',
     };
     members.push(newMember);
     localStorage.setItem(MEMBERS_KEY, JSON.stringify(members));
@@ -110,6 +112,7 @@ export const MemberService = {
           buildingAddress: memberData.buildingAddress?.trim() || '',
           bornAgainStatus: memberData.bornAgainStatus || false,
           bacentaId: memberData.bacentaId || '',
+          role: memberData.role || 'Member', // Default role is Member
         };
 
         members.push(newMember);
@@ -137,6 +140,8 @@ export const MemberService = {
     updatedMember.lastUpdated = new Date().toISOString();
     // Ensure joinedDate is set on update
     updatedMember.joinedDate = updatedMember.joinedDate || formatDateToYYYYMMDD(new Date(updatedMember.createdDate));
+    // Ensure role is set on update, defaulting to Member if not provided
+    updatedMember.role = updatedMember.role || 'Member';
     members = members.map(m => m.id === updatedMember.id ? updatedMember : m);
     localStorage.setItem(MEMBERS_KEY, JSON.stringify(members));
     return updatedMember;

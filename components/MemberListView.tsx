@@ -26,13 +26,32 @@ const MemberListView: React.FC<MemberListViewProps> = ({ bacentaFilter }) => {
   } = useAppContext();
   const [searchTerm, setSearchTerm] = useState('');
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('table');
+  const [roleFilter, setRoleFilter] = useState<'all' | 'Bacenta Leader' | 'Fellowship Leader' | 'Member'>('all');
 
   const filteredMembers = useMemo(() => {
+    // Define role priority for sorting (lower number = higher priority)
+    const getRolePriority = (role: string | undefined) => {
+      switch (role) {
+        case 'Bacenta Leader': return 1;
+        case 'Fellowship Leader': return 2;
+        case 'Member': return 3;
+        default: return 4; // For any undefined roles
+      }
+    };
+
     return members
       .filter(member => {
+        // Filter by bacenta
         if (bacentaFilter && member.bacentaId !== bacentaFilter) {
           return false;
         }
+
+        // Filter by role
+        if (roleFilter !== 'all' && (member.role || 'Member') !== roleFilter) {
+          return false;
+        }
+
+        // Filter by search term
         if (searchTerm) {
           const lowerSearchTerm = searchTerm.toLowerCase();
           return (
@@ -45,8 +64,19 @@ const MemberListView: React.FC<MemberListViewProps> = ({ bacentaFilter }) => {
         }
         return true;
       })
-      .sort((a, b) => a.lastName.localeCompare(b.lastName) || a.firstName.localeCompare(b.firstName));
-  }, [members, bacentaFilter, searchTerm, bacentas]);
+      .sort((a, b) => {
+        // First sort by role priority (Bacenta Leaders first, then Fellowship Leaders, then Members)
+        const rolePriorityA = getRolePriority(a.role);
+        const rolePriorityB = getRolePriority(b.role);
+
+        if (rolePriorityA !== rolePriorityB) {
+          return rolePriorityA - rolePriorityB;
+        }
+
+        // Then sort by last name, then first name within the same role
+        return a.lastName.localeCompare(b.lastName) || a.firstName.localeCompare(b.firstName);
+      });
+  }, [members, bacentaFilter, searchTerm, bacentas, roleFilter]);
 
   if (isLoading && !members.length) {
     return (
@@ -77,6 +107,28 @@ const MemberListView: React.FC<MemberListViewProps> = ({ bacentaFilter }) => {
               <span className="text-2xl">👥</span>
               <p className="text-lg font-medium text-gray-600">{filteredMembers.length} member(s) found</p>
             </div>
+
+            {/* Role Statistics */}
+            <div className="flex flex-wrap items-center justify-center sm:justify-start gap-3 mt-3">
+              <div className="flex items-center space-x-1 bg-green-100 px-3 py-1 rounded-full">
+                <span>💚</span>
+                <span className="text-sm font-semibold text-green-700">
+                  {filteredMembers.filter(m => (m.role || 'Member') === 'Bacenta Leader').length} Bacenta Leaders
+                </span>
+              </div>
+              <div className="flex items-center space-x-1 bg-red-100 px-3 py-1 rounded-full">
+                <span>❤️</span>
+                <span className="text-sm font-semibold text-red-700">
+                  {filteredMembers.filter(m => (m.role || 'Member') === 'Fellowship Leader').length} Fellowship Leaders
+                </span>
+              </div>
+              <div className="flex items-center space-x-1 bg-gray-100 px-3 py-1 rounded-full">
+                <span>👤</span>
+                <span className="text-sm font-semibold text-gray-700">
+                  {filteredMembers.filter(m => (m.role || 'Member') === 'Member').length} Members
+                </span>
+              </div>
+            </div>
           </div>
 
           {/* Enhanced Search and View Toggle */}
@@ -103,6 +155,20 @@ const MemberListView: React.FC<MemberListViewProps> = ({ bacentaFilter }) => {
                   </button>
                 )}
               </div>
+            </div>
+
+            {/* Role Filter */}
+            <div className="w-full sm:w-auto">
+              <select
+                value={roleFilter}
+                onChange={(e) => setRoleFilter(e.target.value as 'all' | 'Bacenta Leader' | 'Fellowship Leader' | 'Member')}
+                className="w-full px-4 py-3 glass border-0 rounded-xl text-gray-700 focus:ring-2 focus:ring-gray-500/50 transition-all duration-200 cursor-pointer"
+              >
+                <option value="all">All Roles</option>
+                <option value="Bacenta Leader">💚 Bacenta Leaders</option>
+                <option value="Fellowship Leader">❤️ Fellowship Leaders</option>
+                <option value="Member">👤 Members</option>
+              </select>
             </div>
 
             {/* View Toggle */}

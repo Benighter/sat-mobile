@@ -339,6 +339,7 @@ export const SimpleFirebaseProvider: React.FC<{ children: ReactNode }> = ({ chil
     try {
       const docRef = await addDoc(collection(db, 'members'), {
         ...memberData,
+        role: memberData.role || 'Member', // Ensure role is set, defaulting to Member
         createdDate: new Date().toISOString(),
         lastUpdated: new Date().toISOString()
       });
@@ -362,10 +363,11 @@ export const SimpleFirebaseProvider: React.FC<{ children: ReactNode }> = ({ chil
         const docRef = doc(membersRef);
         batch.set(docRef, {
           ...memberData,
+          role: memberData.role || 'Member', // Ensure role is set, defaulting to Member
           createdDate: new Date().toISOString(),
           lastUpdated: new Date().toISOString()
         });
-        successful.push({ ...memberData, id: docRef.id, createdDate: new Date().toISOString(), lastUpdated: new Date().toISOString() });
+        successful.push({ ...memberData, role: memberData.role || 'Member', id: docRef.id, createdDate: new Date().toISOString(), lastUpdated: new Date().toISOString() });
       });
 
       await batch.commit();

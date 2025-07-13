@@ -98,6 +98,28 @@ const MemberCard: React.FC<MemberCardProps> = ({ member, isCritical }) => {
               )}
             </div>
 
+            {/* Role Badge */}
+            <div className="flex items-center space-x-2 mb-2">
+              {member.role === 'Bacenta Leader' && (
+                <div className="flex items-center space-x-1 bg-gradient-to-r from-green-100 to-green-200 text-green-700 px-3 py-1 rounded-full text-sm font-semibold shadow-sm">
+                  <span>💚</span>
+                  <span>Bacenta Leader</span>
+                </div>
+              )}
+              {member.role === 'Fellowship Leader' && (
+                <div className="flex items-center space-x-1 bg-gradient-to-r from-red-100 to-red-200 text-red-700 px-3 py-1 rounded-full text-sm font-semibold shadow-sm">
+                  <span>❤️</span>
+                  <span>Fellowship Leader</span>
+                </div>
+              )}
+              {member.role === 'Member' && (
+                <div className="flex items-center space-x-1 bg-gradient-to-r from-gray-100 to-gray-200 text-gray-700 px-3 py-1 rounded-full text-sm font-semibold shadow-sm">
+                  <span>👤</span>
+                  <span>Member</span>
+                </div>
+              )}
+            </div>
+
             <div className="flex items-center space-x-2 mb-2">
               <span className="text-sm text-gray-600">📍</span>
               <p className="text-sm font-medium text-gray-600">

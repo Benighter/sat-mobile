@@ -40,6 +40,7 @@ export const createSampleMembers = (bacentas: Bacenta[]): Member[] => {
       buildingAddress: '123 Main St, Springfield, IL',
       bornAgainStatus: true,
       bacentaId: bacentas[0].id,
+      role: 'Bacenta Leader',
       joinedDate: '2023-01-15',
       createdDate: now,
       lastUpdated: now

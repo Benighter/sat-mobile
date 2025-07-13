@@ -1,9 +1,10 @@
 
 import React, { useState, useEffect } from 'react';
-import { Member } from '../types';
+import { Member, MemberRole } from '../types';
 import { useAppContext } from '../contexts/FirebaseAppContext';
 import Modal from './ui/Modal';
 import Input from './ui/Input';
+import Select from './ui/Select';
 import Checkbox from './ui/Checkbox';
 import Button from './ui/Button';
 import { formatDateToYYYYMMDD } from '../utils/dateUtils';
@@ -29,6 +30,7 @@ const MemberFormModal: React.FC<MemberFormModalProps> = ({ isOpen, onClose, memb
     buildingAddress: '',
     bornAgainStatus: false,
     bacentaId: currentBacentaId || (bacentas.length > 0 ? bacentas[0].id : ''),
+    role: 'Member' as MemberRole, // Default role is Member
     joinedDate: formatDateToYYYYMMDD(new Date()), // Default to today for new members
   };
   const [formData, setFormData] = useState(initialFormData);
@@ -43,6 +45,7 @@ const MemberFormModal: React.FC<MemberFormModalProps> = ({ isOpen, onClose, memb
         buildingAddress: member.buildingAddress,
         bornAgainStatus: member.bornAgainStatus,
         bacentaId: member.bacentaId,
+        role: member.role || 'Member', // Default to Member if role is not set (for backward compatibility)
         joinedDate: member.joinedDate ? member.joinedDate : formatDateToYYYYMMDD(new Date(member.createdDate)), // Use existing or fallback
       });
     } else {
@@ -201,7 +204,19 @@ const MemberFormModal: React.FC<MemberFormModalProps> = ({ isOpen, onClose, memb
           )}
           {errors.bacentaId && <p className="mt-1 text-xs text-red-600">{errors.bacentaId}</p>}
         </div>
-        <Checkbox 
+        <Select
+          label="Role"
+          name="role"
+          value={formData.role}
+          onChange={handleChange}
+          options={[
+            { value: 'Member', label: 'Member' },
+            { value: 'Fellowship Leader', label: 'Fellowship Leader' },
+            { value: 'Bacenta Leader', label: 'Bacenta Leader' }
+          ]}
+          error={errors.role}
+        />
+        <Checkbox
             label="Born Again Status"
             name="bornAgainStatus"
             checked={formData.bornAgainStatus}
