@@ -169,11 +169,11 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ children, showToast }) =
               <div className="bg-white/90 backdrop-blur-xl rounded-3xl shadow-2xl p-8 border border-white/30">
                 {/* Header */}
                 <div className="text-center mb-8">
-                  <div className="mx-auto w-16 h-16 bg-gradient-to-br from-green-500 to-emerald-600 rounded-2xl flex items-center justify-center mb-4 shadow-lg transform hover:scale-105 transition-transform duration-200">
-                    <span className="text-white text-2xl">⛪</span>
+                  <div className="mx-auto w-20 h-20 bg-white rounded-2xl flex items-center justify-center mb-4 shadow-lg transform hover:scale-105 transition-transform duration-200 p-1">
+                    <img src="/logo.png" alt="First Love Church" className="w-full h-full object-contain" />
                   </div>
                   <h1 className="text-2xl font-bold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent mb-1">Join SAT Mobile</h1>
-                  <p className="text-gray-500 text-sm">Create your church account</p>
+                  <p className="text-gray-500 text-sm">Join First Love Church</p>
                 </div>
 
                 <RegisterForm

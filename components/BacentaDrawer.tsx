@@ -13,7 +13,8 @@ import {
   ClockIcon,
   ChartBarIcon,
   WarningIcon,
-  CogIcon
+  CogIcon,
+  UserIcon
 } from './icons';
 
 interface BacentaDrawerProps {
@@ -263,6 +264,15 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
                 isActive={currentTab.id === TabKeys.NEW_BELIEVERS}
                 onClick={() => {
                   switchTab({ id: TabKeys.NEW_BELIEVERS, name: 'New Believers' });
+                  onClose();
+                }}
+              />
+              <NavigationItem
+                icon={<UserIcon className="w-4 h-4" />}
+                label="Profile Settings"
+                isActive={currentTab.id === TabKeys.PROFILE_SETTINGS}
+                onClick={() => {
+                  switchTab({ id: TabKeys.PROFILE_SETTINGS, name: 'Profile Settings' });
                   onClose();
                 }}
               />

@@ -57,6 +57,7 @@ export enum TabKeys {
   CRITICAL_MEMBERS = 'critical_members',
   ATTENDANCE_ANALYTICS = 'attendance_analytics',
   NEW_BELIEVERS = 'new_believers',
+  PROFILE_SETTINGS = 'profile_settings',
 }
 
 export interface NavigationHistoryItem {
@@ -69,4 +70,48 @@ export interface NavigationHistoryItem {
   tabId: string;
   timestamp: number;
   data?: any; // For storing additional context like bacenta filters
+}
+
+export interface UserPreferences {
+  notifications: boolean;
+  theme: 'light' | 'dark' | 'system';
+  emailNotifications: boolean;
+  attendanceReminders: boolean;
+  weeklyReports: boolean;
+  allowEditPreviousSundays: boolean;
+}
+
+export interface User {
+  id: string;
+  uid: string;
+  email: string;
+  displayName: string;
+  firstName?: string;
+  lastName?: string;
+  phoneNumber?: string;
+  profilePicture?: string;
+  churchId: string;
+  churchName?: string;
+  role: 'admin' | 'leader' | 'member';
+  preferences?: UserPreferences;
+  createdAt: string;
+  lastLoginAt: string;
+  lastUpdated?: string;
+  isActive: boolean;
+}
+
+export interface Church {
+  id: string;
+  name: string;
+  address?: string;
+  contactInfo?: {
+    phone?: string;
+    email?: string;
+  };
+  settings?: {
+    timezone?: string;
+    defaultMinistries?: string[];
+  };
+  createdAt: string;
+  lastUpdated: string;
 }

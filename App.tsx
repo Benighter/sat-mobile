@@ -13,6 +13,7 @@ import {
   LazyAttendanceAnalyticsView,
   LazyNewBelieversView
 } from './components/LazyWrapper';
+import ProfileSettingsView from './components/ProfileSettingsView';
 import GestureWrapper from './components/GestureWrapper';
 import BackButton from './components/BackButton';
 import SwipeIndicator from './components/SwipeIndicator';
@@ -164,6 +165,8 @@ const AppContent: React.FC = memo(() => {
             <LazyNewBelieversView />
           </LazyWrapper>
         );
+      case TabKeys.PROFILE_SETTINGS:
+        return <ProfileSettingsView />;
       default:
         return (
           <LazyWrapper>
@@ -189,15 +192,15 @@ const AppContent: React.FC = memo(() => {
               aria-label="Go to Dashboard"
               title="Go to Dashboard"
             >
-              <div className="w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-lg sm:rounded-xl flex items-center justify-center shadow-lg group-hover:shadow-xl group-hover:from-blue-700 group-hover:to-indigo-800 transition-all duration-300 flex-shrink-0 ring-2 ring-blue-100">
-                <span className="text-white font-bold text-sm sm:text-base md:text-lg">⛪</span>
+              <div className="w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 bg-white rounded-lg sm:rounded-xl flex items-center justify-center shadow-lg group-hover:shadow-xl transition-all duration-300 flex-shrink-0 ring-2 ring-blue-100 p-0.5">
+                <img src="/logo.png" alt="First Love Church" className="w-full h-full object-contain" />
               </div>
               <div className="min-w-0 hidden sm:block">
                 <h1 className="text-base sm:text-lg md:text-xl font-bold gradient-text font-serif group-hover:text-gray-700 transition-colors duration-300 truncate">
                   {isBacentaTab ? currentTab.name : 'SAT Mobile'}
                 </h1>
                 <p className="text-xs text-gray-600 font-medium group-hover:text-gray-700 transition-colors duration-300 hidden md:block">
-                  {isBacentaTab ? 'Bacenta Management' : 'Faith • Community • Growth'}
+                  {isBacentaTab ? 'Bacenta Management' : 'First Love Church'}
                 </p>
               </div>
             </button>
@@ -420,10 +423,10 @@ const AppContent: React.FC = memo(() => {
 
 // Wrapper component to access context for AuthScreen
 const AuthenticatedApp: React.FC = () => {
-  const { showToast } = useAppContext();
+  const { showToast, userProfile } = useAppContext();
 
   return (
-    <AuthScreen showToast={showToast}>
+    <AuthScreen showToast={showToast} userProfile={userProfile}>
       <AppContent />
     </AuthScreen>
   );

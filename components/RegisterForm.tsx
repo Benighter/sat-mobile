@@ -125,8 +125,8 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, onSwitchToLogin,
         role: 'admin' // First user becomes admin
       });
 
-      showToast('success', 'Registration Successful!', 
-        `Welcome to SAT Church Connect! Your church "${formData.churchName}" has been set up.`);
+      showToast('success', 'Registration Successful!',
+        `Welcome to SAT Mobile! Your church "${formData.churchName}" has been set up.`);
       onSuccess();
     } catch (error: any) {
       showToast('error', 'Registration Failed', getErrorMessage(error.message || error.code || error.toString()));

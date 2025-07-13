@@ -35,7 +35,8 @@ const EnhancedProfileDropdown: React.FC<EnhancedProfileDropdownProps> = ({
     switchTab,
     members,
     bacentas,
-    newBelievers
+    newBelievers,
+    userProfile
   } = useAppContext();
 
   // Close dropdown when clicking outside
@@ -65,9 +66,22 @@ const EnhancedProfileDropdown: React.FC<EnhancedProfileDropdownProps> = ({
 
   const getInitials = (user: FirebaseUser | null): string => {
     if (!user) return 'U';
+
+    // Try to get initials from userProfile first
+    if (userProfile?.firstName && userProfile?.lastName) {
+      return `${userProfile.firstName.charAt(0)}${userProfile.lastName.charAt(0)}`.toUpperCase();
+    }
+
+    // Fall back to userProfile displayName
+    if (userProfile?.displayName) {
+      return userProfile.displayName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+    }
+
+    // Fall back to auth user displayName
     if (user.displayName) {
       return user.displayName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
     }
+
     return user.email?.charAt(0).toUpperCase() || 'U';
   };
 
@@ -77,6 +91,19 @@ const EnhancedProfileDropdown: React.FC<EnhancedProfileDropdownProps> = ({
       md: 'w-10 h-10 text-base',
       lg: 'w-16 h-16 text-xl'
     };
+
+    // Check if user has a profile picture from userProfile context
+    const profilePicture = userProfile?.profilePicture;
+
+    if (profilePicture) {
+      return (
+        <img
+          src={profilePicture}
+          alt="Profile"
+          className={`${sizeClasses[size]} rounded-full object-cover shadow-lg ring-2 ring-white/20`}
+        />
+      );
+    }
 
     return (
       <div className={`${sizeClasses[size]} rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-semibold shadow-lg ring-2 ring-white/20`}>
@@ -98,7 +125,7 @@ const EnhancedProfileDropdown: React.FC<EnhancedProfileDropdownProps> = ({
         <ProfileAvatar size="sm" />
         <div className="hidden sm:block text-left">
           <p className="text-gray-700 font-medium text-sm truncate max-w-[120px]">
-            {user.displayName || 'User'}
+            {userProfile?.displayName || `${userProfile?.firstName || ''} ${userProfile?.lastName || ''}`.trim() || user.displayName || 'User'}
           </p>
           <p className="text-gray-500 text-xs truncate max-w-[120px]">
             Church Member
@@ -116,7 +143,7 @@ const EnhancedProfileDropdown: React.FC<EnhancedProfileDropdownProps> = ({
               <ProfileAvatar size="lg" />
               <div className="flex-1 min-w-0">
                 <h3 className="font-semibold text-gray-900 truncate text-lg">
-                  {user.displayName || 'User'}
+                  {userProfile?.displayName || `${userProfile?.firstName || ''} ${userProfile?.lastName || ''}`.trim() || user.displayName || 'User'}
                 </h3>
                 <p className="text-sm text-gray-600 truncate">{user.email}</p>
                 <div className="flex items-center space-x-2 mt-1">
@@ -196,7 +223,7 @@ const EnhancedProfileDropdown: React.FC<EnhancedProfileDropdownProps> = ({
           <div className="p-2">
             <button
               onClick={() => {
-                // TODO: Implement profile settings
+                switchTab({ id: TabKeys.PROFILE_SETTINGS, name: 'Profile Settings' });
                 setIsOpen(false);
               }}
               className="w-full flex items-center space-x-3 px-4 py-3 rounded-lg hover:bg-gray-50 transition-colors duration-200 group"

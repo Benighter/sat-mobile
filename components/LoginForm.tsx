@@ -85,13 +85,13 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSignIn, onGoogleSignIn, 
       <div className="bg-white/90 backdrop-blur-xl rounded-3xl shadow-2xl p-8 border border-white/30">
         {/* Single Logo Header */}
         <div className="text-center mb-8">
-          <div className="mx-auto w-16 h-16 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center mb-4 shadow-lg transform hover:scale-105 transition-transform duration-200">
-            <Church className="w-8 h-8 text-white" />
+          <div className="mx-auto w-20 h-20 bg-white rounded-2xl flex items-center justify-center mb-4 shadow-lg transform hover:scale-105 transition-transform duration-200 p-1">
+            <img src="/logo.png" alt="First Love Church" className="w-full h-full object-contain" />
           </div>
           <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-1">
             SAT Mobile
           </h1>
-          <p className="text-gray-500 text-sm">Welcome back</p>
+          <p className="text-gray-500 text-sm">Welcome to First Love Church</p>
         </div>
 
         {/* Error Message */}

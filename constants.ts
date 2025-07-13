@@ -10,6 +10,7 @@ export const FIXED_TABS: TabOption[] = [
   { id: TabKeys.CRITICAL_MEMBERS, name: 'Critical Alerts' },
   { id: TabKeys.ATTENDANCE_ANALYTICS, name: 'Attendance Analytics' },
   { id: TabKeys.NEW_BELIEVERS, name: 'New Believers' },
+  { id: TabKeys.PROFILE_SETTINGS, name: 'Profile Settings' },
 ];
 
 export const CONSECUTIVE_ABSENCE_THRESHOLD = 2;
