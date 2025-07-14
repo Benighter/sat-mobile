@@ -1,8 +1,7 @@
 
 import { Member, AttendanceRecord, AttendanceStatus, Bacenta, NewBeliever } from '../types';
 // CONGREGATION_GROUPS removed from imports
-import { formatDateToYYYYMMDD, getSundaysOfMonth } from '../utils/dateUtils';
-import { memoize } from '../utils/performance';
+import { formatDateToYYYYMMDD } from '../utils/dateUtils';
 
 const MEMBERS_KEY = 'church_members';
 const ATTENDANCE_KEY = 'church_attendance';
@@ -17,33 +16,9 @@ const getInitialMembers = (): Member[] => {
   return []; 
 };
 
-const getInitialAttendance = (members: Member[]): AttendanceRecord[] => {
-  const records: AttendanceRecord[] = [];
-  if (members.length === 0) { // If no members, no initial attendance
-    return records;
-  }
-  
-  const today = new Date();
-  const currentMonthSundays = getSundaysOfMonth(today.getFullYear(), today.getMonth());
-
-  members.forEach(member => {
-    currentMonthSundays.forEach((sundayDate, index) => {
-      // Simulate some attendance data - This part is now less relevant if getInitialMembers is empty
-      // but kept for structure if initial members were to be re-introduced with specific attendance.
-      if (member.id === 'm1' && index < 2) { 
-        records.push({ id: `${member.id}_${sundayDate}`, memberId: member.id, date: sundayDate, status: 'Present' });
-      } else if (member.id === 'm2' && index === 0) { 
-         records.push({ id: `${member.id}_${sundayDate}`, memberId: member.id, date: sundayDate, status: 'Present' });
-      } else if (member.id === 'm2' && (index === 1 || index === 2)) { 
-         records.push({ id: `${member.id}_${sundayDate}`, memberId: member.id, date: sundayDate, status: 'Absent' });
-      } else if (Math.random() > 0.3) { 
-        records.push({ id: `${member.id}_${sundayDate}`, memberId: member.id, date: sundayDate, status: 'Present' });
-      } else {
-         records.push({ id: `${member.id}_${sundayDate}`, memberId: member.id, date: sundayDate, status: 'Absent' });
-      }
-    });
-  });
-  return records;
+const getInitialAttendance = (): AttendanceRecord[] => {
+  // Return empty array - no sample attendance data
+  return [];
 };
 
 
@@ -67,7 +42,7 @@ export const MemberService = {
     const now = new Date().toISOString();
     const newMember: Member = {
       ...memberData,
-      id: `m_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      id: `m_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`,
       createdDate: now,
       lastUpdated: now,
       // Ensure joinedDate is set, defaulting to today if not provided (though form should provide it)
@@ -98,7 +73,7 @@ export const MemberService = {
 
         // Create unique ID with timestamp and random component to avoid collisions
         const timestamp = Date.now();
-        const random = Math.random().toString(36).substr(2, 9);
+        const random = Math.random().toString(36).substring(2, 11);
         const newMember: Member = {
           ...memberData,
           id: `m_${timestamp}_${random}`,
@@ -161,8 +136,7 @@ export const AttendanceService = {
   getAttendance: async (): Promise<AttendanceRecord[]> => {
     const data = localStorage.getItem(ATTENDANCE_KEY);
      if (!data) {
-      const members = await MemberService.getMembers(); 
-      const initialAttendance = getInitialAttendance(members); // Will be empty if members is empty
+      const initialAttendance = getInitialAttendance(); // Will be empty - no sample data
       localStorage.setItem(ATTENDANCE_KEY, JSON.stringify(initialAttendance));
       return initialAttendance;
     }
@@ -218,7 +192,7 @@ export const BacentaService = { // Renamed from CongregationService
   addBacenta: async (name: string): Promise<Bacenta> => {
     const bacentas = await BacentaService.getBacentas();
     const newBacenta: Bacenta = {
-      id: `bacenta_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+      id: `bacenta_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       name,
     };
     bacentas.push(newBacenta);
@@ -261,7 +235,7 @@ export const NewBelieverService = {
     const now = new Date().toISOString();
     const newBeliever: NewBeliever = {
       ...newBelieverData,
-      id: `newbeliever_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+      id: `newbeliever_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       createdDate: now,
       lastUpdated: now,
     };

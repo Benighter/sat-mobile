@@ -1,7 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { useAppContext } from '../contexts/FirebaseAppContext';
 import { storageInfo, backupStorage } from '../utils/localStorage';
-import { initializeSampleData } from '../utils/sampleData';
 import Button from './ui/Button';
 import Modal from './ui/Modal';
 import ExcelExportModal from './ExcelExportModal';
@@ -103,20 +102,7 @@ const DataManagement: React.FC<DataManagementProps> = ({ isOpen, onClose }) => {
     });
   };
 
-  const handleInitializeSampleData = () => {
-    try {
-      initializeSampleData();
-      setImportStatus('success');
-      setImportMessage('Sample data has been loaded! The page will refresh to show the new data.');
-      setTimeout(() => {
-        window.location.reload();
-      }, 2000);
-    } catch (error) {
-      console.error('Failed to initialize sample data:', error);
-      setImportStatus('error');
-      setImportMessage('Failed to load sample data. Please try again.');
-    }
-  };
+
 
   const getDataStats = () => {
     const lastBackup = backupStorage.getLastBackupTime();
@@ -173,28 +159,7 @@ const DataManagement: React.FC<DataManagementProps> = ({ isOpen, onClose }) => {
           </div>
         </div>
 
-        {/* Sample Data */}
-        {(members.length === 0 && bacentas.length === 0) && (
-          <div className="space-y-4">
-            <h3 className="text-lg font-semibold text-gray-800">Quick Start</h3>
 
-            <div className="bg-purple-50 border border-purple-200 rounded-xl p-4">
-              <h4 className="font-medium text-purple-800 mb-2">🚀 Load Sample Data</h4>
-              <p className="text-sm text-purple-700 mb-3">
-                Get started quickly with sample members, bacentas, and attendance data.
-                Perfect for testing the table views and exploring features.
-              </p>
-              <Button
-                onClick={handleInitializeSampleData}
-                variant="primary"
-                className="flex items-center space-x-2 bg-purple-600 hover:bg-purple-700"
-              >
-                <UsersIcon className="w-5 h-5" />
-                <span>Load Sample Data</span>
-              </Button>
-            </div>
-          </div>
-        )}
 
         {/* Excel Export */}
         <div className="space-y-4">
