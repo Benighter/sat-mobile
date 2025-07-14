@@ -8,7 +8,7 @@ import DashboardView from './components/DashboardView';
 import {
   LazyWrapper,
   LazyMemberListView,
-  LazyBacentasTableView,
+  LazyBacentaLeadersView,
   LazyCriticalMembersView,
   LazyAttendanceAnalyticsView,
   LazyWeeklyAttendanceView,
@@ -139,7 +139,7 @@ const AppContent: React.FC = memo(() => {
       case TabKeys.ALL_BACENTAS:
         return (
           <LazyWrapper>
-            <LazyBacentasTableView />
+            <LazyBacentaLeadersView />
           </LazyWrapper>
         );
       case TabKeys.ATTENDANCE_ANALYTICS:

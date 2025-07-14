@@ -38,7 +38,9 @@ interface AppContextType {
   isBacentaDrawerOpen: boolean;
   isNewBelieverFormOpen: boolean;
   editingNewBeliever: NewBeliever | null;
-  
+  isHierarchyModalOpen: boolean;
+  hierarchyBacentaLeader: Member | null;
+
   // Confirmation Modal
   confirmationModal: {
     isOpen: boolean;
@@ -95,7 +97,9 @@ interface AppContextType {
   closeBacentaDrawer: () => void;
   openNewBelieverForm: (newBeliever?: NewBeliever) => void;
   closeNewBelieverForm: () => void;
-  
+  openHierarchyModal: (bacentaLeader: Member) => void;
+  closeHierarchyModal: () => void;
+
   // Navigation
   switchTab: (tab: TabOption) => void;
   navigateToPreviousMonth: () => void;
@@ -139,7 +143,9 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
   const [isBacentaDrawerOpen, setIsBacentaDrawerOpen] = useState(false);
   const [isNewBelieverFormOpen, setIsNewBelieverFormOpen] = useState(false);
   const [editingNewBeliever, setEditingNewBeliever] = useState<NewBeliever | null>(null);
-  
+  const [isHierarchyModalOpen, setIsHierarchyModalOpen] = useState(false);
+  const [hierarchyBacentaLeader, setHierarchyBacentaLeader] = useState<Member | null>(null);
+
   // Confirmation modal
   const [confirmationModal, setConfirmationModal] = useState<{
     isOpen: boolean;
@@ -657,6 +663,16 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     setIsNewBelieverFormOpen(false);
   }, []);
 
+  const openHierarchyModal = useCallback((bacentaLeader: Member) => {
+    setHierarchyBacentaLeader(bacentaLeader);
+    setIsHierarchyModalOpen(true);
+  }, []);
+
+  const closeHierarchyModal = useCallback(() => {
+    setHierarchyBacentaLeader(null);
+    setIsHierarchyModalOpen(false);
+  }, []);
+
   // Navigation handlers
   const switchTab = useCallback((tab: TabOption) => {
     if (!isNavigatingBack.current) {
@@ -818,6 +834,8 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     isBacentaDrawerOpen,
     isNewBelieverFormOpen,
     editingNewBeliever,
+    isHierarchyModalOpen,
+    hierarchyBacentaLeader,
 
     // Confirmation Modal
     confirmationModal,
@@ -865,6 +883,8 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     closeBacentaDrawer,
     openNewBelieverForm,
     closeNewBelieverForm,
+    openHierarchyModal,
+    closeHierarchyModal,
 
     // Navigation
     switchTab,

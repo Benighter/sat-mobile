@@ -232,10 +232,10 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
               />
               <NavigationItem
                 icon={<GroupIcon className="w-4 h-4" />}
-                label="All Bacentas"
+                label="All Bacenta Leaders"
                 isActive={currentTab.id === TabKeys.ALL_BACENTAS}
                 onClick={() => {
-                  switchTab({ id: TabKeys.ALL_BACENTAS, name: 'All Bacentas' });
+                  switchTab({ id: TabKeys.ALL_BACENTAS, name: 'All Bacenta Leaders' });
                   onClose();
                 }}
               />

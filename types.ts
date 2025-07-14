@@ -9,6 +9,7 @@ export interface Member {
   buildingAddress: string;
   bornAgainStatus: boolean;
   bacentaId: string; // Renamed from congregationGroup, stores Bacenta.id, empty if unassigned
+  bacentaLeaderId?: string; // For Fellowship Leaders: ID of the Bacenta Leader they report to
   role: MemberRole; // Role assignment: Member (default), Fellowship Leader, or Bacenta Leader
   joinedDate: string; // ISO string, YYYY-MM-DD from form
   createdDate: string; // ISO string

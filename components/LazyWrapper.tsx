@@ -12,6 +12,7 @@ const LoadingFallback: React.FC = () => (
 export const LazyAttendanceAnalyticsView = lazy(() => import('./AttendanceAnalyticsView'));
 export const LazyMemberListView = lazy(() => import('./MemberListView'));
 export const LazyBacentasTableView = lazy(() => import('./BacentasTableView'));
+export const LazyBacentaLeadersView = lazy(() => import('./BacentaLeadersView'));
 export const LazyCriticalMembersView = lazy(() => import('./CriticalMembersView'));
 export const LazyWeeklyAttendanceView = lazy(() => import('./WeeklyAttendanceView'));
 export const LazyNewBelieversView = lazy(() => import('./NewBelieversView'));

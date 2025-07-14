@@ -8,7 +8,7 @@ import DashboardView from './components/DashboardView';
 import {
   LazyWrapper,
   LazyMemberListView,
-  LazyBacentasTableView,
+  LazyBacentaLeadersView,
   LazyCriticalMembersView,
   LazyAttendanceAnalyticsView,
   LazyWeeklyAttendanceView,
@@ -26,6 +26,7 @@ import BulkMemberAddModal from './components/BulkMemberAddModal';
 import BacentaFormModal from './components/BacentaFormModal'; // Import BacentaFormModal
 import BacentaDrawer from './components/BacentaDrawer'; // Import BacentaDrawer
 import NewBelieverFormModal from './components/NewBelieverFormModal'; // Import NewBelieverFormModal
+import HierarchyModal from './components/HierarchyModal';
 import DataManagement from './components/DataManagement';
 import EnhancedProfileDropdown from './components/EnhancedProfileDropdown';
 import { DeleteMemberModal, DeleteBacentaModal, DeleteNewBelieverModal, ClearAllDataModal, ClearSelectedDataModal } from './components/ConfirmationModal';
@@ -49,6 +50,9 @@ const AppContent: React.FC = memo(() => {
     isNewBelieverFormOpen,
     editingNewBeliever,
     closeNewBelieverForm,
+    isHierarchyModalOpen,
+    hierarchyBacentaLeader,
+    closeHierarchyModal,
     bacentas,
     members,
     newBelievers,
@@ -151,7 +155,7 @@ const AppContent: React.FC = memo(() => {
       case TabKeys.ALL_BACENTAS:
         return (
           <LazyWrapper>
-            <LazyBacentasTableView />
+            <LazyBacentaLeadersView />
           </LazyWrapper>
         );
       case TabKeys.ATTENDANCE_ANALYTICS:
@@ -302,6 +306,13 @@ const AppContent: React.FC = memo(() => {
           newBeliever={editingNewBeliever}
         />
       )}
+
+      {/* Hierarchy Modal */}
+      <HierarchyModal
+        isOpen={isHierarchyModalOpen}
+        bacentaLeader={hierarchyBacentaLeader}
+        onClose={closeHierarchyModal}
+      />
 
       {/* Bacenta Drawer */}
       <BacentaDrawer

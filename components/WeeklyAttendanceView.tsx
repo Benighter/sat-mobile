@@ -116,9 +116,36 @@ const WeeklyAttendanceView: React.FC = () => {
         attendanceData.attendanceList.forEach((attendance, index) => {
           text += `${attendance.bacenta.name}\n`;
 
-          // Add regular members
-          attendance.presentMembers.forEach((member, memberIndex) => {
-            text += `${memberIndex + 1}. ${member.firstName} ${member.lastName}\n`;
+          // Sort members by role hierarchy for text output
+          const getRolePriority = (role: string | undefined) => {
+            switch (role) {
+              case 'Bacenta Leader': return 1;
+              case 'Fellowship Leader': return 2;
+              case 'Member': return 3;
+              default: return 4;
+            }
+          };
+
+          const sortedMembers = [...attendance.presentMembers].sort((a, b) => {
+            const rolePriorityA = getRolePriority(a.role);
+            const rolePriorityB = getRolePriority(b.role);
+
+            if (rolePriorityA !== rolePriorityB) {
+              return rolePriorityA - rolePriorityB;
+            }
+
+            return a.lastName.localeCompare(b.lastName) || a.firstName.localeCompare(b.firstName);
+          });
+
+          // Add regular members with role indicators
+          sortedMembers.forEach((member, memberIndex) => {
+            let roleIndicator = '';
+            if (member.role === 'Bacenta Leader') {
+              roleIndicator = ' 💚';
+            } else if (member.role === 'Fellowship Leader') {
+              roleIndicator = ' ❤️';
+            }
+            text += `${memberIndex + 1}. ${member.firstName} ${member.lastName}${roleIndicator}\n`;
           });
 
           // Add new believers
@@ -234,17 +261,56 @@ const WeeklyAttendanceView: React.FC = () => {
                   </div>
 
                   <div className="space-y-2">
-                    {/* Regular Members */}
-                    {attendance.presentMembers.map((member, index) => (
-                      <div key={member.id} className="flex items-center space-x-3">
-                        <span className="text-gray-600 font-medium w-8">
-                          {index + 1}.
-                        </span>
-                        <span className="text-gray-800">
-                          {member.firstName} {member.lastName}
-                        </span>
-                      </div>
-                    ))}
+                    {/* Regular Members - Sorted by Role Hierarchy */}
+                    {(() => {
+                      // Sort members by role priority: Bacenta Leaders first, then Fellowship Leaders, then Members
+                      const getRolePriority = (role: string | undefined) => {
+                        switch (role) {
+                          case 'Bacenta Leader': return 1;
+                          case 'Fellowship Leader': return 2;
+                          case 'Member': return 3;
+                          default: return 4;
+                        }
+                      };
+
+                      const sortedMembers = [...attendance.presentMembers].sort((a, b) => {
+                        const rolePriorityA = getRolePriority(a.role);
+                        const rolePriorityB = getRolePriority(b.role);
+
+                        if (rolePriorityA !== rolePriorityB) {
+                          return rolePriorityA - rolePriorityB;
+                        }
+
+                        // Within same role, sort by last name, then first name
+                        return a.lastName.localeCompare(b.lastName) || a.firstName.localeCompare(b.firstName);
+                      });
+
+                      return sortedMembers.map((member, index) => (
+                        <div key={member.id} className="flex items-center space-x-3">
+                          <span className="text-gray-600 font-medium w-8">
+                            {index + 1}.
+                          </span>
+                          <div className="flex items-center space-x-2">
+                            <span className="text-gray-800">
+                              {member.firstName} {member.lastName}
+                            </span>
+                            {/* Role Badge */}
+                            {member.role === 'Bacenta Leader' && (
+                              <span className="px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium flex items-center">
+                                <span className="mr-1">💚</span>
+                                Bacenta Leader
+                              </span>
+                            )}
+                            {member.role === 'Fellowship Leader' && (
+                              <span className="px-2 py-1 bg-red-100 text-red-700 rounded-full text-xs font-medium flex items-center">
+                                <span className="mr-1">❤️</span>
+                                Fellowship Leader
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      ));
+                    })()}
 
                     {/* New Believers */}
                     {attendance.presentNewBelievers.map((newBeliever, index) => (
