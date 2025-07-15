@@ -1,12 +1,9 @@
 
 import React, { useState, useMemo } from 'react';
 import { useAppContext } from '../contexts/FirebaseAppContext';
-import MemberCard from './MemberCard';
+
 import MembersTableView from './MembersTableView';
-import { LoadingSpinnerIcon, SearchIcon, UsersIcon, CalendarIcon, ChevronLeftIcon, ChevronRightIcon } from './icons';
-import Input from './ui/Input';
-import Button from './ui/Button';
-import { getMonthName } from '../utils/dateUtils';
+import { LoadingSpinnerIcon, UsersIcon } from './icons';
 
 
 interface MemberListViewProps {
@@ -19,13 +16,8 @@ const MemberListView: React.FC<MemberListViewProps> = ({ bacentaFilter }) => {
     isLoading,
     criticalMemberIds,
     bacentas,
-    currentTab,
-    displayedDate,
-    navigateToPreviousMonth,
-    navigateToNextMonth,
   } = useAppContext();
-  const [searchTerm, setSearchTerm] = useState('');
-  const [viewMode, setViewMode] = useState<'cards' | 'table'>('table');
+
   const [roleFilter, setRoleFilter] = useState<'all' | 'Bacenta Leader' | 'Fellowship Leader' | 'Member'>('all');
 
   const filteredMembers = useMemo(() => {
@@ -51,17 +43,6 @@ const MemberListView: React.FC<MemberListViewProps> = ({ bacentaFilter }) => {
           return false;
         }
 
-        // Filter by search term
-        if (searchTerm) {
-          const lowerSearchTerm = searchTerm.toLowerCase();
-          return (
-            member.firstName.toLowerCase().includes(lowerSearchTerm) ||
-            member.lastName.toLowerCase().includes(lowerSearchTerm) ||
-            member.phoneNumber.toLowerCase().includes(lowerSearchTerm) ||
-            (member.bacentaId && bacentas.find(b => b.id === member.bacentaId)?.name.toLowerCase().includes(lowerSearchTerm)) || // Search by Bacenta name
-            member.buildingAddress.toLowerCase().includes(lowerSearchTerm)
-          );
-        }
         return true;
       })
       .sort((a, b) => {
@@ -76,7 +57,7 @@ const MemberListView: React.FC<MemberListViewProps> = ({ bacentaFilter }) => {
         // Then sort by last name, then first name within the same role
         return a.lastName.localeCompare(b.lastName) || a.firstName.localeCompare(b.firstName);
       });
-  }, [members, bacentaFilter, searchTerm, bacentas, roleFilter]);
+  }, [members, bacentaFilter, bacentas, roleFilter]);
 
   if (isLoading && !members.length) {
     return (
@@ -86,159 +67,12 @@ const MemberListView: React.FC<MemberListViewProps> = ({ bacentaFilter }) => {
       </div>
     );
   }
-  
-  // Get displayed month info
-  const currentMonthName = getMonthName(displayedDate.getMonth());
-  const currentYear = displayedDate.getFullYear();
+
 
   return (
     <div className="animate-fade-in">
-      {/* Enhanced Header */}
-      <div className="mb-8 glass p-6 shadow-2xl rounded-2xl">
-        <div className="flex flex-col sm:flex-row justify-between items-center mb-6">
-          <div className="text-center sm:text-left">
-            <h2 className="text-3xl font-bold gradient-text flex items-center justify-center sm:justify-start font-serif">
-              <div className="w-10 h-10 bg-gradient-to-br from-gray-600 to-gray-700 rounded-xl flex items-center justify-center mr-3 floating">
-                <UsersIcon className="w-6 h-6 text-white" />
-              </div>
-              {currentTab.name}
-            </h2>
-            <div className="flex items-center justify-center sm:justify-start space-x-2 mt-2">
-              <span className="text-2xl">👥</span>
-              <p className="text-lg font-medium text-gray-600">{filteredMembers.length} member(s) found</p>
-            </div>
-
-            {/* Role Statistics */}
-            <div className="flex flex-wrap items-center justify-center sm:justify-start gap-3 mt-3">
-              <div className="flex items-center space-x-1 bg-green-100 px-3 py-1 rounded-full">
-                <span>💚</span>
-                <span className="text-sm font-semibold text-green-700">
-                  {filteredMembers.filter(m => (m.role || 'Member') === 'Bacenta Leader').length} Bacenta Leaders
-                </span>
-              </div>
-              <div className="flex items-center space-x-1 bg-red-100 px-3 py-1 rounded-full">
-                <span>❤️</span>
-                <span className="text-sm font-semibold text-red-700">
-                  {filteredMembers.filter(m => (m.role || 'Member') === 'Fellowship Leader').length} Fellowship Leaders
-                </span>
-              </div>
-              <div className="flex items-center space-x-1 bg-gray-100 px-3 py-1 rounded-full">
-                <span>👤</span>
-                <span className="text-sm font-semibold text-gray-700">
-                  {filteredMembers.filter(m => (m.role || 'Member') === 'Member').length} Members
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Enhanced Search and View Toggle */}
-          <div className="mt-4 sm:mt-0 flex flex-col sm:flex-row items-center space-y-3 sm:space-y-0 sm:space-x-4">
-            {/* Search */}
-            <div className="w-full sm:w-auto sm:max-w-sm">
-              <div className="relative group">
-                <Input
-                  type="text"
-                  placeholder="Search members..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-12 pr-4 py-3 glass border-0 rounded-xl text-gray-700 placeholder-gray-500 focus:ring-2 focus:ring-gray-500/50 transition-all duration-200"
-                  wrapperClassName="relative mb-0"
-                  aria-label="Search members"
-                />
-                <SearchIcon className="w-5 h-5 text-gray-500 absolute left-4 top-1/2 transform -translate-y-1/2 group-hover:scale-110 transition-transform" />
-                {searchTerm && (
-                  <button
-                    onClick={() => setSearchTerm('')}
-                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
-                  >
-                    ✕
-                  </button>
-                )}
-              </div>
-            </div>
 
 
-
-            {/* View Toggle */}
-            <div className="flex items-center glass rounded-xl p-1 shadow-lg">
-              <button
-                onClick={() => setViewMode('cards')}
-                className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-all duration-200 ${
-                  viewMode === 'cards'
-                    ? 'bg-white shadow-md text-gray-900'
-                    : 'text-gray-600 hover:text-gray-900'
-                }`}
-              >
-                <div className="w-4 h-4 grid grid-cols-1 gap-1">
-                  <div className="bg-current rounded-sm"></div>
-                  <div className="bg-current rounded-sm"></div>
-                  <div className="bg-current rounded-sm"></div>
-                </div>
-                <span className="text-sm font-medium">Cards</span>
-              </button>
-              <button
-                onClick={() => setViewMode('table')}
-                className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-all duration-200 ${
-                  viewMode === 'table'
-                    ? 'bg-white shadow-md text-gray-900'
-                    : 'text-gray-600 hover:text-gray-900'
-                }`}
-              >
-                <div className="w-4 h-4 grid grid-cols-3 gap-0.5">
-                  <div className="bg-current rounded-sm"></div>
-                  <div className="bg-current rounded-sm"></div>
-                  <div className="bg-current rounded-sm"></div>
-                  <div className="bg-current rounded-sm"></div>
-                  <div className="bg-current rounded-sm"></div>
-                  <div className="bg-current rounded-sm"></div>
-                </div>
-                <span className="text-sm font-medium">Table</span>
-              </button>
-            </div>
-          </div>
-        </div>
-        
-        {/* Month Navigation - Only for Cards View */}
-        {viewMode === 'cards' && (
-          <div className="mt-6 pt-6 border-t border-white/20">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 bg-gradient-to-br from-purple-100 to-purple-200 rounded-xl flex items-center justify-center">
-                  <CalendarIcon className="w-5 h-5 text-purple-600" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold gradient-text">Attendance Period</h3>
-                  <p className="text-sm text-gray-600">{currentMonthName} {currentYear}</p>
-                </div>
-              </div>
-
-              <div className="flex items-center space-x-2">
-                <button
-                  onClick={navigateToPreviousMonth}
-                  className="group flex items-center space-x-2 px-4 py-2 glass hover:bg-white/20 rounded-xl transition-all duration-200 hover:scale-105"
-                  aria-label="Previous month for attendance"
-                >
-                  <ChevronLeftIcon className="w-5 h-5 text-gray-600 group-hover:-translate-x-1 transition-transform" />
-                  <span className="hidden sm:inline font-medium text-gray-700">Previous</span>
-                </button>
-                <button
-                  onClick={navigateToNextMonth}
-                  className="group flex items-center space-x-2 px-4 py-2 glass hover:bg-white/20 rounded-xl transition-all duration-200 hover:scale-105"
-                  aria-label="Next month for attendance"
-                >
-                  <span className="hidden sm:inline font-medium text-gray-700">Next</span>
-                  <ChevronRightIcon className="w-5 h-5 text-gray-600 group-hover:translate-x-1 transition-transform" />
-                </button>
-              </div>
-            </div>
-            <div className="bg-gradient-to-r from-gray-100 to-gray-200 p-3 rounded-xl">
-              <p className="text-sm text-gray-700 text-center">
-                📊 Attendance data shown for <span className="font-semibold">{currentMonthName} {currentYear}</span>
-              </p>
-            </div>
-          </div>
-        )}
-      </div>
 
       {/* Enhanced Empty State */}
       {filteredMembers.length === 0 && !isLoading && (
@@ -247,19 +81,13 @@ const MemberListView: React.FC<MemberListViewProps> = ({ bacentaFilter }) => {
             <UsersIcon className="w-12 h-12 text-gray-400" />
           </div>
           <h3 className="text-2xl font-bold gradient-text mb-3">No Members Found</h3>
-          {searchTerm && (
-            <div className="space-y-2">
-              <p className="text-gray-600">No results for "<span className="font-semibold text-primary-600">{searchTerm}</span>"</p>
-              <p className="text-sm text-gray-500">Try adjusting your search terms</p>
-            </div>
-          )}
-          {!bacentaFilter && !searchTerm && (
+          {!bacentaFilter && (
             <div className="space-y-2">
               <p className="text-gray-600">Ready to build your community?</p>
               <p className="text-sm text-gray-500">Add your first member using the floating action button</p>
             </div>
           )}
-          {bacentaFilter && !searchTerm && (
+          {bacentaFilter && (
             <div className="space-y-2">
               <p className="text-gray-600">This Bacenta is waiting for members</p>
               <p className="text-sm text-gray-500">Add members to get started with attendance tracking</p>
@@ -268,27 +96,10 @@ const MemberListView: React.FC<MemberListViewProps> = ({ bacentaFilter }) => {
         </div>
       )}
 
-      {/* Member List - Cards or Table View */}
-      {viewMode === 'cards' ? (
-        <div className="space-y-6">
-          {filteredMembers.map((member, index) => (
-            <div
-              key={member.id}
-              className="animate-fade-in"
-              style={{ animationDelay: `${index * 0.1}s` }}
-            >
-              <MemberCard
-                member={member}
-                isCritical={criticalMemberIds.includes(member.id)}
-              />
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="animate-fade-in">
-          <MembersTableView bacentaFilter={bacentaFilter} />
-        </div>
-      )}
+      {/* Member List - Table View Only */}
+      <div className="animate-fade-in">
+        <MembersTableView bacentaFilter={bacentaFilter} />
+      </div>
     </div>
   );
 };
