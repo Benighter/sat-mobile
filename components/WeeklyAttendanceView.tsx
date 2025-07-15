@@ -184,164 +184,169 @@ const WeeklyAttendanceView: React.FC = () => {
   const canGoNext = selectedSunday < getTodayYYYYMMDD();
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 p-4 sm:p-6 lg:p-8">
+    <div className="min-h-screen bg-gray-50 p-4 sm:p-6 lg:p-8">
       <div className="max-w-4xl mx-auto">
-        {/* Header */}
-        <div className="glass p-6 rounded-2xl shadow-lg mb-6">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center space-x-3">
-              <div className="p-3 bg-gradient-to-r from-blue-500 to-blue-600 rounded-xl">
-                <CalendarIcon className="w-6 h-6 text-white" />
+        {/* Paper-like Container */}
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+          {/* Header */}
+          <div className="border-b border-gray-200 pt-8 pb-6 px-6 text-center">
+            {/* Title */}
+            <div className="mb-6">
+              <div className="flex justify-center mb-2">
+                <CalendarIcon className="w-7 h-7 text-blue-600" />
               </div>
-              <div>
-                <h1 className="text-2xl font-bold gradient-text">Weekly Attendance</h1>
-                <p className="text-gray-600">Sunday attendance summary by bacenta</p>
+              <h1 className="text-2xl font-semibold text-gray-900">Weekly Attendance</h1>
+              <p className="text-gray-600 text-sm mt-1">Sunday attendance summary</p>
+            </div>
+
+            {/* Date Navigation */}
+            <div className="flex items-center justify-center space-x-4 mb-4">
+              <button
+                onClick={handlePreviousSunday}
+                className="flex items-center justify-center w-28 py-2 border border-gray-200 text-gray-600 hover:text-gray-900 hover:border-gray-300 rounded-md transition-colors duration-200"
+              >
+                <ChevronLeftIcon className="w-4 h-4 mr-1" />
+                <span className="text-sm font-medium">Previous</span>
+              </button>
+
+              <div className="text-center px-4">
+                <h2 className="text-lg font-semibold text-gray-900">
+                  {formatFullDate(selectedSunday)}
+                </h2>
               </div>
+
+              <button
+                onClick={handleNextSunday}
+                disabled={!canGoNext}
+                className={`flex items-center justify-center w-28 py-2 border rounded-md transition-colors duration-200 ${
+                  canGoNext
+                    ? 'border-gray-200 text-gray-600 hover:text-gray-900 hover:border-gray-300'
+                    : 'border-gray-100 text-gray-300 cursor-not-allowed'
+                }`}
+              >
+                <span className="text-sm font-medium">Next</span>
+                <ChevronRightIcon className="w-4 h-4 ml-1" />
+              </button>
             </div>
 
             {/* Copy Button */}
             <button
               onClick={copyAttendanceText}
-              className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl"
+              className="inline-flex items-center space-x-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors duration-200 text-sm font-medium"
               title="Copy attendance as text"
             >
-              <ClipboardIcon className="w-5 h-5" />
-              <span className="hidden sm:inline font-medium">Copy</span>
+              <ClipboardIcon className="w-4 h-4" />
+              <span>Copy Attendance</span>
             </button>
           </div>
 
-          {/* Date Navigation */}
-          <div className="flex items-center justify-between">
-            <button
-              onClick={handlePreviousSunday}
-              className="flex items-center space-x-2 px-4 py-2 bg-white/50 hover:bg-white/70 rounded-xl transition-all duration-200 border border-gray-200"
-            >
-              <ChevronLeftIcon className="w-5 h-5 text-gray-600" />
-              <span className="text-sm font-medium text-gray-700">Previous</span>
-            </button>
-
-            <div className="text-center">
-              <h2 className="text-xl font-bold text-gray-800">
-                {formatFullDate(selectedSunday)}
-              </h2>
-            </div>
-
-            <button
-              onClick={handleNextSunday}
-              disabled={!canGoNext}
-              className={`flex items-center space-x-2 px-4 py-2 rounded-xl transition-all duration-200 border border-gray-200 ${
-                canGoNext 
-                  ? 'bg-white/50 hover:bg-white/70 text-gray-700' 
-                  : 'bg-gray-100 text-gray-400 cursor-not-allowed'
-              }`}
-            >
-              <span className="text-sm font-medium">Next</span>
-              <ChevronRightIcon className="w-5 h-5" />
-            </button>
-          </div>
-        </div>
-
-        {/* Attendance Summary */}
-        <div className="space-y-4">
-          {attendanceData.attendanceList.length === 0 ? (
-            <div className="glass p-8 rounded-2xl shadow-lg text-center">
-              <UsersIcon className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-xl font-semibold text-gray-600 mb-2">No Attendance Records</h3>
-              <p className="text-gray-500">No one was marked present for this Sunday.</p>
-            </div>
-          ) : (
-            <>
-              {attendanceData.attendanceList.map((attendance) => (
-                <div key={attendance.bacenta.id} className="glass p-6 rounded-2xl shadow-lg">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-xl font-bold text-gray-800">{attendance.bacenta.name}</h3>
-                    <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-semibold">
-                      Total: {attendance.total}
-                    </span>
-                  </div>
-
-                  <div className="space-y-2">
-                    {/* Regular Members - Sorted by Role Hierarchy */}
-                    {(() => {
-                      // Sort members by role priority: Bacenta Leaders first, then Fellowship Leaders, then Members
-                      const getRolePriority = (role: string | undefined) => {
-                        switch (role) {
-                          case 'Bacenta Leader': return 1;
-                          case 'Fellowship Leader': return 2;
-                          case 'Member': return 3;
-                          default: return 4;
-                        }
-                      };
-
-                      const sortedMembers = [...attendance.presentMembers].sort((a, b) => {
-                        const rolePriorityA = getRolePriority(a.role);
-                        const rolePriorityB = getRolePriority(b.role);
-
-                        if (rolePriorityA !== rolePriorityB) {
-                          return rolePriorityA - rolePriorityB;
-                        }
-
-                        // Within same role, sort by last name, then first name
-                        return a.lastName.localeCompare(b.lastName) || a.firstName.localeCompare(b.firstName);
-                      });
-
-                      return sortedMembers.map((member, index) => (
-                        <div key={member.id} className="flex items-center space-x-3">
-                          <span className="text-gray-600 font-medium w-8">
-                            {index + 1}.
-                          </span>
-                          <div className="flex items-center space-x-2">
-                            <span className="text-gray-800">
-                              {member.firstName} {member.lastName}
-                            </span>
-                            {/* Role Badge */}
-                            {member.role === 'Bacenta Leader' && (
-                              <span className="px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium flex items-center">
-                                <span className="mr-1">💚</span>
-                                Bacenta Leader
-                              </span>
-                            )}
-                            {member.role === 'Fellowship Leader' && (
-                              <span className="px-2 py-1 bg-red-100 text-red-700 rounded-full text-xs font-medium flex items-center">
-                                <span className="mr-1">❤️</span>
-                                Fellowship Leader
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      ));
-                    })()}
-
-                    {/* New Believers */}
-                    {attendance.presentNewBelievers.map((newBeliever, index) => (
-                      <div key={newBeliever.id} className="flex items-center space-x-3">
-                        <span className="text-gray-600 font-medium w-8">
-                          {attendance.presentMembers.length + index + 1}.
-                        </span>
-                        <span className="text-gray-800">
-                          {newBeliever.name} {newBeliever.surname}
-                        </span>
-                        <span className="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs font-medium">
-                          New Believer
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
-
-              {/* Grand Total */}
-              <div className="glass p-6 rounded-2xl shadow-lg bg-gradient-to-r from-blue-500 to-blue-600 text-white">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-xl font-bold">Grand Total</h3>
-                  <span className="text-3xl font-bold">{attendanceData.grandTotal}</span>
-                </div>
-                <p className="text-blue-100 mt-2">
-                  Total attendance across all bacentas for {formatFullDate(selectedSunday)}
-                </p>
+          {/* Attendance Content */}
+          <div className="p-6">
+            {attendanceData.attendanceList.length === 0 ? (
+              <div className="text-center py-12">
+                <UsersIcon className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-gray-600 mb-1">No Attendance Records</h3>
+                <p className="text-gray-500 text-sm">No one was marked present for this Sunday.</p>
               </div>
-            </>
-          )}
+            ) : (
+              <>
+                {/* Attendance List */}
+                <div className="divide-y divide-gray-100">
+                  {attendanceData.attendanceList.map((attendance, bacentaIndex) => {
+                    // Sort members by role priority
+                    const getRolePriority = (role: string | undefined) => {
+                      switch (role) {
+                        case 'Bacenta Leader': return 1;
+                        case 'Fellowship Leader': return 2;
+                        case 'Member': return 3;
+                        default: return 4;
+                      }
+                    };
+
+                    const sortedMembers = [...attendance.presentMembers].sort((a, b) => {
+                      const rolePriorityA = getRolePriority(a.role);
+                      const rolePriorityB = getRolePriority(b.role);
+
+                      if (rolePriorityA !== rolePriorityB) {
+                        return rolePriorityA - rolePriorityB;
+                      }
+
+                      return a.lastName.localeCompare(b.lastName) || a.firstName.localeCompare(b.firstName);
+                    });
+
+                    return (
+                      <div key={attendance.bacenta.id} className={`py-4 ${bacentaIndex > 0 ? 'pt-6' : ''}`}>
+                        {/* Bacenta Header */}
+                        <div className="flex items-center justify-between mb-3">
+                          <h3 className="text-lg font-medium text-gray-900">{attendance.bacenta.name}</h3>
+                          <span className="text-sm font-medium text-gray-700">
+                            Total: {attendance.total}
+                          </span>
+                        </div>
+
+                        {/* Members List */}
+                        <div className="space-y-2 pl-2">
+                          {sortedMembers.map((member, index) => (
+                            <div key={member.id} className="flex items-start">
+                              <span className="text-gray-500 text-sm font-medium w-6 pt-0.5">
+                                {index + 1}.
+                              </span>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="text-gray-900">
+                                  {member.firstName} {member.lastName}
+                                </span>
+                                {/* Role Indicator */}
+                                {member.role === 'Bacenta Leader' && (
+                                  <span className="inline-flex items-center text-xs text-green-700">
+                                    <span className="mr-1">💚</span>
+                                    <span className="hidden sm:inline">Bacenta Leader</span>
+                                  </span>
+                                )}
+                                {member.role === 'Fellowship Leader' && (
+                                  <span className="inline-flex items-center text-xs text-red-700">
+                                    <span className="mr-1">❤️</span>
+                                    <span className="hidden sm:inline">Fellowship Leader</span>
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+
+                          {/* New Believers */}
+                          {attendance.presentNewBelievers.map((newBeliever, index) => (
+                            <div key={newBeliever.id} className="flex items-start">
+                              <span className="text-gray-500 text-sm font-medium w-6 pt-0.5">
+                                {attendance.presentMembers.length + index + 1}.
+                              </span>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="text-gray-900">
+                                  {newBeliever.name} {newBeliever.surname}
+                                </span>
+                                <span className="text-xs text-green-700">
+                                  New Believer
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Grand Total */}
+                <div className="mt-8 pt-6 border-t border-gray-200">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-lg font-medium text-gray-900">Grand Total</h3>
+                    <span className="text-2xl font-semibold text-blue-600">{attendanceData.grandTotal}</span>
+                  </div>
+                  <p className="text-sm text-gray-500 mt-1">
+                    Total attendance across all bacentas for {formatFullDate(selectedSunday)}
+                  </p>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
     </div>
