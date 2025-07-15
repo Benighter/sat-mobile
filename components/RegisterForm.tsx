@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { authService } from '../services/firebaseService';
-import { UserIcon, EyeIcon, EyeSlashIcon, ChurchIcon, PhoneIcon, EnvelopeIcon } from './icons';
+import { UserIcon, EyeIcon, EyeSlashIcon, PhoneIcon, EnvelopeIcon } from './icons';
 import Button from './ui/Button';
 
 // Utility function to convert Firebase errors to user-friendly messages
@@ -51,7 +51,7 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, onSwitchToLogin,
     email: '',
     password: '',
     confirmPassword: '',
-    churchName: '',
+    churchName: 'First Love Church',
     phoneNumber: ''
   });
   
@@ -95,9 +95,6 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, onSwitchToLogin,
     } else if (formData.password !== formData.confirmPassword) {
       newErrors.confirmPassword = 'Passwords do not match';
     }
-    if (!formData.churchName.trim()) {
-      newErrors.churchName = 'Church name is required';
-    }
 
     // Optional phone number validation
     if (formData.phoneNumber && !/^[0-9+\-\s()]+$/.test(formData.phoneNumber)) {
@@ -126,7 +123,7 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, onSwitchToLogin,
       });
 
       showToast('success', 'Registration Successful!',
-        `Welcome to SAT Mobile! Your church "${formData.churchName}" has been set up.`);
+        'Welcome to SAT Mobile! Welcome to First Love Church.');
       onSuccess();
     } catch (error: any) {
       showToast('error', 'Registration Failed', getErrorMessage(error.message || error.code || error.toString()));
@@ -203,26 +200,7 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, onSwitchToLogin,
           )}
         </div>
 
-        {/* Church Name */}
-        <div>
-          <div className="relative">
-            <ChurchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-            <input
-              type="text"
-              name="churchName"
-              value={formData.churchName}
-              onChange={handleInputChange}
-              className={`w-full pl-10 pr-4 py-3.5 bg-gray-50/50 border rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 focus:bg-white transition-all duration-200 placeholder-gray-400 ${
-                errors.churchName ? 'border-red-300 bg-red-50' : 'border-gray-200'
-              }`}
-              placeholder="Church name"
-              required
-            />
-          </div>
-          {errors.churchName && (
-            <p className="text-red-500 text-xs mt-1">{errors.churchName}</p>
-          )}
-        </div>
+
 
         {/* Phone Number */}
         <div>
