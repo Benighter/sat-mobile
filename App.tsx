@@ -19,7 +19,6 @@ import GestureWrapper from './components/GestureWrapper';
 import SwipeIndicator from './components/SwipeIndicator';
 import {
   LoadingSpinnerIcon,
-  RefreshIcon,
   Bars3Icon,
   ChartBarIcon,
   UsersIcon,
@@ -204,14 +203,14 @@ const AppContent: React.FC = memo(() => {
       {/* Fixed Header - Clean Single Line Design */}
       <header className="fixed top-0 left-0 right-0 z-50 bg-gradient-to-r from-blue-50/95 via-white/95 to-indigo-50/95 backdrop-blur-md border-b border-gray-200/50 shadow-xl">
         <div className="container mx-auto px-3 sm:px-6 py-3 sm:py-4">
-          <div className="flex items-center justify-between">
+          <div className="relative flex items-center justify-between">
 
             {/* Left Section - Hamburger Menu and Logo */}
-            <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-3 sm:space-x-4">
               {/* Hamburger Menu */}
               <button
                 onClick={openBacentaDrawer}
-                className="group flex items-center space-x-2 px-3 py-2 text-gray-600 hover:text-gray-900 transition-all duration-300 rounded-lg hover:bg-white/50"
+                className="group flex items-center space-x-2 px-2 sm:px-3 py-2 text-gray-600 hover:text-gray-900 transition-all duration-300 rounded-lg hover:bg-white/50"
                 title="Open Navigation Menu"
                 aria-label="Open Navigation Menu"
               >
@@ -226,14 +225,14 @@ const AppContent: React.FC = memo(() => {
                 )}
               </button>
 
-              {/* Logo and Title */}
+              {/* Logo - Always visible */}
               <button
                 onClick={() => switchTab({ id: 'dashboard', name: 'Dashboard' })}
-                className="flex items-center space-x-3 transition-all duration-300 group"
+                className="flex items-center space-x-2 sm:space-x-3 transition-all duration-300 group"
                 aria-label="Go to Dashboard"
                 title="Go to Dashboard"
               >
-                <div className="w-10 h-10 sm:w-12 sm:h-12 bg-white rounded-xl flex items-center justify-center shadow-lg group-hover:shadow-xl transition-all duration-300 ring-2 ring-blue-100 p-0.5">
+                <div className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 bg-white rounded-lg sm:rounded-xl flex items-center justify-center shadow-lg group-hover:shadow-xl transition-all duration-300 ring-2 ring-blue-100 p-0.5">
                   <img src="/logo.png" alt="First Love Church" className="w-full h-full object-contain" />
                 </div>
                 <div className="hidden sm:block">
@@ -247,42 +246,30 @@ const AppContent: React.FC = memo(() => {
               </button>
             </div>
 
-            {/* Right Section - Actions and Profile */}
-            <div className="flex items-center space-x-2 sm:space-x-3">
-              {/* Current Tab Indicator - Mobile Only */}
-              <div className="sm:hidden flex items-center space-x-2 px-2 py-1.5 bg-white/20 rounded-lg border border-white/30">
-                <div className="w-4 h-4">
-                  {(() => {
-                    switch (currentTab.id) {
-                      case 'dashboard': return <ChartBarIcon className="w-full h-full text-gray-600" />;
-                      case 'all_members': return <UsersIcon className="w-full h-full text-gray-600" />;
-                      case 'all_bacentas': return <GroupIcon className="w-full h-full text-gray-600" />;
-                      case 'critical_members': return <WarningIcon className="w-full h-full text-gray-600" />;
-                      case 'attendance_analytics': return <ChartBarIcon className="w-full h-full text-gray-600" />;
-                      case 'weekly_attendance': return <UsersIcon className="w-full h-full text-gray-600" />;
-                      case 'new_believers': return <UsersIcon className="w-full h-full text-gray-600" />;
-                      case 'profile_settings': return <UserIcon className="w-full h-full text-gray-600" />;
-                      default: return <GroupIcon className="w-full h-full text-gray-600" />;
-                    }
-                  })()}
-                </div>
-                <span className="text-gray-700 font-medium text-xs truncate max-w-[80px]">
-                  {currentTab.name}
-                </span>
+            {/* Center Section - Current Tab Indicator (All Screens) */}
+            <div className="absolute left-1/2 transform -translate-x-1/2 flex items-center space-x-2 px-3 py-2 bg-white/20 rounded-lg border border-white/30">
+              <div className="w-5 h-5">
+                {(() => {
+                  switch (currentTab.id) {
+                    case 'dashboard': return <ChartBarIcon className="w-full h-full text-gray-600" />;
+                    case 'all_members': return <UsersIcon className="w-full h-full text-gray-600" />;
+                    case 'all_bacentas': return <GroupIcon className="w-full h-full text-gray-600" />;
+                    case 'critical_members': return <WarningIcon className="w-full h-full text-gray-600" />;
+                    case 'attendance_analytics': return <ChartBarIcon className="w-full h-full text-gray-600" />;
+                    case 'weekly_attendance': return <UsersIcon className="w-full h-full text-gray-600" />;
+                    case 'new_believers': return <UsersIcon className="w-full h-full text-gray-600" />;
+                    case 'profile_settings': return <UserIcon className="w-full h-full text-gray-600" />;
+                    default: return <GroupIcon className="w-full h-full text-gray-600" />;
+                  }
+                })()}
               </div>
+              <span className="text-gray-700 font-medium text-sm truncate max-w-[100px] sm:max-w-[150px]">
+                {currentTab.name}
+              </span>
+            </div>
 
-              {/* Refresh Button */}
-              <button
-                onClick={() => {
-                  fetchInitialData();
-                }}
-                className="p-2 sm:p-2.5 rounded-lg glass hover:glass-dark transition-all duration-300 group shadow-lg"
-                aria-label="Refresh Data"
-                title="Refresh Data"
-              >
-                <RefreshIcon className="w-5 h-5 text-gray-600 group-hover:text-white transition-all duration-300" />
-              </button>
-
+            {/* Right Section - Profile */}
+            <div className="flex items-center space-x-2 sm:space-x-3">
               {/* Enhanced Profile Dropdown */}
               <EnhancedProfileDropdown
                 user={user}

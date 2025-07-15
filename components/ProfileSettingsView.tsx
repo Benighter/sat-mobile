@@ -4,7 +4,6 @@ import { userService } from '../services/userService';
 import Button from './ui/Button';
 import Input from './ui/Input';
 import {
-  BellIcon,
   MoonIcon,
   SunIcon,
   UserIcon,
@@ -17,11 +16,7 @@ import {
 } from './icons';
 
 interface UserPreferences {
-  notifications: boolean;
   theme: 'light' | 'dark' | 'system';
-  emailNotifications: boolean;
-  attendanceReminders: boolean;
-  weeklyReports: boolean;
   allowEditPreviousSundays: boolean;
 }
 
@@ -36,11 +31,7 @@ const ProfileSettingsView: React.FC = () => {
   const { userProfile, user, showToast, refreshUserProfile } = useAppContext();
   
   const [preferences, setPreferences] = useState<UserPreferences>({
-    notifications: userProfile?.preferences?.notifications ?? true,
     theme: userProfile?.preferences?.theme ?? 'light',
-    emailNotifications: userProfile?.preferences?.emailNotifications ?? true,
-    attendanceReminders: userProfile?.preferences?.attendanceReminders ?? true,
-    weeklyReports: userProfile?.preferences?.weeklyReports ?? false,
     allowEditPreviousSundays: userProfile?.preferences?.allowEditPreviousSundays ?? true
   });
 
@@ -59,11 +50,7 @@ const ProfileSettingsView: React.FC = () => {
   useEffect(() => {
     if (userProfile) {
       setPreferences({
-        notifications: userProfile.preferences?.notifications ?? true,
         theme: userProfile.preferences?.theme ?? 'light',
-        emailNotifications: userProfile.preferences?.emailNotifications ?? true,
-        attendanceReminders: userProfile.preferences?.attendanceReminders ?? true,
-        weeklyReports: userProfile.preferences?.weeklyReports ?? false,
         allowEditPreviousSundays: userProfile.preferences?.allowEditPreviousSundays ?? true
       });
 
@@ -272,95 +259,6 @@ const ProfileSettingsView: React.FC = () => {
         </div>
       </div>
 
-      {/* Notification Preferences */}
-      <div className="glass-card p-6 rounded-2xl">
-        <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
-          <BellIcon className="w-5 h-5 mr-2 text-blue-600" />
-          Notifications
-        </h2>
-
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="font-medium text-gray-900">Push Notifications</h3>
-              <p className="text-sm text-gray-500">Receive notifications on your device</p>
-            </div>
-            <button
-              type="button"
-              onClick={() => handlePreferenceChange('notifications', !preferences.notifications)}
-              className={`relative inline-flex h-6 w-12 items-center rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
-                preferences.notifications ? 'bg-blue-600 shadow-lg' : 'bg-gray-300'
-              }`}
-            >
-              <span
-                className={`inline-block h-4 w-4 transform rounded-md bg-white transition-all duration-200 shadow-sm ${
-                  preferences.notifications ? 'translate-x-7' : 'translate-x-1'
-                }`}
-              />
-            </button>
-          </div>
-
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="font-medium text-gray-900">Email Notifications</h3>
-              <p className="text-sm text-gray-500">Receive updates via email</p>
-            </div>
-            <button
-              type="button"
-              onClick={() => handlePreferenceChange('emailNotifications', !preferences.emailNotifications)}
-              className={`relative inline-flex h-6 w-12 items-center rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
-                preferences.emailNotifications ? 'bg-blue-600 shadow-lg' : 'bg-gray-300'
-              }`}
-            >
-              <span
-                className={`inline-block h-4 w-4 transform rounded-md bg-white transition-all duration-200 shadow-sm ${
-                  preferences.emailNotifications ? 'translate-x-7' : 'translate-x-1'
-                }`}
-              />
-            </button>
-          </div>
-
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="font-medium text-gray-900">Attendance Reminders</h3>
-              <p className="text-sm text-gray-500">Get reminded about attendance tracking</p>
-            </div>
-            <button
-              type="button"
-              onClick={() => handlePreferenceChange('attendanceReminders', !preferences.attendanceReminders)}
-              className={`relative inline-flex h-6 w-12 items-center rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
-                preferences.attendanceReminders ? 'bg-blue-600 shadow-lg' : 'bg-gray-300'
-              }`}
-            >
-              <span
-                className={`inline-block h-4 w-4 transform rounded-md bg-white transition-all duration-200 shadow-sm ${
-                  preferences.attendanceReminders ? 'translate-x-7' : 'translate-x-1'
-                }`}
-              />
-            </button>
-          </div>
-
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="font-medium text-gray-900">Weekly Reports</h3>
-              <p className="text-sm text-gray-500">Receive weekly attendance summaries</p>
-            </div>
-            <button
-              type="button"
-              onClick={() => handlePreferenceChange('weeklyReports', !preferences.weeklyReports)}
-              className={`relative inline-flex h-6 w-12 items-center rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
-                preferences.weeklyReports ? 'bg-blue-600 shadow-lg' : 'bg-gray-300'
-              }`}
-            >
-              <span
-                className={`inline-block h-4 w-4 transform rounded-md bg-white transition-all duration-200 shadow-sm ${
-                  preferences.weeklyReports ? 'translate-x-7' : 'translate-x-1'
-                }`}
-              />
-            </button>
-          </div>
-        </div>
-      </div>
 
       {/* App Preferences */}
       <div className="glass-card p-6 rounded-2xl">

@@ -8,10 +8,7 @@ import {
   ArrowRightOnRectangleIcon,
   ChevronDownIcon,
   PlusIcon,
-  ClipboardIcon,
-  RefreshIcon,
-  ChartBarIcon,
-  BellIcon
+  ClipboardIcon
 } from './icons';
 
 interface EnhancedProfileDropdownProps {
@@ -198,16 +195,7 @@ const EnhancedProfileDropdown: React.FC<EnhancedProfileDropdownProps> = ({
                 <ClipboardIcon className="w-4 h-4 text-green-600" />
                 <span className="text-sm font-medium text-green-700">Bulk Add</span>
               </button>
-              <button
-                onClick={() => {
-                  fetchInitialData();
-                  setIsOpen(false);
-                }}
-                className="flex items-center space-x-2 p-3 rounded-lg bg-purple-50 hover:bg-purple-100 transition-colors duration-200 group"
-              >
-                <RefreshIcon className="w-4 h-4 text-purple-600" />
-                <span className="text-sm font-medium text-purple-700">Refresh</span>
-              </button>
+
               <button
                 onClick={() => {
                   onOpenDataManagement?.();
@@ -234,27 +222,7 @@ const EnhancedProfileDropdown: React.FC<EnhancedProfileDropdownProps> = ({
               <span className="text-sm font-medium text-gray-700 group-hover:text-gray-900">Profile Settings</span>
             </button>
             
-            <button
-              onClick={() => {
-                // TODO: Implement notifications
-                setIsOpen(false);
-              }}
-              className="w-full flex items-center space-x-3 px-4 py-3 rounded-lg hover:bg-gray-50 transition-colors duration-200 group"
-            >
-              <BellIcon className="w-5 h-5 text-gray-500 group-hover:text-gray-700" />
-              <span className="text-sm font-medium text-gray-700 group-hover:text-gray-900">Notifications</span>
-            </button>
 
-            <button
-              onClick={() => {
-                switchTab({ id: TabKeys.ATTENDANCE_ANALYTICS, name: 'Attendance Analytics' });
-                setIsOpen(false);
-              }}
-              className="w-full flex items-center space-x-3 px-4 py-3 rounded-lg hover:bg-gray-50 transition-colors duration-200 group"
-            >
-              <ChartBarIcon className="w-5 h-5 text-gray-500 group-hover:text-gray-700" />
-              <span className="text-sm font-medium text-gray-700 group-hover:text-gray-900">Analytics</span>
-            </button>
           </div>
 
           {/* Logout */}

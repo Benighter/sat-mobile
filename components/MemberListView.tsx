@@ -157,19 +157,7 @@ const MemberListView: React.FC<MemberListViewProps> = ({ bacentaFilter }) => {
               </div>
             </div>
 
-            {/* Role Filter */}
-            <div className="w-full sm:w-auto">
-              <select
-                value={roleFilter}
-                onChange={(e) => setRoleFilter(e.target.value as 'all' | 'Bacenta Leader' | 'Fellowship Leader' | 'Member')}
-                className="w-full px-4 py-3 glass border-0 rounded-xl text-gray-700 focus:ring-2 focus:ring-gray-500/50 transition-all duration-200 cursor-pointer"
-              >
-                <option value="all">All Roles</option>
-                <option value="Bacenta Leader">💚 Bacenta Leaders</option>
-                <option value="Fellowship Leader">❤️ Fellowship Leaders</option>
-                <option value="Member">👤 Members</option>
-              </select>
-            </div>
+
 
             {/* View Toggle */}
             <div className="flex items-center glass rounded-xl p-1 shadow-lg">

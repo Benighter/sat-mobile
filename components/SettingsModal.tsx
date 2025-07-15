@@ -6,7 +6,6 @@ import Button from './ui/Button';
 import Input from './ui/Input';
 import DataManagement from './DataManagement';
 import {
-  BellIcon,
   MoonIcon,
   SunIcon,
   InformationCircleIcon,
@@ -23,11 +22,7 @@ interface SettingsModalProps {
 }
 
 interface UserPreferences {
-  notifications: boolean;
   theme: 'light' | 'dark' | 'system';
-  emailNotifications: boolean;
-  attendanceReminders: boolean;
-  weeklyReports: boolean;
   allowEditPreviousSundays: boolean;
 }
 
@@ -45,11 +40,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   onUpdate 
 }) => {
   const [preferences, setPreferences] = useState<UserPreferences>({
-    notifications: currentUser?.preferences?.notifications ?? true,
     theme: currentUser?.preferences?.theme ?? 'light',
-    emailNotifications: currentUser?.preferences?.emailNotifications ?? true,
-    attendanceReminders: currentUser?.preferences?.attendanceReminders ?? true,
-    weeklyReports: currentUser?.preferences?.weeklyReports ?? false,
     allowEditPreviousSundays: currentUser?.preferences?.allowEditPreviousSundays ?? true
   });
 
@@ -132,26 +123,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     }
   };
 
-  const ToggleSwitch: React.FC<{
-    enabled: boolean;
-    onChange: (enabled: boolean) => void;
-    disabled?: boolean;
-  }> = ({ enabled, onChange, disabled = false }) => (
-    <button
-      type="button"
-      onClick={() => !disabled && onChange(!enabled)}
-      className={`relative inline-flex h-6 w-12 items-center rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
-        enabled ? 'bg-blue-600 shadow-lg' : 'bg-gray-300'
-      } ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
-      disabled={disabled}
-    >
-      <span
-        className={`inline-block h-4 w-4 transform rounded-md bg-white transition-all duration-200 shadow-sm ${
-          enabled ? 'translate-x-7' : 'translate-x-1'
-        }`}
-      />
-    </button>
-  );
 
   return (
     <Modal
@@ -239,60 +210,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 value={profileData.phoneNumber}
                 onChange={handleProfileChange}
                 placeholder="Enter phone number"
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Notification Settings */}
-        <div className="bg-gray-50 p-4 rounded-lg">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center space-x-2">
-            <BellIcon className="w-5 h-5 text-blue-600" />
-            <span>Notifications</span>
-          </h3>
-          
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="font-medium text-gray-700">Push Notifications</p>
-                <p className="text-sm text-gray-500">Receive notifications in the app</p>
-              </div>
-              <ToggleSwitch
-                enabled={preferences.notifications}
-                onChange={(value) => handlePreferenceChange('notifications', value)}
-              />
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="font-medium text-gray-700">Email Notifications</p>
-                <p className="text-sm text-gray-500">Receive important updates via email</p>
-              </div>
-              <ToggleSwitch
-                enabled={preferences.emailNotifications}
-                onChange={(value) => handlePreferenceChange('emailNotifications', value)}
-              />
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="font-medium text-gray-700">Attendance Reminders</p>
-                <p className="text-sm text-gray-500">Get reminded about upcoming services</p>
-              </div>
-              <ToggleSwitch
-                enabled={preferences.attendanceReminders}
-                onChange={(value) => handlePreferenceChange('attendanceReminders', value)}
-              />
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="font-medium text-gray-700">Weekly Reports</p>
-                <p className="text-sm text-gray-500">Receive weekly attendance summaries</p>
-              </div>
-              <ToggleSwitch
-                enabled={preferences.weeklyReports}
-                onChange={(value) => handlePreferenceChange('weeklyReports', value)}
               />
             </div>
           </div>

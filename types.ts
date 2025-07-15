@@ -78,11 +78,7 @@ export interface NavigationHistoryItem {
 }
 
 export interface UserPreferences {
-  notifications: boolean;
   theme: 'light' | 'dark' | 'system';
-  emailNotifications: boolean;
-  attendanceReminders: boolean;
-  weeklyReports: boolean;
   allowEditPreviousSundays: boolean;
 }
 

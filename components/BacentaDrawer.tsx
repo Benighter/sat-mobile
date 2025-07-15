@@ -213,24 +213,6 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
             </h3>
             <div className="space-y-2">
               <NavigationItem
-                icon={<ChartBarIcon className="w-4 h-4" />}
-                label="Dashboard"
-                isActive={currentTab.id === TabKeys.DASHBOARD}
-                onClick={() => {
-                  switchTab({ id: TabKeys.DASHBOARD, name: 'Dashboard' });
-                  onClose();
-                }}
-              />
-              <NavigationItem
-                icon={<UsersIcon className="w-4 h-4" />}
-                label="All Members"
-                isActive={currentTab.id === TabKeys.ALL_CONGREGATIONS}
-                onClick={() => {
-                  switchTab({ id: TabKeys.ALL_CONGREGATIONS, name: 'All Members' });
-                  onClose();
-                }}
-              />
-              <NavigationItem
                 icon={<GroupIcon className="w-4 h-4" />}
                 label="All Bacenta Leaders"
                 isActive={currentTab.id === TabKeys.ALL_BACENTAS}
@@ -250,38 +232,11 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
                 badge={criticalMemberIds.length > 0 ? criticalMemberIds.length : undefined}
               />
               <NavigationItem
-                icon={<ChartBarIcon className="w-4 h-4" />}
-                label="Attendance Analytics"
-                isActive={currentTab.id === TabKeys.ATTENDANCE_ANALYTICS}
-                onClick={() => {
-                  switchTab({ id: TabKeys.ATTENDANCE_ANALYTICS, name: 'Attendance Analytics' });
-                  onClose();
-                }}
-              />
-              <NavigationItem
-                icon={<UsersIcon className="w-4 h-4" />}
-                label="Weekly Attendance"
-                isActive={currentTab.id === TabKeys.WEEKLY_ATTENDANCE}
-                onClick={() => {
-                  switchTab({ id: TabKeys.WEEKLY_ATTENDANCE, name: 'Weekly Attendance' });
-                  onClose();
-                }}
-              />
-              <NavigationItem
                 icon={<UsersIcon className="w-4 h-4" />}
                 label="New Believers"
                 isActive={currentTab.id === TabKeys.NEW_BELIEVERS}
                 onClick={() => {
                   switchTab({ id: TabKeys.NEW_BELIEVERS, name: 'New Believers' });
-                  onClose();
-                }}
-              />
-              <NavigationItem
-                icon={<UserIcon className="w-4 h-4" />}
-                label="Profile Settings"
-                isActive={currentTab.id === TabKeys.PROFILE_SETTINGS}
-                onClick={() => {
-                  switchTab({ id: TabKeys.PROFILE_SETTINGS, name: 'Profile Settings' });
                   onClose();
                 }}
               />
