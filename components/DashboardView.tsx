@@ -1,8 +1,8 @@
 
 import React, { memo } from 'react';
 import { useAppContext } from '../contexts/FirebaseAppContext';
-import { PeopleIcon, AttendanceIcon, AlertIcon, ChartBarIcon, ChevronRightIcon } from './icons';
-import { getMonthName } from '../utils/dateUtils';
+import { PeopleIcon, AttendanceIcon, CalendarIcon, ChartBarIcon, ChevronRightIcon } from './icons';
+import { getMonthName, getCurrentOrMostRecentSunday, formatFullDate } from '../utils/dateUtils';
 
 interface StatCardProps {
   title: string;
@@ -56,13 +56,13 @@ const StatCard: React.FC<StatCardProps> = memo(({ title, value, icon, colorClass
 
 
 const DashboardView: React.FC = memo(() => {
-  const { members, attendanceRecords, criticalMemberIds, bacentas, displayedSundays, displayedDate, switchTab } = useAppContext(); // Use displayedSundays
+  const { members, attendanceRecords, newBelievers, bacentas, displayedSundays, displayedDate, switchTab } = useAppContext(); // Use displayedSundays
 
   const totalMembers = members.length;
   
   const currentMonthAttendancePercentage = () => {
     if (!displayedSundays.length || !members.length) return 0;
-    
+
     let totalPossibleAttendances = members.length * displayedSundays.length;
     let actualPresents = 0;
 
@@ -74,9 +74,38 @@ const DashboardView: React.FC = memo(() => {
         }
       });
     });
-    
+
     return totalPossibleAttendances > 0 ? Math.round((actualPresents / totalPossibleAttendances) * 100) : 0;
   };
+
+  // Calculate current week's attendance
+  const getCurrentWeekAttendance = () => {
+    const currentSunday = getCurrentOrMostRecentSunday();
+
+    // Get all attendance records for the current Sunday
+    const sundayRecords = attendanceRecords.filter(
+      record => record.date === currentSunday && record.status === 'Present'
+    );
+
+    // Count present members and new believers
+    const presentMemberIds = sundayRecords
+      .filter(record => record.memberId)
+      .map(record => record.memberId!);
+
+    const presentNewBelieverIds = sundayRecords
+      .filter(record => record.newBelieverId)
+      .map(record => record.newBelieverId!);
+
+    const totalPresent = presentMemberIds.length + presentNewBelieverIds.length;
+
+    return {
+      total: totalPresent,
+      date: currentSunday,
+      formattedDate: formatFullDate(currentSunday)
+    };
+  };
+
+  const weeklyAttendance = getCurrentWeekAttendance();
 
   const membersPerBacenta = bacentas.map(b => { // Renamed from membersPerCongregation
     const count = members.filter(m => m.bacentaId === b.id).length; // Use bacentaId
@@ -119,12 +148,12 @@ const DashboardView: React.FC = memo(() => {
           onClick={() => switchTab({ id: 'attendance_analytics', name: 'Attendance Analytics' })}
         />
         <StatCard
-          title="Critical Alerts"
-          value={criticalMemberIds.length}
-          icon={<AlertIcon className="w-full h-full" />}
-          colorClass="border-red-500"
-          description="Members needing follow-up"
-          onClick={() => switchTab({ id: 'critical_members', name: 'Critical Alerts' })}
+          title="Weekly Attendance"
+          value={weeklyAttendance.total}
+          icon={<CalendarIcon className="w-full h-full" />}
+          colorClass="border-green-500"
+          description={`For ${formatFullDate(weeklyAttendance.date).split(',')[0]}`}
+          onClick={() => switchTab({ id: 'weekly_attendance', name: 'Weekly Attendance' })}
         />
       </div>
 

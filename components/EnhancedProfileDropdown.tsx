@@ -74,12 +74,12 @@ const EnhancedProfileDropdown: React.FC<EnhancedProfileDropdownProps> = ({
 
     // Fall back to userProfile displayName
     if (userProfile?.displayName) {
-      return userProfile.displayName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+      return userProfile.displayName.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2);
     }
 
     // Fall back to auth user displayName
     if (user.displayName) {
-      return user.displayName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+      return user.displayName.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2);
     }
 
     return user.email?.charAt(0).toUpperCase() || 'U';
@@ -123,11 +123,11 @@ const EnhancedProfileDropdown: React.FC<EnhancedProfileDropdownProps> = ({
         aria-label="Open profile menu"
       >
         <ProfileAvatar size="sm" />
-        <div className="hidden sm:block text-left">
-          <p className="text-gray-700 font-medium text-sm truncate max-w-[120px]">
+        <div className="hidden sm:block text-left min-w-0">
+          <p className="text-gray-700 font-medium text-sm truncate max-w-[100px] lg:max-w-[120px]">
             {userProfile?.displayName || `${userProfile?.firstName || ''} ${userProfile?.lastName || ''}`.trim() || user.displayName || 'User'}
           </p>
-          <p className="text-gray-500 text-xs truncate max-w-[120px]">
+          <p className="text-gray-500 text-xs truncate max-w-[100px] lg:max-w-[120px]">
             Church Member
           </p>
         </div>
@@ -136,18 +136,20 @@ const EnhancedProfileDropdown: React.FC<EnhancedProfileDropdownProps> = ({
 
       {/* Dropdown Menu */}
       {isOpen && (
-        <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-2xl shadow-2xl border border-gray-200 z-50 overflow-hidden">
+        <div className="absolute right-0 top-full mt-2 w-80 sm:w-96 bg-white rounded-2xl shadow-2xl border border-gray-200 z-50 overflow-hidden">
           {/* Profile Header */}
-          <div className="p-6 bg-gradient-to-br from-blue-50 to-indigo-50 border-b border-gray-100">
-            <div className="flex items-center space-x-4">
-              <ProfileAvatar size="lg" />
-              <div className="flex-1 min-w-0">
-                <h3 className="font-semibold text-gray-900 truncate text-lg">
+          <div className="p-4 bg-gradient-to-br from-blue-50 to-indigo-50 border-b border-gray-100">
+            <div className="flex items-start space-x-3">
+              <div className="flex-shrink-0">
+                <ProfileAvatar size="lg" />
+              </div>
+              <div className="flex-1 min-w-0 overflow-hidden">
+                <h3 className="font-semibold text-gray-900 text-sm sm:text-base mb-1 truncate">
                   {userProfile?.displayName || `${userProfile?.firstName || ''} ${userProfile?.lastName || ''}`.trim() || user.displayName || 'User'}
                 </h3>
-                <p className="text-sm text-gray-600 truncate">{user.email}</p>
-                <div className="flex items-center space-x-2 mt-1">
-                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                <p className="text-xs text-gray-600 mb-2 break-words overflow-wrap-anywhere">{user.email}</p>
+                <div className="flex items-center space-x-2">
+                  <div className="w-2 h-2 bg-green-500 rounded-full flex-shrink-0"></div>
                   <p className="text-xs text-green-600 font-medium">Online</p>
                 </div>
               </div>

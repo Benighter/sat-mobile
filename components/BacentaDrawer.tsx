@@ -419,14 +419,14 @@ const ToggleSwitch: React.FC<{
   <button
     type="button"
     onClick={() => !disabled && onChange(!enabled)}
-    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
-      enabled ? 'bg-blue-600' : 'bg-gray-200'
+    className={`relative inline-flex h-6 w-12 items-center rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+      enabled ? 'bg-blue-600 shadow-lg' : 'bg-gray-300'
     } ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
     disabled={disabled}
   >
     <span
-      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200 ${
-        enabled ? 'translate-x-6' : 'translate-x-1'
+      className={`inline-block h-4 w-4 transform rounded-md bg-white transition-all duration-200 shadow-sm ${
+        enabled ? 'translate-x-7' : 'translate-x-1'
       }`}
     />
   </button>

@@ -3,7 +3,7 @@ import React, { useEffect, useState, memo } from 'react';
 import { PerformanceMonitor } from './utils/performance';
 import { FirebaseAppProvider, useAppContext } from './contexts/FirebaseAppContext';
 import { AuthScreen } from './components/AuthScreen';
-import Navbar from './components/Navbar';
+
 import DashboardView from './components/DashboardView';
 import {
   LazyWrapper,
@@ -16,10 +16,17 @@ import {
 } from './components/LazyWrapper';
 import ProfileSettingsView from './components/ProfileSettingsView';
 import GestureWrapper from './components/GestureWrapper';
-import BackButton from './components/BackButton';
 import SwipeIndicator from './components/SwipeIndicator';
-import { LoadingSpinnerIcon, RefreshIcon, PlusIcon as AddMemberIcon, CogIcon } from './components/icons'; // Renamed PlusIcon for clarity
-import { ClipboardIcon } from 'lucide-react';
+import {
+  LoadingSpinnerIcon,
+  RefreshIcon,
+  Bars3Icon,
+  ChartBarIcon,
+  UsersIcon,
+  GroupIcon,
+  WarningIcon,
+  UserIcon
+} from './components/icons';
 import { TabKeys } from './types';
 import MemberFormModal from './components/MemberFormModal';
 import BulkMemberAddModal from './components/BulkMemberAddModal';
@@ -46,6 +53,7 @@ const AppContent: React.FC = memo(() => {
     editingBacenta,
     closeBacentaForm,
     isBacentaDrawerOpen,
+    openBacentaDrawer,
     closeBacentaDrawer,
     isNewBelieverFormOpen,
     editingNewBeliever,
@@ -63,7 +71,8 @@ const AppContent: React.FC = memo(() => {
     user,
     switchTab,
     showToast,
-    removeToast
+    removeToast,
+    criticalMemberIds
   } = useAppContext();
 
   // const { canNavigateBack } = useNavigation();
@@ -192,76 +201,101 @@ const AppContent: React.FC = memo(() => {
       {/* Animated background overlay */}
       <div className="fixed inset-0 bg-gradient-to-br from-white/50 via-gray-50/30 to-gray-100/20 pointer-events-none"></div>
 
-      {/* Fixed Header */}
+      {/* Fixed Header - Clean Single Line Design */}
       <header className="fixed top-0 left-0 right-0 z-50 bg-gradient-to-r from-blue-50/95 via-white/95 to-indigo-50/95 backdrop-blur-md border-b border-gray-200/50 shadow-xl">
-        <div className="container mx-auto px-2 sm:px-4 py-2 sm:py-3 md:py-4 flex justify-between items-center">
-          <div className="flex items-center space-x-2 sm:space-x-3 flex-1 min-w-0">
-            {/* {canNavigateBack() && <BackButton />} */}
-            <button
-              onClick={() => switchTab({ id: 'dashboard', name: 'Dashboard' })}
-              className="flex items-center space-x-2 sm:space-x-3 transition-all duration-300 group min-w-0"
-              aria-label="Go to Dashboard"
-              title="Go to Dashboard"
-            >
-              <div className="w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 bg-white rounded-lg sm:rounded-xl flex items-center justify-center shadow-lg group-hover:shadow-xl transition-all duration-300 flex-shrink-0 ring-2 ring-blue-100 p-0.5">
-                <img src="/logo.png" alt="First Love Church" className="w-full h-full object-contain" />
-              </div>
-              <div className="min-w-0 hidden sm:block">
-                <h1 className="text-base sm:text-lg md:text-xl font-bold gradient-text font-serif group-hover:text-gray-700 transition-colors duration-300 truncate">
-                  {isBacentaTab ? currentTab.name : 'SAT Mobile'}
-                </h1>
-                <p className="text-xs text-gray-600 font-medium group-hover:text-gray-700 transition-colors duration-300 hidden md:block">
-                  {isBacentaTab ? 'Bacenta Management' : 'First Love Church'}
-                </p>
-              </div>
-            </button>
-          </div>
-          <div className="flex items-center space-x-1 sm:space-x-2 flex-shrink-0">
-            {/* Quick Actions - Hidden on mobile, shown on larger screens */}
-            <div className="hidden lg:flex items-center space-x-1 mr-2">
+        <div className="container mx-auto px-3 sm:px-6 py-3 sm:py-4">
+          <div className="flex items-center justify-between">
+
+            {/* Left Section - Hamburger Menu and Logo */}
+            <div className="flex items-center space-x-4">
+              {/* Hamburger Menu */}
               <button
-                onClick={() => openMemberForm(null)}
-                className="p-2 sm:p-2.5 md:p-3 rounded-lg sm:rounded-xl glass hover:glass-dark transition-all duration-300 group shadow-lg relative overflow-hidden"
-                aria-label="Add New Member"
-                title="Add New Member"
+                onClick={openBacentaDrawer}
+                className="group flex items-center space-x-2 px-3 py-2 text-gray-600 hover:text-gray-900 transition-all duration-300 rounded-lg hover:bg-white/50"
+                title="Open Navigation Menu"
+                aria-label="Open Navigation Menu"
               >
-                <div className="absolute inset-0 bg-gradient-to-br from-blue-500/8 via-transparent to-blue-600/8 opacity-0 group-hover:opacity-100 transition-all duration-300 rounded-lg sm:rounded-xl"></div>
-                <AddMemberIcon className="w-5 h-5 sm:w-6 sm:h-6 text-gray-600 group-hover:text-blue-100 transition-all duration-300 relative z-10" />
+                <div className="relative">
+                  <Bars3Icon className="w-5 h-5 sm:w-6 sm:h-6 transition-colors duration-200" />
+                </div>
+                <span className="hidden sm:inline font-medium text-sm">Menu</span>
+                {criticalMemberIds.length > 0 && (
+                  <span className="bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full font-bold">
+                    {criticalMemberIds.length}
+                  </span>
+                )}
               </button>
+
+              {/* Logo and Title */}
               <button
-                onClick={() => setIsBulkMemberModalOpen(true)}
-                className="p-2 sm:p-2.5 md:p-3 rounded-lg sm:rounded-xl glass hover:glass-dark transition-all duration-300 group shadow-lg relative overflow-hidden"
-                aria-label="Paste Multiple Members"
-                title="Paste Multiple Members"
+                onClick={() => switchTab({ id: 'dashboard', name: 'Dashboard' })}
+                className="flex items-center space-x-3 transition-all duration-300 group"
+                aria-label="Go to Dashboard"
+                title="Go to Dashboard"
               >
-                <div className="absolute inset-0 bg-gradient-to-br from-green-500/8 via-transparent to-green-600/8 opacity-0 group-hover:opacity-100 transition-all duration-300 rounded-lg sm:rounded-xl"></div>
-                <ClipboardIcon className="w-5 h-5 sm:w-6 sm:h-6 text-gray-600 group-hover:text-green-100 transition-all duration-300 relative z-10" />
+                <div className="w-10 h-10 sm:w-12 sm:h-12 bg-white rounded-xl flex items-center justify-center shadow-lg group-hover:shadow-xl transition-all duration-300 ring-2 ring-blue-100 p-0.5">
+                  <img src="/logo.png" alt="First Love Church" className="w-full h-full object-contain" />
+                </div>
+                <div className="hidden sm:block">
+                  <h1 className="text-lg sm:text-xl font-bold gradient-text font-serif group-hover:text-gray-700 transition-colors duration-300">
+                    {isBacentaTab ? currentTab.name : 'SAT Mobile'}
+                  </h1>
+                  <p className="text-xs text-gray-600 font-medium group-hover:text-gray-700 transition-colors duration-300">
+                    {isBacentaTab ? 'Bacenta Management' : 'First Love Church'}
+                  </p>
+                </div>
               </button>
+            </div>
+
+            {/* Right Section - Actions and Profile */}
+            <div className="flex items-center space-x-2 sm:space-x-3">
+              {/* Current Tab Indicator - Mobile Only */}
+              <div className="sm:hidden flex items-center space-x-2 px-2 py-1.5 bg-white/20 rounded-lg border border-white/30">
+                <div className="w-4 h-4">
+                  {(() => {
+                    switch (currentTab.id) {
+                      case 'dashboard': return <ChartBarIcon className="w-full h-full text-gray-600" />;
+                      case 'all_members': return <UsersIcon className="w-full h-full text-gray-600" />;
+                      case 'all_bacentas': return <GroupIcon className="w-full h-full text-gray-600" />;
+                      case 'critical_members': return <WarningIcon className="w-full h-full text-gray-600" />;
+                      case 'attendance_analytics': return <ChartBarIcon className="w-full h-full text-gray-600" />;
+                      case 'weekly_attendance': return <UsersIcon className="w-full h-full text-gray-600" />;
+                      case 'new_believers': return <UsersIcon className="w-full h-full text-gray-600" />;
+                      case 'profile_settings': return <UserIcon className="w-full h-full text-gray-600" />;
+                      default: return <GroupIcon className="w-full h-full text-gray-600" />;
+                    }
+                  })()}
+                </div>
+                <span className="text-gray-700 font-medium text-xs truncate max-w-[80px]">
+                  {currentTab.name}
+                </span>
+              </div>
+
+              {/* Refresh Button */}
               <button
                 onClick={() => {
                   fetchInitialData();
                 }}
-                className="p-2 sm:p-2.5 md:p-3 rounded-lg sm:rounded-xl glass hover:glass-dark transition-all duration-300 group shadow-lg"
+                className="p-2 sm:p-2.5 rounded-lg glass hover:glass-dark transition-all duration-300 group shadow-lg"
                 aria-label="Refresh Data"
                 title="Refresh Data"
               >
-                <RefreshIcon className="w-5 h-5 sm:w-6 sm:h-6 text-gray-600 group-hover:text-white transition-all duration-300" />
+                <RefreshIcon className="w-5 h-5 text-gray-600 group-hover:text-white transition-all duration-300" />
               </button>
-            </div>
 
-            {/* Enhanced Profile Dropdown - Contains all actions and user info */}
-            <EnhancedProfileDropdown
-              user={user}
-              onOpenBulkMemberModal={() => setIsBulkMemberModalOpen(true)}
-              onOpenDataManagement={() => setIsDataManagementOpen(true)}
-            />
+              {/* Enhanced Profile Dropdown */}
+              <EnhancedProfileDropdown
+                user={user}
+                onOpenBulkMemberModal={() => setIsBulkMemberModalOpen(true)}
+                onOpenDataManagement={() => setIsDataManagementOpen(true)}
+              />
+            </div>
           </div>
         </div>
-        <Navbar />
       </header>
 
       {/* Scrollable Main Content */}
-      <main className="flex-1 overflow-y-auto pt-24 sm:pt-28 md:pt-32 pb-4 sm:pb-6 relative z-10">
+      <main className="flex-1 overflow-y-auto pt-20 sm:pt-24 pb-4 sm:pb-6 relative z-10">
         <GestureWrapper className="h-full">
           <div className="container mx-auto px-2 sm:px-4 py-3 sm:py-4 md:py-6">
             <div className="animate-fade-in">
@@ -441,10 +475,10 @@ const AppContent: React.FC = memo(() => {
 
 // Wrapper component to access context for AuthScreen
 const AuthenticatedApp: React.FC = () => {
-  const { showToast, userProfile } = useAppContext();
+  const { showToast } = useAppContext();
 
   return (
-    <AuthScreen showToast={showToast} userProfile={userProfile}>
+    <AuthScreen showToast={showToast}>
       <AppContent />
     </AuthScreen>
   );

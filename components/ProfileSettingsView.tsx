@@ -288,13 +288,13 @@ const ProfileSettingsView: React.FC = () => {
             <button
               type="button"
               onClick={() => handlePreferenceChange('notifications', !preferences.notifications)}
-              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                preferences.notifications ? 'bg-blue-600' : 'bg-gray-200'
+              className={`relative inline-flex h-6 w-12 items-center rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+                preferences.notifications ? 'bg-blue-600 shadow-lg' : 'bg-gray-300'
               }`}
             >
               <span
-                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                  preferences.notifications ? 'translate-x-6' : 'translate-x-1'
+                className={`inline-block h-4 w-4 transform rounded-md bg-white transition-all duration-200 shadow-sm ${
+                  preferences.notifications ? 'translate-x-7' : 'translate-x-1'
                 }`}
               />
             </button>
@@ -308,13 +308,13 @@ const ProfileSettingsView: React.FC = () => {
             <button
               type="button"
               onClick={() => handlePreferenceChange('emailNotifications', !preferences.emailNotifications)}
-              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                preferences.emailNotifications ? 'bg-blue-600' : 'bg-gray-200'
+              className={`relative inline-flex h-6 w-12 items-center rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+                preferences.emailNotifications ? 'bg-blue-600 shadow-lg' : 'bg-gray-300'
               }`}
             >
               <span
-                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                  preferences.emailNotifications ? 'translate-x-6' : 'translate-x-1'
+                className={`inline-block h-4 w-4 transform rounded-md bg-white transition-all duration-200 shadow-sm ${
+                  preferences.emailNotifications ? 'translate-x-7' : 'translate-x-1'
                 }`}
               />
             </button>
@@ -328,13 +328,13 @@ const ProfileSettingsView: React.FC = () => {
             <button
               type="button"
               onClick={() => handlePreferenceChange('attendanceReminders', !preferences.attendanceReminders)}
-              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                preferences.attendanceReminders ? 'bg-blue-600' : 'bg-gray-200'
+              className={`relative inline-flex h-6 w-12 items-center rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+                preferences.attendanceReminders ? 'bg-blue-600 shadow-lg' : 'bg-gray-300'
               }`}
             >
               <span
-                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                  preferences.attendanceReminders ? 'translate-x-6' : 'translate-x-1'
+                className={`inline-block h-4 w-4 transform rounded-md bg-white transition-all duration-200 shadow-sm ${
+                  preferences.attendanceReminders ? 'translate-x-7' : 'translate-x-1'
                 }`}
               />
             </button>
@@ -348,13 +348,13 @@ const ProfileSettingsView: React.FC = () => {
             <button
               type="button"
               onClick={() => handlePreferenceChange('weeklyReports', !preferences.weeklyReports)}
-              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                preferences.weeklyReports ? 'bg-blue-600' : 'bg-gray-200'
+              className={`relative inline-flex h-6 w-12 items-center rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+                preferences.weeklyReports ? 'bg-blue-600 shadow-lg' : 'bg-gray-300'
               }`}
             >
               <span
-                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                  preferences.weeklyReports ? 'translate-x-6' : 'translate-x-1'
+                className={`inline-block h-4 w-4 transform rounded-md bg-white transition-all duration-200 shadow-sm ${
+                  preferences.weeklyReports ? 'translate-x-7' : 'translate-x-1'
                 }`}
               />
             </button>
