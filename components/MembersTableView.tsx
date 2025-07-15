@@ -62,8 +62,6 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
     return record?.status;
   };
 
-
-
   // Handle attendance toggle with three states: empty -> Present -> Absent -> empty
   const handleAttendanceToggle = async (memberId: string, date: string) => {
     if (!isDateEditable(date, allowEditPreviousSundays)) {
@@ -71,33 +69,25 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
     }
 
     const currentStatus = getAttendanceStatus(memberId, date);
-    console.log('🔄 Toggle attendance:', memberId, date, 'Current:', currentStatus);
 
     // Three-state cycle: empty -> Present -> Absent -> empty
     if (!currentStatus) {
-      // Empty state: mark as Present
-      console.log('➡️ Empty -> Present');
       await markAttendanceHandler(memberId, date, 'Present');
     } else if (currentStatus === 'Present') {
-      // Present state: mark as Absent
-      console.log('➡️ Present -> Absent');
       await markAttendanceHandler(memberId, date, 'Absent');
     } else if (currentStatus === 'Absent') {
-      // Absent state: clear/remove the record (back to empty)
-      console.log('➡️ Absent -> Empty');
       await clearAttendanceHandler(memberId, date);
     }
   };
 
   // Filter and search members
   const filteredMembers = useMemo(() => {
-    // Define role priority for sorting (lower number = higher priority)
     const getRolePriority = (role: string | undefined) => {
       switch (role) {
         case 'Bacenta Leader': return 1;
         case 'Fellowship Leader': return 2;
         case 'Member': return 3;
-        default: return 4; // For any undefined roles
+        default: return 4;
       }
     };
 
@@ -127,7 +117,7 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
         return true;
       })
       .sort((a, b) => {
-        // First sort by role priority (Bacenta Leaders first, then Fellowship Leaders, then Members)
+        // First sort by role priority
         const rolePriorityA = getRolePriority(a.role);
         const rolePriorityB = getRolePriority(b.role);
 
@@ -258,7 +248,7 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
       const isEditable = isDateEditable(sundayDate, allowEditPreviousSundays);
       const today = new Date();
       const todayStr = formatDateToYYYYMMDD(today);
-      const targetDate = new Date(sundayDate + 'T00:00:00'); // Parse as local date
+      const targetDate = new Date(sundayDate + 'T00:00:00');
       const isFuture = sundayDate > todayStr;
       const isPastMonth = targetDate.getFullYear() < today.getFullYear() ||
                         (targetDate.getFullYear() === today.getFullYear() && targetDate.getMonth() < today.getMonth());
@@ -270,19 +260,6 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
             <span className={`text-xs ${!isEditable ? 'text-gray-400' : 'text-gray-700'}`}>
               {formatDisplayDate(sundayDate)}
             </span>
-            {false && !isEditable && (
-              <div className="flex items-center justify-center">
-                {isFuture ? (
-                  <svg className="w-3 h-3 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
-                  </svg>
-                ) : (
-                  <svg className="w-3 h-3 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
-                  </svg>
-                )}
-              </div>
-            )}
           </div>
         ),
         width: '80px',
@@ -293,7 +270,7 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
         const isEditable = isDateEditable(sundayDate, allowEditPreviousSundays);
         const today = new Date();
         const todayStr = formatDateToYYYYMMDD(today);
-        const targetDate = new Date(sundayDate + 'T00:00:00'); // Parse as local date
+        const targetDate = new Date(sundayDate + 'T00:00:00');
         const isFuture = sundayDate > todayStr;
         const isPastMonth = targetDate.getFullYear() < today.getFullYear() ||
                           (targetDate.getFullYear() === today.getFullYear() && targetDate.getMonth() < today.getMonth());
@@ -332,16 +309,6 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
               {status === 'Absent' && (
                 <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-                </svg>
-              )}
-              {false && !isEditable && isFuture && (
-                <svg className="w-3 h-3 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
-                </svg>
-              )}
-              {false && !isEditable && isPastMonth && (
-                <svg className="w-3 h-3 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
                 </svg>
               )}
             </div>
@@ -395,114 +362,95 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
   const currentYear = displayedDate.getFullYear();
 
   return (
-    <div className="space-y-6">
-      {/* Header with month navigation and search */}
-      <div className="glass p-4 rounded-2xl shadow-lg">
-        <div className="flex flex-col space-y-4">
-          {/* Month Navigation */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <CalendarIcon className="w-5 h-5 text-blue-600" />
-              <h3 className="text-lg font-semibold text-gray-800">
-                Attendance for {currentMonthName} {currentYear}
-              </h3>
+    <div className="space-y-3">
+      {/* Clean Header */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+        <div className="text-center">
+          {/* Title */}
+          <div className="flex items-center justify-center space-x-2 mb-3">
+            <CalendarIcon className="w-5 h-5 text-blue-600" />
+            <h2 className="text-xl font-semibold text-gray-900">
+              Attendance for {currentMonthName} {currentYear}
+            </h2>
+          </div>
+          
+          {/* Summary */}
+          <div className="flex items-center justify-center space-x-2 text-sm text-gray-600 mb-3">
+            <span>{currentMonthSundays.length} Sunday{currentMonthSundays.length !== 1 ? 's' : ''} in {currentMonthName}</span>
+            <span>•</span>
+            <span>{filteredMembers.length} member{filteredMembers.length !== 1 ? 's' : ''}</span>
+          </div>
+
+          {/* Role Statistics */}
+          <div className="flex items-center justify-center space-x-4 text-sm mb-4">
+            <div className="flex items-center space-x-1">
+              <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+              <span className="text-gray-700 font-medium">
+                {filteredMembers.filter(m => (m.role || 'Member') === 'Bacenta Leader').length} BL
+              </span>
             </div>
-            <div className="flex items-center space-x-2">
-              <button
-                onClick={navigateToPreviousMonth}
-                className="group flex items-center space-x-2 px-3 py-2 glass hover:bg-white/20 rounded-xl transition-all duration-200 hover:scale-105"
-                aria-label="Previous month"
-              >
-                <ChevronLeftIcon className="w-4 h-4 text-gray-600 group-hover:-translate-x-1 transition-transform" />
-                <span className="hidden sm:inline text-sm font-medium text-gray-700">Previous</span>
-              </button>
-              <button
-                onClick={navigateToNextMonth}
-                className="group flex items-center space-x-2 px-3 py-2 glass hover:bg-white/20 rounded-xl transition-all duration-200 hover:scale-105"
-                aria-label="Next month"
-              >
-                <span className="hidden sm:inline text-sm font-medium text-gray-700">Next</span>
-                <ChevronRightIcon className="w-4 h-4 text-gray-600 group-hover:translate-x-1 transition-transform" />
-              </button>
+            <div className="flex items-center space-x-1">
+              <span className="w-2 h-2 bg-red-500 rounded-full"></span>
+              <span className="text-gray-700 font-medium">
+                {filteredMembers.filter(m => (m.role || 'Member') === 'Fellowship Leader').length} FL
+              </span>
+            </div>
+            <div className="flex items-center space-x-1">
+              <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
+              <span className="text-gray-700 font-medium">
+                {filteredMembers.filter(m => (m.role || 'Member') === 'Member').length} M
+              </span>
             </div>
           </div>
 
-          {/* Search and Info */}
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-3 sm:space-y-0">
-            <div className="flex flex-col space-y-2">
-              <p className="text-sm text-gray-600">
-                {currentMonthSundays.length} Sunday{currentMonthSundays.length !== 1 ? 's' : ''} in {currentMonthName} • {filteredMembers.length} member(s)
-              </p>
+          {/* Navigation */}
+          <div className="flex items-center justify-center space-x-3 mb-4">
+            <button
+              onClick={navigateToPreviousMonth}
+              className="flex items-center space-x-1 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+              aria-label="Previous month"
+            >
+              <ChevronLeftIcon className="w-4 h-4 text-gray-600" />
+              <span className="text-sm text-gray-700">Previous</span>
+            </button>
+            <button
+              onClick={navigateToNextMonth}
+              className="flex items-center space-x-1 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+              aria-label="Next month"
+            >
+              <span className="text-sm text-gray-700">Next</span>
+              <ChevronRightIcon className="w-4 h-4 text-gray-600" />
+            </button>
+          </div>
 
-              {/* Role Statistics */}
-              <div className="flex flex-wrap items-center gap-2 text-xs">
-                <div className="flex items-center space-x-1 bg-green-100 px-2 py-1 rounded">
-                  <span>💚</span>
-                  <span className="font-semibold text-green-700">
-                    {filteredMembers.filter(m => (m.role || 'Member') === 'Bacenta Leader').length} BL
-                  </span>
-                </div>
-                <div className="flex items-center space-x-1 bg-red-100 px-2 py-1 rounded">
-                  <span>❤️</span>
-                  <span className="font-semibold text-red-700">
-                    {filteredMembers.filter(m => (m.role || 'Member') === 'Fellowship Leader').length} FL
-                  </span>
-                </div>
-                <div className="flex items-center space-x-1 bg-gray-100 px-2 py-1 rounded">
-                  <span>👤</span>
-                  <span className="font-semibold text-gray-700">
-                    {filteredMembers.filter(m => (m.role || 'Member') === 'Member').length} M
-                  </span>
-                </div>
-              </div>
-              {/* Smart editing status */}
-              <div className="flex items-center space-x-4 text-xs">
-                <div className="flex items-center space-x-1">
-                  <div className="w-3 h-3 bg-green-500 rounded border"></div>
-                  <span className="text-gray-600">Editable</span>
-                </div>
-                <div className="flex items-center space-x-1">
-                  <div className="w-3 h-3 bg-blue-50 border border-blue-200 rounded"></div>
-                  <span className="text-gray-600">Future</span>
-                </div>
-                <div className="flex items-center space-x-1">
-                  <div className="w-3 h-3 bg-gray-200 border border-gray-300 rounded"></div>
-                    {/* <svg className="w-2 h-2 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
-                    </svg> */}
-
-                  <span className="text-gray-600">Past Month</span>
-                </div>
-              </div>
+          {/* Search and Filter */}
+          <div className="flex flex-col sm:flex-row items-center justify-center space-y-2 sm:space-y-0 sm:space-x-3">
+            <div className="w-full sm:w-64">
+              <Input
+                placeholder="Search members..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="text-center"
+              />
             </div>
-            <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3 w-full sm:w-auto">
-              <div className="w-full sm:w-64">
-                <Input
-                  placeholder="Search members..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="border-0 bg-white/50 focus:bg-white/80 transition-colors"
-                />
-              </div>
-              <div className="w-full sm:w-48">
-                <select
-                  value={roleFilter}
-                  onChange={(e) => setRoleFilter(e.target.value as 'all' | 'Bacenta Leader' | 'Fellowship Leader' | 'Member')}
-                  className="w-full px-3 py-2 border-0 bg-white/50 focus:bg-white/80 rounded-lg transition-colors cursor-pointer"
-                >
-                  <option value="all">All Roles</option>
-                  <option value="Bacenta Leader">💚 Bacenta Leaders</option>
-                  <option value="Fellowship Leader">❤️ Fellowship Leaders</option>
-                  <option value="Member">👤 Members</option>
-                </select>
-              </div>
+            <div className="w-full sm:w-48">
+              <select
+                value={roleFilter}
+                onChange={(e) => setRoleFilter(e.target.value as 'all' | 'Bacenta Leader' | 'Fellowship Leader' | 'Member')}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-center cursor-pointer"
+              >
+                <option value="all">All Roles</option>
+                <option value="Bacenta Leader">💚 Bacenta Leaders</option>
+                <option value="Fellowship Leader">❤️ Fellowship Leaders</option>
+                <option value="Member">👤 Members</option>
+              </select>
             </div>
           </div>
         </div>
       </div>
 
       {/* Members Attendance Table */}
-      <div className="glass rounded-2xl overflow-hidden shadow-2xl">
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
         <div className="overflow-x-auto">
           <Table
             data={filteredMembers}
@@ -520,30 +468,6 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
           />
         </div>
       </div>
-
-      {/* Summary */}
-      {filteredMembers.length > 0 && (
-        <div className="glass p-4 rounded-2xl shadow-lg">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
-            <div className="text-center">
-              <div className="font-semibold text-gray-900">Total Members</div>
-              <div className="text-2xl font-bold text-blue-600">{filteredMembers.length}</div>
-            </div>
-            <div className="text-center">
-              <div className="font-semibold text-gray-900">Critical Alerts</div>
-              <div className="text-2xl font-bold text-red-600">
-                {criticalMemberIds.filter(id => filteredMembers.some(m => m.id === id)).length}
-              </div>
-            </div>
-            <div className="text-center">
-              <div className="font-semibold text-gray-900">Sundays This Month</div>
-              <div className="text-2xl font-bold text-green-600">{currentMonthSundays.length}</div>
-            </div>
-          </div>
-        </div>
-      )}
-
-
     </div>
   );
 };
