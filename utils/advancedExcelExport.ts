@@ -3,6 +3,7 @@ import { Member, Bacenta, AttendanceRecord } from '../types';
 import { formatDateToYYYYMMDD } from './dateUtils';
 
 export interface AdvancedExcelExportOptions {
+  includeCharts: boolean;
   dateRange: {
     startDate: Date;
     endDate: Date;
@@ -293,6 +294,174 @@ const createStyledTable = (
   return currentRow + 1; // Return next available row
 };
 
+// Create charts for the worksheet
+const addChartsToWorksheet = (
+  worksheet: ExcelJS.Worksheet,
+  data: AdvancedExcelData,
+  chartType: 'attendance' | 'bacenta-performance' | 'monthly-trends',
+  startRow: number
+): number => {
+  const { options } = data;
+
+  if (!options.includeCharts) return startRow;
+
+  const colors = COLOR_SCHEMES[options.theme];
+  let currentRow = startRow + 2;
+
+  try {
+    // Add chart section header
+    worksheet.mergeCells(`A${currentRow}:F${currentRow}`);
+    const chartTitleCell = worksheet.getCell(`A${currentRow}`);
+    chartTitleCell.value = `📊 ${chartType.replace('-', ' ').toUpperCase()} CHART DATA`;
+    chartTitleCell.font = {
+      name: 'Calibri',
+      size: 14,
+      bold: true,
+      color: { argb: colors.header }
+    };
+    chartTitleCell.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: colors.background }
+    };
+    chartTitleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+    currentRow += 1;
+
+    // Add instruction note
+    worksheet.mergeCells(`A${currentRow}:F${currentRow}`);
+    const noteCell = worksheet.getCell(`A${currentRow}`);
+    noteCell.value = 'Use this data to create charts in Excel: Select data → Insert → Charts → Choose chart type';
+    noteCell.font = {
+      name: 'Calibri',
+      size: 10,
+      italic: true,
+      color: { argb: colors.secondary }
+    };
+    noteCell.alignment = { horizontal: 'center', vertical: 'middle' };
+    currentRow += 2;
+
+    if (chartType === 'attendance') {
+      // Create attendance trend chart data
+      const sundays = getSundaysInRange(data.options.dateRange.startDate, data.options.dateRange.endDate);
+      const chartData = [
+        ['Date', 'Present', 'Absent', 'Attendance Rate']
+      ];
+
+      sundays.forEach(sunday => {
+        const dateStr = formatDateToYYYYMMDD(sunday);
+        const dayRecords = data.attendanceRecords.filter(r => r.date === dateStr);
+        const presentCount = dayRecords.filter(r => r.status === 'Present').length;
+        const absentCount = dayRecords.filter(r => r.status === 'Absent').length;
+        const total = presentCount + absentCount;
+        const rate = total > 0 ? Math.round((presentCount / total) * 100) : 0;
+
+        chartData.push([
+          sunday.toLocaleDateString(),
+          presentCount.toString(),
+          absentCount.toString(),
+          `${rate}%`
+        ]);
+      });
+
+      currentRow = createStyledTable(worksheet, currentRow, chartData[0], chartData.slice(1), options.theme, 'Attendance Trend Chart Data');
+    }
+
+    if (chartType === 'bacenta-performance') {
+      // Create bacenta performance chart data
+      const chartData = [
+        ['Bacenta Name', 'Members', 'Attendance Rate', 'Performance Score']
+      ];
+
+      data.bacentas.forEach(bacenta => {
+        const bacentaMembers = data.members.filter(m => m.bacentaId === bacenta.id);
+        const bacentaStats = calculateAttendanceStats(bacentaMembers, data.attendanceRecords, data.options.dateRange);
+        const performanceScore = Math.round(
+          (bacentaStats.overallRate * 0.7) +
+          (bacentaMembers.length * 2) +
+          (bacentaMembers.filter(m => m.bornAgainStatus).length * 3)
+        );
+
+        chartData.push([
+          bacenta.name,
+          bacentaStats.totalMembers.toString(),
+          `${bacentaStats.overallRate}%`,
+          performanceScore.toString()
+        ]);
+      });
+
+      currentRow = createStyledTable(worksheet, currentRow, chartData[0], chartData.slice(1), options.theme, 'Bacenta Performance Chart Data');
+    }
+
+    if (chartType === 'monthly-trends') {
+      // Create monthly trends chart data
+      const monthlyData = new Map<string, { present: number; absent: number; total: number }>();
+
+      data.attendanceRecords.forEach(record => {
+        const recordDate = new Date(record.date);
+        if (recordDate >= data.options.dateRange.startDate && recordDate <= data.options.dateRange.endDate) {
+          const monthKey = `${recordDate.getFullYear()}-${String(recordDate.getMonth() + 1).padStart(2, '0')}`;
+
+          if (!monthlyData.has(monthKey)) {
+            monthlyData.set(monthKey, { present: 0, absent: 0, total: 0 });
+          }
+
+          const monthStats = monthlyData.get(monthKey)!;
+          if (record.status === 'Present') {
+            monthStats.present++;
+          } else {
+            monthStats.absent++;
+          }
+          monthStats.total++;
+        }
+      });
+
+      const chartData = [
+        ['Month', 'Present', 'Absent', 'Attendance Rate', 'Trend']
+      ];
+
+      const sortedMonths = Array.from(monthlyData.entries()).sort(([a], [b]) => a.localeCompare(b));
+      let previousRate = 0;
+
+      sortedMonths.forEach(([monthKey, stats], index) => {
+        const [year, month] = monthKey.split('-');
+        const monthName = new Date(parseInt(year), parseInt(month) - 1).toLocaleDateString('en-US', {
+          year: 'numeric',
+          month: 'long'
+        });
+
+        const rate = stats.total > 0 ? Math.round((stats.present / stats.total) * 100) : 0;
+        let trend = 'Stable';
+
+        if (index > 0) {
+          if (rate > previousRate + 5) trend = 'Improving ↗';
+          else if (rate < previousRate - 5) trend = 'Declining ↘';
+          else trend = 'Stable →';
+        }
+
+        chartData.push([
+          monthName,
+          stats.present.toString(),
+          stats.absent.toString(),
+          `${rate}%`,
+          trend
+        ]);
+
+        previousRate = rate;
+      });
+
+      currentRow = createStyledTable(worksheet, currentRow, chartData[0], chartData.slice(1), options.theme, 'Monthly Trends Chart Data');
+    }
+
+  } catch (error) {
+    console.warn('Chart creation failed:', error);
+    // Continue without charts if there's an error
+  }
+
+  return currentRow;
+};
+
+
+
 // Church information constants
 const CHURCH_INFO = {
   name: 'First Love Church',
@@ -412,6 +581,11 @@ const createExecutiveDashboard = async (workbook: ExcelJS.Workbook, data: Advanc
     applyPerformanceFormatting(performanceCell, performance, colors);
   }
 
+  // Add charts if enabled
+  if (options.includeCharts) {
+    currentRow = addChartsToWorksheet(worksheet, data, 'bacenta-performance', currentRow);
+  }
+
   // Apply styling
   applyWorksheetStyling(worksheet, theme);
 
@@ -490,6 +664,11 @@ const createEnhancedSummary = async (workbook: ExcelJS.Workbook, data: AdvancedE
 
     applyAttendanceRateFormatting(attendanceRateCell, attendanceRate, colors);
     applyPerformanceFormatting(performanceCell, performance, colors);
+  }
+
+  // Add charts if enabled
+  if (options.includeCharts) {
+    currentRow = addChartsToWorksheet(worksheet, data, 'monthly-trends', currentRow);
   }
 
   // Apply styling
@@ -848,6 +1027,11 @@ const createAdvancedAnalytics = async (workbook: ExcelJS.Workbook, data: Advance
 
     applyAttendanceRateFormatting(rateCell, rate, colors);
     applyPerformanceFormatting(statusCell, status, colors);
+  }
+
+  // Add charts if enabled
+  if (options.includeCharts) {
+    currentRow = addChartsToWorksheet(worksheet, data, 'attendance', currentRow);
   }
 
   // Apply styling
