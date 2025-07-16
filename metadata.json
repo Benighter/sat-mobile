@@ -1,5 +1,5 @@
 
 {
   "name": "SAT Mobile",
-  "description": "SAT Mobile - A mobile-first church membership management application. This demonstration uses browser localStorage for data persistence instead of a live SQLite database. Features include member management, attendance tracking, congregation grouping, and critical member alerts."
+  "description": "SAT Mobile - A mobile-first church membership management application. This demonstration uses browser localStorage for data persistence instead of a live SQLite database. Features include member management, attendance tracking, and congregation grouping."
 }

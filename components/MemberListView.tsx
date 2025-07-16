@@ -14,7 +14,7 @@ const MemberListView: React.FC<MemberListViewProps> = ({ bacentaFilter }) => {
   const {
     members,
     isLoading,
-    criticalMemberIds,
+
     bacentas,
   } = useAppContext();
 

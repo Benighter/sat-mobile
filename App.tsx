@@ -9,7 +9,7 @@ import {
   LazyWrapper,
   LazyMemberListView,
   LazyBacentaLeadersView,
-  LazyCriticalMembersView,
+
   LazyAttendanceAnalyticsView,
   LazyWeeklyAttendanceView,
   LazyNewBelieversView
@@ -71,7 +71,7 @@ const AppContent: React.FC = memo(() => {
     switchTab,
     showToast,
     removeToast,
-    criticalMemberIds
+
   } = useAppContext();
 
   // const { canNavigateBack } = useNavigation();
@@ -148,12 +148,7 @@ const AppContent: React.FC = memo(() => {
     switch (currentTab.id) {
       case TabKeys.DASHBOARD:
         return <DashboardView />;
-      case TabKeys.CRITICAL_MEMBERS:
-        return (
-          <LazyWrapper>
-            <LazyCriticalMembersView />
-          </LazyWrapper>
-        );
+
       case TabKeys.ALL_CONGREGATIONS:
         return (
           <LazyWrapper>
@@ -218,11 +213,6 @@ const AppContent: React.FC = memo(() => {
                   <Bars3Icon className="w-5 h-5 sm:w-6 sm:h-6 transition-colors duration-200" />
                 </div>
                 <span className="hidden sm:inline font-medium text-sm">Menu</span>
-                {criticalMemberIds.length > 0 && (
-                  <span className="bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full font-bold">
-                    {criticalMemberIds.length}
-                  </span>
-                )}
               </button>
 
               {/* Logo - Always visible */}
@@ -254,7 +244,7 @@ const AppContent: React.FC = memo(() => {
                     case 'dashboard': return <ChartBarIcon className="w-full h-full text-gray-600" />;
                     case 'all_members': return <UsersIcon className="w-full h-full text-gray-600" />;
                     case 'all_bacentas': return <GroupIcon className="w-full h-full text-gray-600" />;
-                    case 'critical_members': return <WarningIcon className="w-full h-full text-gray-600" />;
+
                     case 'attendance_analytics': return <ChartBarIcon className="w-full h-full text-gray-600" />;
                     case 'weekly_attendance': return <UsersIcon className="w-full h-full text-gray-600" />;
                     case 'new_believers': return <UsersIcon className="w-full h-full text-gray-600" />;
@@ -307,8 +297,8 @@ const AppContent: React.FC = memo(() => {
         <BulkMemberAddModal
           isOpen={isBulkMemberModalOpen}
           onClose={() => setIsBulkMemberModalOpen(false)}
-          bacentaId={currentTab.id !== 'dashboard' && currentTab.id !== 'all_members' && currentTab.id !== 'all_bacentas' && currentTab.id !== 'critical_members' && currentTab.id !== 'attendance_analytics' && currentTab.id !== 'new_believers' ? currentTab.id : undefined}
-          bacentaName={currentTab.id !== 'dashboard' && currentTab.id !== 'all_members' && currentTab.id !== 'all_bacentas' && currentTab.id !== 'critical_members' && currentTab.id !== 'attendance_analytics' && currentTab.id !== 'new_believers' ? currentTab.name : undefined}
+          bacentaId={currentTab.id !== 'dashboard' && currentTab.id !== 'all_members' && currentTab.id !== 'all_bacentas' && currentTab.id !== 'attendance_analytics' && currentTab.id !== 'new_believers' ? currentTab.id : undefined}
+          bacentaName={currentTab.id !== 'dashboard' && currentTab.id !== 'all_members' && currentTab.id !== 'all_bacentas' && currentTab.id !== 'attendance_analytics' && currentTab.id !== 'new_believers' ? currentTab.name : undefined}
         />
       )}
 

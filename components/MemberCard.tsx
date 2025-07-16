@@ -11,11 +11,10 @@ import Badge from './ui/Badge';
 
 interface MemberCardProps {
   member: Member;
-  isCritical?: boolean;
 }
 
-const MemberCard: React.FC<MemberCardProps> = ({ member, isCritical }) => {
-  const { displayedSundays, attendanceRecords, markAttendanceHandler, deleteMemberHandler, openMemberForm, bacentas, criticalMemberIds, userProfile } = useAppContext();
+const MemberCard: React.FC<MemberCardProps> = ({ member }) => {
+  const { displayedSundays, attendanceRecords, markAttendanceHandler, deleteMemberHandler, openMemberForm, bacentas, userProfile } = useAppContext();
 
   // Get user preference for editing previous Sundays
   const allowEditPreviousSundays = userProfile?.preferences?.allowEditPreviousSundays ?? false;
@@ -68,34 +67,21 @@ const MemberCard: React.FC<MemberCardProps> = ({ member, isCritical }) => {
 
 
   return (
-    <div className={`group glass shadow-2xl rounded-2xl p-6 mb-6 border-l-4 transition-all duration-300 relative overflow-hidden animate-fade-in ${isCritical ? 'border-red-500' : 'border-gray-500'}`}>
+    <div className="group glass shadow-2xl rounded-2xl p-6 mb-6 border-l-4 border-gray-500 transition-all duration-300 relative overflow-hidden animate-fade-in">
       {/* Animated background gradient */}
       <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
 
-      {/* Critical alert background */}
-      {isCritical && (
-        <div className="absolute inset-0 bg-red-500/5"></div>
-      )}
-
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between relative z-10">
         <div className="flex items-start mb-4 sm:mb-0 flex-1">
-          <div className={`relative p-3 rounded-2xl mr-4 shadow-lg floating ${isCritical ? 'bg-gradient-to-br from-red-100 to-red-200' : 'bg-gradient-to-br from-gray-100 to-gray-200'}`}>
-            <UserIcon className={`w-10 h-10 ${isCritical ? 'text-red-600' : 'text-gray-600'}`} />
-            {isCritical && (
-              <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full animate-bounce-gentle"></div>
-            )}
+          <div className="relative p-3 rounded-2xl mr-4 shadow-lg floating bg-gradient-to-br from-gray-100 to-gray-200">
+            <UserIcon className="w-10 h-10 text-gray-600" />
           </div>
           <div className="flex-1">
             <div className="flex items-center space-x-2 mb-2">
               <h3 className="text-xl font-bold text-gray-800 group-hover:text-gray-900 transition-colors">
                 {member.firstName} {member.lastName}
               </h3>
-              {isCritical && (
-                <div className="flex items-center space-x-1 bg-red-100 px-2 py-1 rounded-full">
-                  <WarningIcon className="w-4 h-4 text-red-500" />
-                  <span className="text-xs font-bold text-red-600">CRITICAL</span>
-                </div>
-              )}
+
             </div>
 
             {/* Role Badge */}
@@ -156,19 +142,7 @@ const MemberCard: React.FC<MemberCardProps> = ({ member, isCritical }) => {
         </div>
       </div>
 
-      {isCritical && (
-        <div className="mt-4 p-4 bg-gradient-to-r from-red-50 to-red-100 border border-red-200 rounded-xl text-sm text-red-700 animate-fade-in">
-          <div className="flex items-center space-x-2">
-            <div className="w-8 h-8 bg-red-200 rounded-full flex items-center justify-center">
-              <WarningIcon className="w-5 h-5 text-red-600" />
-            </div>
-            <div>
-              <p className="font-semibold">Follow-up Required</p>
-              <p className="text-xs text-red-600">This member has {criticalMemberIds.includes(member.id) ? '2 or more' : ''} consecutive absences for the displayed month.</p>
-            </div>
-          </div>
-        </div>
-      )}
+
 
       {/* Enhanced Member Details */}
       <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">

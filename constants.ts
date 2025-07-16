@@ -7,14 +7,11 @@ export const FIXED_TABS: TabOption[] = [
   { id: TabKeys.DASHBOARD, name: 'Dashboard' },
   { id: TabKeys.ALL_CONGREGATIONS, name: 'All Members' }, // ID remains, name updated
   { id: TabKeys.ALL_BACENTAS, name: 'All Bacenta Leaders' },
-  { id: TabKeys.CRITICAL_MEMBERS, name: 'Critical Alerts' },
   { id: TabKeys.ATTENDANCE_ANALYTICS, name: 'Attendance Analytics' },
   { id: TabKeys.WEEKLY_ATTENDANCE, name: 'Weekly Attendance' },
   { id: TabKeys.NEW_BELIEVERS, name: 'New Believers' },
   { id: TabKeys.PROFILE_SETTINGS, name: 'Profile Settings' },
 ];
-
-export const CONSECUTIVE_ABSENCE_THRESHOLD = 2;
 
 export const DEFAULT_TAB_ID = TabKeys.DASHBOARD;
 

@@ -9,7 +9,7 @@ import {
   LazyWrapper,
   LazyMemberListView,
   LazyBacentaLeadersView,
-  LazyCriticalMembersView,
+
   LazyAttendanceAnalyticsView,
   LazyWeeklyAttendanceView,
   LazyNewBelieversView
@@ -124,12 +124,7 @@ const AppContent: React.FC = memo(() => {
     switch (currentTab.id) {
       case TabKeys.DASHBOARD:
         return <DashboardView />;
-      case TabKeys.CRITICAL_MEMBERS:
-        return (
-          <LazyWrapper>
-            <LazyCriticalMembersView />
-          </LazyWrapper>
-        );
+
       case TabKeys.ALL_CONGREGATIONS:
         return (
           <LazyWrapper>
@@ -282,8 +277,8 @@ const AppContent: React.FC = memo(() => {
         <BulkMemberAddModal
           isOpen={isBulkMemberModalOpen}
           onClose={() => setIsBulkMemberModalOpen(false)}
-          bacentaId={currentTab.id !== 'dashboard' && currentTab.id !== 'all_members' && currentTab.id !== 'all_bacentas' && currentTab.id !== 'critical_members' && currentTab.id !== 'attendance_analytics' && currentTab.id !== 'new_believers' ? currentTab.id : undefined}
-          bacentaName={currentTab.id !== 'dashboard' && currentTab.id !== 'all_members' && currentTab.id !== 'all_bacentas' && currentTab.id !== 'critical_members' && currentTab.id !== 'attendance_analytics' && currentTab.id !== 'new_believers' ? currentTab.name : undefined}
+          bacentaId={currentTab.id !== 'dashboard' && currentTab.id !== 'all_members' && currentTab.id !== 'all_bacentas' && currentTab.id !== 'attendance_analytics' && currentTab.id !== 'new_believers' ? currentTab.id : undefined}
+          bacentaName={currentTab.id !== 'dashboard' && currentTab.id !== 'all_members' && currentTab.id !== 'all_bacentas' && currentTab.id !== 'attendance_analytics' && currentTab.id !== 'new_believers' ? currentTab.name : undefined}
         />
       )}
 

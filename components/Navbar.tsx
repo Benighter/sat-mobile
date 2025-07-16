@@ -4,14 +4,14 @@ import { useAppContext } from '../contexts/FirebaseAppContext';
 import { ChartBarIcon, UsersIcon, WarningIcon, GroupIcon, Bars3Icon, UserIcon } from './icons';
 
 const Navbar: React.FC = memo(() => {
-  const { bacentas, currentTab, criticalMemberIds, openBacentaDrawer } = useAppContext();
+  const { bacentas, currentTab, openBacentaDrawer } = useAppContext();
 
   const getIconForTab = (tabId: string) => {
     switch (tabId) {
       case 'dashboard': return <ChartBarIcon className="w-full h-full mr-1 sm:mr-2" />;
       case 'all_members': return <UsersIcon className="w-full h-full mr-1 sm:mr-2" />;
       case 'all_bacentas': return <GroupIcon className="w-full h-full mr-1 sm:mr-2" />;
-      case 'critical_members': return <WarningIcon className="w-full h-full mr-1 sm:mr-2" />;
+
       case 'attendance_analytics': return <ChartBarIcon className="w-full h-full mr-1 sm:mr-2" />;
       case 'weekly_attendance': return <UsersIcon className="w-full h-full mr-1 sm:mr-2" />;
       case 'new_believers': return <UsersIcon className="w-full h-full mr-1 sm:mr-2" />;
@@ -38,11 +38,6 @@ const Navbar: React.FC = memo(() => {
               <Bars3Icon className="w-4 h-4 sm:w-5 sm:h-5 transition-colors duration-200" />
             </div>
             <span className="hidden sm:inline font-semibold text-sm">Menu</span>
-            {criticalMemberIds.length > 0 && (
-              <span className="bg-red-500 text-white text-xs px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full font-bold">
-                {criticalMemberIds.length}
-              </span>
-            )}
           </button>
 
           {/* Current Tab Indicator */}

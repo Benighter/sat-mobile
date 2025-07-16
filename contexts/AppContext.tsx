@@ -2,7 +2,7 @@
 import React, { createContext, useState, useEffect, useCallback, ReactNode, useMemo } from 'react';
 import { Member, AttendanceRecord, Bacenta, TabOption, AttendanceStatus, TabKeys, NavigationHistoryItem, NewBeliever } from '../types'; // Bacenta instead of CongregationGroup
 import { MemberService, AttendanceService, BacentaService, NewBelieverService, initializeDataIfNeeded } from '../services/dataService'; // BacentaService
-import { FIXED_TABS, CONSECUTIVE_ABSENCE_THRESHOLD, DEFAULT_TAB_ID } from '../constants'; // CONGREGATION_GROUPS removed
+import { FIXED_TABS, DEFAULT_TAB_ID } from '../constants'; // CONGREGATION_GROUPS removed
 import { getSundaysOfMonth, formatDateToYYYYMMDD } from '../utils/dateUtils';
 import {
   membersStorage,
@@ -23,7 +23,7 @@ interface AppContextType {
   error: string | null;
   displayedSundays: string[]; // Renamed from sundaysThisMonth
   displayedDate: Date; // For month navigation
-  criticalMemberIds: string[];
+
   isMemberFormOpen: boolean;
   editingMember: Member | null;
   isBacentaFormOpen: boolean; // New state for Bacenta form
@@ -137,51 +137,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const isNavigatingBack = React.useRef(false);
 
 
-  // Memoize critical members calculation for performance
-  const criticalMemberIds = useMemo(() => {
-    if (!displayedSundays.length || !members.length) return [];
 
-    const criticalIds: string[] = [];
-    const sortedSundays = [...displayedSundays].sort((a,b) => new Date(a).getTime() - new Date(b).getTime());
-
-    members.forEach(member => {
-      let consecutiveAbsences = 0;
-      let maxConsecutiveAbsences = 0;
-
-      // Only consider Sundays that occur after the member's join date
-      const memberJoinDate = new Date(member.joinedDate);
-      const relevantSundays = sortedSundays.filter(sunday => new Date(sunday) >= memberJoinDate);
-
-      // Skip if member hasn't been around for at least CONSECUTIVE_ABSENCE_THRESHOLD Sundays
-      if (relevantSundays.length < CONSECUTIVE_ABSENCE_THRESHOLD) {
-        return;
-      }
-
-      // Check from the most recent Sunday in the relevant Sundays list
-      for (const sundayDate of relevantSundays.slice().reverse()) {
-        const record = attendanceRecords.find(ar => ar.memberId === member.id && ar.date === sundayDate);
-        if (record && record.status === 'Absent') {
-          consecutiveAbsences++;
-        } else if (record && record.status === 'Present') {
-          break; // Streak broken by presence
-        } else {
-           // No record for this Sunday, can't determine absence for sure for the streak from this point
-           // For simplicity, we'll consider no record as breaking the *consecutive* absence streak for *this specific calculation*
-           // A more robust system might require records for all Sundays or handle this differently.
-           break;
-        }
-        if (consecutiveAbsences >= CONSECUTIVE_ABSENCE_THRESHOLD) {
-          maxConsecutiveAbsences = consecutiveAbsences;
-          break;
-        }
-      }
-
-      if (maxConsecutiveAbsences >= CONSECUTIVE_ABSENCE_THRESHOLD) {
-        criticalIds.push(member.id);
-      }
-    });
-    return criticalIds;
-  }, [members, attendanceRecords, displayedSundays]);
 
   const loadData = useCallback(async (targetDate: Date = displayedDate) => {
     setIsLoading(true);
@@ -571,8 +527,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         // Recalculate derived data
         const sundays = getSundaysOfMonth(importedDate.getFullYear(), importedDate.getMonth());
         setDisplayedSundays(sundays);
-        const criticalIds = calculateCriticalMembers(importedMembers, importedAttendance, sundays);
-        setCriticalMemberIds(criticalIds);
+
 
         return true;
       }
@@ -672,7 +627,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   // Memoize context value to prevent unnecessary re-renders
   const contextValue = useMemo(() => ({
     members, attendanceRecords, bacentas, newBelievers, currentTab, isLoading, error,
-    displayedSundays, displayedDate, criticalMemberIds,
+    displayedSundays, displayedDate,
     isMemberFormOpen, editingMember, isBacentaFormOpen, editingBacenta, isBacentaDrawerOpen,
     isNewBelieverFormOpen, editingNewBeliever,
     confirmationModal, toasts,
@@ -686,7 +641,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     navigationHistory, navigateBack, canNavigateBack, addToNavigationHistory
   }), [
     members, attendanceRecords, bacentas, newBelievers, currentTab, isLoading, error,
-    displayedSundays, displayedDate, criticalMemberIds,
+    displayedSundays, displayedDate,
     isMemberFormOpen, editingMember, isBacentaFormOpen, editingBacenta, isBacentaDrawerOpen,
     isNewBelieverFormOpen, editingNewBeliever,
     confirmationModal, toasts,

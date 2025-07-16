@@ -17,7 +17,7 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
   const {
     members,
     bacentas,
-    criticalMemberIds,
+
     openMemberForm,
     deleteMemberHandler,
     attendanceRecords,
@@ -153,12 +153,6 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
               <div className="font-semibold text-gray-900">
                 {member.firstName} {member.lastName}
               </div>
-              {criticalMemberIds.includes(member.id) && (
-                <Badge color="red" size="sm" className="mt-1">
-                  <WarningIcon className="w-3 h-3 mr-1" />
-                  Critical
-                </Badge>
-              )}
             </div>
           </div>
         ),
@@ -355,7 +349,7 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
     };
 
     return [...baseColumns, ...attendanceColumns, actionsColumn];
-  }, [currentMonthSundays, criticalMemberIds, attendanceRecords, getBacentaName, openMemberForm, deleteMemberHandler, getAttendanceStatus, handleAttendanceToggle]);
+  }, [currentMonthSundays, attendanceRecords, getBacentaName, openMemberForm, deleteMemberHandler, getAttendanceStatus, handleAttendanceToggle]);
 
   // Get displayed month name
   const currentMonthName = getMonthName(displayedDate.getMonth());

@@ -64,12 +64,7 @@ SAT Mobile is designed specifically for churches that need a modern, efficient w
 - **Hierarchical Navigation**: Organized menu system for easy access to all Bacentas
 - **Group Management**: Add, edit, and delete Bacentas with member reassignment handling
 
-### 🚨 Critical Member Alerts
-- **Automatic Detection**: Identifies members with consecutive absences requiring attention
-- **Configurable Thresholds**: Customizable criteria for determining critical status
-- **Visual Indicators**: Clear alerts and notifications for members needing pastoral care
-- **Prioritized Lists**: Dedicated views for critical members with action recommendations
-- **Trend Analysis**: Historical patterns to identify at-risk members early
+
 
 ### 📊 Analytics & Reporting
 - **Interactive Charts**: Beautiful, responsive charts using Chart.js for attendance visualization

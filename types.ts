@@ -58,7 +58,6 @@ export enum TabKeys {
   DASHBOARD = 'dashboard',
   ALL_CONGREGATIONS = 'all_members', // Kept ID for now, name will change in FIXED_TABS
   ALL_BACENTAS = 'all_bacentas',
-  CRITICAL_MEMBERS = 'critical_members',
   ATTENDANCE_ANALYTICS = 'attendance_analytics',
   WEEKLY_ATTENDANCE = 'weekly_attendance',
   NEW_BELIEVERS = 'new_believers',

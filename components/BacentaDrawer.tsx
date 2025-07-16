@@ -30,7 +30,7 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
     switchTab,
     openBacentaForm,
     deleteBacentaHandler,
-    criticalMemberIds,
+
     userProfile,
     user,
     showToast,
@@ -221,16 +221,7 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
                   onClose();
                 }}
               />
-              <NavigationItem
-                icon={<WarningIcon className="w-4 h-4" />}
-                label="Critical Alerts"
-                isActive={currentTab.id === TabKeys.CRITICAL_MEMBERS}
-                onClick={() => {
-                  switchTab({ id: TabKeys.CRITICAL_MEMBERS, name: 'Critical Alerts' });
-                  onClose();
-                }}
-                badge={criticalMemberIds.length > 0 ? criticalMemberIds.length : undefined}
-              />
+
               <NavigationItem
                 icon={<UsersIcon className="w-4 h-4" />}
                 label="New Believers"

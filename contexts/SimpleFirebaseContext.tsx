@@ -34,7 +34,7 @@ interface AppContextType {
   error: string | null;
   displayedSundays: string[];
   displayedDate: Date;
-  criticalMemberIds: string[];
+
   
   // Modal States
   isMemberFormOpen: boolean;
@@ -162,49 +162,7 @@ export const SimpleFirebaseProvider: React.FC<{ children: ReactNode }> = ({ chil
     return getSundaysOfMonth(displayedDate.getFullYear(), displayedDate.getMonth());
   }, [displayedDate]);
   
-  const criticalMemberIds = useMemo(() => {
-    if (!displayedSundays.length || !members.length) return [];
 
-    const criticalIds: string[] = [];
-    const sortedSundays = [...displayedSundays].sort((a,b) => new Date(a).getTime() - new Date(b).getTime());
-
-    members.forEach(member => {
-      let consecutiveAbsences = 0;
-
-      // Only consider Sundays that occur after the member's join date
-      const memberJoinDate = new Date(member.joinedDate);
-      const relevantSundays = sortedSundays.filter(sunday => new Date(sunday) >= memberJoinDate);
-
-      // Skip if member hasn't been around for at least CONSECUTIVE_ABSENCE_THRESHOLD Sundays
-      if (relevantSundays.length < CONSECUTIVE_ABSENCE_THRESHOLD) {
-        return;
-      }
-
-      // Check from the most recent Sunday in the relevant Sundays list
-      for (const sundayDate of relevantSundays.slice().reverse()) {
-        const record = attendanceRecords.find(ar => ar.memberId === member.id && ar.date === sundayDate);
-        if (record && record.status === 'Absent') {
-          consecutiveAbsences++;
-        } else if (record && record.status === 'Present') {
-          break; // Streak broken by presence
-        } else {
-           // No record for this Sunday, can't determine absence for sure for the streak from this point
-           // For simplicity, we'll consider no record as breaking the *consecutive* absence streak for *this specific calculation*
-           // A more robust system might require records for all Sundays or handle this differently.
-           break;
-        }
-        if (consecutiveAbsences >= CONSECUTIVE_ABSENCE_THRESHOLD) {
-          break;
-        }
-      }
-
-      if (consecutiveAbsences >= CONSECUTIVE_ABSENCE_THRESHOLD) {
-        criticalIds.push(member.id);
-      }
-    });
-
-    return criticalIds;
-  }, [members, attendanceRecords, displayedSundays]);
   
   // Initialize Firebase listeners
   useEffect(() => {
@@ -707,7 +665,6 @@ export const SimpleFirebaseProvider: React.FC<{ children: ReactNode }> = ({ chil
     error,
     displayedSundays,
     displayedDate,
-    criticalMemberIds,
 
     // Modal States
     isMemberFormOpen,
