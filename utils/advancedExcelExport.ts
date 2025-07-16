@@ -1,9 +1,8 @@
 import ExcelJS from 'exceljs';
 import { Member, Bacenta, AttendanceRecord } from '../types';
-import { getSundaysOfMonth, formatDateToYYYYMMDD, getMonthName } from './dateUtils';
+import { formatDateToYYYYMMDD } from './dateUtils';
 
 export interface AdvancedExcelExportOptions {
-  includeCharts: boolean;
   dateRange: {
     startDate: Date;
     endDate: Date;
@@ -82,18 +81,19 @@ const calculateAttendanceStats = (
 ) => {
   const startDateStr = formatDateToYYYYMMDD(dateRange.startDate);
   const endDateStr = formatDateToYYYYMMDD(dateRange.endDate);
-  
-  const relevantRecords = attendanceRecords.filter(record => 
+
+  const relevantRecords = attendanceRecords.filter(record =>
     record.date >= startDateStr && record.date <= endDateStr
   );
-  
-  const totalPossibleAttendances = members.length * getSundaysInRange(dateRange.startDate, dateRange.endDate).length;
+
+  const totalServices = getSundaysInRange(dateRange.startDate, dateRange.endDate).length;
+  const totalPossibleAttendances = members.length * totalServices;
   const totalActualAttendances = relevantRecords.filter(r => r.status === 'Present').length;
   const overallRate = totalPossibleAttendances > 0 ? Math.round((totalActualAttendances / totalPossibleAttendances) * 100) : 0;
-  
+
   return {
     totalMembers: members.length,
-    totalServices: getSundaysInRange(dateRange.startDate, dateRange.endDate).length,
+    totalServices,
     totalPossibleAttendances,
     totalActualAttendances,
     overallRate,
@@ -143,7 +143,7 @@ const createWorksheetHeader = (
   // Church name and title
   worksheet.mergeCells('A1:H1');
   const titleCell = worksheet.getCell('A1');
-  titleCell.value = 'First Love Church';
+  titleCell.value = CHURCH_INFO.name;
   titleCell.font = {
     name: 'Calibri',
     size: 20,
@@ -151,11 +151,11 @@ const createWorksheetHeader = (
     color: { argb: colors.primary }
   };
   titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
-  
+
   // Subtitle
   worksheet.mergeCells('A2:H2');
   const subtitleCell = worksheet.getCell('A2');
-  subtitleCell.value = 'Faith • Community • Growth';
+  subtitleCell.value = CHURCH_INFO.tagline;
   subtitleCell.font = {
     name: 'Calibri',
     size: 12,
@@ -293,17 +293,62 @@ const createStyledTable = (
   return currentRow + 1; // Return next available row
 };
 
-// Apply conditional formatting for attendance rates
-const applyConditionalFormatting = (
-  worksheet: ExcelJS.Worksheet,
-  range: string,
-  theme: string
-) => {
-  const colors = COLOR_SCHEMES[theme as keyof typeof COLOR_SCHEMES];
-
-  // This would be implemented with ExcelJS conditional formatting
-  // For now, we'll apply it manually in the data creation functions
+// Church information constants
+const CHURCH_INFO = {
+  name: 'First Love Church',
+  tagline: 'Faith • Community • Growth',
+  appName: 'Church Connect Mobile'
 };
+
+// Helper function to apply performance-based cell formatting
+const applyPerformanceFormatting = (
+  cell: ExcelJS.Cell,
+  performance: string,
+  colors: any
+) => {
+  const colorMap = {
+    'Excellent': colors.success,
+    'Good': colors.warning,
+    'Needs Attention': colors.danger,
+    'Active': colors.accent,
+    'Highly Active': colors.success,
+    'Irregular': colors.warning,
+    'Inactive': colors.danger,
+    'Critical': colors.danger,
+    'Poor': colors.danger,
+    'Improving': colors.success,
+    'Declining': colors.danger,
+    'Stable': colors.secondary
+  };
+
+  const color = colorMap[performance as keyof typeof colorMap] || colors.secondary;
+  cell.fill = {
+    type: 'pattern',
+    pattern: 'solid',
+    fgColor: { argb: color }
+  };
+  cell.font = { color: { argb: 'FFFFFFFF' }, bold: true };
+};
+
+// Helper function to apply attendance rate formatting
+const applyAttendanceRateFormatting = (
+  cell: ExcelJS.Cell,
+  rate: number,
+  colors: any
+) => {
+  let color = colors.danger;
+  if (rate >= 80) color = colors.success;
+  else if (rate >= 60) color = colors.warning;
+
+  cell.fill = {
+    type: 'pattern',
+    pattern: 'solid',
+    fgColor: { argb: color }
+  };
+  cell.font = { color: { argb: 'FFFFFFFF' }, bold: true };
+};
+
+
 
 // Create Executive Dashboard worksheet
 const createExecutiveDashboard = async (workbook: ExcelJS.Workbook, data: AdvancedExcelData): Promise<ExcelJS.Worksheet> => {
@@ -339,29 +384,7 @@ const createExecutiveDashboard = async (workbook: ExcelJS.Workbook, data: Advanc
   for (let i = 1; i <= kpiData.length - 1; i++) {
     const statusCell = worksheet.getCell(currentRow - kpiData.length + i, 3);
     const status = kpiData[i][2];
-
-    if (status === 'Excellent') {
-      statusCell.fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: colors.success }
-      };
-      statusCell.font = { color: { argb: 'FFFFFFFF' }, bold: true };
-    } else if (status === 'Good') {
-      statusCell.fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: colors.warning }
-      };
-      statusCell.font = { color: { argb: 'FFFFFFFF' }, bold: true };
-    } else if (status === 'Needs Attention') {
-      statusCell.fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: colors.danger }
-      };
-      statusCell.font = { color: { argb: 'FFFFFFFF' }, bold: true };
-    }
+    applyPerformanceFormatting(statusCell, status, colors);
   }
 
   currentRow += 2;
@@ -386,29 +409,7 @@ const createExecutiveDashboard = async (workbook: ExcelJS.Workbook, data: Advanc
   for (let i = 0; i < bacentaPerformance.length; i++) {
     const performanceCell = worksheet.getCell(currentRow - bacentaPerformance.length + i, 5);
     const performance = bacentaPerformance[i][4];
-
-    if (performance === 'Excellent') {
-      performanceCell.fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: colors.success }
-      };
-      performanceCell.font = { color: { argb: 'FFFFFFFF' }, bold: true };
-    } else if (performance === 'Good') {
-      performanceCell.fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: colors.warning }
-      };
-      performanceCell.font = { color: { argb: 'FFFFFFFF' }, bold: true };
-    } else {
-      performanceCell.fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: colors.danger }
-      };
-      performanceCell.font = { color: { argb: 'FFFFFFFF' }, bold: true };
-    }
+    applyPerformanceFormatting(performanceCell, performance, colors);
   }
 
   // Apply styling
@@ -458,8 +459,8 @@ const createEnhancedSummary = async (workbook: ExcelJS.Workbook, data: AdvancedE
     const bacentaStats = calculateAttendanceStats(bacentaMembers, attendanceRecords, options.dateRange);
     const avgAge = bacentaMembers.length > 0 ?
       Math.round(bacentaMembers.reduce((sum, member) => {
-        const memberAge = Math.floor((Date.now() - new Date(member.joinedDate).getTime()) / (1000 * 60 * 60 * 24));
-        return sum + memberAge;
+        const memberDays = Math.floor((Date.now() - new Date(member.joinedDate).getTime()) / (1000 * 60 * 60 * 24));
+        return sum + memberDays;
       }, 0) / bacentaMembers.length) : 0;
 
     const bornAgainCount = bacentaMembers.filter(m => m.bornAgainStatus).length;
@@ -487,53 +488,8 @@ const createEnhancedSummary = async (workbook: ExcelJS.Workbook, data: AdvancedE
     const attendanceRate = parseInt(detailedBacentaData[i][2].replace('%', ''));
     const performance = detailedBacentaData[i][6];
 
-    // Color code attendance rate
-    if (attendanceRate >= 80) {
-      attendanceRateCell.fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: colors.success }
-      };
-      attendanceRateCell.font = { color: { argb: 'FFFFFFFF' }, bold: true };
-    } else if (attendanceRate >= 60) {
-      attendanceRateCell.fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: colors.warning }
-      };
-      attendanceRateCell.font = { color: { argb: 'FFFFFFFF' }, bold: true };
-    } else {
-      attendanceRateCell.fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: colors.danger }
-      };
-      attendanceRateCell.font = { color: { argb: 'FFFFFFFF' }, bold: true };
-    }
-
-    // Color code performance
-    if (performance === 'Excellent') {
-      performanceCell.fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: colors.success }
-      };
-      performanceCell.font = { color: { argb: 'FFFFFFFF' }, bold: true };
-    } else if (performance === 'Good') {
-      performanceCell.fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: colors.warning }
-      };
-      performanceCell.font = { color: { argb: 'FFFFFFFF' }, bold: true };
-    } else {
-      performanceCell.fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: colors.danger }
-      };
-      performanceCell.font = { color: { argb: 'FFFFFFFF' }, bold: true };
-    }
+    applyAttendanceRateFormatting(attendanceRateCell, attendanceRate, colors);
+    applyPerformanceFormatting(performanceCell, performance, colors);
   }
 
   // Apply styling
@@ -648,58 +604,14 @@ const createEnhancedBacentaWorksheet = async (workbook: ExcelJS.Workbook, bacent
       }
     }
 
-    // Color code attendance rate
+    // Color code attendance rate and performance
     const rateCell = worksheet.getCell(rowNum, rateCol);
     const performanceCell = worksheet.getCell(rowNum, performanceCol);
     const rate = parseInt(attendanceData[i][rateCol - 1].replace('%', ''));
     const performance = attendanceData[i][performanceCol - 1];
 
-    if (rate >= 80) {
-      rateCell.fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: colors.success }
-      };
-      rateCell.font = { color: { argb: 'FFFFFFFF' }, bold: true };
-    } else if (rate >= 60) {
-      rateCell.fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: colors.warning }
-      };
-      rateCell.font = { color: { argb: 'FFFFFFFF' }, bold: true };
-    } else {
-      rateCell.fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: colors.danger }
-      };
-      rateCell.font = { color: { argb: 'FFFFFFFF' }, bold: true };
-    }
-
-    // Color code performance
-    if (performance === 'Excellent') {
-      performanceCell.fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: colors.success }
-      };
-      performanceCell.font = { color: { argb: 'FFFFFFFF' }, bold: true };
-    } else if (performance === 'Good') {
-      performanceCell.fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: colors.warning }
-      };
-      performanceCell.font = { color: { argb: 'FFFFFFFF' }, bold: true };
-    } else {
-      performanceCell.fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: colors.danger }
-      };
-      performanceCell.font = { color: { argb: 'FFFFFFFF' }, bold: true };
-    }
+    applyAttendanceRateFormatting(rateCell, rate, colors);
+    applyPerformanceFormatting(performanceCell, performance, colors);
   }
 
   // Apply styling
@@ -787,90 +699,17 @@ const createEnhancedMemberDirectory = async (workbook: ExcelJS.Workbook, data: A
     // Color code attendance rate (column 9)
     const attendanceRateCell = worksheet.getCell(rowNum, 9);
     const attendanceRate = parseInt(memberData[i][8].replace('%', ''));
-
-    if (attendanceRate >= 80) {
-      attendanceRateCell.fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: colors.success }
-      };
-      attendanceRateCell.font = { color: { argb: 'FFFFFFFF' }, bold: true };
-    } else if (attendanceRate >= 60) {
-      attendanceRateCell.fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: colors.warning }
-      };
-      attendanceRateCell.font = { color: { argb: 'FFFFFFFF' }, bold: true };
-    } else {
-      attendanceRateCell.fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: colors.danger }
-      };
-      attendanceRateCell.font = { color: { argb: 'FFFFFFFF' }, bold: true };
-    }
+    applyAttendanceRateFormatting(attendanceRateCell, attendanceRate, colors);
 
     // Color code member status (column 12)
     const statusCell = worksheet.getCell(rowNum, 12);
     const status = memberData[i][11];
-
-    if (status === 'Highly Active') {
-      statusCell.fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: colors.success }
-      };
-      statusCell.font = { color: { argb: 'FFFFFFFF' }, bold: true };
-    } else if (status === 'Active') {
-      statusCell.fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: colors.accent }
-      };
-      statusCell.font = { color: { argb: 'FFFFFFFF' }, bold: true };
-    } else if (status === 'Irregular') {
-      statusCell.fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: colors.warning }
-      };
-      statusCell.font = { color: { argb: 'FFFFFFFF' }, bold: true };
-    } else {
-      statusCell.fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: colors.danger }
-      };
-      statusCell.font = { color: { argb: 'FFFFFFFF' }, bold: true };
-    }
+    applyPerformanceFormatting(statusCell, status, colors);
 
     // Color code engagement score (column 13)
     const engagementCell = worksheet.getCell(rowNum, 13);
     const engagementScore = parseInt(memberData[i][12].split('/')[0]);
-
-    if (engagementScore >= 80) {
-      engagementCell.fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: colors.success }
-      };
-      engagementCell.font = { color: { argb: 'FFFFFFFF' }, bold: true };
-    } else if (engagementScore >= 60) {
-      engagementCell.fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: colors.warning }
-      };
-      engagementCell.font = { color: { argb: 'FFFFFFFF' }, bold: true };
-    } else {
-      engagementCell.fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: colors.danger }
-      };
-      engagementCell.font = { color: { argb: 'FFFFFFFF' }, bold: true };
-    }
+    applyAttendanceRateFormatting(engagementCell, engagementScore, colors);
   }
 
   // Apply styling
@@ -949,53 +788,8 @@ const createAdvancedAnalytics = async (workbook: ExcelJS.Workbook, data: Advance
     const rate = parseInt(weeklyData[i][4].replace('%', ''));
     const trend = weeklyData[i][5];
 
-    // Color code attendance rate
-    if (rate >= 80) {
-      rateCell.fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: colors.success }
-      };
-      rateCell.font = { color: { argb: 'FFFFFFFF' }, bold: true };
-    } else if (rate >= 60) {
-      rateCell.fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: colors.warning }
-      };
-      rateCell.font = { color: { argb: 'FFFFFFFF' }, bold: true };
-    } else {
-      rateCell.fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: colors.danger }
-      };
-      rateCell.font = { color: { argb: 'FFFFFFFF' }, bold: true };
-    }
-
-    // Color code trend
-    if (trend === 'Improving') {
-      trendCell.fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: colors.success }
-      };
-      trendCell.font = { color: { argb: 'FFFFFFFF' }, bold: true };
-    } else if (trend === 'Declining') {
-      trendCell.fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: colors.danger }
-      };
-      trendCell.font = { color: { argb: 'FFFFFFFF' }, bold: true };
-    } else {
-      trendCell.fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: colors.secondary }
-      };
-      trendCell.font = { color: { argb: 'FFFFFFFF' }, bold: true };
-    }
+    applyAttendanceRateFormatting(rateCell, rate, colors);
+    applyPerformanceFormatting(trendCell, trend, colors);
   }
 
   currentRow += 2;
@@ -1052,36 +846,8 @@ const createAdvancedAnalytics = async (workbook: ExcelJS.Workbook, data: Advance
     const rate = parseInt(memberPerformanceData[i][3].replace('%', ''));
     const status = memberPerformanceData[i][4];
 
-    // Color code rate and status
-    if (status === 'Excellent') {
-      rateCell.fill = statusCell.fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: colors.success }
-      };
-      rateCell.font = statusCell.font = { color: { argb: 'FFFFFFFF' }, bold: true };
-    } else if (status === 'Good') {
-      rateCell.fill = statusCell.fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: colors.accent }
-      };
-      rateCell.font = statusCell.font = { color: { argb: 'FFFFFFFF' }, bold: true };
-    } else if (status === 'Needs Attention') {
-      rateCell.fill = statusCell.fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: colors.warning }
-      };
-      rateCell.font = statusCell.font = { color: { argb: 'FFFFFFFF' }, bold: true };
-    } else {
-      rateCell.fill = statusCell.fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: colors.danger }
-      };
-      rateCell.font = statusCell.font = { color: { argb: 'FFFFFFFF' }, bold: true };
-    }
+    applyAttendanceRateFormatting(rateCell, rate, colors);
+    applyPerformanceFormatting(statusCell, status, colors);
   }
 
   // Apply styling
@@ -1106,8 +872,8 @@ export const exportToAdvancedExcel = async (data: AdvancedExcelData): Promise<vo
   const workbook = new ExcelJS.Workbook();
 
   // Set workbook properties
-  workbook.creator = 'First Love Church';
-  workbook.lastModifiedBy = 'Church Connect Mobile';
+  workbook.creator = CHURCH_INFO.name;
+  workbook.lastModifiedBy = CHURCH_INFO.appName;
   workbook.created = new Date();
   workbook.modified = new Date();
   workbook.lastPrinted = new Date();
@@ -1136,8 +902,8 @@ export const exportToAdvancedExcel = async (data: AdvancedExcelData): Promise<vo
   // Generate filename with timestamp
   const startDate = options.dateRange.startDate.toISOString().split('T')[0];
   const endDate = options.dateRange.endDate.toISOString().split('T')[0];
-  const timestamp = new Date().toISOString().replace(/[:.]/g, '-').split('T')[0];
-  const filename = `First-Love-Church-Report-${startDate}-to-${endDate}-${timestamp}.xlsx`;
+  const timestamp = new Date().toISOString().split('T')[0];
+  const filename = `${CHURCH_INFO.name.replace(/\s+/g, '-')}-Report-${startDate}-to-${endDate}-${timestamp}.xlsx`;
 
   // Write file
   const buffer = await workbook.xlsx.writeBuffer();
@@ -1164,12 +930,13 @@ export const getAdvancedExportPreview = (data: AdvancedExcelData) => {
     : bacentas;
 
   const sundays = getSundaysInRange(options.dateRange.startDate, options.dateRange.endDate);
+  const dateRangeDays = Math.ceil((options.dateRange.endDate.getTime() - options.dateRange.startDate.getTime()) / (1000 * 60 * 60 * 24));
 
   return {
     totalTabs: 4 + targetBacentas.length, // Dashboard + Summary + Directory + Analytics + Individual Bacentas
     bacentaCount: targetBacentas.length,
     memberCount: members.length,
-    dateRangeDays: Math.ceil((options.dateRange.endDate.getTime() - options.dateRange.startDate.getTime()) / (1000 * 60 * 60 * 24)),
+    dateRangeDays,
     servicesCount: sundays.length,
     features: [
       'Executive Dashboard with KPIs',
