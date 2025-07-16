@@ -524,9 +524,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (importedTab) setCurrentTab(importedTab);
         setDisplayedDate(importedDate);
 
-        // Recalculate derived data
-        const sundays = getSundaysOfMonth(importedDate.getFullYear(), importedDate.getMonth());
-        setDisplayedSundays(sundays);
+        // displayedSundays will automatically update when displayedDate changes
 
 
         return true;

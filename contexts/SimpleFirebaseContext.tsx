@@ -1,7 +1,7 @@
 // Simple Firebase Context without Authentication
 import React, { createContext, useState, useEffect, useCallback, ReactNode, useMemo } from 'react';
 import { Member, AttendanceRecord, Bacenta, TabOption, AttendanceStatus, TabKeys, NavigationHistoryItem, NewBeliever } from '../types';
-import { FIXED_TABS, CONSECUTIVE_ABSENCE_THRESHOLD, DEFAULT_TAB_ID } from '../constants';
+import { FIXED_TABS, DEFAULT_TAB_ID } from '../constants';
 import { getSundaysOfMonth, formatDateToYYYYMMDD } from '../utils/dateUtils';
 
 // Simple Firebase services without authentication
@@ -80,7 +80,9 @@ interface AppContextType {
   
   // Attendance Operations
   markAttendanceHandler: (memberId: string, date: string, status: AttendanceStatus) => Promise<void>;
+  clearAttendanceHandler: (memberId: string, date: string) => Promise<void>;
   markNewBelieverAttendanceHandler: (newBelieverId: string, date: string, status: AttendanceStatus) => Promise<void>;
+  clearNewBelieverAttendanceHandler: (newBelieverId: string, date: string) => Promise<void>;
   
   // UI Handlers
   openMemberForm: (member?: Member) => void;
