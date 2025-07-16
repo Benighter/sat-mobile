@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useAppContext } from '../contexts/FirebaseAppContext';
 import { exportToExcel, ExcelExportOptions } from '../utils/excelExport';
+import { exportToAdvancedExcel, AdvancedExcelExportOptions, getAdvancedExportPreview } from '../utils/advancedExcelExport';
 import Modal from './ui/Modal';
 import Button from './ui/Button';
 import { 
@@ -25,6 +26,8 @@ const ExcelExportModal: React.FC<ExcelExportModalProps> = ({ isOpen, onClose }) 
   const [includeCharts, setIncludeCharts] = useState(true);
   const [includePersonalInfo, setIncludePersonalInfo] = useState(true);
   const [selectedBacentas, setSelectedBacentas] = useState<string[]>([]);
+  const [useAdvancedExport, setUseAdvancedExport] = useState(true);
+  const [theme, setTheme] = useState<'professional' | 'colorful' | 'minimal'>('professional');
   const [dateRange, setDateRange] = useState({
     startDate: new Date(new Date().getFullYear(), new Date().getMonth() - 2, 1), // 3 months ago
     endDate: new Date()
@@ -48,23 +51,43 @@ const ExcelExportModal: React.FC<ExcelExportModalProps> = ({ isOpen, onClose }) 
 
   const handleExport = async () => {
     setIsExporting(true);
-    
+
     try {
-      const exportOptions: ExcelExportOptions = {
-        includeCharts,
-        dateRange,
-        selectedBacentas,
-        includePersonalInfo
-      };
+      if (useAdvancedExport) {
+        const advancedOptions: AdvancedExcelExportOptions = {
+          includeCharts,
+          dateRange,
+          selectedBacentas,
+          includePersonalInfo,
+          theme
+        };
 
-      await exportToExcel({
-        members,
-        bacentas,
-        attendanceRecords,
-        options: exportOptions
-      });
+        await exportToAdvancedExcel({
+          members,
+          bacentas,
+          attendanceRecords,
+          options: advancedOptions
+        });
 
-      showToast('success', 'Export Successful', 'Excel report has been downloaded successfully!');
+        showToast('success', 'Advanced Export Successful', 'Professional Excel report with advanced formatting has been downloaded!');
+      } else {
+        const exportOptions: ExcelExportOptions = {
+          includeCharts,
+          dateRange,
+          selectedBacentas,
+          includePersonalInfo
+        };
+
+        await exportToExcel({
+          members,
+          bacentas,
+          attendanceRecords,
+          options: exportOptions
+        });
+
+        showToast('success', 'Export Successful', 'Excel report has been downloaded successfully!');
+      }
+
       onClose();
     } catch (error) {
       console.error('Export failed:', error);
@@ -79,16 +102,35 @@ const ExcelExportModal: React.FC<ExcelExportModalProps> = ({ isOpen, onClose }) 
   };
 
   const getExportPreview = () => {
-    const targetBacentas = selectedBacentas.length > 0 
-      ? bacentas.filter(b => selectedBacentas.includes(b.id))
-      : bacentas;
-    
-    return {
-      totalTabs: 4 + targetBacentas.length, // Summary + All Members + Analytics + Monthly Trends + Bacenta tabs
-      bacentaCount: targetBacentas.length,
-      memberCount: members.length,
-      dateRangeDays: Math.ceil((dateRange.endDate.getTime() - dateRange.startDate.getTime()) / (1000 * 60 * 60 * 24))
-    };
+    if (useAdvancedExport) {
+      const advancedOptions: AdvancedExcelExportOptions = {
+        includeCharts,
+        dateRange,
+        selectedBacentas,
+        includePersonalInfo,
+        theme
+      };
+
+      return getAdvancedExportPreview({
+        members,
+        bacentas,
+        attendanceRecords,
+        options: advancedOptions
+      });
+    } else {
+      const targetBacentas = selectedBacentas.length > 0
+        ? bacentas.filter(b => selectedBacentas.includes(b.id))
+        : bacentas;
+
+      return {
+        totalTabs: 4 + targetBacentas.length,
+        bacentaCount: targetBacentas.length,
+        memberCount: members.length,
+        dateRangeDays: Math.ceil((dateRange.endDate.getTime() - dateRange.startDate.getTime()) / (1000 * 60 * 60 * 24)),
+        servicesCount: 0,
+        features: ['Basic Excel export with standard formatting']
+      };
+    }
   };
 
   const preview = getExportPreview();
@@ -115,8 +157,113 @@ const ExcelExportModal: React.FC<ExcelExportModalProps> = ({ isOpen, onClose }) 
             <div>
               <span className="font-medium">Date Range:</span> {preview.dateRangeDays} days
             </div>
+            {preview.servicesCount && (
+              <div>
+                <span className="font-medium">Services:</span> {preview.servicesCount}
+              </div>
+            )}
+          </div>
+          {useAdvancedExport && preview.features && (
+            <div className="mt-3">
+              <h5 className="font-medium text-blue-800 mb-2">Advanced Features:</h5>
+              <ul className="text-xs text-blue-600 space-y-1">
+                {preview.features.map((feature, index) => (
+                  <li key={index} className="flex items-center">
+                    <CheckIcon className="w-3 h-3 mr-1 text-green-600" />
+                    {feature}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+
+        {/* Export Type Selection */}
+        <div className="space-y-4">
+          <h4 className="font-semibold text-gray-800">Export Type</h4>
+          <div className="space-y-3">
+            <label className="flex items-center space-x-3 cursor-pointer">
+              <input
+                type="radio"
+                name="exportType"
+                checked={useAdvancedExport}
+                onChange={() => setUseAdvancedExport(true)}
+                className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+              />
+              <div>
+                <span className="font-medium text-gray-900">Advanced Export</span>
+                <p className="text-sm text-gray-600">Professional formatting, colors, charts, and advanced analytics</p>
+              </div>
+            </label>
+            <label className="flex items-center space-x-3 cursor-pointer">
+              <input
+                type="radio"
+                name="exportType"
+                checked={!useAdvancedExport}
+                onChange={() => setUseAdvancedExport(false)}
+                className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+              />
+              <div>
+                <span className="font-medium text-gray-900">Basic Export</span>
+                <p className="text-sm text-gray-600">Simple Excel format with basic data</p>
+              </div>
+            </label>
           </div>
         </div>
+
+        {/* Theme Selection (only for advanced export) */}
+        {useAdvancedExport && (
+          <div className="space-y-4">
+            <h4 className="font-semibold text-gray-800">Theme</h4>
+            <div className="grid grid-cols-3 gap-3">
+              <label className="flex flex-col items-center space-y-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="theme"
+                  value="professional"
+                  checked={theme === 'professional'}
+                  onChange={(e) => setTheme(e.target.value as 'professional' | 'colorful' | 'minimal')}
+                  className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+                />
+                <div className="text-center">
+                  <div className="w-12 h-8 bg-gradient-to-r from-blue-800 to-blue-600 rounded mb-1"></div>
+                  <span className="text-sm font-medium">Professional</span>
+                  <p className="text-xs text-gray-600">Corporate blue theme</p>
+                </div>
+              </label>
+              <label className="flex flex-col items-center space-y-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="theme"
+                  value="colorful"
+                  checked={theme === 'colorful'}
+                  onChange={(e) => setTheme(e.target.value as 'professional' | 'colorful' | 'minimal')}
+                  className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+                />
+                <div className="text-center">
+                  <div className="w-12 h-8 bg-gradient-to-r from-purple-600 to-teal-500 rounded mb-1"></div>
+                  <span className="text-sm font-medium">Colorful</span>
+                  <p className="text-xs text-gray-600">Vibrant colors</p>
+                </div>
+              </label>
+              <label className="flex flex-col items-center space-y-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="theme"
+                  value="minimal"
+                  checked={theme === 'minimal'}
+                  onChange={(e) => setTheme(e.target.value as 'professional' | 'colorful' | 'minimal')}
+                  className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+                />
+                <div className="text-center">
+                  <div className="w-12 h-8 bg-gradient-to-r from-gray-800 to-gray-600 rounded mb-1"></div>
+                  <span className="text-sm font-medium">Minimal</span>
+                  <p className="text-xs text-gray-600">Clean black & white</p>
+                </div>
+              </label>
+            </div>
+          </div>
+        )}
 
         {/* Date Range Selection */}
         <div className="space-y-4">
@@ -257,12 +404,12 @@ const ExcelExportModal: React.FC<ExcelExportModalProps> = ({ isOpen, onClose }) 
             {isExporting ? (
               <>
                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                <span>Exporting...</span>
+                <span>{useAdvancedExport ? 'Creating Advanced Report...' : 'Exporting...'}</span>
               </>
             ) : (
               <>
                 <DocumentArrowDownIcon className="w-4 h-4" />
-                <span>Export Excel</span>
+                <span>{useAdvancedExport ? 'Create Advanced Excel Report' : 'Export Basic Excel'}</span>
               </>
             )}
           </Button>
