@@ -23,7 +23,6 @@ import {
   ChartBarIcon,
   UsersIcon,
   GroupIcon,
-  WarningIcon,
   UserIcon
 } from './components/icons';
 import { TabKeys } from './types';

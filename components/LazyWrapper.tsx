@@ -11,7 +11,6 @@ const LoadingFallback: React.FC = () => (
 // Lazy load heavy components
 export const LazyAttendanceAnalyticsView = lazy(() => import('./AttendanceAnalyticsView'));
 export const LazyMemberListView = lazy(() => import('./MemberListView'));
-export const LazyBacentasTableView = lazy(() => import('./BacentasTableView'));
 export const LazyBacentaLeadersView = lazy(() => import('./BacentaLeadersView'));
 
 export const LazyWeeklyAttendanceView = lazy(() => import('./WeeklyAttendanceView'));
