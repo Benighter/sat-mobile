@@ -2,16 +2,23 @@ import React, { useState } from 'react';
 import { useAppContext } from '../contexts/FirebaseAppContext';
 import { exportToExcel, ExcelExportOptions } from '../utils/excelExport';
 import { exportToAdvancedExcel, AdvancedExcelExportOptions, getAdvancedExportPreview } from '../utils/advancedExcelExport';
+import {
+  selectDirectory,
+  canSelectDirectory,
+  getDirectoryDescription,
+  DirectoryHandle
+} from '../utils/fileSystemUtils';
 import Modal from './ui/Modal';
 import Button from './ui/Button';
-import { 
-  DocumentArrowDownIcon, 
-  CalendarIcon, 
+import {
+  DocumentArrowDownIcon,
+  CalendarIcon,
   ChartBarIcon,
   EyeIcon,
   EyeSlashIcon,
-  CheckIcon
-} from './icons';
+  CheckIcon,
+  FolderIcon
+} from './icons/index';
 
 interface ExcelExportModalProps {
   isOpen: boolean;
@@ -21,7 +28,7 @@ interface ExcelExportModalProps {
 const ExcelExportModal: React.FC<ExcelExportModalProps> = ({ isOpen, onClose }) => {
   const { members, bacentas, attendanceRecords, showToast } = useAppContext();
   const [isExporting, setIsExporting] = useState(false);
-  
+
   // Export options state
   const [includeCharts, setIncludeCharts] = useState(true);
   const [includePersonalInfo, setIncludePersonalInfo] = useState(true);
@@ -32,6 +39,10 @@ const ExcelExportModal: React.FC<ExcelExportModalProps> = ({ isOpen, onClose }) 
     startDate: new Date(new Date().getFullYear(), new Date().getMonth() - 2, 1), // 3 months ago
     endDate: new Date()
   });
+
+  // Directory selection state
+  const [selectedDirectory, setSelectedDirectory] = useState<DirectoryHandle | null>(null);
+  const [isSelectingDirectory, setIsSelectingDirectory] = useState(false);
 
   const handleBacentaToggle = (bacentaId: string) => {
     setSelectedBacentas(prev => 
@@ -49,49 +60,69 @@ const ExcelExportModal: React.FC<ExcelExportModalProps> = ({ isOpen, onClose }) 
     }
   };
 
+  const handleSelectDirectory = async () => {
+    setIsSelectingDirectory(true);
+    try {
+      const directory = await selectDirectory();
+      setSelectedDirectory(directory);
+    } catch (error) {
+      console.error('Directory selection failed:', error);
+      showToast('error', 'Directory Selection Failed', 'Could not select directory. Using default download location.');
+    } finally {
+      setIsSelectingDirectory(false);
+    }
+  };
+
   const handleExport = async () => {
     setIsExporting(true);
 
     try {
+      let result: { success: boolean; path?: string; error?: string };
+
       if (useAdvancedExport) {
         const advancedOptions: AdvancedExcelExportOptions = {
           includeCharts,
           dateRange,
           selectedBacentas,
           includePersonalInfo,
-          theme
+          theme,
+          directory: selectedDirectory
         };
 
-        await exportToAdvancedExcel({
+        result = await exportToAdvancedExcel({
           members,
           bacentas,
           attendanceRecords,
           options: advancedOptions
         });
-
-        showToast('success', 'Advanced Export Successful', 'Professional Excel report with advanced formatting has been downloaded!');
       } else {
         const exportOptions: ExcelExportOptions = {
           includeCharts,
           dateRange,
           selectedBacentas,
-          includePersonalInfo
+          includePersonalInfo,
+          directory: selectedDirectory
         };
 
-        await exportToExcel({
+        result = await exportToExcel({
           members,
           bacentas,
           attendanceRecords,
           options: exportOptions
         });
-
-        showToast('success', 'Export Successful', 'Excel report has been downloaded successfully!');
       }
 
-      onClose();
-    } catch (error) {
+      if (result.success) {
+        const locationText = result.path ? ` to ${result.path}` : '';
+        const exportType = useAdvancedExport ? 'Advanced Excel report' : 'Excel report';
+        showToast('success', 'Export Successful', `${exportType} has been saved${locationText}!`);
+        onClose();
+      } else {
+        showToast('error', 'Export Failed', result.error || 'Failed to generate Excel report. Please try again.');
+      }
+    } catch (error: any) {
       console.error('Export failed:', error);
-      showToast('error', 'Export Failed', 'Failed to generate Excel report. Please try again.');
+      showToast('error', 'Export Failed', error.message || 'Failed to generate Excel report. Please try again.');
     } finally {
       setIsExporting(false);
     }
@@ -385,6 +416,52 @@ const ExcelExportModal: React.FC<ExcelExportModalProps> = ({ isOpen, onClose }) 
             </label>
           </div>
         </div>
+
+        {/* Directory Selection */}
+        {canSelectDirectory() && (
+          <div className="space-y-4">
+            <h4 className="font-semibold text-gray-800">Save Location</h4>
+
+            <div className="space-y-3">
+              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border">
+                <div className="flex items-center space-x-3">
+                  <FolderIcon className="w-5 h-5 text-gray-600" />
+                  <div>
+                    <span className="text-sm font-medium text-gray-700">
+                      {selectedDirectory ? 'Custom Location' : 'Default Location'}
+                    </span>
+                    <p className="text-xs text-gray-500">
+                      {getDirectoryDescription(selectedDirectory)}
+                    </p>
+                  </div>
+                </div>
+
+                <Button
+                  onClick={handleSelectDirectory}
+                  variant="secondary"
+                  disabled={isSelectingDirectory || isExporting}
+                  className="text-xs px-3 py-1"
+                >
+                  {isSelectingDirectory ? (
+                    <>
+                      <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600 mr-1"></div>
+                      Selecting...
+                    </>
+                  ) : (
+                    'Choose Folder'
+                  )}
+                </Button>
+              </div>
+
+              <p className="text-xs text-gray-500">
+                {selectedDirectory
+                  ? 'Files will be saved to your selected folder.'
+                  : 'Files will be saved to your default downloads folder.'
+                }
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Action Buttons */}
         <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">

@@ -1,6 +1,7 @@
 import ExcelJS from 'exceljs';
 import { Member, Bacenta, AttendanceRecord } from '../types';
 import { formatDateToYYYYMMDD } from './dateUtils';
+import { DirectoryHandle, saveFileToDirectory } from './fileSystemUtils';
 
 export interface AdvancedExcelExportOptions {
   includeCharts: boolean;
@@ -11,6 +12,7 @@ export interface AdvancedExcelExportOptions {
   selectedBacentas: string[];
   includePersonalInfo: boolean;
   theme: 'professional' | 'colorful' | 'minimal';
+  directory?: DirectoryHandle | null;
 }
 
 export interface AdvancedExcelData {
@@ -1044,66 +1046,71 @@ const createAdvancedAnalytics = async (workbook: ExcelJS.Workbook, data: Advance
 };
 
 // Main advanced export function
-export const exportToAdvancedExcel = async (data: AdvancedExcelData): Promise<void> => {
+export const exportToAdvancedExcel = async (data: AdvancedExcelData): Promise<{ success: boolean; path?: string; error?: string }> => {
   const { bacentas, options } = data;
 
-  // Filter bacentas if specific ones are selected
-  const targetBacentas = options.selectedBacentas.length > 0
-    ? bacentas.filter(b => options.selectedBacentas.includes(b.id))
-    : bacentas;
+  try {
+    // Filter bacentas if specific ones are selected
+    const targetBacentas = options.selectedBacentas.length > 0
+      ? bacentas.filter(b => options.selectedBacentas.includes(b.id))
+      : bacentas;
 
-  // Create workbook
-  const workbook = new ExcelJS.Workbook();
+    // Create workbook
+    const workbook = new ExcelJS.Workbook();
 
-  // Set workbook properties
-  workbook.creator = CHURCH_INFO.name;
-  workbook.lastModifiedBy = CHURCH_INFO.appName;
-  workbook.created = new Date();
-  workbook.modified = new Date();
-  workbook.lastPrinted = new Date();
-  workbook.properties.date1904 = true;
-  workbook.calcProperties.fullCalcOnLoad = true;
+    // Set workbook properties
+    workbook.creator = CHURCH_INFO.name;
+    workbook.lastModifiedBy = CHURCH_INFO.appName;
+    workbook.created = new Date();
+    workbook.modified = new Date();
+    workbook.lastPrinted = new Date();
+    workbook.properties.date1904 = true;
+    workbook.calcProperties.fullCalcOnLoad = true;
 
-  // Add worksheets in order of importance
+    // Add worksheets in order of importance
 
-  // 1. Executive Dashboard
-  await createExecutiveDashboard(workbook, data);
+    // 1. Executive Dashboard
+    await createExecutiveDashboard(workbook, data);
 
-  // 2. Enhanced Summary
-  await createEnhancedSummary(workbook, data);
+    // 2. Enhanced Summary
+    await createEnhancedSummary(workbook, data);
 
-  // 3. Member Directory
-  await createEnhancedMemberDirectory(workbook, data);
+    // 3. Member Directory
+    await createEnhancedMemberDirectory(workbook, data);
 
-  // 4. Advanced Analytics
-  await createAdvancedAnalytics(workbook, data);
+    // 4. Advanced Analytics
+    await createAdvancedAnalytics(workbook, data);
 
-  // 5. Individual Bacenta worksheets
-  for (const bacenta of targetBacentas) {
-    await createEnhancedBacentaWorksheet(workbook, bacenta, data);
+    // 5. Individual Bacenta worksheets
+    for (const bacenta of targetBacentas) {
+      await createEnhancedBacentaWorksheet(workbook, bacenta, data);
+    }
+
+    // Generate filename with timestamp
+    const startDate = options.dateRange.startDate.toISOString().split('T')[0];
+    const endDate = options.dateRange.endDate.toISOString().split('T')[0];
+    const timestamp = new Date().toISOString().split('T')[0];
+    const filename = `${CHURCH_INFO.name.replace(/\s+/g, '-')}-Report-${startDate}-to-${endDate}-${timestamp}.xlsx`;
+
+    // Write file
+    const buffer = await workbook.xlsx.writeBuffer();
+
+    // Save file using the new file system utility
+    const result = await saveFileToDirectory(
+      options.directory || null,
+      filename,
+      buffer,
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    );
+
+    return result;
+  } catch (error: any) {
+    console.error('Advanced Excel export failed:', error);
+    return {
+      success: false,
+      error: error.message || 'Failed to export Excel file'
+    };
   }
-
-  // Generate filename with timestamp
-  const startDate = options.dateRange.startDate.toISOString().split('T')[0];
-  const endDate = options.dateRange.endDate.toISOString().split('T')[0];
-  const timestamp = new Date().toISOString().split('T')[0];
-  const filename = `${CHURCH_INFO.name.replace(/\s+/g, '-')}-Report-${startDate}-to-${endDate}-${timestamp}.xlsx`;
-
-  // Write file
-  const buffer = await workbook.xlsx.writeBuffer();
-
-  // Create download link
-  const blob = new Blob([buffer], {
-    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-  });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
 };
 
 // Export preview function for the modal
