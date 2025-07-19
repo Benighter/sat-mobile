@@ -1,10 +1,9 @@
 import React, { useState, useMemo } from 'react';
 import { useAppContext } from '../contexts/FirebaseAppContext';
 import { Member } from '../types';
-import Table from './ui/Table';
 import { formatDisplayDate, getSundaysOfMonth, getMonthName, formatDateToYYYYMMDD } from '../utils/dateUtils';
 import { isDateEditable } from '../utils/attendanceUtils';
-import { UserIcon, EditIcon, TrashIcon, PhoneIcon, HomeIcon, CalendarIcon, WarningIcon, ChevronLeftIcon, ChevronRightIcon } from './icons';
+import { UserIcon, TrashIcon, PhoneIcon, CalendarIcon, ChevronLeftIcon, ChevronRightIcon } from './icons';
 import Button from './ui/Button';
 import Badge from './ui/Badge';
 import Input from './ui/Input';
@@ -130,33 +129,31 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
       });
   }, [members, bacentaFilter, searchTerm, roleFilter]);
 
-  // Get bacenta name by ID
-  const getBacentaName = (bacentaId: string) => {
-    if (!bacentaId) return 'Unassigned';
-    const bacenta = bacentas.find(b => b.id === bacentaId);
-    return bacenta?.name || 'Unknown';
-  };
 
-  // Define table columns with attendance
-  const columns = useMemo(() => {
-    const baseColumns = [
-      {
-        key: 'name',
-        header: 'Name',
-        width: '200px',
-        render: (member: Member) => (
-          <div className="flex items-center space-x-3">
-            <div className="w-8 h-8 bg-gradient-to-br from-blue-100 to-blue-200 rounded-full flex items-center justify-center">
-              <UserIcon className="w-4 h-4 text-blue-600" />
-            </div>
-            <div>
-              <div className="font-semibold text-gray-900">
-                {member.firstName} {member.lastName}
-              </div>
-            </div>
+
+  // Define fixed column (only name)
+  const fixedColumn = useMemo(() => ({
+    key: 'name',
+    header: 'Name',
+    width: '200px',
+    render: (member: Member) => (
+      <div className="flex items-center space-x-3">
+        <div className="w-8 h-8 bg-gradient-to-br from-blue-100 to-blue-200 rounded-full flex items-center justify-center">
+          <UserIcon className="w-4 h-4 text-blue-600" />
+        </div>
+        <div>
+          <div className="font-semibold text-gray-900">
+            {member.firstName} {member.lastName}
           </div>
-        ),
-      },
+        </div>
+      </div>
+    ),
+  }), []);
+
+  // Define scrollable columns (phone, role, born again, attendance dates, remove)
+  const scrollableColumns = useMemo(() => {
+    // Base scrollable columns
+    const baseScrollableColumns = [
       {
         key: 'phoneNumber',
         header: 'Phone',
@@ -166,29 +163,6 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
             <PhoneIcon className="w-4 h-4 text-gray-400" />
             <span className="text-sm">{member.phoneNumber || '-'}</span>
           </div>
-        ),
-      },
-      {
-        key: 'buildingAddress',
-        header: 'Address',
-        width: '180px',
-        render: (member: Member) => (
-          <div className="flex items-center space-x-2">
-            <HomeIcon className="w-4 h-4 text-gray-400" />
-            <span className="truncate text-sm" title={member.buildingAddress}>
-              {member.buildingAddress || '-'}
-            </span>
-          </div>
-        ),
-      },
-      {
-        key: 'bacentaId',
-        header: 'Bacenta',
-        width: '120px',
-        render: (member: Member) => (
-          <Badge color="gray" size="sm">
-            {getBacentaName(member.bacentaId)}
-          </Badge>
         ),
       },
       {
@@ -225,16 +199,6 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
           </Badge>
         ),
       },
-      {
-        key: 'joinedDate',
-        header: 'Joined',
-        width: '100px',
-        render: (member: Member) => (
-          <div className="text-sm">
-            {member.joinedDate ? formatDisplayDate(member.joinedDate) : '-'}
-          </div>
-        ),
-      },
     ];
 
     // Add attendance columns for each Sunday
@@ -243,7 +207,6 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
       const today = new Date();
       const todayStr = formatDateToYYYYMMDD(today);
       const targetDate = new Date(sundayDate + 'T00:00:00');
-      const isFuture = sundayDate > todayStr;
       const isPastMonth = targetDate.getFullYear() < today.getFullYear() ||
                         (targetDate.getFullYear() === today.getFullYear() && targetDate.getMonth() < today.getMonth());
 
@@ -265,7 +228,6 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
         const today = new Date();
         const todayStr = formatDateToYYYYMMDD(today);
         const targetDate = new Date(sundayDate + 'T00:00:00');
-        const isFuture = sundayDate > todayStr;
         const isPastMonth = targetDate.getFullYear() < today.getFullYear() ||
                           (targetDate.getFullYear() === today.getFullYear() && targetDate.getMonth() < today.getMonth());
 
@@ -312,44 +274,30 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
       };
     });
 
-    // Add actions column
-    const actionsColumn = {
-      key: 'actions',
-      header: 'Actions',
+    // Add remove action column
+    const removeColumn = {
+      key: 'remove',
+      header: 'Remove',
       width: '80px',
       align: 'center' as const,
       render: (member: Member) => (
-        <div className="flex items-center justify-center space-x-1">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={(e) => {
-              e.stopPropagation();
-              openMemberForm(member);
-            }}
-            className="p-1 hover:bg-blue-100"
-            title="Edit member"
-          >
-            <EditIcon className="w-3 h-3 text-blue-600" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={(e) => {
-              e.stopPropagation();
-              deleteMemberHandler(member.id);
-            }}
-            className="p-1 hover:bg-red-100"
-            title="Delete member"
-          >
-            <TrashIcon className="w-3 h-3 text-red-600" />
-          </Button>
-        </div>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={(e) => {
+            e.stopPropagation();
+            deleteMemberHandler(member.id);
+          }}
+          className="p-1 hover:bg-red-100"
+          title="Remove member"
+        >
+          <TrashIcon className="w-3 h-3 text-red-600" />
+        </Button>
       ),
     };
 
-    return [...baseColumns, ...attendanceColumns, actionsColumn];
-  }, [currentMonthSundays, attendanceRecords, getBacentaName, openMemberForm, deleteMemberHandler, getAttendanceStatus, handleAttendanceToggle]);
+    return [...baseScrollableColumns, ...attendanceColumns, removeColumn];
+  }, [currentMonthSundays, attendanceRecords, deleteMemberHandler, getAttendanceStatus, handleAttendanceToggle]);
 
   // Get displayed month name
   const currentMonthName = getMonthName(displayedDate.getMonth());
@@ -443,24 +391,102 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
         </div>
       </div>
 
-      {/* Members Attendance Table */}
+      {/* Members Attendance Table with Fixed Name Column */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-        <div className="overflow-x-auto">
-          <Table
-            data={filteredMembers}
-            columns={columns}
-            loading={isLoading}
-            emptyMessage={
-              bacentaFilter
+        {isLoading ? (
+          <div className="flex items-center justify-center py-8">
+            <div className="text-gray-500">Loading...</div>
+          </div>
+        ) : filteredMembers.length === 0 ? (
+          <div className="flex items-center justify-center py-8">
+            <div className="text-gray-500">
+              {bacentaFilter
                 ? "No members found in this bacenta"
                 : searchTerm
                   ? "No members match your search"
-                  : "No members added yet"
-            }
-            onRowClick={(member) => openMemberForm(member)}
-            className="min-w-full"
-          />
-        </div>
+                  : "No members added yet"}
+            </div>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full border-collapse">
+              <thead>
+                <tr className="bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200">
+                  {/* Fixed Name Header */}
+                  <th
+                    className="sticky left-0 z-20 px-3 py-3 text-xs font-semibold text-gray-700 uppercase tracking-wider text-left border-r border-gray-200"
+                    style={{
+                      width: '200px',
+                      minWidth: '200px',
+                      background: 'linear-gradient(to right, rgb(249 250 251), rgb(243 244 246))',
+                      boxShadow: '2px 0 4px rgba(0, 0, 0, 0.1)'
+                    }}
+                  >
+                    <div className="truncate">{fixedColumn.header}</div>
+                  </th>
+                  {/* Scrollable Headers */}
+                  {scrollableColumns.map((column, index) => (
+                    <th
+                      key={index}
+                      className={`px-3 py-3 text-xs font-semibold text-gray-700 uppercase tracking-wider ${
+                        column.align === 'center' ? 'text-center' : column.align === 'right' ? 'text-right' : 'text-left'
+                      }`}
+                      style={{
+                        width: column.width,
+                        minWidth: column.width || '80px'
+                      }}
+                    >
+                      <div className="truncate">{column.header}</div>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {filteredMembers.map((member, rowIndex) => (
+                  <tr
+                    key={rowIndex}
+                    className={`
+                      ${rowIndex % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}
+                      hover:bg-blue-50/50 transition-colors duration-200 cursor-pointer
+                    `}
+                    onClick={() => openMemberForm(member)}
+                  >
+                    {/* Fixed Name Cell */}
+                    <td
+                      className="sticky left-0 z-10 px-3 py-3 text-sm text-left border-r border-gray-200"
+                      style={{
+                        width: '200px',
+                        minWidth: '200px',
+                        backgroundColor: rowIndex % 2 === 0 ? 'white' : 'rgb(249 250 251)',
+                        boxShadow: '2px 0 4px rgba(0, 0, 0, 0.1)'
+                      }}
+                    >
+                      {fixedColumn.render(member)}
+                    </td>
+                    {/* Scrollable Cells */}
+                    {scrollableColumns.map((column, colIndex) => {
+                      const value = member[column.key as keyof Member];
+                      return (
+                        <td
+                          key={colIndex}
+                          className={`px-3 py-3 text-sm ${
+                            column.align === 'center' ? 'text-center' : column.align === 'right' ? 'text-right' : 'text-left'
+                          }`}
+                          style={{
+                            width: column.width,
+                            minWidth: column.width || '80px'
+                          }}
+                        >
+                          {column.render ? column.render(member) : value}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );
