@@ -301,7 +301,9 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
   const showToast = useCallback((type: 'success' | 'error' | 'warning' | 'info', title: string, message?: string) => {
     // Generate unique ID using timestamp + random number to avoid duplicates
     const id = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    setToasts(prev => [...prev, { id, type, title, message }]);
+
+    // Clear any existing toasts and show only the new one
+    setToasts([{ id, type, title, message }]);
 
     // Auto-remove toast after 5 seconds
     setTimeout(() => {
