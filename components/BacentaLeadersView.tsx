@@ -17,7 +17,8 @@ const BacentaLeadersView: React.FC = () => {
     deleteMemberHandler,
     isLoading,
     displayedSundays,
-    openHierarchyModal
+    openHierarchyModal,
+    showConfirmation
   } = useAppContext();
   
   const [searchTerm, setSearchTerm] = useState('');
@@ -213,7 +214,11 @@ const BacentaLeadersView: React.FC = () => {
             size="sm"
             onClick={(e) => {
               e.stopPropagation();
-              deleteMemberHandler(leader.id);
+              showConfirmation(
+                'deleteMember',
+                { member: leader },
+                () => deleteMemberHandler(leader.id)
+              );
             }}
             className="p-2 hover:bg-red-100"
             title="Delete Leader"

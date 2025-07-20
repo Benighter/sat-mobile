@@ -14,7 +14,7 @@ interface MemberCardProps {
 }
 
 const MemberCard: React.FC<MemberCardProps> = ({ member }) => {
-  const { displayedSundays, attendanceRecords, markAttendanceHandler, deleteMemberHandler, openMemberForm, bacentas, userProfile } = useAppContext();
+  const { displayedSundays, attendanceRecords, markAttendanceHandler, deleteMemberHandler, openMemberForm, bacentas, userProfile, showConfirmation } = useAppContext();
 
   // Get user preference for editing previous Sundays
   const allowEditPreviousSundays = userProfile?.preferences?.allowEditPreviousSundays ?? false;
@@ -132,7 +132,11 @@ const MemberCard: React.FC<MemberCardProps> = ({ member }) => {
             <span className="hidden sm:inline font-medium">Edit</span>
           </button>
           <button
-            onClick={() => deleteMemberHandler(member.id)}
+            onClick={() => showConfirmation(
+              'deleteMember',
+              { member },
+              () => deleteMemberHandler(member.id)
+            )}
             className="group/btn flex items-center space-x-2 px-4 py-2 bg-red-100 hover:bg-red-200 text-red-700 hover:text-red-800 rounded-xl transition-all duration-200 shadow-sm"
             aria-label="Delete Member"
           >

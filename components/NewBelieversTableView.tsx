@@ -12,13 +12,14 @@ import { formatDisplayDate, formatDateToDisplay } from '../utils/dateUtils';
 
 const NewBelieversTableView: React.FC = () => {
   const { 
-    newBelievers, 
+    newBelievers,
     attendanceRecords,
-    openNewBelieverForm, 
+    openNewBelieverForm,
     deleteNewBelieverHandler,
     markNewBelieverAttendanceHandler,
     isLoading,
-    displayedSundays
+    displayedSundays,
+    showConfirmation
   } = useAppContext();
   
   const [searchTerm, setSearchTerm] = useState('');
@@ -203,7 +204,11 @@ const NewBelieversTableView: React.FC = () => {
             size="sm"
             onClick={(e) => {
               e.stopPropagation();
-              deleteNewBelieverHandler(newBeliever.id);
+              showConfirmation(
+                'deleteNewBeliever',
+                newBeliever,
+                () => deleteNewBelieverHandler(newBeliever.id)
+              );
             }}
             className="p-2 hover:bg-red-100"
             title="Delete New Believer"

@@ -30,7 +30,8 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
     switchTab,
     openBacentaForm,
     deleteBacentaHandler,
-
+    isBacentaFormOpen,
+    confirmationModal,
     userProfile,
     user,
     showToast,
@@ -90,6 +91,18 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
       .slice(0, 3);
   }, [recentBacentas, bacentas]);
 
+  // Close any open context menus when modals open
+  useEffect(() => {
+    if (isBacentaFormOpen || confirmationModal.isOpen) {
+      // Find any open context menus and close them
+      const contextMenus = document.querySelectorAll('.context-menu-container');
+      contextMenus.forEach(() => {
+        // Trigger a custom event to close context menus
+        window.dispatchEvent(new CustomEvent('closeContextMenus'));
+      });
+    }
+  }, [isBacentaFormOpen, confirmationModal.isOpen]);
+
   const handleBacentaClick = (bacenta: Bacenta) => {
     switchTab({ id: bacenta.id, name: bacenta.name });
     onClose();
@@ -97,12 +110,22 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
 
   const handleEditBacenta = (e: React.MouseEvent, bacenta: Bacenta) => {
     e.stopPropagation();
+    console.log('🔧 Edit bacenta clicked:', bacenta.name);
     openBacentaForm(bacenta);
   };
 
   const handleDeleteBacenta = (e: React.MouseEvent, bacentaId: string) => {
     e.stopPropagation();
-    deleteBacentaHandler(bacentaId);
+    console.log('🗑️ Delete bacenta clicked:', bacentaId);
+    const bacenta = bacentas.find(b => b.id === bacentaId);
+    if (!bacenta) return;
+
+    const memberCount = getMemberCount(bacentaId);
+    showConfirmation(
+      'deleteBacenta',
+      { bacenta, memberCount },
+      () => deleteBacentaHandler(bacentaId)
+    );
   };
 
   const handleAddBacenta = () => {
@@ -449,22 +472,39 @@ const BacentaItem: React.FC<BacentaItemProps> = ({
     setShowContextMenu(false);
   };
 
-  // Close context menu when clicking outside
+  // Close context menu when clicking outside or when modals open
   React.useEffect(() => {
-    const handleClickOutside = () => {
+    const handleClickOutside = (event: Event) => {
       if (showContextMenu) {
+        // Don't close if clicking on the context menu itself
+        const target = event.target as Element;
+        const contextMenu = document.querySelector('.context-menu-container');
+        if (contextMenu && contextMenu.contains(target)) {
+          return;
+        }
         setShowContextMenu(false);
       }
     };
 
+    const handleCloseContextMenus = () => {
+      setShowContextMenu(false);
+    };
+
     if (showContextMenu) {
-      document.addEventListener('click', handleClickOutside);
-      document.addEventListener('touchstart', handleClickOutside);
+      // Use a small delay to avoid immediate closing
+      setTimeout(() => {
+        document.addEventListener('click', handleClickOutside);
+        document.addEventListener('touchstart', handleClickOutside);
+      }, 10);
     }
+
+    // Listen for custom event to close context menus
+    window.addEventListener('closeContextMenus', handleCloseContextMenus);
 
     return () => {
       document.removeEventListener('click', handleClickOutside);
       document.removeEventListener('touchstart', handleClickOutside);
+      window.removeEventListener('closeContextMenus', handleCloseContextMenus);
     };
   }, [showContextMenu]);
 
@@ -509,7 +549,7 @@ const BacentaItem: React.FC<BacentaItemProps> = ({
     {/* Context Menu */}
     {showContextMenu && (
       <div
-        className="fixed z-50 bg-white rounded-xl shadow-2xl border border-gray-200 py-2 min-w-[160px]"
+        className="context-menu-container fixed z-50 bg-white rounded-xl shadow-2xl border border-gray-200 py-2 min-w-[160px]"
         style={{
           left: Math.min(contextMenuPosition.x, window.innerWidth - 180),
           top: Math.min(contextMenuPosition.y, window.innerHeight - 120),
@@ -519,8 +559,8 @@ const BacentaItem: React.FC<BacentaItemProps> = ({
         <button
           onClick={(e) => {
             e.stopPropagation();
+            console.log('📝 Context menu Edit button clicked');
             onEdit(e);
-            closeContextMenu();
           }}
           className="w-full px-4 py-3 text-left hover:bg-gray-50 transition-colors duration-200 flex items-center space-x-3"
         >
@@ -530,8 +570,8 @@ const BacentaItem: React.FC<BacentaItemProps> = ({
         <button
           onClick={(e) => {
             e.stopPropagation();
+            console.log('🗑️ Context menu Delete button clicked');
             onDelete(e);
-            closeContextMenu();
           }}
           className="w-full px-4 py-3 text-left hover:bg-red-50 transition-colors duration-200 flex items-center space-x-3"
         >

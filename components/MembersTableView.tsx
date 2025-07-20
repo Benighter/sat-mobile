@@ -23,7 +23,8 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
     markAttendanceHandler,
     clearAttendanceHandler,
     isLoading,
-    userProfile
+    userProfile,
+    showConfirmation
   } = useAppContext();
 
   // Get user preference for editing previous Sundays
@@ -286,7 +287,11 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
           size="sm"
           onClick={(e) => {
             e.stopPropagation();
-            deleteMemberHandler(member.id);
+            showConfirmation(
+              'deleteMember',
+              { member },
+              () => deleteMemberHandler(member.id)
+            );
           }}
           className="p-1 hover:bg-red-100"
           title="Remove member"
