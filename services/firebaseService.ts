@@ -29,6 +29,10 @@ import {
   GoogleAuthProvider,
   signOut,
   onAuthStateChanged,
+  sendPasswordResetEmail,
+  updatePassword,
+  reauthenticateWithCredential,
+  EmailAuthProvider,
   User
 } from 'firebase/auth';
 import { db, auth } from '../firebase.config';
@@ -59,9 +63,26 @@ export const authService = {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
 
-      // Get user data from Firestore
-      const userDoc = await getDoc(doc(db, 'users', user.uid));
-      const userData = userDoc.data();
+      // Get user data from Firestore - first try direct lookup by UID
+      let userDoc = await getDoc(doc(db, 'users', user.uid));
+      let userData = userDoc.data();
+
+      // If not found, try fallback search for legacy users (created with auto-generated IDs)
+      if (!userData) {
+        const usersRef = collection(db, 'users');
+        const q = query(usersRef, where('uid', '==', user.uid));
+        const querySnapshot = await getDocs(q);
+
+        if (!querySnapshot.empty) {
+          const legacyUserDoc = querySnapshot.docs[0];
+          userData = legacyUserDoc.data();
+
+          // Migrate legacy user document to use UID as document ID
+          await setDoc(doc(db, 'users', user.uid), userData);
+          // Delete the old document with auto-generated ID
+          await deleteDoc(legacyUserDoc.ref);
+        }
+      }
 
       currentUser = {
         uid: user.uid,
@@ -107,7 +128,7 @@ export const authService = {
           authProvider: 'google'
         };
 
-        await addDoc(collection(db, 'users'), newUserData);
+        await setDoc(doc(db, 'users', user.uid), newUserData);
         userData = newUserData;
       } else {
         userData = userDoc.data();
@@ -138,8 +159,8 @@ export const authService = {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
 
-      // Create user document in Firestore
-      await addDoc(collection(db, 'users'), {
+      // Create user document in Firestore with user UID as document ID
+      await setDoc(doc(db, 'users', user.uid), {
         uid: user.uid,
         email: user.email,
         displayName,
@@ -180,8 +201,8 @@ export const authService = {
       const displayName = `${profile.firstName} ${profile.lastName}`;
       const churchId = profile.churchName.toLowerCase().replace(/\s+/g, '-');
 
-      // Create user document in Firestore
-      await addDoc(collection(db, 'users'), {
+      // Create user document in Firestore with user UID as document ID
+      await setDoc(doc(db, 'users', user.uid), {
         uid: user.uid,
         email: user.email,
         displayName,
@@ -221,6 +242,38 @@ export const authService = {
     }
   },
 
+  // Reset password
+  resetPassword: async (email: string): Promise<void> => {
+    try {
+      await sendPasswordResetEmail(auth, email);
+    } catch (error: any) {
+      // Pass through the original Firebase error for better error handling
+      throw error;
+    }
+  },
+
+  // Change password (requires current password for reauthentication)
+  changePassword: async (currentPassword: string, newPassword: string): Promise<void> => {
+    try {
+      const user = auth.currentUser;
+      if (!user || !user.email) {
+        throw new Error('No authenticated user found');
+      }
+
+      // Create credential for reauthentication
+      const credential = EmailAuthProvider.credential(user.email, currentPassword);
+
+      // Reauthenticate user
+      await reauthenticateWithCredential(user, credential);
+
+      // Update password
+      await updatePassword(user, newPassword);
+    } catch (error: any) {
+      // Pass through the original Firebase error for better error handling
+      throw error;
+    }
+  },
+
   // Get current user
   getCurrentUser: (): FirebaseUser | null => currentUser,
 
@@ -228,16 +281,34 @@ export const authService = {
   onAuthStateChanged: (callback: (user: FirebaseUser | null) => void): Unsubscribe => {
     return onAuthStateChanged(auth, async (user) => {
       if (user) {
-        const userDoc = await getDoc(doc(db, 'users', user.uid));
-        const userData = userDoc.data();
-        
+        // Get user data from Firestore - first try direct lookup by UID
+        let userDoc = await getDoc(doc(db, 'users', user.uid));
+        let userData = userDoc.data();
+
+        // If not found, try fallback search for legacy users (created with auto-generated IDs)
+        if (!userData) {
+          const usersRef = collection(db, 'users');
+          const q = query(usersRef, where('uid', '==', user.uid));
+          const querySnapshot = await getDocs(q);
+
+          if (!querySnapshot.empty) {
+            const legacyUserDoc = querySnapshot.docs[0];
+            userData = legacyUserDoc.data();
+
+            // Migrate legacy user document to use UID as document ID
+            await setDoc(doc(db, 'users', user.uid), userData);
+            // Delete the old document with auto-generated ID
+            await deleteDoc(legacyUserDoc.ref);
+          }
+        }
+
         currentUser = {
           uid: user.uid,
           email: user.email,
           displayName: user.displayName,
           churchId: userData?.churchId
         };
-        
+
         currentChurchId = userData?.churchId || null;
         callback(currentUser);
       } else {

@@ -149,7 +149,13 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ children, showToast }) =
         <div className="w-full relative z-10">
           {authMode === 'login' ? (
             <div>
-              <LoginForm onSignIn={handleSignIn} onGoogleSignIn={handleGoogleSignIn} error={error} loading={loading} />
+              <LoginForm
+                onSignIn={handleSignIn}
+                onGoogleSignIn={handleGoogleSignIn}
+                error={error}
+                loading={loading}
+                showToast={showToast}
+              />
 
               {/* Switch to Register */}
               <div className="mt-6 text-center">

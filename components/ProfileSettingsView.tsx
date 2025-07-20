@@ -3,6 +3,7 @@ import { useAppContext } from '../contexts/FirebaseAppContext';
 import { userService } from '../services/userService';
 import Button from './ui/Button';
 import Input from './ui/Input';
+import ChangePasswordModal from './ChangePasswordModal';
 import {
   MoonIcon,
   SunIcon,
@@ -12,7 +13,8 @@ import {
   XMarkIcon,
   EnvelopeIcon,
   BuildingOfficeIcon,
-  ShieldCheckIcon
+  ShieldCheckIcon,
+  KeyIcon
 } from './icons';
 
 interface UserPreferences {
@@ -44,6 +46,7 @@ const ProfileSettingsView: React.FC = () => {
 
   const [isLoading, setIsLoading] = useState(false);
   const [imagePreview, setImagePreview] = useState<string>(userProfile?.profilePicture || '');
+  const [isChangePasswordModalOpen, setIsChangePasswordModalOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Update state when userProfile changes
@@ -306,6 +309,32 @@ const ProfileSettingsView: React.FC = () => {
         </div>
       </div>
 
+      {/* Security Settings */}
+      <div className="glass-card p-6 rounded-2xl">
+        <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
+          <ShieldCheckIcon className="w-5 h-5 mr-2 text-blue-600" />
+          Security
+        </h2>
+
+        <div className="space-y-4">
+          <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+            <div>
+              <h3 className="font-medium text-gray-900">Password</h3>
+              <p className="text-sm text-gray-500">Change your account password</p>
+            </div>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setIsChangePasswordModalOpen(true)}
+              className="flex items-center space-x-2"
+            >
+              <KeyIcon className="w-4 h-4" />
+              <span>Change Password</span>
+            </Button>
+          </div>
+        </div>
+      </div>
+
       {/* Save Button */}
       <div className="flex justify-end">
         <Button
@@ -318,6 +347,12 @@ const ProfileSettingsView: React.FC = () => {
           {isLoading ? 'Saving...' : 'Save Changes'}
         </Button>
       </div>
+
+      {/* Change Password Modal */}
+      <ChangePasswordModal
+        isOpen={isChangePasswordModalOpen}
+        onClose={() => setIsChangePasswordModalOpen(false)}
+      />
     </div>
   );
 };

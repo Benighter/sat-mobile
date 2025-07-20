@@ -1,12 +1,14 @@
 // Clean Modern Login Form Component
 import React, { useState } from 'react';
 import { Eye, EyeOff, Mail, Lock, Church } from 'lucide-react';
+import ForgotPasswordModal from './ForgotPasswordModal';
 
 interface LoginFormProps {
   onSignIn: (email: string, password: string) => Promise<void>;
   onGoogleSignIn: () => Promise<void>;
   error: string | null;
   loading: boolean;
+  showToast: (type: 'success' | 'error' | 'warning' | 'info', title: string, message?: string) => void;
 }
 
 // Utility function to convert Firebase errors to user-friendly messages
@@ -43,11 +45,12 @@ const getErrorMessage = (error: string): string => {
   return 'Sign in failed. Please try again or contact support if the problem persists.';
 };
 
-export const LoginForm: React.FC<LoginFormProps> = ({ onSignIn, onGoogleSignIn, error, loading }) => {
+export const LoginForm: React.FC<LoginFormProps> = ({ onSignIn, onGoogleSignIn, error, loading, showToast }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [validationErrors, setValidationErrors] = useState<{email?: string; password?: string}>({});
+  const [isForgotPasswordOpen, setIsForgotPasswordOpen] = useState(false);
 
   const validateForm = (): boolean => {
     const errors: {email?: string; password?: string} = {};
@@ -212,7 +215,11 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSignIn, onGoogleSignIn, 
 
         {/* Forgot Password */}
         <div className="mt-4 text-center">
-          <button className="text-sm text-blue-600 hover:text-blue-700 font-medium transition-colors">
+          <button
+            type="button"
+            onClick={() => setIsForgotPasswordOpen(true)}
+            className="text-sm text-blue-600 hover:text-blue-700 font-medium transition-colors"
+          >
             Forgot password?
           </button>
         </div>
@@ -224,6 +231,13 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSignIn, onGoogleSignIn, 
           </p>
         </div>
       </div>
+
+      {/* Forgot Password Modal */}
+      <ForgotPasswordModal
+        isOpen={isForgotPasswordOpen}
+        onClose={() => setIsForgotPasswordOpen(false)}
+        showToast={showToast}
+      />
     </div>
   );
 };
