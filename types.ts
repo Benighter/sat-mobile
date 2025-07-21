@@ -121,13 +121,16 @@ export interface AdminInvite {
   invitedUserEmail: string;
   invitedUserId: string;
   invitedUserName: string;
+  invitedUserChurchId: string; // Church ID of the invited user
+  invitedUserChurchName?: string; // Church name of the invited user
   createdBy: string; // Admin UID who created the invite
   createdByName: string; // Admin display name
   churchId: string; // Church ID of the admin who created the invite
   targetRole: 'leader'; // Role the invitee will get
-  status: 'pending' | 'accepted' | 'rejected';
+  status: 'pending' | 'accepted' | 'rejected' | 'revoked';
   createdAt: string;
   expiresAt: string;
   respondedAt?: string;
+  revokedAt?: string; // When leader access was revoked
   accessChurchId?: string; // Church ID that the leader should have access to
 }

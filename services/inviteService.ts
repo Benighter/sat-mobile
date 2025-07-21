@@ -111,6 +111,8 @@ export const inviteService = {
         invitedUserEmail: targetUser.email,
         invitedUserId: targetUser.uid,
         invitedUserName: targetUser.displayName || `${targetUser.firstName} ${targetUser.lastName}`,
+        invitedUserChurchId: targetUser.churchId,
+        invitedUserChurchName: targetUser.churchName,
         createdBy: adminUid,
         createdByName: adminName,
         churchId,
@@ -273,6 +275,56 @@ export const inviteService = {
       };
     } catch (error: any) {
       throw new Error(`Failed to fix leader access: ${error.message}`);
+    }
+  },
+
+  // Remove leader access - reverts user back to admin role and removes church access
+  removeLeaderAccess: async (adminUid: string, leaderUserId: string): Promise<{ success: boolean; message: string }> => {
+    try {
+      // Find the accepted invite for this leader created by this admin
+      const inviteQuery = query(
+        collection(db, 'adminInvites'),
+        where('invitedUserId', '==', leaderUserId),
+        where('createdBy', '==', adminUid),
+        where('status', '==', 'accepted')
+      );
+
+      const inviteSnapshot = await getDocs(inviteQuery);
+
+      if (inviteSnapshot.empty) {
+        throw new Error('No accepted invite found for this leader');
+      }
+
+      // Get the leader's user document
+      const userDocRef = doc(db, 'users', leaderUserId);
+      const userDoc = await getDoc(userDocRef);
+
+      if (!userDoc.exists()) {
+        throw new Error('Leader user not found');
+      }
+
+      const userData = userDoc.data() as User;
+
+      // Revert user back to admin role and remove church access
+      await updateDoc(userDocRef, {
+        role: 'admin',
+        churchId: leaderUserId, // Reset to their own church ID (their user ID)
+        lastUpdated: new Date().toISOString()
+      });
+
+      // Mark the invite as revoked
+      const inviteDoc = inviteSnapshot.docs[0];
+      await updateDoc(doc(db, 'adminInvites', inviteDoc.id), {
+        status: 'revoked',
+        revokedAt: new Date().toISOString()
+      });
+
+      return {
+        success: true,
+        message: `${userData.displayName || userData.firstName} has been removed as a leader and reverted to admin role.`
+      };
+    } catch (error: any) {
+      throw new Error(`Failed to remove leader access: ${error.message}`);
     }
   },
 

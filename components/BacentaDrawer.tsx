@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAppContext } from '../contexts/FirebaseAppContext';
-import { userService } from '../services/userService';
 import { Bacenta, TabKeys } from '../types';
 import {
   XMarkIcon,
@@ -13,7 +12,6 @@ import {
   ClockIcon,
   ChartBarIcon,
   WarningIcon,
-  CogIcon,
   UserIcon
 } from './icons';
 
@@ -44,8 +42,7 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
   const [canScrollUp, setCanScrollUp] = useState(false);
   const [canScrollDown, setCanScrollDown] = useState(false);
 
-  // Get user preference for editing previous Sundays
-  const allowEditPreviousSundays = userProfile?.preferences?.allowEditPreviousSundays ?? true;
+
 
   // Load recent bacentas from localStorage
   useEffect(() => {
@@ -94,12 +91,8 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
   // Close any open context menus when modals open
   useEffect(() => {
     if (isBacentaFormOpen || confirmationModal.isOpen) {
-      // Find any open context menus and close them
-      const contextMenus = document.querySelectorAll('.context-menu-container');
-      contextMenus.forEach(() => {
-        // Trigger a custom event to close context menus
-        window.dispatchEvent(new CustomEvent('closeContextMenus'));
-      });
+      // Trigger a custom event to close context menus
+      window.dispatchEvent(new CustomEvent('closeContextMenus'));
     }
   }, [isBacentaFormOpen, confirmationModal.isOpen]);
 
@@ -129,33 +122,11 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
   };
 
   const handleAddBacenta = () => {
-    openBacentaForm(null);
+    openBacentaForm();
     onClose();
   };
 
-  const handleToggleEditPreviousSundays = async (enabled: boolean) => {
-    try {
-      if (!userProfile || !user) return;
 
-      const updatedPreferences = {
-        ...userProfile.preferences,
-        allowEditPreviousSundays: enabled
-      };
-
-      await userService.updateUserPreferences(user.uid, updatedPreferences);
-
-      // Refresh the user profile to get the updated preferences
-      await refreshUserProfile();
-
-      showToast('success', 'Setting Updated!',
-        enabled
-          ? 'You can now edit attendance for previous months'
-          : 'Editing previous months is now disabled'
-      );
-    } catch (error: any) {
-      showToast('error', 'Update Failed', error.message);
-    }
-  };
 
   // Handle scroll to update scroll indicators
   const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
@@ -353,53 +324,13 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
             )}
           </div>
 
-          {/* Settings Section */}
-          <div className="border-t border-gray-200 p-4 mt-auto">
-            <h3 className="text-sm font-semibold text-gray-600 mb-3 flex items-center">
-              <CogIcon className="w-4 h-4 mr-1" />
-              Quick Settings
-            </h3>
 
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-700">Edit Previous Months</p>
-                  <p className="text-xs text-gray-500">Allow editing attendance for past months</p>
-                </div>
-                <ToggleSwitch
-                  enabled={allowEditPreviousSundays}
-                  onChange={handleToggleEditPreviousSundays}
-                />
-              </div>
-            </div>
-          </div>
         </div>
       </div>
     </>
   );
 };
 
-// Toggle Switch Component
-const ToggleSwitch: React.FC<{
-  enabled: boolean;
-  onChange: (enabled: boolean) => void;
-  disabled?: boolean;
-}> = ({ enabled, onChange, disabled = false }) => (
-  <button
-    type="button"
-    onClick={() => !disabled && onChange(!enabled)}
-    className={`relative inline-flex h-6 w-12 items-center rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
-      enabled ? 'bg-blue-600 shadow-lg' : 'bg-gray-300'
-    } ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
-    disabled={disabled}
-  >
-    <span
-      className={`inline-block h-4 w-4 transform rounded-md bg-white transition-all duration-200 shadow-sm ${
-        enabled ? 'translate-x-7' : 'translate-x-1'
-      }`}
-    />
-  </button>
-);
 
 // Bacenta Item Component
 interface BacentaItemProps {
@@ -430,7 +361,7 @@ const BacentaItem: React.FC<BacentaItemProps> = ({
     const timer = setTimeout(() => {
       setShowContextMenu(true);
       // Haptic feedback if available
-      if (navigator.vibrate) {
+      if ('vibrate' in navigator && navigator.vibrate) {
         navigator.vibrate(50);
       }
     }, 500); // 500ms long press
@@ -462,15 +393,20 @@ const BacentaItem: React.FC<BacentaItemProps> = ({
     }
   };
 
-  const handleClick = (e: React.MouseEvent) => {
+  const handleClick = () => {
     if (!showContextMenu) {
       onClick();
     }
   };
 
-  const closeContextMenu = () => {
-    setShowContextMenu(false);
-  };
+  // Cleanup timer on unmount
+  React.useEffect(() => {
+    return () => {
+      if (longPressTimer) {
+        clearTimeout(longPressTimer);
+      }
+    };
+  }, [longPressTimer]);
 
   // Close context menu when clicking outside or when modals open
   React.useEffect(() => {
@@ -492,10 +428,18 @@ const BacentaItem: React.FC<BacentaItemProps> = ({
 
     if (showContextMenu) {
       // Use a small delay to avoid immediate closing
-      setTimeout(() => {
+      const timeoutId = setTimeout(() => {
         document.addEventListener('click', handleClickOutside);
         document.addEventListener('touchstart', handleClickOutside);
       }, 10);
+
+      // Cleanup timeout if component unmounts
+      return () => {
+        clearTimeout(timeoutId);
+        document.removeEventListener('click', handleClickOutside);
+        document.removeEventListener('touchstart', handleClickOutside);
+        window.removeEventListener('closeContextMenus', handleCloseContextMenus);
+      };
     }
 
     // Listen for custom event to close context menus
@@ -551,8 +495,8 @@ const BacentaItem: React.FC<BacentaItemProps> = ({
       <div
         className="context-menu-container fixed z-50 bg-white rounded-xl shadow-2xl border border-gray-200 py-2 min-w-[160px]"
         style={{
-          left: Math.min(contextMenuPosition.x, window.innerWidth - 180),
-          top: Math.min(contextMenuPosition.y, window.innerHeight - 120),
+          left: Math.min(contextMenuPosition.x, (window.innerWidth || 1024) - 180),
+          top: Math.min(contextMenuPosition.y, (window.innerHeight || 768) - 120),
         }}
         onClick={(e) => e.stopPropagation()}
       >
