@@ -34,6 +34,7 @@ import NewBelieverFormModal from './components/NewBelieverFormModal'; // Import 
 import HierarchyModal from './components/HierarchyModal';
 import DataManagement from './components/DataManagement';
 import EnhancedProfileDropdown from './components/EnhancedProfileDropdown';
+import PendingInviteNotification from './components/PendingInviteNotification';
 import { DeleteMemberModal, DeleteBacentaModal, DeleteNewBelieverModal, ClearAllDataModal, ClearSelectedDataModal } from './components/ConfirmationModal';
 
 const AppContent: React.FC = memo(() => {
@@ -98,7 +99,9 @@ const AppContent: React.FC = memo(() => {
       }
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // fetchInitialData itself will load current month's data
+  }, []);
+
+ // fetchInitialData itself will load current month's data
 
   const renderView = () => {
     // Initial loading state check
@@ -388,6 +391,9 @@ const AppContent: React.FC = memo(() => {
           includeUnassigned={confirmationModal.data?.includeUnassigned || false}
         />
       )}
+
+      {/* Pending Invite Notification */}
+      <PendingInviteNotification />
 
       {/* Toast Notifications */}
       {toasts.map((toast) => (

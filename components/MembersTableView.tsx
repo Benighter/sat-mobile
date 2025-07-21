@@ -138,7 +138,13 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
     header: 'Name',
     width: '200px',
     render: (member: Member) => (
-      <div className="flex items-center space-x-3">
+      <div
+        className="flex items-center space-x-3 cursor-pointer hover:bg-blue-50 rounded-lg p-2 -m-2 transition-colors duration-200"
+        onClick={(e) => {
+          e.stopPropagation();
+          openMemberForm(member);
+        }}
+      >
         <div className="w-8 h-8 bg-gradient-to-br from-blue-100 to-blue-200 rounded-full flex items-center justify-center">
           <UserIcon className="w-4 h-4 text-blue-600" />
         </div>
@@ -149,7 +155,7 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
         </div>
       </div>
     ),
-  }), []);
+  }), [openMemberForm]);
 
   // Define scrollable columns (phone, role, born again, attendance dates, remove)
   const scrollableColumns = useMemo(() => {
@@ -452,9 +458,8 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
                     key={rowIndex}
                     className={`
                       ${rowIndex % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}
-                      hover:bg-blue-50/50 transition-colors duration-200 cursor-pointer
+                      hover:bg-blue-50/50 transition-colors duration-200
                     `}
-                    onClick={() => openMemberForm(member)}
                   >
                     {/* Fixed Name Cell */}
                     <td

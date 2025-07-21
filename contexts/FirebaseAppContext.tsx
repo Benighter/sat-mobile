@@ -14,6 +14,7 @@ import {
 } from '../services/firebaseService';
 import { dataMigrationService } from '../utils/dataMigration';
 import { userService } from '../services/userService';
+import { inviteService } from '../services/inviteService';
 
 interface AppContextType {
   // Data

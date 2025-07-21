@@ -1,9 +1,13 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useAppContext } from '../contexts/FirebaseAppContext';
 import { userService } from '../services/userService';
+import { inviteService } from '../services/inviteService';
 import Button from './ui/Button';
 import Input from './ui/Input';
+import Badge from './ui/Badge';
 import ChangePasswordModal from './ChangePasswordModal';
+import AdminInviteManager from './AdminInviteManager';
+import { hasAdminPrivileges, hasLeaderPrivileges } from '../utils/permissionUtils';
 import {
   MoonIcon,
   SunIcon,
@@ -14,7 +18,9 @@ import {
   EnvelopeIcon,
   BuildingOfficeIcon,
   ShieldCheckIcon,
-  KeyIcon
+  KeyIcon,
+  UserGroupIcon,
+  RefreshIcon
 } from './icons';
 
 interface UserPreferences {
@@ -47,6 +53,8 @@ const ProfileSettingsView: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [imagePreview, setImagePreview] = useState<string>(userProfile?.profilePicture || '');
   const [isChangePasswordModalOpen, setIsChangePasswordModalOpen] = useState(false);
+  const [isAdminInviteModalOpen, setIsAdminInviteModalOpen] = useState(false);
+  const [isFixingAccess, setIsFixingAccess] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Update state when userProfile changes
@@ -141,11 +149,33 @@ const ProfileSettingsView: React.FC = () => {
     }
     if (user?.displayName) {
       const names = user.displayName.split(' ');
-      return names.length > 1 
+      return names.length > 1
         ? `${names[0][0]}${names[names.length - 1][0]}`.toUpperCase()
         : names[0][0].toUpperCase();
     }
     return 'U';
+  };
+
+  const handleFixAccess = async () => {
+    if (!user) return;
+
+    setIsFixingAccess(true);
+    try {
+      const result = await inviteService.fixLeaderAccess(user.uid);
+      if (result.success) {
+        showToast('success', 'Access Fixed', result.message);
+        // Refresh user profile to get updated church data
+        await refreshUserProfile();
+        // Reload the page to refresh all data with new church context
+        window.location.reload();
+      } else {
+        showToast('error', 'Fix Failed', result.message);
+      }
+    } catch (error: any) {
+      showToast('error', 'Fix Failed', error.message);
+    } finally {
+      setIsFixingAccess(false);
+    }
   };
 
   if (!userProfile) {
@@ -309,6 +339,91 @@ const ProfileSettingsView: React.FC = () => {
         </div>
       </div>
 
+      {/* Admin Features */}
+      {hasAdminPrivileges(userProfile) && (
+        <div className="glass-card p-6 rounded-2xl">
+          <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
+            <UserGroupIcon className="w-5 h-5 mr-2 text-blue-600" />
+            Admin Features
+          </h2>
+
+          <div className="space-y-4">
+            <div className="flex items-center justify-between p-4 bg-blue-50 rounded-lg">
+              <div>
+                <h3 className="font-medium text-gray-900">Admin Invite Links</h3>
+                <p className="text-sm text-gray-500">Generate links to downgrade other admins to leaders</p>
+              </div>
+              <Button
+                type="button"
+                variant="primary"
+                onClick={() => setIsAdminInviteModalOpen(true)}
+                className="flex items-center space-x-2"
+              >
+                <UserGroupIcon className="w-4 h-4" />
+                <span>Manage Invites</span>
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Leader Features - Show for both admin and leader roles */}
+      {hasLeaderPrivileges(userProfile) && (
+        <div className="glass-card p-6 rounded-2xl">
+          <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
+            <UserIcon className="w-5 h-5 mr-2 text-purple-600" />
+            {userProfile?.role === 'leader' ? 'Leader Features' : 'Leader Management'}
+          </h2>
+
+          <div className="space-y-4">
+            <div className="flex items-center justify-between p-4 bg-purple-50 rounded-lg">
+              <div>
+                <h3 className="font-medium text-gray-900">Role Information</h3>
+                <p className="text-sm text-gray-500">
+                  {userProfile?.role === 'leader'
+                    ? 'You have leader privileges to manage all church data'
+                    : 'You have full admin privileges including role management'}
+                </p>
+              </div>
+              <Badge color={userProfile?.role === 'admin' ? 'blue' : 'purple'} size="md">
+                {userProfile?.role === 'admin' ? 'Administrator' : 'Leader'}
+              </Badge>
+            </div>
+
+            {/* Fix Access Button for Leaders */}
+            {userProfile?.role === 'leader' && (
+              <div className="flex items-center justify-between p-4 bg-yellow-50 rounded-lg">
+                <div>
+                  <h3 className="font-medium text-gray-900">Data Access</h3>
+                  <p className="text-sm text-gray-500">
+                    If you can't see church data, click here to fix your access permissions
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={handleFixAccess}
+                  disabled={isFixingAccess}
+                  className="flex items-center space-x-2"
+                >
+                  {isFixingAccess ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600"></div>
+                      <span>Fixing...</span>
+                    </>
+                  ) : (
+                    <>
+                      <RefreshIcon className="w-4 h-4" />
+                      <span>Fix Access</span>
+                    </>
+                  )}
+                </Button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Security Settings */}
       <div className="glass-card p-6 rounded-2xl">
         <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
@@ -352,6 +467,12 @@ const ProfileSettingsView: React.FC = () => {
       <ChangePasswordModal
         isOpen={isChangePasswordModalOpen}
         onClose={() => setIsChangePasswordModalOpen(false)}
+      />
+
+      {/* Admin Invite Manager Modal */}
+      <AdminInviteManager
+        isOpen={isAdminInviteModalOpen}
+        onClose={() => setIsAdminInviteModalOpen(false)}
       />
     </div>
   );

@@ -115,3 +115,19 @@ export interface Church {
   createdAt: string;
   lastUpdated: string;
 }
+
+export interface AdminInvite {
+  id: string;
+  invitedUserEmail: string;
+  invitedUserId: string;
+  invitedUserName: string;
+  createdBy: string; // Admin UID who created the invite
+  createdByName: string; // Admin display name
+  churchId: string; // Church ID of the admin who created the invite
+  targetRole: 'leader'; // Role the invitee will get
+  status: 'pending' | 'accepted' | 'rejected';
+  createdAt: string;
+  expiresAt: string;
+  respondedAt?: string;
+  accessChurchId?: string; // Church ID that the leader should have access to
+}
