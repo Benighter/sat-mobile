@@ -558,3 +558,5 @@ VITE_DEBUG_STORAGE=false
 **Ready to transform your church's member management?** 🚀
 
 Start by running `npm install && npm run dev` and experience the future of church administration!
+#   T e s t   c h a n g e  
+ 
