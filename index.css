@@ -236,6 +236,32 @@
   user-select: none;
 }
 
+/* Modal scroll fixes for mobile */
+.modal-backdrop {
+  touch-action: none;
+  overscroll-behavior: contain;
+}
+
+.modal-content {
+  touch-action: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.modal-scrollable {
+  touch-action: pan-y;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Prevent body scroll when modal is open */
+body.modal-open {
+  overflow: hidden !important;
+  position: fixed !important;
+  width: 100% !important;
+  height: 100% !important;
+}
+
 /* Gesture feedback */
 .gesture-feedback {
   transition: transform 0.2s ease-out, opacity 0.2s ease-out;

@@ -278,7 +278,9 @@ const AdminInviteManager: React.FC<AdminInviteManagerProps> = ({ isOpen, onClose
               <p className="text-gray-400 text-sm mt-1">Start by searching for an admin to invite</p>
             </div>
           ) : (
-            <div className="space-y-4 max-h-80 overflow-y-auto pr-2">
+            <div
+              className="space-y-4 max-h-80 overflow-y-auto pr-2 custom-scroll modal-scrollable"
+            >
               {invites.map((invite) => (
                 <div
                   key={invite.id}
