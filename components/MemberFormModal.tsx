@@ -8,6 +8,7 @@ import Select from './ui/Select';
 import Checkbox from './ui/Checkbox';
 import Button from './ui/Button';
 import { formatDateToYYYYMMDD } from '../utils/dateUtils';
+import { canAssignMemberRoles } from '../utils/permissionUtils';
 
 interface MemberFormModalProps {
   isOpen: boolean;
@@ -16,7 +17,10 @@ interface MemberFormModalProps {
 }
 
 const MemberFormModal: React.FC<MemberFormModalProps> = ({ isOpen, onClose, member }) => {
-  const { addMemberHandler, updateMemberHandler, bacentas, currentTab } = useAppContext();
+  const { addMemberHandler, updateMemberHandler, bacentas, currentTab, userProfile } = useAppContext();
+
+  // Check if user can assign roles
+  const canAssignRoles = canAssignMemberRoles(userProfile);
 
   // Check if we're currently in a specific bacenta (not dashboard/fixed tabs)
   const isInSpecificBacenta = currentTab && bacentas.some(b => b.id === currentTab.id);
@@ -204,18 +208,28 @@ const MemberFormModal: React.FC<MemberFormModalProps> = ({ isOpen, onClose, memb
           )}
           {errors.bacentaId && <p className="mt-1 text-xs text-red-600">{errors.bacentaId}</p>}
         </div>
-        <Select
-          label="Role"
-          name="role"
-          value={formData.role}
-          onChange={handleChange}
-          options={[
-            { value: 'Member', label: 'Member' },
-            { value: 'Fellowship Leader', label: 'Fellowship Leader' },
-            { value: 'Bacenta Leader', label: 'Bacenta Leader' }
-          ]}
-          error={errors.role}
-        />
+        {canAssignRoles ? (
+          <Select
+            label="Role"
+            name="role"
+            value={formData.role}
+            onChange={handleChange}
+            options={[
+              { value: 'Member', label: 'Member' },
+              { value: 'Fellowship Leader', label: 'Fellowship Leader' },
+              { value: 'Bacenta Leader', label: 'Bacenta Leader' }
+            ]}
+            error={errors.role}
+          />
+        ) : (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
+            <div className="px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-600">
+              {formData.role || 'Member'}
+            </div>
+            <p className="text-xs text-gray-500 mt-1">Role assignment is restricted to administrators</p>
+          </div>
+        )}
         <Checkbox
             label="Born Again Status"
             name="bornAgainStatus"

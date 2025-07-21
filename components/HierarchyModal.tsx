@@ -5,6 +5,7 @@ import { XMarkIcon, UsersIcon, UserIcon, PhoneIcon, MapPinIcon, CheckIcon, PlusI
 import Button from './ui/Button';
 import Badge from './ui/Badge';
 import Input from './ui/Input';
+import { canManageHierarchy } from '../utils/permissionUtils';
 
 interface HierarchyModalProps {
   isOpen: boolean;
@@ -13,8 +14,11 @@ interface HierarchyModalProps {
 }
 
 const HierarchyModal: React.FC<HierarchyModalProps> = ({ isOpen, bacentaLeader, onClose }) => {
-  const { members, updateMemberHandler, showToast, bacentas } = useAppContext();
+  const { members, updateMemberHandler, showToast, bacentas, userProfile } = useAppContext();
   const [searchTerm, setSearchTerm] = useState('');
+
+  // Check if user can manage hierarchy
+  const canManageHierarchyActions = canManageHierarchy(userProfile);
 
   // Get all fellowship leaders
   const fellowshipLeaders = useMemo(() => {
@@ -172,15 +176,17 @@ const HierarchyModal: React.FC<HierarchyModalProps> = ({ isOpen, bacentaLeader, 
                         <div className="bg-red-100 text-red-700 px-2 py-1 rounded-md text-xs font-medium">
                           ❤️ Fellowship Leader
                         </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleRemoveFellowshipLeader(leader)}
-                          className="text-red-600 hover:bg-red-100 p-1.5 sm:p-2"
-                          title="Remove from hierarchy"
-                        >
-                          <XMarkIcon className="w-3 h-3 sm:w-4 sm:h-4" />
-                        </Button>
+                        {canManageHierarchyActions && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleRemoveFellowshipLeader(leader)}
+                            className="text-red-600 hover:bg-red-100 p-1.5 sm:p-2"
+                            title="Remove from hierarchy"
+                          >
+                            <XMarkIcon className="w-3 h-3 sm:w-4 sm:h-4" />
+                          </Button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -242,15 +248,17 @@ const HierarchyModal: React.FC<HierarchyModalProps> = ({ isOpen, bacentaLeader, 
                         <div className="bg-blue-100 text-blue-700 px-2 py-1 rounded-md text-xs font-medium">
                           ❤️ Available
                         </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleAssignFellowshipLeader(leader)}
-                          className="text-green-600 hover:bg-green-100 p-1.5 sm:p-2"
-                          title="Assign to this bacenta leader"
-                        >
-                          <PlusIcon className="w-3 h-3 sm:w-4 sm:h-4" />
-                        </Button>
+                        {canManageHierarchyActions && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleAssignFellowshipLeader(leader)}
+                            className="text-green-600 hover:bg-green-100 p-1.5 sm:p-2"
+                            title="Assign to this bacenta leader"
+                          >
+                            <PlusIcon className="w-3 h-3 sm:w-4 sm:h-4" />
+                          </Button>
+                        )}
                       </div>
                     </div>
                   </div>

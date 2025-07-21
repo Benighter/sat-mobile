@@ -95,6 +95,33 @@ export const canImportData = (user: User | null): boolean => {
 };
 
 /**
+ * Check if a user can assign member roles (Fellowship Leader, Bacenta Leader, etc.)
+ * @param user The user object to check
+ * @returns boolean indicating if the user can assign member roles
+ */
+export const canAssignMemberRoles = (user: User | null): boolean => {
+  return hasAdminPrivileges(user);
+};
+
+/**
+ * Check if a user can manage hierarchy (assign/remove fellowship leaders to/from bacenta leaders)
+ * @param user The user object to check
+ * @returns boolean indicating if the user can manage hierarchy
+ */
+export const canManageHierarchy = (user: User | null): boolean => {
+  return hasAdminPrivileges(user);
+};
+
+/**
+ * Check if a user can assign bacenta leaders to bacentas
+ * @param user The user object to check
+ * @returns boolean indicating if the user can assign bacenta leaders
+ */
+export const canAssignBacentaLeaders = (user: User | null): boolean => {
+  return hasAdminPrivileges(user);
+};
+
+/**
  * Get a user-friendly role display name
  * @param role The role string from the user object
  * @returns A user-friendly display name for the role

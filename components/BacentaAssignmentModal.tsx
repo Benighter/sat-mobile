@@ -5,6 +5,7 @@ import Modal from './ui/Modal';
 import Button from './ui/Button';
 import Input from './ui/Input';
 import { SearchIcon, PlusIcon, UserIcon, MapPinIcon } from './icons';
+import { canAssignBacentaLeaders } from '../utils/permissionUtils';
 
 // Define MinusIcon since it's not in the icons module
 const MinusIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
@@ -20,8 +21,11 @@ interface BacentaAssignmentModalProps {
 }
 
 const BacentaAssignmentModal: React.FC<BacentaAssignmentModalProps> = ({ isOpen, leader, onClose }) => {
-  const { members, bacentas, updateMemberHandler, showToast } = useAppContext();
+  const { members, bacentas, updateMemberHandler, showToast, userProfile } = useAppContext();
   const [searchTerm, setSearchTerm] = useState('');
+
+  // Check if user can assign bacenta leaders
+  const canAssignLeaders = canAssignBacentaLeaders(userProfile);
 
   // Get the current bacenta assignment for this leader
   const currentBacenta = useMemo(() => {
@@ -99,6 +103,13 @@ const BacentaAssignmentModal: React.FC<BacentaAssignmentModalProps> = ({ isOpen,
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Bacenta Assignment" size="lg">
       <div className="space-y-6">
+        {!canAssignLeaders && (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+            <div className="text-yellow-800 text-sm">
+              <strong>View Only:</strong> You can view bacenta assignments but cannot make changes. Only administrators can assign leaders to bacentas.
+            </div>
+          </div>
+        )}
         {/* Leader Info */}
         <div className="bg-gray-50 rounded-xl p-4">
           <div className="flex items-center space-x-3">
@@ -134,15 +145,17 @@ const BacentaAssignmentModal: React.FC<BacentaAssignmentModalProps> = ({ isOpen,
                     <div className="text-sm text-gray-600">Currently assigned</div>
                   </div>
                 </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleRemoveFromBacenta}
-                  className="text-red-600 hover:bg-red-100 p-2"
-                  title="Remove from this bacenta"
-                >
-                  <MinusIcon className="w-4 h-4" />
-                </Button>
+                {canAssignLeaders && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleRemoveFromBacenta}
+                    className="text-red-600 hover:bg-red-100 p-2"
+                    title="Remove from this bacenta"
+                  >
+                    <MinusIcon className="w-4 h-4" />
+                  </Button>
+                )}
               </div>
             </div>
           ) : (
@@ -187,15 +200,17 @@ const BacentaAssignmentModal: React.FC<BacentaAssignmentModalProps> = ({ isOpen,
                         <div className="text-sm text-gray-500">Available for assignment</div>
                       </div>
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleAssignToBacenta(bacenta)}
-                      className="text-green-600 hover:bg-green-100 p-2"
-                      title="Assign to this bacenta"
-                    >
-                      <PlusIcon className="w-4 h-4" />
-                    </Button>
+                    {canAssignLeaders && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleAssignToBacenta(bacenta)}
+                        className="text-green-600 hover:bg-green-100 p-2"
+                        title="Assign to this bacenta"
+                      >
+                        <PlusIcon className="w-4 h-4" />
+                      </Button>
+                    )}
                   </div>
                 </div>
               ))

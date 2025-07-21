@@ -7,6 +7,7 @@ import Button from './ui/Button';
 import Badge from './ui/Badge';
 import Input from './ui/Input';
 import { formatDisplayDate } from '../utils/dateUtils';
+import { canManageMembers, canManageHierarchy } from '../utils/permissionUtils';
 
 const BacentaLeadersView: React.FC = () => {
   const {
@@ -18,8 +19,13 @@ const BacentaLeadersView: React.FC = () => {
     isLoading,
     displayedSundays,
     openHierarchyModal,
-    showConfirmation
+    showConfirmation,
+    userProfile
   } = useAppContext();
+
+  // Check permissions
+  const canEdit = canManageMembers(userProfile);
+  const canManageHierarchyActions = canManageHierarchy(userProfile);
   
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -77,12 +83,12 @@ const BacentaLeadersView: React.FC = () => {
     return Math.round((memberAttendance / currentMonthSundays.length) * 100);
   };
 
-  // Define table columns
-  const columns = [
+  // Define base table columns
+  const baseColumns = [
     {
       key: 'name',
       header: 'Bacenta Leader',
-      width: '25%',
+      width: canEdit ? '25%' : '30%',
       render: (leader: Member) => (
         <div className="flex items-center space-x-3">
           <div className="w-10 h-10 bg-gradient-to-br from-green-100 to-green-200 rounded-xl flex items-center justify-center">
@@ -105,7 +111,7 @@ const BacentaLeadersView: React.FC = () => {
     {
       key: 'contact',
       header: 'Contact Info',
-      width: '20%',
+      width: canEdit ? '20%' : '25%',
       render: (leader: Member) => (
         <div className="space-y-1">
           <div className="flex items-center space-x-2 text-sm">
@@ -122,7 +128,7 @@ const BacentaLeadersView: React.FC = () => {
     {
       key: 'bacenta',
       header: 'Bacenta',
-      width: '15%',
+      width: canEdit ? '15%' : '20%',
       render: (leader: Member) => (
         <div className="text-center">
           <div className="font-medium text-gray-900">{getBacentaName(leader.bacentaId)}</div>
@@ -135,7 +141,7 @@ const BacentaLeadersView: React.FC = () => {
     {
       key: 'hierarchy',
       header: 'Leadership',
-      width: '15%',
+      width: canEdit ? '15%' : '15%',
       align: 'center' as const,
       render: (leader: Member) => {
         const fellowshipLeaders = getFellowshipLeadersCount(leader.id);
@@ -178,6 +184,11 @@ const BacentaLeadersView: React.FC = () => {
         );
       },
     },
+  ];
+
+  // Add actions column only for users who can edit (admins)
+  const columns = canEdit ? [
+    ...baseColumns,
     {
       key: 'actions',
       header: 'Actions',
@@ -193,7 +204,7 @@ const BacentaLeadersView: React.FC = () => {
               openHierarchyModal(leader);
             }}
             className="p-2 hover:bg-purple-100"
-            title="View Hierarchy"
+            title={canManageHierarchyActions ? "Manage Hierarchy" : "View Hierarchy"}
           >
             <UsersIcon className="w-4 h-4 text-purple-600" />
           </Button>
@@ -228,7 +239,7 @@ const BacentaLeadersView: React.FC = () => {
         </div>
       ),
     },
-  ];
+  ] : baseColumns;
 
   return (
     <div className="space-y-6">
@@ -241,7 +252,9 @@ const BacentaLeadersView: React.FC = () => {
               Bacenta Leaders - {currentMonthName}
             </h3>
             <p className="text-sm text-gray-600 mt-1">
-              Leadership overview and hierarchy management
+              {canEdit
+                ? 'Leadership overview and hierarchy management'
+                : 'Leadership overview - Click on any leader to view their hierarchy'}
             </p>
           </div>
           <div className="w-full sm:w-64">
@@ -265,7 +278,7 @@ const BacentaLeadersView: React.FC = () => {
             ? "No bacenta leaders match your search" 
             : "No bacenta leaders assigned yet"
         }
-        onRowClick={(leader) => openMemberForm(leader)}
+        onRowClick={(leader) => canEdit ? openMemberForm(leader) : openHierarchyModal(leader)}
       />
 
       {/* Summary */}
