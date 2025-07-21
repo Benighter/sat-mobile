@@ -87,7 +87,7 @@ const DashboardView: React.FC = memo(() => {
       record => record.date === currentSunday && record.status === 'Present'
     );
 
-    // Count present members and new believers
+    // Get present member IDs and new believer IDs
     const presentMemberIds = sundayRecords
       .filter(record => record.memberId)
       .map(record => record.memberId!);
@@ -96,7 +96,12 @@ const DashboardView: React.FC = memo(() => {
       .filter(record => record.newBelieverId)
       .map(record => record.newBelieverId!);
 
-    const totalPresent = presentMemberIds.length + presentNewBelieverIds.length;
+    // Filter to only include members and new believers that actually exist
+    // This prevents counting orphaned attendance records for deleted members
+    const presentMembers = members.filter(member => presentMemberIds.includes(member.id));
+    const presentNewBelievers = newBelievers.filter(nb => presentNewBelieverIds.includes(nb.id));
+
+    const totalPresent = presentMembers.length + presentNewBelievers.length;
 
     return {
       total: totalPresent,
