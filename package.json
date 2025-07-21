@@ -18,7 +18,10 @@
     "test:firebase": "node scripts/test-firebase.js",
     "setup:firebase": "node scripts/setup-firebase.js",
     "demo:firebase": "node scripts/demo-firebase.js",
-    "migration:guide": "echo 'See FIREBASE_MIGRATION_GUIDE.md for detailed migration instructions'"
+    "migration:guide": "echo 'See FIREBASE_MIGRATION_GUIDE.md for detailed migration instructions'",
+    "migrate:auth-links": "node scripts/migrate-auth-links.js migrate",
+    "rollback:auth-links": "node scripts/migrate-auth-links.js rollback",
+    "migration:dynamic-links": "echo 'See FIREBASE_DYNAMIC_LINKS_MIGRATION.md for Dynamic Links migration guide'"
   },
   "dependencies": {
     "@capacitor/android": "^7.4.1",
@@ -46,6 +49,7 @@
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
     "autoprefixer": "^10.4.21",
+    "firebase-admin": "^13.0.1",
     "tailwindcss": "^4.1.11",
     "terser": "^5.42.0",
     "typescript": "~5.7.2",
