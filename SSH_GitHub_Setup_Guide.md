@@ -79,14 +79,20 @@ If you have commits with the wrong email, amend the last commit:
 git commit --amend --reset-author --no-edit
 ```
 
-### Step 5: Add SSH Remote and Push
+### Step 5: Add SSH Remote and Set Upstream
 
 ```bash
 # Add SSH remote
 git remote add [remote-name] git@github.com:[username]/[repository].git
 
+# Set upstream tracking for easy pushing
+git branch --set-upstream-to=[remote-name]/main main
+
 # Push to the new remote
 git push [remote-name] main
+
+# After upstream is set, you can just use:
+git push
 ```
 
 ## Verification Commands
@@ -138,17 +144,56 @@ git push [remote-name] [branch-name]
 
 ### Issue 4: Permission denied
 - **Cause**: SSH key not added to GitHub account
-- **Solution**: 
+- **Solution**:
   1. Copy public key: `cat ~/.ssh/id_ed25519.pub`
   2. Add to GitHub: Settings → SSH and GPG keys → New SSH key
+
+### Issue 5: Having to type remote and branch every time
+- **Cause**: No upstream tracking configured
+- **Solution**:
+  ```bash
+  git branch --set-upstream-to=[remote-name]/main main
+  # Then just use: git push
+  ```
 
 ## Best Practices
 
 1. **Always use SSH for private repositories** - More secure than HTTPS with tokens
 2. **Use GitHub noreply email** - Protects your privacy
-3. **Test SSH connection** before pushing
-4. **Keep SSH config simple** - Use standard ports and hostnames
-5. **Backup SSH keys** - Store them securely
+3. **Set up upstream tracking** - Simplifies push/pull commands
+4. **Use global Git configuration** - Consistent settings across all repositories
+5. **Test SSH connection** before pushing
+6. **Keep SSH config simple** - Use standard ports and hostnames
+7. **Backup SSH keys** - Store them securely
+8. **Use the automated setup script** - Ensures consistent configuration
+
+## Automated Setup Script
+
+For quick setup, use the provided PowerShell script:
+
+```powershell
+# Run the automated setup script
+powershell -ExecutionPolicy Bypass -File setup-github-ssh.ps1
+```
+
+This script will:
+- Create/update SSH configuration
+- Set global Git configuration
+- Test SSH connection
+- Display current settings
+
+## Upstream Tracking Setup
+
+To avoid typing the remote and branch every time:
+
+```bash
+# Set upstream tracking (one-time setup)
+git branch --set-upstream-to=benighter/main main
+
+# Now you can just use:
+git push                    # Instead of: git push benighter main
+git pull                    # Instead of: git pull benighter main
+```
 
 ## Quick Reference Commands
 
@@ -156,14 +201,18 @@ git push [remote-name] [branch-name]
 # Test SSH
 ssh -T git@github.com
 
-# Set correct email
-git config user.email "[user-id]+[username]@users.noreply.github.com"
+# Set correct email (global)
+git config --global user.email "[user-id]+[username]@users.noreply.github.com"
+git config --global user.name "[username]"
 
 # Add SSH remote
-git remote add origin git@github.com:[username]/[repo].git
+git remote add benighter git@github.com:[username]/[repo].git
 
-# Push with SSH
-git push origin main
+# Set upstream tracking
+git branch --set-upstream-to=benighter/main main
+
+# Push with SSH (after upstream setup)
+git push                    # Simple push to tracked remote
 ```
 
 ## File Locations
@@ -171,6 +220,21 @@ git push origin main
 - **SSH Config**: `~/.ssh/config` (Windows: `C:\Users\[username]\.ssh\config`)
 - **SSH Keys**: `~/.ssh/id_ed25519` and `~/.ssh/id_ed25519.pub`
 - **Git Config**: `.git/config` (local) or `~/.gitconfig` (global)
+- **Setup Script**: `setup-github-ssh.ps1` (in project root)
+
+## Complete Workflow Example
+
+```bash
+# One-time setup
+powershell -ExecutionPolicy Bypass -File setup-github-ssh.ps1
+git remote add benighter git@github.com:Benighter/sat-mobile.git
+git branch --set-upstream-to=benighter/main main
+
+# Daily workflow
+git add .
+git commit -m "Your changes"
+git push                    # Simple push!
+```
 
 ---
 
