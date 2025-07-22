@@ -35,7 +35,6 @@ const MemberFormModal: React.FC<MemberFormModalProps> = ({ isOpen, onClose, memb
     bornAgainStatus: false,
     bacentaId: currentBacentaId || (bacentas.length > 0 ? bacentas[0].id : ''),
     role: 'Member' as MemberRole, // Default role is Member
-    joinedDate: formatDateToYYYYMMDD(new Date()), // Default to today for new members
   };
   const [formData, setFormData] = useState(initialFormData);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -50,7 +49,6 @@ const MemberFormModal: React.FC<MemberFormModalProps> = ({ isOpen, onClose, memb
         bornAgainStatus: member.bornAgainStatus,
         bacentaId: member.bacentaId,
         role: member.role || 'Member', // Default to Member if role is not set (for backward compatibility)
-        joinedDate: member.joinedDate ? member.joinedDate : formatDateToYYYYMMDD(new Date(member.createdDate)), // Use existing or fallback
       });
     } else {
       // For new members, default to current bacenta if we're in one
@@ -58,7 +56,6 @@ const MemberFormModal: React.FC<MemberFormModalProps> = ({ isOpen, onClose, memb
       setFormData({
         ...initialFormData,
         bacentaId: defaultBacentaId,
-        joinedDate: formatDateToYYYYMMDD(new Date()), // Default for new
       });
     }
     setErrors({});
@@ -79,19 +76,6 @@ const MemberFormModal: React.FC<MemberFormModalProps> = ({ isOpen, onClose, memb
     const newErrors: Record<string, string> = {};
     if (!formData.firstName.trim()) newErrors.firstName = 'First name is required.';
     if (!formData.lastName.trim()) newErrors.lastName = 'Last name is required.';
-    if (!formData.joinedDate) newErrors.joinedDate = 'Joined date is required.';
-    else {
-        // Basic validation for YYYY-MM-DD format, though type="date" input helps
-        const datePattern = /^\d{4}-\d{2}-\d{2}$/;
-        if(!datePattern.test(formData.joinedDate)) {
-            newErrors.joinedDate = 'Joined date must be in YYYY-MM-DD format.';
-        } else {
-            const dateObj = new Date(formData.joinedDate);
-            if (isNaN(dateObj.getTime())) { // Check if date is valid
-                 newErrors.joinedDate = 'Invalid joined date.';
-            }
-        }
-    }
     if (formData.phoneNumber && !/^[0-9().+\-\s]+$/.test(formData.phoneNumber)) { // Allow more chars for phone
         newErrors.phoneNumber = 'Phone number format is invalid.';
     }
@@ -167,15 +151,7 @@ const MemberFormModal: React.FC<MemberFormModalProps> = ({ isOpen, onClose, memb
           onChange={handleChange} 
           error={errors.buildingAddress}
         />
-         <Input
-            label="Joined Date"
-            name="joinedDate"
-            type="date" // HTML5 date input
-            value={formData.joinedDate}
-            onChange={handleChange}
-            error={errors.joinedDate}
-            required
-        />
+
         <div>
           <label htmlFor="bacentaId" className="block text-sm font-medium text-gray-700 mb-1">Bacenta</label>
           {isInSpecificBacenta && !member ? (

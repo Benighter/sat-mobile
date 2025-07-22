@@ -11,7 +11,6 @@ export interface Member {
   bacentaId: string; // Renamed from congregationGroup, stores Bacenta.id, empty if unassigned
   bacentaLeaderId?: string; // For Fellowship Leaders: ID of the Bacenta Leader they report to
   role: MemberRole; // Role assignment: Member (default), Fellowship Leader, or Bacenta Leader
-  joinedDate: string; // ISO string, YYYY-MM-DD from form
   createdDate: string; // ISO string
   lastUpdated: string; // ISO string
 }
@@ -29,7 +28,6 @@ export interface NewBeliever {
   year: string;
   isFirstTime: boolean; // First Time? boolean field
   ministry: string; // Ministry dropdown selection
-  joinedDate: string; // Date they joined as new believer, ISO string YYYY-MM-DD
   createdDate: string; // ISO string
   lastUpdated: string; // ISO string
 }

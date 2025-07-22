@@ -562,7 +562,7 @@ const createExecutiveDashboard = async (workbook: ExcelJS.Workbook, data: Advanc
   currentRow += 2;
 
   // All Members Table
-  const membersHeaders = ['First Name', 'Last Name', 'Phone', 'Bacenta', 'Role', 'Born Again', 'Join Date', 'Attendance Rate', 'Present Count'];
+  const membersHeaders = ['First Name', 'Last Name', 'Phone', 'Bacenta', 'Role', 'Born Again', 'Attendance Rate', 'Present Count'];
   const membersData = members.map(member => {
     const bacenta = bacentas.find(b => b.id === member.bacentaId);
     let presentCount = 0;
@@ -583,7 +583,6 @@ const createExecutiveDashboard = async (workbook: ExcelJS.Workbook, data: Advanc
       bacenta ? bacenta.name : 'Unassigned',
       member.role || 'Member',
       member.bornAgainStatus ? 'Yes' : 'No',
-      new Date(member.joinedDate).toLocaleDateString(),
       `${attendanceRate}%`,
       presentCount.toString()
     ];
@@ -742,7 +741,7 @@ const createEnhancedSummary = async (workbook: ExcelJS.Workbook, data: AdvancedE
     const bacentaStats = calculateAttendanceStats(bacentaMembers, attendanceRecords, options.dateRange);
     const avgAge = bacentaMembers.length > 0 ?
       Math.round(bacentaMembers.reduce((sum, member) => {
-        const memberDays = Math.floor((Date.now() - new Date(member.joinedDate).getTime()) / (1000 * 60 * 60 * 24));
+        const memberDays = Math.floor((Date.now() - new Date(member.createdDate).getTime()) / (1000 * 60 * 60 * 24));
         return sum + memberDays;
       }, 0) / bacentaMembers.length) : 0;
 
@@ -819,10 +818,10 @@ const createEnhancedBacentaWorksheet = async (workbook: ExcelJS.Workbook, bacent
     ['Total Absent Records', bacentaStats.absentCount.toString()],
     ['Born Again Members', bacentaMembers.filter(m => m.bornAgainStatus).length.toString()],
     ['New Members (Last 30 days)', bacentaMembers.filter(m => {
-      const joinDate = new Date(m.joinedDate);
+      const createdDate = new Date(m.createdDate);
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-      return joinDate >= thirtyDaysAgo;
+      return createdDate >= thirtyDaysAgo;
     }).length.toString()]
   ];
 
@@ -830,7 +829,7 @@ const createEnhancedBacentaWorksheet = async (workbook: ExcelJS.Workbook, bacent
   currentRow += 2;
 
   // Member Attendance Matrix
-  const attendanceHeaders = ['Member Name', 'Phone', 'Born Again', 'Join Date'];
+  const attendanceHeaders = ['Member Name', 'Phone', 'Born Again'];
   sundays.forEach(sunday => {
     attendanceHeaders.push(sunday.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
   });
@@ -840,8 +839,7 @@ const createEnhancedBacentaWorksheet = async (workbook: ExcelJS.Workbook, bacent
     const memberRow = [
       `${member.firstName} ${member.lastName}`,
       options.includePersonalInfo ? member.phoneNumber : 'Hidden',
-      member.bornAgainStatus ? 'Yes' : 'No',
-      new Date(member.joinedDate).toLocaleDateString()
+      member.bornAgainStatus ? 'Yes' : 'No'
     ];
 
     let presentCount = 0;
@@ -864,7 +862,7 @@ const createEnhancedBacentaWorksheet = async (workbook: ExcelJS.Workbook, bacent
   currentRow = createStyledTable(worksheet, currentRow, attendanceHeaders, attendanceData, theme, 'Member Attendance Matrix');
 
   // Apply conditional formatting to attendance data
-  const attendanceStartCol = 5; // After Name, Phone, Born Again, Join Date
+  const attendanceStartCol = 4; // After Name, Phone, Born Again
   const attendanceEndCol = attendanceStartCol + sundays.length - 1;
   const rateCol = attendanceEndCol + 2; // Attendance Rate column
   const performanceCol = rateCol + 1; // Performance column
@@ -929,7 +927,7 @@ const createEnhancedMemberDirectory = async (workbook: ExcelJS.Workbook, data: A
   // Member directory data with enhanced information
   const memberData = members.map(member => {
     const bacenta = bacentas.find(b => b.id === member.bacentaId);
-    const memberSince = Math.floor((Date.now() - new Date(member.joinedDate).getTime()) / (1000 * 60 * 60 * 24));
+    const memberSince = Math.floor((Date.now() - new Date(member.createdDate).getTime()) / (1000 * 60 * 60 * 24));
 
     // Calculate member's attendance statistics
     const memberRecords = attendanceRecords.filter(r =>
@@ -962,7 +960,7 @@ const createEnhancedMemberDirectory = async (workbook: ExcelJS.Workbook, data: A
       options.includePersonalInfo ? member.buildingAddress : 'Hidden',
       bacenta ? bacenta.name : 'Unassigned',
       member.bornAgainStatus ? 'Yes' : 'No',
-      new Date(member.joinedDate).toLocaleDateString(),
+      new Date(member.createdDate).toLocaleDateString(),
       `${memberSince} days`,
       `${attendanceRate}%`,
       presentCount.toString(),
@@ -974,7 +972,7 @@ const createEnhancedMemberDirectory = async (workbook: ExcelJS.Workbook, data: A
 
   const memberHeaders = [
     'First Name', 'Last Name', 'Phone', 'Address', 'Bacenta',
-    'Born Again', 'Join Date', 'Member Since', 'Attendance Rate',
+    'Born Again', 'Created Date', 'Member Since', 'Attendance Rate',
     'Present Count', 'Total Records', 'Status', 'Engagement Score'
   ];
 

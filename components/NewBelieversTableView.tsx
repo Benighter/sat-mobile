@@ -49,7 +49,7 @@ const NewBelieversTableView: React.FC = () => {
         
         return matchesSearch && matchesMinistry && matchesFirstTime;
       })
-      .sort((a, b) => new Date(b.joinedDate).getTime() - new Date(a.joinedDate).getTime());
+      .sort((a, b) => new Date(b.createdDate).getTime() - new Date(a.createdDate).getTime());
   }, [newBelievers, searchTerm, selectedMinistry, showFirstTimeOnly]);
 
   // Get attendance status for a new believer on a specific date
@@ -122,23 +122,7 @@ const NewBelieversTableView: React.FC = () => {
         </div>
       ),
     },
-    {
-      key: 'joinedDate',
-      header: 'Joined Date',
-      width: '15%',
-      align: 'center' as const,
-      render: (newBeliever: NewBeliever) => (
-        <div className="flex flex-col items-center">
-          <div className="flex items-center space-x-2">
-            <CalendarIcon className="w-4 h-4 text-blue-500" />
-            <span className="font-semibold text-sm">{formatDateToDisplay(newBeliever.joinedDate)}</span>
-          </div>
-          <span className="text-xs text-gray-500 mt-1">
-            {Math.floor((new Date().getTime() - new Date(newBeliever.joinedDate).getTime()) / (1000 * 60 * 60 * 24))} days ago
-          </span>
-        </div>
-      ),
-    },
+
     // Attendance columns for each Sunday
     ...displayedSundays.map(date => ({
       key: `attendance_${date}`,

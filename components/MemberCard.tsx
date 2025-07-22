@@ -174,17 +174,7 @@ const MemberCard: React.FC<MemberCardProps> = ({ member }) => {
           </div>
         </div>
 
-        <div className="glass p-4 rounded-xl hover:scale-102 transition-transform duration-200 md:col-span-2">
-          <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-purple-100 to-purple-200 rounded-xl flex items-center justify-center">
-              <CalendarIcon className="w-5 h-5 text-purple-600"/>
-            </div>
-            <div>
-              <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">Member Since</p>
-              <p className="font-semibold text-gray-700">{member.joinedDate ? formatDisplayDate(member.joinedDate) : <span className="text-gray-400 italic">N/A</span>}</p>
-            </div>
-          </div>
-        </div>
+
       </div>
 
 

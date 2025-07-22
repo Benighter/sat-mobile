@@ -268,7 +268,7 @@ const BulkMemberAddModal: React.FC<BulkMemberAddModalProps> = ({
               </h4>
               <p className="text-sm text-green-700">
                 Review the parsed information below. Members will be added to{' '}
-                <strong>{selectedBacenta?.name}</strong> with joined date{' '}
+                <strong>{selectedBacenta?.name}</strong>.
               </p>
             </div>
 

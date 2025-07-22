@@ -79,8 +79,8 @@ const NewBelieverDetailModal: React.FC<NewBelieverDetailModalProps> = ({
     );
   };
 
-  const daysSinceJoined = Math.floor(
-    (new Date().getTime() - new Date(newBeliever.joinedDate).getTime()) / (1000 * 60 * 60 * 24)
+  const daysSinceCreated = Math.floor(
+    (new Date().getTime() - new Date(newBeliever.createdDate).getTime()) / (1000 * 60 * 60 * 24)
   );
 
   return (
@@ -159,9 +159,9 @@ const NewBelieverDetailModal: React.FC<NewBelieverDetailModalProps> = ({
             <div className="flex items-center space-x-3">
               <ClockIcon className="w-5 h-5 text-gray-400" />
               <div>
-                <div className="text-sm text-gray-500">Joined Date</div>
+                <div className="text-sm text-gray-500">Created Date</div>
                 <div className="font-medium">
-                  {formatDateToDisplay(newBeliever.joinedDate)} ({daysSinceJoined} days ago)
+                  {formatDateToDisplay(newBeliever.createdDate)} ({daysSinceCreated} days ago)
                 </div>
               </div>
             </div>

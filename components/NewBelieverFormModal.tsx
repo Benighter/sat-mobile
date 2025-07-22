@@ -29,7 +29,6 @@ const NewBelieverFormModal: React.FC<NewBelieverFormModalProps> = ({ isOpen, onC
     year: '',
     isFirstTime: false,
     ministry: '',
-    joinedDate: formatDateToYYYYMMDD(new Date()), // Default to today
   };
 
   const [formData, setFormData] = useState(initialFormData);
@@ -49,12 +48,10 @@ const NewBelieverFormModal: React.FC<NewBelieverFormModalProps> = ({ isOpen, onC
         year: newBeliever.year,
         isFirstTime: newBeliever.isFirstTime,
         ministry: newBeliever.ministry,
-        joinedDate: newBeliever.joinedDate,
       });
     } else {
       setFormData({
         ...initialFormData,
-        joinedDate: formatDateToYYYYMMDD(new Date()),
       });
     }
     setErrors({});
@@ -88,9 +85,7 @@ const NewBelieverFormModal: React.FC<NewBelieverFormModalProps> = ({ isOpen, onC
       newErrors.dateOfBirth = 'Please enter a valid date';
     }
 
-    if (formData.joinedDate && !/^\d{4}-\d{2}-\d{2}$/.test(formData.joinedDate)) {
-      newErrors.joinedDate = 'Please enter a valid date';
-    }
+
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -218,24 +213,15 @@ const NewBelieverFormModal: React.FC<NewBelieverFormModalProps> = ({ isOpen, onC
           />
         </div>
 
-        {/* Year and Joined Date */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Input 
-            label="Year" 
-            name="year" 
-            value={formData.year} 
-            onChange={handleChange} 
+        {/* Year */}
+        <div>
+          <Input
+            label="Year"
+            name="year"
+            value={formData.year}
+            onChange={handleChange}
             error={errors.year}
             placeholder="Academic year or year of study"
-          />
-          <Input
-            label="Joined Date"
-            name="joinedDate"
-            type="date"
-            value={formData.joinedDate}
-            onChange={handleChange}
-            error={errors.joinedDate}
-            required
           />
         </div>
 

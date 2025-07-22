@@ -30,12 +30,8 @@ export const MemberService = {
       localStorage.setItem(MEMBERS_KEY, JSON.stringify(initialMembers));
       return initialMembers;
     }
-    // Ensure existing members have a joinedDate if they are loaded from storage and don't have one
     const members = JSON.parse(data) as Member[];
-    return members.map(m => ({
-      ...m,
-      joinedDate: m.joinedDate || formatDateToYYYYMMDD(new Date(m.createdDate)) // Fallback for old data
-    }));
+    return members;
   },
   addMember: async (memberData: Omit<Member, 'id' | 'createdDate' | 'lastUpdated'>): Promise<Member> => {
     const members = await MemberService.getMembers();
@@ -45,8 +41,6 @@ export const MemberService = {
       id: `m_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`,
       createdDate: now,
       lastUpdated: now,
-      // Ensure joinedDate is set, defaulting to today if not provided (though form should provide it)
-      joinedDate: memberData.joinedDate || formatDateToYYYYMMDD(new Date()),
       // Ensure role is set, defaulting to Member if not provided
       role: memberData.role || 'Member',
     };
@@ -79,7 +73,6 @@ export const MemberService = {
           id: `m_${timestamp}_${random}`,
           createdDate: now,
           lastUpdated: now,
-          joinedDate: memberData.joinedDate || formatDateToYYYYMMDD(new Date()),
           // Ensure required fields have defaults
           firstName: memberData.firstName.trim(),
           lastName: memberData.lastName?.trim() || '',
@@ -113,8 +106,6 @@ export const MemberService = {
   updateMember: async (updatedMember: Member): Promise<Member> => {
     let members = await MemberService.getMembers();
     updatedMember.lastUpdated = new Date().toISOString();
-    // Ensure joinedDate is set on update
-    updatedMember.joinedDate = updatedMember.joinedDate || formatDateToYYYYMMDD(new Date(updatedMember.createdDate));
     // Ensure role is set on update, defaulting to Member if not provided
     updatedMember.role = updatedMember.role || 'Member';
     members = members.map(m => m.id === updatedMember.id ? updatedMember : m);

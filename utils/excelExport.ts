@@ -87,7 +87,7 @@ const createSummaryWorksheet = (data: ExcelData) => {
     ['Total Absent:', stats.absentCount],
     [],
     ['ALL MEMBERS'],
-    ['First Name', 'Last Name', 'Phone', 'Bacenta', 'Role', 'Born Again', 'Join Date', 'Attendance Rate', 'Present Count']
+    ['First Name', 'Last Name', 'Phone', 'Bacenta', 'Role', 'Born Again', 'Attendance Rate', 'Present Count']
   ];
 
   // Add all members data
@@ -111,7 +111,6 @@ const createSummaryWorksheet = (data: ExcelData) => {
       bacenta ? bacenta.name : 'Unassigned',
       member.role || 'Member',
       member.bornAgainStatus ? 'Yes' : 'No',
-      new Date(member.joinedDate).toLocaleDateString(),
       `${attendanceRate}%`,
       presentCount.toString()
     ]);
@@ -202,7 +201,7 @@ const createBacentaWorksheet = (bacenta: Bacenta, data: ExcelData) => {
   ];
   
   // Create attendance table header
-  const headerRow = ['Member Name', 'Phone', 'Born Again', 'Join Date'];
+  const headerRow = ['Member Name', 'Phone', 'Born Again'];
   sundays.forEach(sunday => {
     headerRow.push(sunday.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
   });
@@ -214,8 +213,7 @@ const createBacentaWorksheet = (bacenta: Bacenta, data: ExcelData) => {
     const memberRow = [
       `${member.firstName} ${member.lastName}`,
       options.includePersonalInfo ? member.phoneNumber : 'Hidden',
-      member.bornAgainStatus ? 'Yes' : 'No',
-      new Date(member.joinedDate).toLocaleDateString()
+      member.bornAgainStatus ? 'Yes' : 'No'
     ];
     
     let presentCount = 0;
@@ -244,13 +242,13 @@ const createAllMembersWorksheet = (data: ExcelData) => {
     ['All Members Directory'],
     ['Generated on:', new Date().toLocaleDateString()],
     [],
-    ['First Name', 'Last Name', 'Phone', 'Address', 'Bacenta', 'Born Again', 'Join Date', 'Member Since']
+    ['First Name', 'Last Name', 'Phone', 'Address', 'Bacenta', 'Born Again', 'Created Date', 'Member Since']
   ];
   
   members.forEach(member => {
     const bacenta = bacentas.find(b => b.id === member.bacentaId);
-    const memberSince = Math.floor((Date.now() - new Date(member.joinedDate).getTime()) / (1000 * 60 * 60 * 24));
-    
+    const memberSince = Math.floor((Date.now() - new Date(member.createdDate).getTime()) / (1000 * 60 * 60 * 24));
+
     worksheetData.push([
       member.firstName,
       member.lastName,
@@ -258,7 +256,7 @@ const createAllMembersWorksheet = (data: ExcelData) => {
       options.includePersonalInfo ? member.buildingAddress : 'Hidden',
       bacenta ? bacenta.name : 'Unassigned',
       member.bornAgainStatus ? 'Yes' : 'No',
-      new Date(member.joinedDate).toLocaleDateString(),
+      new Date(member.createdDate).toLocaleDateString(),
       `${memberSince} days`
     ]);
   });
