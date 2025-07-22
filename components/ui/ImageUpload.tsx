@@ -1,21 +1,29 @@
 import React, { useState, useRef } from 'react';
-import { Camera, X, User, Upload } from 'lucide-react';
+import { Camera, X, User, Upload, Crop } from 'lucide-react';
+import ImageCropper from './ImageCropper';
+import ImageCropperWithPresets from './ImageCropperWithPresets';
 
 interface ImageUploadProps {
   value?: string; // Base64 string
   onChange: (base64: string | null) => void;
   className?: string;
   size?: 'sm' | 'md' | 'lg';
+  enableCropping?: boolean; // Enable cropping functionality
+  cropPresets?: boolean; // Use preset cropper (default: true)
 }
 
-const ImageUpload: React.FC<ImageUploadProps> = ({ 
-  value, 
-  onChange, 
-  className = '', 
-  size = 'md' 
+const ImageUpload: React.FC<ImageUploadProps> = ({
+  value,
+  onChange,
+  className = '',
+  size = 'md',
+  enableCropping = true,
+  cropPresets = true
 }) => {
   const [isFullScreen, setIsFullScreen] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [showCropper, setShowCropper] = useState(false);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const sizeClasses = {
@@ -35,12 +43,28 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
       const reader = new FileReader();
       reader.onload = (e) => {
         const base64 = e.target?.result as string;
-        onChange(base64);
+        if (enableCropping) {
+          setSelectedImage(base64);
+          setShowCropper(true);
+        } else {
+          onChange(base64);
+        }
       };
       reader.readAsDataURL(file);
     } else {
       alert('Please select a valid image file');
     }
+  };
+
+  const handleCropComplete = (croppedImage: string) => {
+    onChange(croppedImage);
+    setShowCropper(false);
+    setSelectedImage(null);
+  };
+
+  const handleCropCancel = () => {
+    setShowCropper(false);
+    setSelectedImage(null);
   };
 
   const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -108,7 +132,12 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
                 className="w-full h-full object-cover rounded-2xl"
               />
               <div className="absolute inset-0 bg-black bg-opacity-0 hover:bg-opacity-20 transition-all duration-200 rounded-2xl flex items-center justify-center">
-                <Camera className="w-6 h-6 text-white opacity-0 hover:opacity-100 transition-opacity duration-200" />
+                <div className="flex space-x-2">
+                  <Camera className="w-5 h-5 text-white opacity-0 hover:opacity-100 transition-opacity duration-200" />
+                  {enableCropping && (
+                    <Crop className="w-5 h-5 text-white opacity-0 hover:opacity-100 transition-opacity duration-200" />
+                  )}
+                </div>
               </div>
             </>
           ) : (
@@ -166,18 +195,52 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
             >
               <X className="w-6 h-6" />
             </button>
-            <button
-              onClick={() => {
-                setIsFullScreen(false);
-                openFileDialog();
-              }}
-              className="absolute bottom-4 right-4 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg flex items-center space-x-2 transition-colors duration-200"
-            >
-              <Camera className="w-4 h-4" />
-              <span>Change Photo</span>
-            </button>
+            <div className="absolute bottom-4 right-4 flex space-x-2">
+              {enableCropping && (
+                <button
+                  onClick={() => {
+                    setIsFullScreen(false);
+                    setSelectedImage(value);
+                    setShowCropper(true);
+                  }}
+                  className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg flex items-center space-x-2 transition-colors duration-200"
+                >
+                  <Crop className="w-4 h-4" />
+                  <span>Crop</span>
+                </button>
+              )}
+              <button
+                onClick={() => {
+                  setIsFullScreen(false);
+                  openFileDialog();
+                }}
+                className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg flex items-center space-x-2 transition-colors duration-200"
+              >
+                <Camera className="w-4 h-4" />
+                <span>Change</span>
+              </button>
+            </div>
           </div>
         </div>
+      )}
+
+      {/* Image Cropper Modal */}
+      {showCropper && selectedImage && (
+        <>
+          {cropPresets ? (
+            <ImageCropperWithPresets
+              image={selectedImage}
+              onCropComplete={handleCropComplete}
+              onCancel={handleCropCancel}
+            />
+          ) : (
+            <ImageCropper
+              image={selectedImage}
+              onCropComplete={handleCropComplete}
+              onCancel={handleCropCancel}
+            />
+          )}
+        </>
       )}
     </>
   );
