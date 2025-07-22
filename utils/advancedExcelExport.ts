@@ -521,12 +521,13 @@ const applyAttendanceRateFormatting = (
 
 
 
-// Create Executive Dashboard worksheet
+// Create Executive Dashboard worksheet with all members and leaders
 const createExecutiveDashboard = async (workbook: ExcelJS.Workbook, data: AdvancedExcelData): Promise<ExcelJS.Worksheet> => {
   const { members, bacentas, attendanceRecords, options } = data;
   const worksheet = workbook.addWorksheet('Executive Dashboard');
   const theme = options.theme;
   const colors = COLOR_SCHEMES[theme];
+  const sundays = getSundaysInRange(options.dateRange.startDate, options.dateRange.endDate);
 
   // Create header
   let currentRow = createWorksheetHeader(
@@ -556,6 +557,112 @@ const createExecutiveDashboard = async (workbook: ExcelJS.Workbook, data: Advanc
     const statusCell = worksheet.getCell(currentRow - kpiData.length + i, 3);
     const status = kpiData[i][2];
     applyPerformanceFormatting(statusCell, status, colors);
+  }
+
+  currentRow += 2;
+
+  // All Members Table
+  const membersHeaders = ['First Name', 'Last Name', 'Phone', 'Bacenta', 'Role', 'Born Again', 'Join Date', 'Attendance Rate', 'Present Count'];
+  const membersData = members.map(member => {
+    const bacenta = bacentas.find(b => b.id === member.bacentaId);
+    let presentCount = 0;
+
+    // Calculate attendance for this member
+    sundays.forEach(sunday => {
+      const dateStr = formatDateToYYYYMMDD(sunday);
+      const record = attendanceRecords.find(r => r.memberId === member.id && r.date === dateStr);
+      if (record && record.status === 'Present') presentCount++;
+    });
+
+    const attendanceRate = sundays.length > 0 ? Math.round((presentCount / sundays.length) * 100) : 0;
+
+    return [
+      member.firstName,
+      member.lastName,
+      options.includePersonalInfo ? member.phoneNumber : 'Hidden',
+      bacenta ? bacenta.name : 'Unassigned',
+      member.role || 'Member',
+      member.bornAgainStatus ? 'Yes' : 'No',
+      new Date(member.joinedDate).toLocaleDateString(),
+      `${attendanceRate}%`,
+      presentCount.toString()
+    ];
+  });
+
+  currentRow = createStyledTable(worksheet, currentRow, membersHeaders, membersData, theme, 'All Members');
+
+  // Apply conditional formatting to attendance rate column
+  for (let i = 0; i < membersData.length; i++) {
+    const attendanceCell = worksheet.getCell(currentRow - membersData.length + i, 8);
+    const rate = parseInt(membersData[i][7]);
+    if (rate >= 80) {
+      attendanceCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: colors.success } };
+    } else if (rate >= 60) {
+      attendanceCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: colors.warning } };
+    } else {
+      attendanceCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: colors.danger } };
+    }
+    attendanceCell.font = { color: { argb: 'FFFFFFFF' }, bold: true };
+  }
+
+  currentRow += 2;
+
+  // All Leaders Table (Bacenta & Fellowship Leaders)
+  const leadersHeaders = ['Name', 'Role', 'Bacenta', 'Phone', 'Attendance Rate', 'Present Count', 'Leadership Info'];
+  const leaders = members.filter(m => m.role === 'Bacenta Leader' || m.role === 'Fellowship Leader');
+
+  const leadersData = leaders.map(leader => {
+    const bacenta = bacentas.find(b => b.id === leader.bacentaId);
+    let presentCount = 0;
+
+    // Calculate attendance for this leader
+    sundays.forEach(sunday => {
+      const dateStr = formatDateToYYYYMMDD(sunday);
+      const record = attendanceRecords.find(r => r.memberId === leader.id && r.date === dateStr);
+      if (record && record.status === 'Present') presentCount++;
+    });
+
+    const attendanceRate = sundays.length > 0 ? Math.round((presentCount / sundays.length) * 100) : 0;
+
+    // Get leadership info
+    let leadershipInfo = '';
+    if (leader.role === 'Bacenta Leader') {
+      const fellowshipLeadersCount = members.filter(m => m.role === 'Fellowship Leader' && m.bacentaLeaderId === leader.id).length;
+      const totalUnderLeadership = members.filter(m =>
+        (m.role === 'Fellowship Leader' && m.bacentaLeaderId === leader.id) ||
+        (m.role === 'Member' && m.bacentaId === leader.bacentaId)
+      ).length;
+      leadershipInfo = `${fellowshipLeadersCount} FL, ${totalUnderLeadership} total under leadership`;
+    } else if (leader.role === 'Fellowship Leader') {
+      const bacentaLeader = members.find(m => m.id === leader.bacentaLeaderId);
+      leadershipInfo = bacentaLeader ? `Reports to ${bacentaLeader.firstName} ${bacentaLeader.lastName}` : 'Unassigned';
+    }
+
+    return [
+      `${leader.firstName} ${leader.lastName}`,
+      leader.role,
+      bacenta ? bacenta.name : 'Unassigned',
+      options.includePersonalInfo ? leader.phoneNumber : 'Hidden',
+      `${attendanceRate}%`,
+      presentCount.toString(),
+      leadershipInfo
+    ];
+  });
+
+  currentRow = createStyledTable(worksheet, currentRow, leadersHeaders, leadersData, theme, 'All Leaders (Bacenta & Fellowship Leaders)');
+
+  // Apply conditional formatting to leaders attendance rate column
+  for (let i = 0; i < leadersData.length; i++) {
+    const attendanceCell = worksheet.getCell(currentRow - leadersData.length + i, 5);
+    const rate = parseInt(leadersData[i][4]);
+    if (rate >= 80) {
+      attendanceCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: colors.success } };
+    } else if (rate >= 60) {
+      attendanceCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: colors.warning } };
+    } else {
+      attendanceCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: colors.danger } };
+    }
+    attendanceCell.font = { color: { argb: 'FFFFFFFF' }, bold: true };
   }
 
   currentRow += 2;

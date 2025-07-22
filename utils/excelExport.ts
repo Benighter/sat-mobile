@@ -67,11 +67,12 @@ const getSundaysInRange = (startDate: Date, endDate: Date): Date[] => {
   return sundays;
 };
 
-// Create summary worksheet
+// Create summary worksheet with all members and leaders
 const createSummaryWorksheet = (data: ExcelData) => {
   const { members, bacentas, attendanceRecords, options } = data;
   const stats = calculateAttendanceStats(members, attendanceRecords, options.dateRange);
-  
+  const sundays = getSundaysInRange(options.dateRange.startDate, options.dateRange.endDate);
+
   const summaryData = [
     ['Church Connect Mobile - Summary Report'],
     ['Generated on:', new Date().toLocaleDateString()],
@@ -85,15 +86,95 @@ const createSummaryWorksheet = (data: ExcelData) => {
     ['Total Present:', stats.totalActualAttendances],
     ['Total Absent:', stats.absentCount],
     [],
-    ['BACENTA BREAKDOWN'],
-    ['Bacenta Name', 'Members', 'Attendance Rate', 'Total Attendances']
+    ['ALL MEMBERS'],
+    ['First Name', 'Last Name', 'Phone', 'Bacenta', 'Role', 'Born Again', 'Join Date', 'Attendance Rate', 'Present Count']
   ];
-  
+
+  // Add all members data
+  members.forEach(member => {
+    const bacenta = bacentas.find(b => b.id === member.bacentaId);
+    let presentCount = 0;
+
+    // Calculate attendance for this member
+    sundays.forEach(sunday => {
+      const dateStr = formatDateToYYYYMMDD(sunday);
+      const record = attendanceRecords.find(r => r.memberId === member.id && r.date === dateStr);
+      if (record && record.status === 'Present') presentCount++;
+    });
+
+    const attendanceRate = sundays.length > 0 ? Math.round((presentCount / sundays.length) * 100) : 0;
+
+    summaryData.push([
+      member.firstName,
+      member.lastName,
+      options.includePersonalInfo ? member.phoneNumber : 'Hidden',
+      bacenta ? bacenta.name : 'Unassigned',
+      member.role || 'Member',
+      member.bornAgainStatus ? 'Yes' : 'No',
+      new Date(member.joinedDate).toLocaleDateString(),
+      `${attendanceRate}%`,
+      presentCount.toString()
+    ]);
+  });
+
+  // Add spacing and leaders section
+  summaryData.push([]);
+  summaryData.push([]);
+  summaryData.push(['ALL LEADERS (BACENTA & FELLOWSHIP LEADERS)']);
+  summaryData.push(['Name', 'Role', 'Bacenta', 'Phone', 'Attendance Rate', 'Present Count', 'Leadership Info']);
+
+  // Get all leaders (Bacenta Leaders and Fellowship Leaders)
+  const leaders = members.filter(m => m.role === 'Bacenta Leader' || m.role === 'Fellowship Leader');
+
+  leaders.forEach(leader => {
+    const bacenta = bacentas.find(b => b.id === leader.bacentaId);
+    let presentCount = 0;
+
+    // Calculate attendance for this leader
+    sundays.forEach(sunday => {
+      const dateStr = formatDateToYYYYMMDD(sunday);
+      const record = attendanceRecords.find(r => r.memberId === leader.id && r.date === dateStr);
+      if (record && record.status === 'Present') presentCount++;
+    });
+
+    const attendanceRate = sundays.length > 0 ? Math.round((presentCount / sundays.length) * 100) : 0;
+
+    // Get leadership info
+    let leadershipInfo = '';
+    if (leader.role === 'Bacenta Leader') {
+      const fellowshipLeadersCount = members.filter(m => m.role === 'Fellowship Leader' && m.bacentaLeaderId === leader.id).length;
+      const totalUnderLeadership = members.filter(m =>
+        (m.role === 'Fellowship Leader' && m.bacentaLeaderId === leader.id) ||
+        (m.role === 'Member' && m.bacentaId === leader.bacentaId)
+      ).length;
+      leadershipInfo = `${fellowshipLeadersCount} FL, ${totalUnderLeadership} total under leadership`;
+    } else if (leader.role === 'Fellowship Leader') {
+      const bacentaLeader = members.find(m => m.id === leader.bacentaLeaderId);
+      leadershipInfo = bacentaLeader ? `Reports to ${bacentaLeader.firstName} ${bacentaLeader.lastName}` : 'Unassigned';
+    }
+
+    summaryData.push([
+      `${leader.firstName} ${leader.lastName}`,
+      leader.role,
+      bacenta ? bacenta.name : 'Unassigned',
+      options.includePersonalInfo ? leader.phoneNumber : 'Hidden',
+      `${attendanceRate}%`,
+      presentCount.toString(),
+      leadershipInfo
+    ]);
+  });
+
+  // Add spacing and bacenta breakdown
+  summaryData.push([]);
+  summaryData.push([]);
+  summaryData.push(['BACENTA BREAKDOWN']);
+  summaryData.push(['Bacenta Name', 'Members', 'Attendance Rate', 'Total Attendances']);
+
   // Add bacenta statistics
   bacentas.forEach(bacenta => {
     const bacentaMembers = members.filter(m => m.bacentaId === bacenta.id);
     const bacentaStats = calculateAttendanceStats(bacentaMembers, attendanceRecords, options.dateRange);
-    
+
     summaryData.push([
       bacenta.name,
       bacentaStats.totalMembers,
@@ -101,7 +182,7 @@ const createSummaryWorksheet = (data: ExcelData) => {
       bacentaStats.totalActualAttendances
     ]);
   });
-  
+
   return XLSX.utils.aoa_to_sheet(summaryData);
 };
 
