@@ -109,10 +109,7 @@ const ProfileSettingsView: React.FC = () => {
       showToast('error', 'Validation Error', 'First name is required');
       return false;
     }
-    if (!profileData.lastName.trim()) {
-      showToast('error', 'Validation Error', 'Last name is required');
-      return false;
-    }
+    // Last name is now optional - removed validation
     return true;
   };
 
@@ -269,7 +266,7 @@ const ProfileSettingsView: React.FC = () => {
 
             <div className="space-y-2">
               <label className="block text-sm font-semibold text-gray-700">
-                Last Name *
+                Last Name
               </label>
               <Input
                 type="text"
@@ -277,7 +274,6 @@ const ProfileSettingsView: React.FC = () => {
                 value={profileData.lastName}
                 onChange={handleProfileChange}
                 placeholder="Enter last name"
-                required
                 className="h-14 text-base border-2 border-gray-200 focus:border-blue-500 rounded-2xl px-4 transition-all duration-200"
               />
             </div>

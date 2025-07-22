@@ -38,13 +38,13 @@ const BacentaLeadersView: React.FC = () => {
           const searchLower = searchTerm.toLowerCase();
           return (
             member.firstName.toLowerCase().includes(searchLower) ||
-            member.lastName.toLowerCase().includes(searchLower) ||
+            (member.lastName || '').toLowerCase().includes(searchLower) ||
             member.phoneNumber.toLowerCase().includes(searchLower)
           );
         }
         return true;
       })
-      .sort((a, b) => a.lastName.localeCompare(b.lastName) || a.firstName.localeCompare(b.firstName));
+      .sort((a, b) => (a.lastName || '').localeCompare(b.lastName || '') || a.firstName.localeCompare(b.firstName));
   }, [members, searchTerm]);
 
   // Get current month info

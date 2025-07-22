@@ -106,7 +106,7 @@ const createSummaryWorksheet = (data: ExcelData) => {
 
     summaryData.push([
       member.firstName,
-      member.lastName,
+      member.lastName || '',
       options.includePersonalInfo ? member.phoneNumber : 'Hidden',
       bacenta ? bacenta.name : 'Unassigned',
       member.role || 'Member',
@@ -251,7 +251,7 @@ const createAllMembersWorksheet = (data: ExcelData) => {
 
     worksheetData.push([
       member.firstName,
-      member.lastName,
+      member.lastName || '',
       options.includePersonalInfo ? member.phoneNumber : 'Hidden',
       options.includePersonalInfo ? member.buildingAddress : 'Hidden',
       bacenta ? bacenta.name : 'Unassigned',

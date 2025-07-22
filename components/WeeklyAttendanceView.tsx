@@ -134,7 +134,7 @@ const WeeklyAttendanceView: React.FC = () => {
               return rolePriorityA - rolePriorityB;
             }
 
-            return a.lastName.localeCompare(b.lastName) || a.firstName.localeCompare(b.firstName);
+            return (a.lastName || '').localeCompare(b.lastName || '') || a.firstName.localeCompare(b.firstName);
           });
 
           // Add regular members with role indicators
@@ -145,7 +145,7 @@ const WeeklyAttendanceView: React.FC = () => {
             } else if (member.role === 'Fellowship Leader') {
               roleIndicator = ' ❤️';
             }
-            text += `${memberIndex + 1}. ${member.firstName} ${member.lastName}${roleIndicator}\n`;
+            text += `${memberIndex + 1}. ${member.firstName} ${member.lastName || ''}${roleIndicator}\n`;
           });
 
           // Add new believers

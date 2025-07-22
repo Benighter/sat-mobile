@@ -108,7 +108,7 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
           const searchLower = searchTerm.toLowerCase();
           return (
             member.firstName.toLowerCase().includes(searchLower) ||
-            member.lastName.toLowerCase().includes(searchLower) ||
+            (member.lastName || '').toLowerCase().includes(searchLower) ||
             member.phoneNumber.includes(searchTerm) ||
             member.buildingAddress.toLowerCase().includes(searchLower)
           );
@@ -145,8 +145,16 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
           openMemberForm(member);
         }}
       >
-        <div className="w-8 h-8 bg-gradient-to-br from-blue-100 to-blue-200 rounded-full flex items-center justify-center">
-          <UserIcon className="w-4 h-4 text-blue-600" />
+        <div className="w-8 h-8 bg-gradient-to-br from-blue-100 to-blue-200 rounded-full flex items-center justify-center overflow-hidden">
+          {member.profilePicture ? (
+            <img
+              src={member.profilePicture}
+              alt={`${member.firstName} ${member.lastName || ''}`}
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <UserIcon className="w-4 h-4 text-blue-600" />
+          )}
         </div>
         <div>
           <div className="font-semibold text-gray-900">

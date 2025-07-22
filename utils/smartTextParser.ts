@@ -340,8 +340,8 @@ export class SmartTextParser {
    * Convert parsed data to Member format for adding to the system
    */
   static convertToMember(
-    parsedData: ParsedMemberData, 
-    bacentaId: string, 
+    parsedData: ParsedMemberData,
+    bacentaId: string,
     joinedDate: string = new Date().toISOString().split('T')[0]
   ): Omit<Member, 'id' | 'createdDate' | 'lastUpdated'> {
     return {
@@ -349,9 +349,10 @@ export class SmartTextParser {
       lastName: parsedData.lastName || '',
       phoneNumber: parsedData.phoneNumber || '',
       buildingAddress: parsedData.buildingAddress || '',
+      profilePicture: '', // No profile picture from text parsing
       bornAgainStatus: false, // Default to false, user can edit later
       bacentaId: bacentaId,
-      joinedDate: joinedDate
+      role: 'Member' // Default role
     };
   }
 }

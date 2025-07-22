@@ -73,13 +73,23 @@ const MemberCard: React.FC<MemberCardProps> = ({ member }) => {
 
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between relative z-10">
         <div className="flex items-start mb-4 sm:mb-0 flex-1">
-          <div className="relative p-3 rounded-2xl mr-4 shadow-lg floating bg-gradient-to-br from-gray-100 to-gray-200">
-            <UserIcon className="w-10 h-10 text-gray-600" />
+          <div className="relative w-16 h-16 rounded-2xl mr-4 shadow-lg floating overflow-hidden bg-gradient-to-br from-gray-100 to-gray-200">
+            {member.profilePicture ? (
+              <img
+                src={member.profilePicture}
+                alt={`${member.firstName} ${member.lastName || ''}`}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center">
+                <UserIcon className="w-8 h-8 text-gray-600" />
+              </div>
+            )}
           </div>
           <div className="flex-1">
             <div className="flex items-center space-x-2 mb-2">
               <h3 className="text-xl font-bold text-gray-800 group-hover:text-gray-900 transition-colors">
-                {member.firstName} {member.lastName}
+                {member.firstName} {member.lastName || ''}
               </h3>
 
             </div>

@@ -7,8 +7,10 @@ import Input from './ui/Input';
 import Select from './ui/Select';
 import Checkbox from './ui/Checkbox';
 import Button from './ui/Button';
+import ImageUpload from './ui/ImageUpload';
 import { formatDateToYYYYMMDD } from '../utils/dateUtils';
 import { canAssignMemberRoles } from '../utils/permissionUtils';
+import { User, MapPin, Phone, Home, Users, Shield } from 'lucide-react';
 
 interface MemberFormModalProps {
   isOpen: boolean;
@@ -32,6 +34,7 @@ const MemberFormModal: React.FC<MemberFormModalProps> = ({ isOpen, onClose, memb
     lastName: '',
     phoneNumber: '',
     buildingAddress: '',
+    profilePicture: '',
     bornAgainStatus: false,
     bacentaId: currentBacentaId || (bacentas.length > 0 ? bacentas[0].id : ''),
     role: 'Member' as MemberRole, // Default role is Member
@@ -43,9 +46,10 @@ const MemberFormModal: React.FC<MemberFormModalProps> = ({ isOpen, onClose, memb
     if (member) {
       setFormData({
         firstName: member.firstName,
-        lastName: member.lastName,
+        lastName: member.lastName || '',
         phoneNumber: member.phoneNumber,
         buildingAddress: member.buildingAddress,
+        profilePicture: member.profilePicture || '',
         bornAgainStatus: member.bornAgainStatus,
         bacentaId: member.bacentaId,
         role: member.role || 'Member', // Default to Member if role is not set (for backward compatibility)
@@ -63,7 +67,7 @@ const MemberFormModal: React.FC<MemberFormModalProps> = ({ isOpen, onClose, memb
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
-    
+
     if (type === 'checkbox') {
         const { checked } = e.target as HTMLInputElement;
         setFormData(prev => ({ ...prev, [name]: checked }));
@@ -72,10 +76,14 @@ const MemberFormModal: React.FC<MemberFormModalProps> = ({ isOpen, onClose, memb
     }
   };
 
+  const handleImageChange = (base64: string | null) => {
+    setFormData(prev => ({ ...prev, profilePicture: base64 || '' }));
+  };
+
   const validate = (): boolean => {
     const newErrors: Record<string, string> = {};
     if (!formData.firstName.trim()) newErrors.firstName = 'First name is required.';
-    if (!formData.lastName.trim()) newErrors.lastName = 'Last name is required.';
+    // Last name is now optional - removed validation
     if (formData.phoneNumber && !/^[0-9().+\-\s]+$/.test(formData.phoneNumber)) { // Allow more chars for phone
         newErrors.phoneNumber = 'Phone number format is invalid.';
     }
@@ -96,128 +104,222 @@ const MemberFormModal: React.FC<MemberFormModalProps> = ({ isOpen, onClose, memb
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={member ? 'Edit Member' : 'Add New Member'} size="lg">
-      <form onSubmit={handleSubmit} className="space-y-4">
-        {/* Context-aware message for adding members to specific bacenta */}
-        {isInSpecificBacenta && !member && (
-          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-4">
-            <div className="flex items-start space-x-3">
-              <div className="flex-shrink-0">
-                <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                  <span className="text-blue-600 text-sm">👥</span>
+    <Modal isOpen={isOpen} onClose={onClose} title="" size="lg">
+      <div className="p-6">
+        {/* Header */}
+        <div className="text-center mb-8">
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">
+            {member ? 'Edit Member' : 'Add New Member'}
+          </h2>
+          <p className="text-gray-600">
+            {member ? 'Update member information' : 'Add a new member to your community'}
+          </p>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-8">
+          {/* Profile Picture Section */}
+          <div className="flex flex-col items-center space-y-4">
+            <div className="text-center">
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">Profile Photo</h3>
+              <p className="text-sm text-gray-500">Upload a profile picture (optional)</p>
+            </div>
+            <ImageUpload
+              value={formData.profilePicture}
+              onChange={handleImageChange}
+              size="lg"
+            />
+          </div>
+
+          {/* Context-aware message for adding members to specific bacenta */}
+          {isInSpecificBacenta && !member && (
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+              <div className="flex items-start space-x-3">
+                <div className="flex-shrink-0">
+                  <Users className="w-5 h-5 text-blue-600 mt-0.5" />
+                </div>
+                <div>
+                  <h4 className="font-medium text-blue-800 mb-1">Adding to {currentBacentaName}</h4>
+                  <p className="text-sm text-blue-700">
+                    This member will be automatically assigned to the <strong>{currentBacentaName}</strong> bacenta.
+                  </p>
                 </div>
               </div>
-              <div>
-                <h4 className="font-medium text-blue-800 mb-1">Adding to {currentBacentaName}</h4>
-                <p className="text-sm text-blue-700">
-                  This member will be automatically added to <strong>{currentBacentaName}</strong>.
-                  To add members to a different Bacenta, go to the Dashboard first.
-                </p>
-              </div>
             </div>
-          </div>
-        )}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Input 
-            label="First Name" 
-            name="firstName" 
-            value={formData.firstName} 
-            onChange={handleChange} 
-            error={errors.firstName}
-            required 
-          />
-          <Input 
-            label="Last Name" 
-            name="lastName" 
-            value={formData.lastName} 
-            onChange={handleChange} 
-            error={errors.lastName}
-            required 
-          />
-        </div>
-        <Input 
-          label="Phone Number" 
-          name="phoneNumber"
-          type="tel"
-          value={formData.phoneNumber} 
-          onChange={handleChange} 
-          error={errors.phoneNumber}
-          placeholder="e.g., (555) 123-4567"
-        />
-        <Input 
-          label="Building/Home Address" 
-          name="buildingAddress" 
-          value={formData.buildingAddress} 
-          onChange={handleChange} 
-          error={errors.buildingAddress}
-        />
-
-        <div>
-          <label htmlFor="bacentaId" className="block text-sm font-medium text-gray-700 mb-1">Bacenta</label>
-          {isInSpecificBacenta && !member ? (
-            // When adding a new member from within a specific bacenta, show read-only field
-            <div className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm bg-gray-50 text-gray-700">
-              <div className="flex items-center justify-between">
-                <span className="font-medium">{currentBacentaName}</span>
-                <span className="text-xs text-gray-500 bg-blue-100 text-blue-700 px-2 py-1 rounded-full">
-                  Current Bacenta
-                </span>
-              </div>
-              <p className="text-xs text-gray-500 mt-1">
-                Adding member to current Bacenta. Switch to Dashboard to choose a different Bacenta.
-              </p>
-            </div>
-          ) : (
-            // When editing a member or adding from dashboard, show dropdown
-            <select
-              id="bacentaId"
-              name="bacentaId"
-              value={formData.bacentaId}
-              onChange={handleChange}
-              className={`w-full px-3 py-2 border ${errors.bacentaId ? 'border-red-500' : 'border-gray-300'} rounded-md shadow-sm focus:outline-none focus:ring-2 ${errors.bacentaId ? 'focus:ring-red-500' : 'focus:ring-blue-500'} focus:border-transparent transition-colors`}
-            >
-              <option value="">Unassigned</option>
-              {bacentas.map(b => (
-                <option key={b.id} value={b.id}>{b.name}</option>
-              ))}
-            </select>
           )}
-          {errors.bacentaId && <p className="mt-1 text-xs text-red-600">{errors.bacentaId}</p>}
-        </div>
-        {canAssignRoles ? (
-          <Select
-            label="Role"
-            name="role"
-            value={formData.role}
-            onChange={handleChange}
-            options={[
-              { value: 'Member', label: 'Member' },
-              { value: 'Fellowship Leader', label: 'Fellowship Leader' },
-              { value: 'Bacenta Leader', label: 'Bacenta Leader' }
-            ]}
-            error={errors.role}
-          />
-        ) : (
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
-            <div className="px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-600">
-              {formData.role || 'Member'}
+
+          {/* Personal Information */}
+          <div className="space-y-6">
+            <div className="flex items-center space-x-2 pb-2 border-b border-gray-200">
+              <User className="w-5 h-5 text-gray-600" />
+              <h3 className="text-lg font-semibold text-gray-900">Personal Information</h3>
             </div>
-            <p className="text-xs text-gray-500 mt-1">Role assignment is restricted to administrators</p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700">
+                  First Name <span className="text-red-500">*</span>
+                </label>
+                <Input
+                  name="firstName"
+                  value={formData.firstName}
+                  onChange={handleChange}
+                  error={errors.firstName}
+                  placeholder="Enter first name"
+                  className="h-12"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700">
+                  Last Name
+                </label>
+                <Input
+                  name="lastName"
+                  value={formData.lastName}
+                  onChange={handleChange}
+                  error={errors.lastName}
+                  placeholder="Enter last name"
+                  className="h-12"
+                />
+              </div>
+            </div>
           </div>
-        )}
-        <Checkbox
-            label="Born Again Status"
-            name="bornAgainStatus"
-            checked={formData.bornAgainStatus}
-            onChange={handleChange}
-            error={errors.bornAgainStatus}
-        />
-        <div className="flex justify-end space-x-3 pt-4">
-          <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
-          <Button type="submit" variant="primary">{member ? 'Save Changes' : 'Add Member'}</Button>
-        </div>
-      </form>
+          {/* Contact Information */}
+          <div className="space-y-6">
+            <div className="flex items-center space-x-2 pb-2 border-b border-gray-200">
+              <Phone className="w-5 h-5 text-gray-600" />
+              <h3 className="text-lg font-semibold text-gray-900">Contact Information</h3>
+            </div>
+
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-gray-700">
+                Phone Number
+              </label>
+              <Input
+                name="phoneNumber"
+                type="tel"
+                value={formData.phoneNumber}
+                onChange={handleChange}
+                error={errors.phoneNumber}
+                placeholder="e.g., (555) 123-4567"
+                className="h-12"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-gray-700">
+                Home Address
+              </label>
+              <Input
+                name="buildingAddress"
+                value={formData.buildingAddress}
+                onChange={handleChange}
+                error={errors.buildingAddress}
+                placeholder="Enter home address"
+                className="h-12"
+              />
+            </div>
+          </div>
+
+          {/* Church Information */}
+          <div className="space-y-6">
+            <div className="flex items-center space-x-2 pb-2 border-b border-gray-200">
+              <Home className="w-5 h-5 text-gray-600" />
+              <h3 className="text-lg font-semibold text-gray-900">Church Information</h3>
+            </div>
+
+            <div className="space-y-6">
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700">
+                  Bacenta
+                </label>
+                {isInSpecificBacenta && !member ? (
+                  <div className="w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm bg-gray-50 text-gray-700">
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium">{currentBacentaName}</span>
+                      <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full">
+                        Current Bacenta
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Adding member to current Bacenta. Switch to Dashboard to choose a different Bacenta.
+                    </p>
+                  </div>
+                ) : (
+                  <select
+                    name="bacentaId"
+                    value={formData.bacentaId}
+                    onChange={handleChange}
+                    className={`w-full px-4 py-3 border ${errors.bacentaId ? 'border-red-500' : 'border-gray-300'} rounded-lg shadow-sm focus:outline-none focus:ring-2 ${errors.bacentaId ? 'focus:ring-red-500' : 'focus:ring-blue-500'} focus:border-transparent transition-colors h-12`}
+                  >
+                    <option value="">Select a Bacenta</option>
+                    {bacentas.map(b => (
+                      <option key={b.id} value={b.id}>{b.name}</option>
+                    ))}
+                  </select>
+                )}
+                {errors.bacentaId && <p className="mt-1 text-xs text-red-600">{errors.bacentaId}</p>}
+              </div>
+
+              {canAssignRoles && (
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-gray-700">
+                    <Shield className="w-4 h-4 inline mr-1" />
+                    Role
+                  </label>
+                  <select
+                    name="role"
+                    value={formData.role}
+                    onChange={handleChange}
+                    className={`w-full px-4 py-3 border ${errors.role ? 'border-red-500' : 'border-gray-300'} rounded-lg shadow-sm focus:outline-none focus:ring-2 ${errors.role ? 'focus:ring-red-500' : 'focus:ring-blue-500'} focus:border-transparent transition-colors h-12`}
+                  >
+                    <option value="Member">Member</option>
+                    <option value="Fellowship Leader">Fellowship Leader</option>
+                    <option value="Bacenta Leader">Bacenta Leader</option>
+                  </select>
+                  {errors.role && <p className="mt-1 text-xs text-red-600">{errors.role}</p>}
+                </div>
+              )}
+
+              <div className="space-y-4">
+                <div className="flex items-center space-x-3">
+                  <input
+                    type="checkbox"
+                    id="bornAgainStatus"
+                    name="bornAgainStatus"
+                    checked={formData.bornAgainStatus}
+                    onChange={handleChange}
+                    className="w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
+                  />
+                  <label htmlFor="bornAgainStatus" className="text-sm font-medium text-gray-700">
+                    Born Again Status
+                  </label>
+                </div>
+                <p className="text-xs text-gray-500 ml-8">Check if this member has been born again</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex justify-end space-x-4 pt-6 border-t border-gray-200">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={onClose}
+              className="px-6 py-3"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              className="px-6 py-3"
+            >
+              {member ? 'Update Member' : 'Add Member'}
+            </Button>
+          </div>
+        </form>
+      </div>
     </Modal>
   );
 };

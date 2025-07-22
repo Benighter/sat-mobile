@@ -70,8 +70,7 @@ export const userService = {
         collection(db, 'users'),
         where('churchId', '==', churchId),
         where('isActive', '==', true),
-        orderBy('lastName'),
-        orderBy('firstName')
+        orderBy('firstName') // Removed orderBy lastName since it's now optional
       );
       
       const querySnapshot = await getDocs(usersQuery);

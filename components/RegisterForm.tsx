@@ -77,9 +77,7 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, onSwitchToLogin,
     if (!formData.firstName.trim()) {
       newErrors.firstName = 'First name is required';
     }
-    if (!formData.lastName.trim()) {
-      newErrors.lastName = 'Last name is required';
-    }
+    // Last name is now optional - removed validation
     if (!formData.email.trim()) {
       newErrors.email = 'Email is required';
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
@@ -170,7 +168,6 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, onSwitchToLogin,
                   errors.lastName ? 'border-red-300 bg-red-50' : 'border-gray-200'
                 }`}
                 placeholder="Last Name"
-                required
               />
             </div>
             {errors.lastName && (

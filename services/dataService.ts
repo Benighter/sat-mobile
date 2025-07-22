@@ -41,8 +41,15 @@ export const MemberService = {
       id: `m_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`,
       createdDate: now,
       lastUpdated: now,
-      // Ensure role is set, defaulting to Member if not provided
-      role: memberData.role || 'Member',
+      // Ensure required fields have defaults
+      firstName: memberData.firstName.trim(),
+      lastName: memberData.lastName?.trim() || '',
+      phoneNumber: memberData.phoneNumber?.trim() || '',
+      buildingAddress: memberData.buildingAddress?.trim() || '',
+      profilePicture: memberData.profilePicture?.trim() || '',
+      bornAgainStatus: memberData.bornAgainStatus || false,
+      bacentaId: memberData.bacentaId || '',
+      role: memberData.role || 'Member', // Default role is Member
     };
     members.push(newMember);
     localStorage.setItem(MEMBERS_KEY, JSON.stringify(members));
@@ -78,6 +85,7 @@ export const MemberService = {
           lastName: memberData.lastName?.trim() || '',
           phoneNumber: memberData.phoneNumber?.trim() || '',
           buildingAddress: memberData.buildingAddress?.trim() || '',
+          profilePicture: memberData.profilePicture?.trim() || '',
           bornAgainStatus: memberData.bornAgainStatus || false,
           bacentaId: memberData.bacentaId || '',
           role: memberData.role || 'Member', // Default role is Member
