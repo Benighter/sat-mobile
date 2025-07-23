@@ -36,6 +36,8 @@ import DataManagement from './components/DataManagement';
 import EnhancedProfileDropdown from './components/EnhancedProfileDropdown';
 import PendingInviteNotification from './components/PendingInviteNotification';
 import { DeleteMemberModal, DeleteBacentaModal, DeleteNewBelieverModal, ClearAllDataModal, ClearSelectedDataModal } from './components/ConfirmationModal';
+import WhatsNewModal from './components/WhatsNewModal';
+import { useWhatsNew } from './hooks/useWhatsNew';
 
 const AppContent: React.FC = memo(() => {
   const {
@@ -77,6 +79,9 @@ const AppContent: React.FC = memo(() => {
   // const { canNavigateBack } = useNavigation();
   const [isDataManagementOpen, setIsDataManagementOpen] = useState(false);
   const [isBulkMemberModalOpen, setIsBulkMemberModalOpen] = useState(false);
+
+  // What's New modal state
+  const { isOpen: isWhatsNewOpen, closeModal: closeWhatsNew } = useWhatsNew();
 
   // Check if current tab is a bacenta tab
   const isBacentaTab = bacentas.some(b => b.id === currentTab.id);
@@ -394,6 +399,12 @@ const AppContent: React.FC = memo(() => {
 
       {/* Pending Invite Notification */}
       <PendingInviteNotification />
+
+      {/* What's New Modal */}
+      <WhatsNewModal
+        isOpen={isWhatsNewOpen}
+        onClose={closeWhatsNew}
+      />
 
       {/* Toast Notifications */}
       {toasts.map((toast) => (
