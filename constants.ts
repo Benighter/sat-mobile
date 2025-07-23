@@ -15,6 +15,12 @@ export const FIXED_TABS: TabOption[] = [
 
 export const DEFAULT_TAB_ID = TabKeys.DASHBOARD;
 
+// Default church configuration
+export const DEFAULT_CHURCH = {
+  ID: 'first-love-church',
+  NAME: 'First Love Church'
+};
+
 // Ministry options for New Believers dropdown
 export const MINISTRY_OPTIONS = [
   'Choir',

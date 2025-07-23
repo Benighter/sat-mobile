@@ -26,6 +26,7 @@ import {
   UserIcon
 } from './components/icons';
 import { TabKeys } from './types';
+import { DEFAULT_CHURCH } from './constants';
 import MemberFormModal from './components/MemberFormModal';
 import BulkMemberAddModal from './components/BulkMemberAddModal';
 import BacentaFormModal from './components/BacentaFormModal'; // Import BacentaFormModal
@@ -230,14 +231,14 @@ const AppContent: React.FC = memo(() => {
                 title="Go to Dashboard"
               >
                 <div className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 bg-white rounded-lg sm:rounded-xl flex items-center justify-center shadow-lg group-hover:shadow-xl transition-all duration-300 ring-2 ring-blue-100 p-0.5">
-                  <img src="/logo.png" alt="First Love Church" className="w-full h-full object-contain" />
+                  <img src="/logo.png" alt={DEFAULT_CHURCH.NAME} className="w-full h-full object-contain" />
                 </div>
                 <div className="hidden sm:block">
                   <h1 className="text-lg sm:text-xl font-bold gradient-text font-serif group-hover:text-gray-700 transition-colors duration-300">
                     {isBacentaTab ? currentTab.name : 'SAT Mobile'}
                   </h1>
                   <p className="text-xs text-gray-600 font-medium group-hover:text-gray-700 transition-colors duration-300">
-                    {isBacentaTab ? 'Bacenta Management' : 'First Love Church'}
+                    {isBacentaTab ? 'Bacenta Management' : DEFAULT_CHURCH.NAME}
                   </p>
                 </div>
               </button>

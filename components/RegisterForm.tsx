@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { authService } from '../services/firebaseService';
 import { UserIcon, EyeIcon, EyeSlashIcon, PhoneIcon, EnvelopeIcon } from './icons';
-import Button from './ui/Button';
 
 // Utility function to convert Firebase errors to user-friendly messages
 const getErrorMessage = (error: string): string => {
@@ -51,7 +50,7 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, onSwitchToLogin,
     email: '',
     password: '',
     confirmPassword: '',
-    churchName: 'First Love Church',
+    churchName: '', // SECURITY FIX: Don't use default church name to prevent data sharing
     phoneNumber: ''
   });
   
@@ -59,45 +58,315 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, onSwitchToLogin,
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [isCheckingEmail, setIsCheckingEmail] = useState(false);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
-    
+
     // Clear error when user starts typing
     if (errors[name]) {
       setErrors(prev => ({ ...prev, [name]: '' }));
     }
   };
 
-  const validateForm = (): boolean => {
+  // Real-time validation on blur for better UX
+  const handleFieldBlur = async (fieldName: string) => {
+    let error = '';
+
+    switch (fieldName) {
+      case 'firstName':
+        error = validateFirstName(formData.firstName);
+        break;
+      case 'lastName':
+        error = validateLastName(formData.lastName);
+        break;
+      case 'email':
+        error = validateEmail(formData.email);
+        if (error) {
+          setErrors(prev => ({ ...prev, [fieldName]: error }));
+        } else {
+          // If basic validation passes, check if email exists
+          await checkEmailExists(formData.email);
+        }
+        return; // Early return to avoid setting error again below
+      case 'password':
+        error = validatePassword(formData.password);
+        // Also revalidate confirm password if it has a value
+        if (formData.confirmPassword) {
+          const confirmError = validateConfirmPassword(formData.password, formData.confirmPassword);
+          if (confirmError) {
+            setErrors(prev => ({ ...prev, confirmPassword: confirmError }));
+          } else {
+            setErrors(prev => ({ ...prev, confirmPassword: '' }));
+          }
+        }
+        break;
+      case 'confirmPassword':
+        error = validateConfirmPassword(formData.password, formData.confirmPassword);
+        break;
+      case 'phoneNumber':
+        error = validatePhoneNumber(formData.phoneNumber);
+        break;
+      case 'churchName':
+        error = validateChurchName(formData.churchName);
+        break;
+    }
+
+    if (error) {
+      setErrors(prev => ({ ...prev, [fieldName]: error }));
+    }
+  };
+
+  // Individual field validation functions
+  const validateFirstName = (value: string): string => {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return 'First name is required';
+    }
+    if (trimmed.length < 2) {
+      return 'First name must be at least 2 characters long';
+    }
+    if (trimmed.length > 50) {
+      return 'First name is too long (maximum 50 characters)';
+    }
+    if (!/^[a-zA-Z\s'-]+$/.test(trimmed)) {
+      return 'First name can only contain letters, spaces, hyphens, and apostrophes';
+    }
+    return '';
+  };
+
+  const validateLastName = (value: string): string => {
+    const trimmed = value.trim();
+    if (trimmed && trimmed.length < 2) {
+      return 'Last name must be at least 2 characters long';
+    }
+    if (trimmed.length > 50) {
+      return 'Last name is too long (maximum 50 characters)';
+    }
+    if (trimmed && !/^[a-zA-Z\s'-]+$/.test(trimmed)) {
+      return 'Last name can only contain letters, spaces, hyphens, and apostrophes';
+    }
+    return '';
+  };
+
+  const validateEmail = (value: string): string => {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return 'Email address is required';
+    }
+
+    // More comprehensive email validation with stricter rules
+    const emailRegex = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
+
+    if (!emailRegex.test(trimmed)) {
+      return 'Please enter a valid email address (e.g., user@example.com)';
+    }
+
+    if (trimmed.length > 254) {
+      return 'Email address is too long (maximum 254 characters)';
+    }
+
+    // Check for common invalid patterns
+    if (trimmed.includes('..')) {
+      return 'Email address cannot contain consecutive dots';
+    }
+
+    if (trimmed.startsWith('.') || trimmed.endsWith('.')) {
+      return 'Email address cannot start or end with a dot';
+    }
+
+    // Check for valid domain
+    const parts = trimmed.split('@');
+    if (parts.length !== 2) {
+      return 'Email address must contain exactly one @ symbol';
+    }
+
+    const [localPart, domain] = parts;
+    if (localPart.length === 0 || localPart.length > 64) {
+      return 'Email address local part must be between 1 and 64 characters';
+    }
+
+    if (domain.length === 0 || domain.length > 253) {
+      return 'Email domain must be between 1 and 253 characters';
+    }
+
+    // Check for valid domain format
+    if (!domain.includes('.')) {
+      return 'Email domain must contain at least one dot';
+    }
+
+    const domainParts = domain.split('.');
+    if (domainParts.some(part => part.length === 0)) {
+      return 'Email domain cannot have empty parts';
+    }
+
+    return '';
+  };
+
+  // Live email existence check
+  const checkEmailExists = async (email: string): Promise<void> => {
+    const trimmed = email.trim();
+
+    // Only check if email format is valid
+    if (!trimmed || validateEmail(trimmed)) {
+      return;
+    }
+
+    setIsCheckingEmail(true);
+    try {
+      const exists = await authService.checkEmailExists(trimmed);
+      if (exists) {
+        setErrors(prev => ({
+          ...prev,
+          email: 'This email address is already registered. Please use a different email or sign in instead.'
+        }));
+      } else {
+        // Clear email error if it was about email existence
+        setErrors(prev => {
+          const newErrors = { ...prev };
+          if (newErrors.email?.includes('already registered')) {
+            delete newErrors.email;
+          }
+          return newErrors;
+        });
+      }
+    } catch (error) {
+      console.error('Error checking email existence:', error);
+      // Don't show error to user, just log it
+    } finally {
+      setIsCheckingEmail(false);
+    }
+  };
+
+  const validatePassword = (value: string): string => {
+    if (!value) {
+      return 'Password is required';
+    }
+
+    if (value.length < 8) {
+      return 'Password must be at least 8 characters long';
+    }
+
+    if (value.length > 128) {
+      return 'Password is too long (maximum 128 characters)';
+    }
+
+    // Check for at least one uppercase letter
+    if (!/[A-Z]/.test(value)) {
+      return 'Password must contain at least one uppercase letter';
+    }
+
+    // Check for at least one lowercase letter
+    if (!/[a-z]/.test(value)) {
+      return 'Password must contain at least one lowercase letter';
+    }
+
+    // Check for at least one number
+    if (!/\d/.test(value)) {
+      return 'Password must contain at least one number';
+    }
+
+    // Check for common weak passwords
+    const commonPasswords = ['password', '12345678', 'password123', 'admin123', 'qwerty123'];
+    if (commonPasswords.includes(value.toLowerCase())) {
+      return 'Please choose a stronger password';
+    }
+
+    return '';
+  };
+
+  const validateConfirmPassword = (password: string, confirmPassword: string): string => {
+    if (!confirmPassword) {
+      return 'Please confirm your password';
+    }
+
+    if (password !== confirmPassword) {
+      return 'Passwords do not match';
+    }
+
+    return '';
+  };
+
+  const validateChurchName = (value: string): string => {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return 'Church name is required';
+    }
+
+    if (trimmed.length < 2) {
+      return 'Church name must be at least 2 characters';
+    }
+
+    if (trimmed.length > 100) {
+      return 'Church name must be no more than 100 characters';
+    }
+
+    return '';
+  };
+
+  const validatePhoneNumber = (value: string): string => {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return ''; // Phone number is optional
+    }
+
+    // Remove all non-digit characters for validation
+    const digitsOnly = trimmed.replace(/\D/g, '');
+
+    if (digitsOnly.length < 10) {
+      return 'Phone number must be at least 10 digits';
+    }
+
+    if (digitsOnly.length > 15) {
+      return 'Phone number is too long';
+    }
+
+    // Allow international format with +, spaces, hyphens, and parentheses
+    if (!/^[\+]?[0-9\s\-\(\)]+$/.test(trimmed)) {
+      return 'Please enter a valid phone number (e.g., +1 234 567 8900)';
+    }
+
+    return '';
+  };
+
+  const validateForm = async (): Promise<boolean> => {
     const newErrors: Record<string, string> = {};
 
-    // Required fields
-    if (!formData.firstName.trim()) {
-      newErrors.firstName = 'First name is required';
-    }
-    // Last name is now optional - removed validation
-    if (!formData.email.trim()) {
-      newErrors.email = 'Email is required';
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-      newErrors.email = 'Please enter a valid email address';
-    }
-    if (!formData.password) {
-      newErrors.password = 'Password is required';
-    } else if (formData.password.length < 6) {
-      newErrors.password = 'Password must be at least 6 characters';
-    }
-    if (!formData.confirmPassword) {
-      newErrors.confirmPassword = 'Please confirm your password';
-    } else if (formData.password !== formData.confirmPassword) {
-      newErrors.confirmPassword = 'Passwords do not match';
+    // Validate all fields
+    const firstNameError = validateFirstName(formData.firstName);
+    if (firstNameError) newErrors.firstName = firstNameError;
+
+    const lastNameError = validateLastName(formData.lastName);
+    if (lastNameError) newErrors.lastName = lastNameError;
+
+    const emailError = validateEmail(formData.email);
+    if (emailError) {
+      newErrors.email = emailError;
+    } else {
+      // Check if email exists only if basic validation passes
+      try {
+        const emailExists = await authService.checkEmailExists(formData.email);
+        if (emailExists) {
+          newErrors.email = 'This email address is already registered. Please use a different email or sign in instead.';
+        }
+      } catch (error) {
+        console.error('Error checking email existence during form validation:', error);
+        // Don't block form submission on email check error
+      }
     }
 
-    // Optional phone number validation
-    if (formData.phoneNumber && !/^[0-9+\-\s()]+$/.test(formData.phoneNumber)) {
-      newErrors.phoneNumber = 'Please enter a valid phone number';
-    }
+    const passwordError = validatePassword(formData.password);
+    if (passwordError) newErrors.password = passwordError;
+
+    const confirmPasswordError = validateConfirmPassword(formData.password, formData.confirmPassword);
+    if (confirmPasswordError) newErrors.confirmPassword = confirmPasswordError;
+
+    const churchNameError = validateChurchName(formData.churchName);
+    if (churchNameError) newErrors.churchName = churchNameError;
+
+    const phoneError = validatePhoneNumber(formData.phoneNumber);
+    if (phoneError) newErrors.phoneNumber = phoneError;
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -105,12 +374,16 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, onSwitchToLogin,
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!validateForm()) {
+
+    setIsLoading(true);
+
+    // Validate form including email existence check
+    const isValid = await validateForm();
+    if (!isValid) {
+      setIsLoading(false);
       return;
     }
 
-    setIsLoading(true);
     try {
       await authService.register(formData.email, formData.password, {
         firstName: formData.firstName.trim(),
@@ -121,7 +394,7 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, onSwitchToLogin,
       });
 
       showToast('success', 'Registration Successful!',
-        'Welcome to SAT Mobile! Welcome to First Love Church.');
+        `Welcome to SAT Mobile! Your church "${formData.churchName}" has been set up.`);
       onSuccess();
     } catch (error: any) {
       showToast('error', 'Registration Failed', getErrorMessage(error.message || error.code || error.toString()));
@@ -144,11 +417,14 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, onSwitchToLogin,
                 name="firstName"
                 value={formData.firstName}
                 onChange={handleInputChange}
+                onBlur={() => handleFieldBlur('firstName')}
                 className={`w-full pl-10 pr-4 py-3.5 bg-gray-50/50 border rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 focus:bg-white transition-all duration-200 placeholder-gray-400 ${
                   errors.firstName ? 'border-red-300 bg-red-50' : 'border-gray-200'
                 }`}
                 placeholder="First Name"
                 required
+                autoComplete="given-name"
+                spellCheck="false"
               />
             </div>
             {errors.firstName && (
@@ -164,10 +440,13 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, onSwitchToLogin,
                 name="lastName"
                 value={formData.lastName}
                 onChange={handleInputChange}
+                onBlur={() => handleFieldBlur('lastName')}
                 className={`w-full pl-10 pr-4 py-3.5 bg-gray-50/50 border rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 focus:bg-white transition-all duration-200 placeholder-gray-400 ${
                   errors.lastName ? 'border-red-300 bg-red-50' : 'border-gray-200'
                 }`}
-                placeholder="Last Name"
+                placeholder="Last Name (optional)"
+                autoComplete="family-name"
+                spellCheck="false"
               />
             </div>
             {errors.lastName && (
@@ -185,15 +464,26 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, onSwitchToLogin,
               name="email"
               value={formData.email}
               onChange={handleInputChange}
-              className={`w-full pl-10 pr-4 py-3.5 bg-gray-50/50 border rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 focus:bg-white transition-all duration-200 placeholder-gray-400 ${
+              onBlur={() => handleFieldBlur('email')}
+              className={`w-full pl-10 pr-12 py-3.5 bg-gray-50/50 border rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 focus:bg-white transition-all duration-200 placeholder-gray-400 ${
                 errors.email ? 'border-red-300 bg-red-50' : 'border-gray-200'
               }`}
               placeholder="Email address"
               required
+              autoComplete="email"
+              spellCheck="false"
             />
+            {isCheckingEmail && (
+              <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                <div className="w-4 h-4 border-2 border-green-500 border-t-transparent rounded-full animate-spin"></div>
+              </div>
+            )}
           </div>
           {errors.email && (
                 <p className="text-red-500 text-xs mt-1">{errors.email}</p>
+          )}
+          {isCheckingEmail && !errors.email && (
+            <p className="text-blue-500 text-xs mt-1">Checking email availability...</p>
           )}
         </div>
 
@@ -208,10 +498,12 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, onSwitchToLogin,
               name="phoneNumber"
               value={formData.phoneNumber}
               onChange={handleInputChange}
+              onBlur={() => handleFieldBlur('phoneNumber')}
               className={`w-full pl-10 pr-4 py-3.5 bg-gray-50/50 border rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 focus:bg-white transition-all duration-200 placeholder-gray-400 ${
                 errors.phoneNumber ? 'border-red-300 bg-red-50' : 'border-gray-200'
               }`}
               placeholder="Phone number (optional)"
+              autoComplete="tel"
             />
           </div>
           {errors.phoneNumber && (
@@ -227,11 +519,13 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, onSwitchToLogin,
               name="password"
               value={formData.password}
               onChange={handleInputChange}
+              onBlur={() => handleFieldBlur('password')}
               className={`w-full pl-4 pr-12 py-3.5 bg-gray-50/50 border rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 focus:bg-white transition-all duration-200 placeholder-gray-400 ${
                 errors.password ? 'border-red-300 bg-red-50' : 'border-gray-200'
               }`}
-              placeholder="Password"
+              placeholder="Password (8+ chars, uppercase, lowercase, number)"
               required
+              autoComplete="new-password"
             />
             <button
               type="button"
@@ -258,11 +552,13 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, onSwitchToLogin,
               name="confirmPassword"
               value={formData.confirmPassword}
               onChange={handleInputChange}
+              onBlur={() => handleFieldBlur('confirmPassword')}
               className={`w-full pl-4 pr-12 py-3.5 bg-gray-50/50 border rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 focus:bg-white transition-all duration-200 placeholder-gray-400 ${
                 errors.confirmPassword ? 'border-red-300 bg-red-50' : 'border-gray-200'
               }`}
               placeholder="Confirm password"
               required
+              autoComplete="new-password"
             />
             <button
               type="button"

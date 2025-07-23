@@ -5,7 +5,6 @@ import ForgotPasswordModal from './ForgotPasswordModal';
 
 interface LoginFormProps {
   onSignIn: (email: string, password: string) => Promise<void>;
-  onGoogleSignIn: () => Promise<void>;
   error: string | null;
   loading: boolean;
   showToast: (type: 'success' | 'error' | 'warning' | 'info', title: string, message?: string) => void;
@@ -45,32 +44,147 @@ const getErrorMessage = (error: string): string => {
   return 'Sign in failed. Please try again or contact support if the problem persists.';
 };
 
-export const LoginForm: React.FC<LoginFormProps> = ({ onSignIn, onGoogleSignIn, error, loading, showToast }) => {
+export const LoginForm: React.FC<LoginFormProps> = ({ onSignIn, error, loading, showToast }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [validationErrors, setValidationErrors] = useState<{email?: string; password?: string}>({});
   const [isForgotPasswordOpen, setIsForgotPasswordOpen] = useState(false);
 
+  const validateEmail = (emailValue: string): string => {
+    const trimmedEmail = emailValue.trim();
+
+    if (!trimmedEmail) {
+      return 'Email address is required';
+    }
+
+    // More comprehensive email validation with stricter rules
+    const emailRegex = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
+
+    if (!emailRegex.test(trimmedEmail)) {
+      return 'Please enter a valid email address (e.g., user@example.com)';
+    }
+
+    if (trimmedEmail.length > 254) {
+      return 'Email address is too long (maximum 254 characters)';
+    }
+
+    // Check for common invalid patterns
+    if (trimmedEmail.includes('..')) {
+      return 'Email address cannot contain consecutive dots';
+    }
+
+    if (trimmedEmail.startsWith('.') || trimmedEmail.endsWith('.')) {
+      return 'Email address cannot start or end with a dot';
+    }
+
+    // Check for valid domain
+    const parts = trimmedEmail.split('@');
+    if (parts.length !== 2) {
+      return 'Email address must contain exactly one @ symbol';
+    }
+
+    const [localPart, domain] = parts;
+    if (localPart.length === 0 || localPart.length > 64) {
+      return 'Email address local part must be between 1 and 64 characters';
+    }
+
+    if (domain.length === 0 || domain.length > 253) {
+      return 'Email domain must be between 1 and 253 characters';
+    }
+
+    // Check for valid domain format
+    if (!domain.includes('.')) {
+      return 'Email domain must contain at least one dot';
+    }
+
+    const domainParts = domain.split('.');
+    if (domainParts.some(part => part.length === 0)) {
+      return 'Email domain cannot have empty parts';
+    }
+
+    return '';
+  };
+
+  const validatePassword = (passwordValue: string): string => {
+    if (!passwordValue) {
+      return 'Password is required';
+    }
+
+    if (passwordValue.length < 6) {
+      return 'Password must be at least 6 characters long';
+    }
+
+    if (passwordValue.length > 128) {
+      return 'Password is too long (maximum 128 characters)';
+    }
+
+    // Check for common weak passwords
+    const commonPasswords = ['password', '123456', 'password123', 'admin', 'qwerty'];
+    if (commonPasswords.includes(passwordValue.toLowerCase())) {
+      return 'Please choose a stronger password';
+    }
+
+    return '';
+  };
+
   const validateForm = (): boolean => {
     const errors: {email?: string; password?: string} = {};
 
-    // Email validation
-    if (!email.trim()) {
-      errors.email = 'Email is required';
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      errors.email = 'Please enter a valid email address';
+    // Validate email
+    const emailError = validateEmail(email);
+    if (emailError) {
+      errors.email = emailError;
     }
 
-    // Password validation
-    if (!password) {
-      errors.password = 'Password is required';
-    } else if (password.length < 6) {
-      errors.password = 'Password must be at least 6 characters';
+    // Validate password
+    const passwordError = validatePassword(password);
+    if (passwordError) {
+      errors.password = passwordError;
     }
 
     setValidationErrors(errors);
     return Object.keys(errors).length === 0;
+  };
+
+  // Real-time validation functions
+  const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newEmail = e.target.value;
+    setEmail(newEmail);
+
+    // Clear error immediately when user starts typing
+    if (validationErrors.email) {
+      setValidationErrors(prev => ({ ...prev, email: undefined }));
+    }
+  };
+
+  const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newPassword = e.target.value;
+    setPassword(newPassword);
+
+    // Clear error immediately when user starts typing
+    if (validationErrors.password) {
+      setValidationErrors(prev => ({ ...prev, password: undefined }));
+    }
+  };
+
+  // Validate on blur for better UX
+  const handleEmailBlur = () => {
+    if (email.trim()) {
+      const emailError = validateEmail(email);
+      if (emailError) {
+        setValidationErrors(prev => ({ ...prev, email: emailError }));
+      }
+    }
+  };
+
+  const handlePasswordBlur = () => {
+    if (password) {
+      const passwordError = validatePassword(password);
+      if (passwordError) {
+        setValidationErrors(prev => ({ ...prev, password: passwordError }));
+      }
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -104,30 +218,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSignIn, onGoogleSignIn, 
           </div>
         )}
 
-        {/* Google Sign In Button */}
-        <button
-          onClick={onGoogleSignIn}
-          disabled={loading}
-          className="w-full flex items-center justify-center px-4 py-3.5 bg-white border border-gray-300 rounded-xl shadow-sm hover:shadow-md hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed mb-6 group"
-        >
-          <svg className="w-5 h-5 mr-3 group-hover:scale-110 transition-transform duration-200" viewBox="0 0 24 24">
-            <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-            <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-            <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-            <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-          </svg>
-          <span className="text-gray-700 font-medium">Continue with Google</span>
-        </button>
 
-        {/* Divider */}
-        <div className="relative mb-6">
-          <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-gray-200"></div>
-          </div>
-          <div className="relative flex justify-center text-sm">
-            <span className="px-3 bg-white text-gray-400 text-xs">or sign in with email</span>
-          </div>
-        </div>
 
         {/* Email/Password Form */}
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -138,12 +229,8 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSignIn, onGoogleSignIn, 
                 id="email"
                 type="email"
                 value={email}
-                onChange={(e) => {
-                  setEmail(e.target.value);
-                  if (validationErrors.email) {
-                    setValidationErrors(prev => ({ ...prev, email: undefined }));
-                  }
-                }}
+                onChange={handleEmailChange}
+                onBlur={handleEmailBlur}
                 className={`w-full pl-10 pr-4 py-3.5 bg-gray-50/50 border rounded-xl focus:outline-none focus:ring-2 focus:bg-white transition-all duration-200 placeholder-gray-400 ${
                   validationErrors.email
                     ? 'border-red-300 focus:ring-red-500 focus:border-red-500'
@@ -151,6 +238,8 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSignIn, onGoogleSignIn, 
                 }`}
                 placeholder="Email address"
                 disabled={loading}
+                autoComplete="email"
+                spellCheck="false"
               />
             </div>
             {validationErrors.email && (
@@ -165,12 +254,8 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSignIn, onGoogleSignIn, 
                 id="password"
                 type={showPassword ? 'text' : 'password'}
                 value={password}
-                onChange={(e) => {
-                  setPassword(e.target.value);
-                  if (validationErrors.password) {
-                    setValidationErrors(prev => ({ ...prev, password: undefined }));
-                  }
-                }}
+                onChange={handlePasswordChange}
+                onBlur={handlePasswordBlur}
                 className={`w-full pl-10 pr-12 py-3.5 bg-gray-50/50 border rounded-xl focus:outline-none focus:ring-2 focus:bg-white transition-all duration-200 placeholder-gray-400 ${
                   validationErrors.password
                     ? 'border-red-300 focus:ring-red-500 focus:border-red-500'
@@ -178,6 +263,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSignIn, onGoogleSignIn, 
                 }`}
                 placeholder="Password"
                 disabled={loading}
+                autoComplete="current-password"
               />
               <button
                 type="button"

@@ -198,15 +198,27 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
         // Listen to auth state changes
         const unsubscribeAuth = authService.onAuthStateChanged(async (user) => {
           setUser(user);
-          if (user && firebaseUtils.isReady()) {
-            // User is authenticated, load profile and set up data listeners
+          if (user) {
+            // User is authenticated, load profile first
             try {
               const profile = await userService.getUserProfile(user.uid);
               setUserProfile(profile);
+
+              // Check if Firebase is ready (has church context) and set up data listeners
+              if (firebaseUtils.isReady()) {
+                setupDataListeners();
+              } else {
+                console.log('⏳ User authenticated but no church context yet. Waiting for church assignment...');
+                // Clear data until church context is available
+                setMembers([]);
+                setBacentas([]);
+                setAttendanceRecords([]);
+                setNewBelievers([]);
+              }
             } catch (error) {
               console.error('Failed to load user profile:', error);
+              setUserProfile(null);
             }
-            setupDataListeners();
           } else {
             // User not authenticated, clear data
             setUserProfile(null);
@@ -723,13 +735,39 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
   const refreshUserProfile = useCallback(async () => {
     try {
       if (user) {
+        // Refresh both the auth context and user profile
+        await authService.refreshCurrentUser();
         const profile = await userService.getUserProfile(user.uid);
         setUserProfile(profile);
+
+        // After refreshing profile, check if we now have church context and can set up data listeners
+        if (firebaseUtils.isReady() && members.length === 0 && bacentas.length === 0) {
+          console.log('✅ Church context now available, setting up data listeners...');
+          setupDataListeners();
+        }
       }
     } catch (error: any) {
       console.error('Failed to refresh user profile:', error);
     }
-  }, [user]);
+  }, [user, members.length, bacentas.length]);
+
+  // Effect to handle delayed church context availability for Google users
+  useEffect(() => {
+    if (user && userProfile && !firebaseUtils.isReady() && members.length === 0) {
+      console.log('🔄 User has profile but no church context, attempting refresh...');
+
+      // Single attempt to refresh user profile after a short delay
+      const timeout = setTimeout(async () => {
+        try {
+          await refreshUserProfile();
+        } catch (error) {
+          console.error('Failed to refresh church context:', error);
+        }
+      }, 1000);
+
+      return () => clearTimeout(timeout);
+    }
+  }, [user, userProfile, members.length, refreshUserProfile]);
 
   // Data export/import (for backup purposes)
   const exportData = useCallback((): string => {

@@ -79,21 +79,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ children, showToast }) =
     }
   };
 
-  const handleGoogleSignIn = async () => {
-    try {
-      setError(null);
-      setLoading(true);
-      const user = await authService.signInWithGoogle();
-      setUser(user);
-      showToast('success', 'Welcome!', `Signed in with Google as ${user.displayName || user.email}`);
-    } catch (error: any) {
-      const friendlyMessage = getErrorMessage(error.message || error.code || error.toString());
-      setError(friendlyMessage);
-      showToast('error', 'Google Sign In Failed', friendlyMessage);
-    } finally {
-      setLoading(false);
-    }
-  };
+
 
   const handleSignOut = async () => {
     try {
@@ -151,7 +137,6 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ children, showToast }) =
             <div>
               <LoginForm
                 onSignIn={handleSignIn}
-                onGoogleSignIn={handleGoogleSignIn}
                 error={error}
                 loading={loading}
                 showToast={showToast}

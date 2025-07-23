@@ -464,9 +464,11 @@ const addChartsToWorksheet = (
 
 
 
+import { DEFAULT_CHURCH } from '../constants';
+
 // Church information constants
 const CHURCH_INFO = {
-  name: 'First Love Church',
+  name: DEFAULT_CHURCH.NAME,
   tagline: 'Faith • Community • Growth',
   appName: 'Church Connect Mobile'
 };

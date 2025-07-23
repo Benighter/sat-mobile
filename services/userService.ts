@@ -127,6 +127,29 @@ export const userService = {
     }
   },
 
+  // Create church and update user profile (for church setup)
+  createChurchAndUpdateUser: async (churchData: {
+    name: string;
+    address: string;
+    contactInfo: {
+      phone: string;
+      email: string;
+      website: string;
+    };
+    settings: {
+      timezone: string;
+      defaultMinistries: string[];
+    };
+  }): Promise<void> => {
+    try {
+      // This method is for existing users who need to set up their church
+      // For new registrations, the church is created in the register method
+      throw new Error('Church setup should be handled during registration. This method is deprecated.');
+    } catch (error: any) {
+      throw new Error(`Failed to create church: ${error.message}`);
+    }
+  },
+
   // Get user statistics for dashboard
   getUserStats: async (churchId: string): Promise<{
     totalUsers: number;

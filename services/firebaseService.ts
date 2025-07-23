@@ -25,8 +25,6 @@ import {
 import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
-  signInWithPopup,
-  GoogleAuthProvider,
   signOut,
   onAuthStateChanged,
   sendPasswordResetEmail,
@@ -99,59 +97,7 @@ export const authService = {
     }
   },
 
-  // Sign in with Google
-  signInWithGoogle: async (): Promise<FirebaseUser> => {
-    try {
-      const provider = new GoogleAuthProvider();
-      provider.addScope('email');
-      provider.addScope('profile');
 
-      const result = await signInWithPopup(auth, provider);
-      const user = result.user;
-
-      // Check if user document exists, create if not
-      const userDocRef = doc(db, 'users', user.uid);
-      const userDoc = await getDoc(userDocRef);
-
-      let userData;
-      if (!userDoc.exists()) {
-        // Create new user document for Google sign-in
-        const newUserData = {
-          uid: user.uid,
-          email: user.email,
-          displayName: user.displayName,
-          photoURL: user.photoURL,
-          role: 'member',
-          createdAt: Timestamp.now(),
-          lastLoginAt: Timestamp.now(),
-          isActive: true,
-          authProvider: 'google'
-        };
-
-        await setDoc(doc(db, 'users', user.uid), newUserData);
-        userData = newUserData;
-      } else {
-        userData = userDoc.data();
-        // Update last login
-        await updateDoc(userDocRef, {
-          lastLoginAt: Timestamp.now()
-        });
-      }
-
-      currentUser = {
-        uid: user.uid,
-        email: user.email,
-        displayName: user.displayName,
-        churchId: userData?.churchId
-      };
-
-      currentChurchId = userData?.churchId || null;
-      return currentUser;
-    } catch (error: any) {
-      // Pass through the original Firebase error for better error handling
-      throw error;
-    }
-  },
 
   // Sign up new user
   signUp: async (email: string, password: string, displayName: string, churchId: string): Promise<FirebaseUser> => {
@@ -199,7 +145,10 @@ export const authService = {
       const user = userCredential.user;
 
       const displayName = `${profile.firstName} ${profile.lastName}`;
-      const churchId = profile.churchName.toLowerCase().replace(/\s+/g, '-');
+
+      // SECURITY FIX: Generate unique church ID using user UID to prevent data leakage
+      // Each user gets their own isolated church context
+      const churchId = `church-${user.uid}`;
 
       // Create user document in Firestore with user UID as document ID
       await setDoc(doc(db, 'users', user.uid), {
@@ -215,6 +164,24 @@ export const authService = {
         createdAt: Timestamp.now(),
         lastLoginAt: Timestamp.now(),
         isActive: true
+      });
+
+      // Create the church document for this user
+      await setDoc(doc(db, 'churches', churchId), {
+        name: profile.churchName,
+        address: '',
+        contactInfo: {
+          phone: profile.phoneNumber,
+          email: user.email,
+          website: ''
+        },
+        settings: {
+          timezone: 'America/New_York',
+          defaultMinistries: ['Choir', 'Dancing Stars', 'Ushers', 'Arrival Stars', 'Airport Stars', 'Media']
+        },
+        createdAt: Timestamp.now(),
+        lastUpdated: Timestamp.now(),
+        ownerId: user.uid // Track who owns this church
       });
 
       currentUser = {
@@ -317,8 +284,55 @@ export const authService = {
         callback(null);
       }
     });
+  },
+
+  // Force refresh current user context (useful after profile updates)
+  refreshCurrentUser: async (): Promise<FirebaseUser | null> => {
+    const user = auth.currentUser;
+    if (user) {
+      const userDoc = await getDoc(doc(db, 'users', user.uid));
+      const userData = userDoc.data();
+
+      currentUser = {
+        uid: user.uid,
+        email: user.email,
+        displayName: user.displayName,
+        churchId: userData?.churchId
+      };
+
+      currentChurchId = userData?.churchId || null;
+      return currentUser;
+    }
+    return null;
+  },
+
+  // Check if email already exists in the system
+  checkEmailExists: async (email: string): Promise<boolean> => {
+    try {
+      const trimmedEmail = email.trim().toLowerCase();
+
+      if (!trimmedEmail) {
+        return false;
+      }
+
+      // Search for users with the exact email (across all users)
+      const usersQuery = query(
+        collection(db, 'users'),
+        where('email', '==', trimmedEmail),
+        where('isActive', '==', true)
+      );
+
+      const usersSnapshot = await getDocs(usersQuery);
+      return !usersSnapshot.empty;
+    } catch (error: any) {
+      console.error('Error checking email existence:', error);
+      // Return false on error to avoid blocking registration
+      return false;
+    }
   }
 };
+
+// REMOVED: ensureDefaultChurchExists function - no longer needed since each user gets their own church
 
 // Helper function to get church collection path
 const getChurchCollectionPath = (collectionName: string): string => {
