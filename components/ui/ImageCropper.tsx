@@ -194,36 +194,46 @@ const ImageCropper: React.FC<ImageCropperProps> = ({
   }, [cropArea, imagePosition, imageSize, onCropComplete]);
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-90 z-50 flex flex-col">
+    <div className="fixed inset-0 bg-gradient-to-br from-slate-900 via-gray-900 to-slate-800 z-50 flex flex-col max-h-screen">
       {/* Header */}
-      <div className="flex items-center justify-between p-4 bg-gray-900 text-white">
-        <h3 className="text-lg font-semibold">Crop Image</h3>
-        <div className="flex items-center space-x-2">
-          <button
-            onClick={() => handleZoom('out')}
-            className="p-2 hover:bg-gray-700 rounded-lg transition-colors"
-          >
-            <ZoomOut className="w-5 h-5" />
-          </button>
-          <button
-            onClick={() => handleZoom('in')}
-            className="p-2 hover:bg-gray-700 rounded-lg transition-colors"
-          >
-            <ZoomIn className="w-5 h-5" />
-          </button>
-          <button
-            onClick={onCancel}
-            className="p-2 hover:bg-gray-700 rounded-lg transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
+      <div className="bg-white/5 backdrop-blur-xl border-b border-white/10 flex-shrink-0">
+        <div className="flex items-center justify-between p-6">
+          <div>
+            <h3 className="text-xl font-bold text-white mb-1">Crop Your Image</h3>
+            <p className="text-gray-300 text-sm">
+              {aspectRatio ? `${aspectRatio.toFixed(2)}:1 aspect ratio` : 'Free crop mode'}
+            </p>
+          </div>
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={() => handleZoom('out')}
+              className="p-3 hover:bg-white/10 rounded-xl transition-all duration-200 text-gray-300 hover:text-white"
+              title="Zoom Out"
+            >
+              <ZoomOut className="w-5 h-5" />
+            </button>
+            <button
+              onClick={() => handleZoom('in')}
+              className="p-3 hover:bg-white/10 rounded-xl transition-all duration-200 text-gray-300 hover:text-white"
+              title="Zoom In"
+            >
+              <ZoomIn className="w-5 h-5" />
+            </button>
+            <button
+              onClick={onCancel}
+              className="p-3 hover:bg-white/10 rounded-xl transition-all duration-200 text-gray-300 hover:text-white"
+              title="Close"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
       </div>
 
       {/* Crop Area */}
       <div
         ref={containerRef}
-        className="flex-1 relative overflow-hidden touch-none"
+        className="flex-1 relative overflow-hidden touch-none bg-gradient-to-br from-gray-800/50 to-gray-900/50"
         onMouseMove={handlePointerMove}
         onMouseUp={handlePointerUp}
         onMouseLeave={handlePointerUp}
@@ -251,24 +261,25 @@ const ImageCropper: React.FC<ImageCropperProps> = ({
         {imageLoaded && (
           <>
             {/* Dark overlay */}
-            <div className="absolute inset-0 bg-black bg-opacity-50 pointer-events-none" />
-            
+            <div className="absolute inset-0 bg-black/60 pointer-events-none" />
+
             {/* Crop area */}
             <div
-              className="absolute border-2 border-white cursor-move touch-none"
+              className="absolute border-2 border-blue-400 cursor-move touch-none shadow-lg"
               style={{
                 left: cropArea.x,
                 top: cropArea.y,
                 width: cropArea.width,
                 height: cropArea.height,
-                backgroundColor: 'transparent'
+                backgroundColor: 'transparent',
+                boxShadow: '0 0 0 2px rgba(59, 130, 246, 0.3), 0 0 20px rgba(59, 130, 246, 0.2)'
               }}
               onMouseDown={(e) => handlePointerDown(e, 'drag')}
               onTouchStart={(e) => handlePointerDown(e, 'drag')}
             >
               {/* Corner resize handle */}
               <div
-                className="absolute -bottom-2 -right-2 w-8 h-8 bg-white border-2 border-blue-500 cursor-se-resize rounded-full touch-none flex items-center justify-center"
+                className="absolute -bottom-3 -right-3 w-6 h-6 bg-blue-500 border-2 border-white cursor-se-resize rounded-full touch-none flex items-center justify-center shadow-lg hover:bg-blue-400 transition-all duration-200 hover:scale-110"
                 onMouseDown={(e) => {
                   e.stopPropagation();
                   handlePointerDown(e, 'resize');
@@ -278,7 +289,9 @@ const ImageCropper: React.FC<ImageCropperProps> = ({
                   handlePointerDown(e, 'resize');
                 }}
               >
-                <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6-6-6z"/>
+                </svg>
               </div>
             </div>
           </>
@@ -286,24 +299,23 @@ const ImageCropper: React.FC<ImageCropperProps> = ({
       </div>
 
       {/* Footer */}
-      <div className="flex items-center justify-between p-4 bg-gray-900">
-        <div className="text-white text-sm">
-          {aspectRatio ? `Aspect Ratio: ${aspectRatio.toFixed(2)}:1` : 'Free Crop'}
-        </div>
-        <div className="flex space-x-3">
-          <button
-            onClick={onCancel}
-            className="px-6 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={cropImage}
-            className="px-6 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg flex items-center space-x-2 transition-colors"
-          >
-            <Check className="w-4 h-4" />
-            <span>Apply Crop</span>
-          </button>
+      <div className="bg-white/5 backdrop-blur-xl border-t border-white/10 flex-shrink-0">
+        <div className="p-6">
+          <div className="flex flex-col sm:flex-row gap-3 max-w-2xl mx-auto">
+            <button
+              onClick={onCancel}
+              className="flex-1 sm:flex-none px-8 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl transition-all duration-200 font-medium border border-white/20 hover:border-white/30"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={cropImage}
+              className="flex-1 sm:flex-none px-8 py-3 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white rounded-xl transition-all duration-200 font-medium shadow-lg hover:shadow-xl transform hover:scale-105 flex items-center justify-center space-x-2"
+            >
+              <Check className="w-5 h-5" />
+              <span>Apply Crop</span>
+            </button>
+          </div>
         </div>
       </div>
 
