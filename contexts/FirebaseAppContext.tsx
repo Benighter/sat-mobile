@@ -412,6 +412,19 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
   const deleteMemberHandler = useCallback(async (memberId: string) => {
     try {
       setIsLoading(true);
+
+      // Find the member to check their role
+      const memberToDelete = members.find(m => m.id === memberId);
+      if (!memberToDelete) {
+        throw new Error('Member not found');
+      }
+
+      // Check if current user has permission to delete this member
+      const { canDeleteMemberWithRole } = await import('../utils/permissionUtils');
+      if (!canDeleteMemberWithRole(userProfile, memberToDelete.role)) {
+        throw new Error('You do not have permission to delete leaders. Only original administrators can delete Bacenta Leaders and Fellowship Leaders.');
+      }
+
       await membersFirebaseService.delete(memberId);
       showToast('success', 'Member deleted successfully');
     } catch (error: any) {
@@ -421,7 +434,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     } finally {
       setIsLoading(false);
     }
-  }, [showToast]);
+  }, [showToast, members, userProfile]);
 
   // Bacenta handlers
   const addBacentaHandler = useCallback(async (bacentaData: Omit<Bacenta, 'id'>) => {

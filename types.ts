@@ -97,6 +97,8 @@ export interface User {
   lastLoginAt: string;
   lastUpdated?: string;
   isActive: boolean;
+  isInvitedAdminLeader?: boolean; // True if this user became a leader through an admin invite
+  invitedByAdminId?: string; // UID of the admin who invited this user to become a leader
 }
 
 export interface Church {

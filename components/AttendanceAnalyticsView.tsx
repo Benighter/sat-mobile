@@ -523,6 +523,7 @@ const SimpleDoughnutChart: React.FC<{
 const AttendanceAnalyticsView: React.FC = () => {
   const {
     members,
+    newBelievers,
     attendanceRecords,
     bacentas,
     displayedDate,
@@ -585,24 +586,51 @@ const AttendanceAnalyticsView: React.FC = () => {
     const periodSundays = getAllSundaysInRange(startDate, endDate);
     const currentMonthSundays = getSundaysOfMonth(currentYear, currentMonth);
 
-    // Overall attendance rate for the period
-    const totalPossibleAttendances = members.length * periodSundays.length;
-    const actualAttendances = attendanceRecords.filter(record =>
+    // Overall attendance rate for the period (including both members and new believers)
+    const totalPossibleAttendances = (members.length + newBelievers.length) * periodSundays.length;
+
+    // Count actual attendances by getting unique member and new believer attendances
+    const periodAttendanceRecords = attendanceRecords.filter(record =>
       record.status === 'Present' &&
       periodSundays.some(sunday =>
         formatDateToYYYYMMDD(sunday) === record.date
       )
-    ).length;
+    );
+
+    // Count unique member and new believer attendances to avoid double counting
+    const memberAttendances = periodAttendanceRecords.filter(record => record.memberId).length;
+    const newBelieverAttendances = periodAttendanceRecords.filter(record => record.newBelieverId).length;
+    const actualAttendances = memberAttendances + newBelieverAttendances;
 
     const overallRate = totalPossibleAttendances > 0 ?
       Math.round((actualAttendances / totalPossibleAttendances) * 100) : 0;
 
     // Weekly attendance data for current month
     const weeklyData = currentMonthSundays.map(sundayStr => {
-      const dayAttendance = attendanceRecords.filter(record =>
+      // Get all attendance records for this Sunday
+      const sundayRecords = attendanceRecords.filter(record =>
         record.date === sundayStr && record.status === 'Present'
-      ).length;
-      const dayRate = members.length > 0 ? Math.round((dayAttendance / members.length) * 100) : 0;
+      );
+
+      // Separate member and new believer attendance records
+      const presentMemberIds = sundayRecords
+        .filter(record => record.memberId)
+        .map(record => record.memberId!);
+
+      const presentNewBelieverIds = sundayRecords
+        .filter(record => record.newBelieverId)
+        .map(record => record.newBelieverId!);
+
+      // Count actual present members and new believers (to avoid counting duplicates)
+      const presentMembers = members.filter(member => presentMemberIds.includes(member.id));
+      const presentNewBelievers = newBelievers.filter(nb => presentNewBelieverIds.includes(nb.id));
+
+      // Total attendance is the sum of present members and new believers
+      const dayAttendance = presentMembers.length + presentNewBelievers.length;
+
+      // Calculate rate based on total possible attendees (members + new believers)
+      const totalPossibleAttendees = members.length + newBelievers.length;
+      const dayRate = totalPossibleAttendees > 0 ? Math.round((dayAttendance / totalPossibleAttendees) * 100) : 0;
 
       // Convert string back to Date for label formatting
       const sundayDate = new Date(sundayStr);
@@ -749,7 +777,7 @@ const AttendanceAnalyticsView: React.FC = () => {
       insights,
       trends
     };
-  }, [members, attendanceRecords, bacentas, displayedDate, timePeriod, getDateRange]);
+  }, [members, newBelievers, attendanceRecords, bacentas, displayedDate, timePeriod, getDateRange]);
 
   // Get month and year for display
   const monthName = getMonthName(displayedDate.getMonth());

@@ -5,6 +5,7 @@ import { useAppContext } from '../contexts/FirebaseAppContext';
 import AttendanceMarker from './AttendanceMarker';
 import { formatDisplayDate, formatFullDate, formatDateToYYYYMMDD } from '../utils/dateUtils';
 import { isDateEditable } from '../utils/attendanceUtils';
+import { canDeleteMemberWithRole } from '../utils/permissionUtils';
 import { UserIcon, EditIcon, TrashIcon, WarningIcon, PhoneIcon, HomeIcon, CalendarIcon } from './icons';
 import Button from './ui/Button';
 import Badge from './ui/Badge';
@@ -141,18 +142,31 @@ const MemberCard: React.FC<MemberCardProps> = ({ member }) => {
             <EditIcon className="w-4 h-4 transition-colors" />
             <span className="hidden sm:inline font-medium">Edit</span>
           </button>
-          <button
-            onClick={() => showConfirmation(
-              'deleteMember',
-              { member },
-              () => deleteMemberHandler(member.id)
-            )}
-            className="group/btn flex items-center space-x-2 px-4 py-2 bg-red-100 hover:bg-red-200 text-red-700 hover:text-red-800 rounded-xl transition-all duration-200 shadow-sm"
-            aria-label="Delete Member"
-          >
-            <TrashIcon className="w-4 h-4 transition-colors" />
-            <span className="hidden sm:inline font-medium">Delete</span>
-          </button>
+          {canDeleteMemberWithRole(userProfile, member.role) ? (
+            <button
+              onClick={() => showConfirmation(
+                'deleteMember',
+                { member },
+                () => deleteMemberHandler(member.id)
+              )}
+              className="group/btn flex items-center space-x-2 px-4 py-2 bg-red-100 hover:bg-red-200 text-red-700 hover:text-red-800 rounded-xl transition-all duration-200 shadow-sm"
+              aria-label="Delete Member"
+            >
+              <TrashIcon className="w-4 h-4 transition-colors" />
+              <span className="hidden sm:inline font-medium">Delete</span>
+            </button>
+          ) : (
+            <div
+              className="group/btn flex items-center space-x-2 px-4 py-2 bg-gray-100 text-gray-400 rounded-xl cursor-not-allowed opacity-50"
+              title={member.role === 'Bacenta Leader' || member.role === 'Fellowship Leader'
+                ? "You cannot delete leaders. Only original administrators can delete Bacenta Leaders and Fellowship Leaders."
+                : "You do not have permission to delete this member"
+              }
+            >
+              <TrashIcon className="w-4 h-4" />
+              <span className="hidden sm:inline font-medium">Delete</span>
+            </div>
+          )}
         </div>
       </div>
 

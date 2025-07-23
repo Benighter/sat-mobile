@@ -186,10 +186,13 @@ export const inviteService = {
       }
 
       // Update user role to leader and grant access to the admin's church
+      // Mark them as an invited admin leader to restrict their permissions
       const userDocRef = doc(db, 'users', userUid);
       await updateDoc(userDocRef, {
         role: 'leader',
         churchId: invite.churchId, // Give access to the admin's church
+        isInvitedAdminLeader: true, // Mark as invited admin leader
+        invitedByAdminId: invite.createdBy, // Track who invited them
         lastUpdated: new Date().toISOString()
       });
 
@@ -309,6 +312,8 @@ export const inviteService = {
       await updateDoc(userDocRef, {
         role: 'admin',
         churchId: leaderUserId, // Reset to their own church ID (their user ID)
+        isInvitedAdminLeader: false, // Clear invited admin leader status
+        invitedByAdminId: null, // Clear the inviting admin reference
         lastUpdated: new Date().toISOString()
       });
 

@@ -122,6 +122,54 @@ export const canAssignBacentaLeaders = (user: User | null): boolean => {
 };
 
 /**
+ * Check if a user is an invited admin who became a leader
+ * @param user The user object to check
+ * @returns boolean indicating if the user is an invited admin leader
+ */
+export const isInvitedAdminLeader = (user: User | null): boolean => {
+  if (!user) return false;
+  return user.role === 'leader' && user.isInvitedAdminLeader === true;
+};
+
+/**
+ * Check if a user can delete members with leader roles (Bacenta Leader, Fellowship Leader)
+ * Invited admin leaders cannot delete other leaders, only original admins can
+ * @param user The user object to check
+ * @returns boolean indicating if the user can delete leaders
+ */
+export const canDeleteLeaders = (user: User | null): boolean => {
+  if (!user) return false;
+
+  // Only original admins can delete leaders
+  // Invited admin leaders (who became leaders through invites) cannot delete leaders
+  return user.role === 'admin' && !isInvitedAdminLeader(user);
+};
+
+/**
+ * Check if a user can delete a specific member based on the member's role
+ * @param user The current user object to check permissions for
+ * @param memberRole The role of the member to be deleted
+ * @returns boolean indicating if the user can delete this member
+ */
+export const canDeleteMemberWithRole = (user: User | null, memberRole: string): boolean => {
+  if (!user) return false;
+
+  // If the member is a regular member, any leader or admin can delete them
+  if (memberRole === 'Member') {
+    return hasLeaderPrivileges(user);
+  }
+
+  // If the member is a leader (Bacenta Leader or Fellowship Leader),
+  // only original admins can delete them, not invited admin leaders
+  if (memberRole === 'Bacenta Leader' || memberRole === 'Fellowship Leader') {
+    return canDeleteLeaders(user);
+  }
+
+  // For any other roles, use standard leader privileges
+  return hasLeaderPrivileges(user);
+};
+
+/**
  * Get a user-friendly role display name
  * @param role The role string from the user object
  * @returns A user-friendly display name for the role

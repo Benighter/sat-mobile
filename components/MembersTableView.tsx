@@ -3,6 +3,7 @@ import { useAppContext } from '../contexts/FirebaseAppContext';
 import { Member } from '../types';
 import { formatDisplayDate, getSundaysOfMonth, getMonthName, formatDateToYYYYMMDD } from '../utils/dateUtils';
 import { isDateEditable } from '../utils/attendanceUtils';
+import { canDeleteMemberWithRole } from '../utils/permissionUtils';
 import { UserIcon, TrashIcon, PhoneIcon, CalendarIcon, ChevronLeftIcon, ChevronRightIcon } from './icons';
 import Button from './ui/Button';
 import Badge from './ui/Badge';
@@ -295,24 +296,42 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
       header: 'Remove',
       width: '80px',
       align: 'center' as const,
-      render: (member: Member) => (
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={(e) => {
-            e.stopPropagation();
-            showConfirmation(
-              'deleteMember',
-              { member },
-              () => deleteMemberHandler(member.id)
-            );
-          }}
-          className="p-1 hover:bg-red-100"
-          title="Remove member"
-        >
-          <TrashIcon className="w-3 h-3 text-red-600" />
-        </Button>
-      ),
+      render: (member: Member) => {
+        const canDelete = canDeleteMemberWithRole(userProfile, member.role);
+
+        if (!canDelete) {
+          return (
+            <div
+              className="p-1 opacity-50 cursor-not-allowed"
+              title={member.role === 'Bacenta Leader' || member.role === 'Fellowship Leader'
+                ? "You cannot delete leaders. Only original administrators can delete Bacenta Leaders and Fellowship Leaders."
+                : "You do not have permission to delete this member"
+              }
+            >
+              <TrashIcon className="w-3 h-3 text-gray-400" />
+            </div>
+          );
+        }
+
+        return (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={(e) => {
+              e.stopPropagation();
+              showConfirmation(
+                'deleteMember',
+                { member },
+                () => deleteMemberHandler(member.id)
+              );
+            }}
+            className="p-1 hover:bg-red-100"
+            title="Remove member"
+          >
+            <TrashIcon className="w-3 h-3 text-red-600" />
+          </Button>
+        );
+      },
     };
 
     return [...baseScrollableColumns, ...attendanceColumns, removeColumn];
