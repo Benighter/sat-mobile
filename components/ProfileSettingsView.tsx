@@ -1,10 +1,11 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../contexts/FirebaseAppContext';
 import { userService } from '../services/userService';
 import { inviteService } from '../services/inviteService';
 import Button from './ui/Button';
 import Input from './ui/Input';
 import Badge from './ui/Badge';
+import ImageUpload from './ui/ImageUpload';
 import ChangePasswordModal from './ChangePasswordModal';
 import AdminInviteManager from './AdminInviteManager';
 import { hasAdminPrivileges, hasLeaderPrivileges } from '../utils/permissionUtils';
@@ -55,7 +56,6 @@ const ProfileSettingsView: React.FC = () => {
   const [isChangePasswordModalOpen, setIsChangePasswordModalOpen] = useState(false);
   const [isAdminInviteModalOpen, setIsAdminInviteModalOpen] = useState(false);
   const [isFixingAccess, setIsFixingAccess] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Update state when userProfile changes
   useEffect(() => {
@@ -85,23 +85,10 @@ const ProfileSettingsView: React.FC = () => {
     setProfileData(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      // Check file size (limit to 5MB)
-      if (file.size > 5 * 1024 * 1024) {
-        showToast('error', 'File Too Large', 'Please select an image smaller than 5MB');
-        return;
-      }
-
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const result = e.target?.result as string;
-        setImagePreview(result);
-        setProfileData(prev => ({ ...prev, profilePicture: result }));
-      };
-      reader.readAsDataURL(file);
-    }
+  const handleImageChange = (base64: string | null) => {
+    const imageData = base64 || '';
+    setImagePreview(imageData);
+    setProfileData(prev => ({ ...prev, profilePicture: imageData }));
   };
 
   const validateProfile = (): boolean => {
@@ -190,30 +177,20 @@ const ProfileSettingsView: React.FC = () => {
         <div className="bg-white rounded-3xl shadow-xl border border-gray-100 p-6 sm:p-8 mb-8">
           <div className="flex flex-col lg:flex-row lg:items-center gap-6">
             {/* Profile Picture */}
-            <div className="relative flex-shrink-0 mx-auto lg:mx-0">
-              <div className="w-32 h-32 bg-gray-200 rounded-3xl flex items-center justify-center overflow-hidden shadow-lg">
-                {imagePreview ? (
-                  <img src={imagePreview} alt="Profile" className="w-full h-full object-cover" />
-                ) : (
-                  <div className="w-full h-full bg-gradient-to-br from-blue-500 via-purple-500 to-indigo-600 flex items-center justify-center text-white font-bold text-3xl">
-                    {getInitials(userProfile)}
-                  </div>
-                )}
+            <div className="flex-shrink-0 mx-auto lg:mx-0">
+              <div className="text-center lg:text-left mb-4">
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">Profile Picture</h3>
+                <p className="text-sm text-gray-500">Upload and crop your profile picture</p>
               </div>
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="absolute -bottom-3 -right-3 w-12 h-12 bg-gradient-to-r from-blue-600 to-purple-600 rounded-2xl flex items-center justify-center text-white hover:from-blue-700 hover:to-purple-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105"
-              >
-                <CameraIcon className="w-5 h-5" />
-              </button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                onChange={handleImageUpload}
-                className="hidden"
-              />
+              <div className="flex justify-center lg:justify-start">
+                <ImageUpload
+                  value={imagePreview || profileData.profilePicture}
+                  onChange={handleImageChange}
+                  size="lg"
+                  enableCropping={true}
+                  cropPresets={true}
+                />
+              </div>
             </div>
 
             {/* User Info */}
