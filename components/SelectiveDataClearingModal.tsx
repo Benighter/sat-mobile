@@ -7,7 +7,6 @@ import {
   TrashIcon,
   UsersIcon,
   CheckIcon,
-  XMarkIcon,
   InformationCircleIcon
 } from './icons';
 
@@ -37,8 +36,9 @@ const SelectiveDataClearingModal: React.FC<SelectiveDataClearingModalProps> = ({
     return bacentas.map(bacenta => {
       const bacentaMembers = members.filter(m => m.bacentaId === bacenta.id);
       const memberIds = bacentaMembers.map(m => m.id);
-      const bacentaAttendance = attendanceRecords.filter(a => memberIds.includes(a.memberId));
-      const bacentaNewBelievers = newBelievers.filter(nb => nb.bacentaId === bacenta.id);
+      const bacentaAttendance = attendanceRecords.filter(a => a.memberId && memberIds.includes(a.memberId));
+      // Note: NewBeliever type doesn't have bacentaId property, so we can't filter by bacenta
+      const bacentaNewBelievers: never[] = [];
 
       return {
         id: bacenta.id,
@@ -54,8 +54,9 @@ const SelectiveDataClearingModal: React.FC<SelectiveDataClearingModalProps> = ({
   const unassignedData = useMemo(() => {
     const unassignedMembers = members.filter(m => !m.bacentaId || m.bacentaId === '');
     const unassignedMemberIds = unassignedMembers.map(m => m.id);
-    const unassignedAttendance = attendanceRecords.filter(a => unassignedMemberIds.includes(a.memberId));
-    const unassignedNewBelievers = newBelievers.filter(nb => !nb.bacentaId || nb.bacentaId === '');
+    const unassignedAttendance = attendanceRecords.filter(a => a.memberId && unassignedMemberIds.includes(a.memberId));
+    // Note: NewBeliever type doesn't have bacentaId property, so all new believers are considered "unassigned"
+    const unassignedNewBelievers = newBelievers;
 
     return {
       memberCount: unassignedMembers.length,
@@ -121,14 +122,15 @@ const SelectiveDataClearingModal: React.FC<SelectiveDataClearingModalProps> = ({
 
         // Get members to delete (from selected bacentas or unassigned)
         const membersToDelete = members.filter(member => {
-          if (includeUnassigned && !member.bacentaId) return true;
+          if (includeUnassigned && (!member.bacentaId || member.bacentaId === '')) return true;
           return selectedBacentaIds.includes(member.bacentaId);
         });
 
         // Get new believers to delete (from selected bacentas or unassigned)
-        const newBelieversToDelete = newBelievers.filter(nb => {
-          if (includeUnassigned && !nb.bacentaId) return true;
-          return selectedBacentaIds.includes(nb.bacentaId);
+        // Note: NewBeliever type doesn't have bacentaId property, so we only include unassigned if requested
+        const newBelieversToDelete = newBelievers.filter(() => {
+          // Since NewBeliever doesn't have bacentaId, we can only delete all new believers when includeUnassigned is true
+          return includeUnassigned;
         });
 
         // Delete all members first (this will also delete their attendance records)
@@ -170,7 +172,7 @@ const SelectiveDataClearingModal: React.FC<SelectiveDataClearingModalProps> = ({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={handleClose} size="lg">
+    <Modal isOpen={isOpen} onClose={handleClose} size="lg" title="Selective Data Clearing">
       <div className="p-6">
         {/* Header */}
         <div className="flex items-center space-x-3 mb-6">
@@ -204,7 +206,7 @@ const SelectiveDataClearingModal: React.FC<SelectiveDataClearingModalProps> = ({
           <h4 className="text-md font-medium text-gray-900">Select Bacentas to Clear</h4>
           <Button
             onClick={handleSelectAll}
-            variant="outline"
+            variant="secondary"
             size="sm"
             className="text-sm"
           >
@@ -320,7 +322,7 @@ const SelectiveDataClearingModal: React.FC<SelectiveDataClearingModalProps> = ({
         <div className="flex items-center justify-end space-x-3">
           <Button
             onClick={handleClose}
-            variant="outline"
+            variant="secondary"
           >
             Cancel
           </Button>
