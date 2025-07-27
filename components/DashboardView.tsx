@@ -1,7 +1,7 @@
 
 import React, { memo } from 'react';
 import { useAppContext } from '../contexts/FirebaseAppContext';
-import { PeopleIcon, AttendanceIcon, CalendarIcon, ChartBarIcon, ChevronRightIcon } from './icons';
+import { PeopleIcon, AttendanceIcon, CalendarIcon, ChartBarIcon, ChevronRightIcon, CheckIcon } from './icons';
 import { getMonthName, getCurrentOrMostRecentSunday, formatFullDate } from '../utils/dateUtils';
 
 interface StatCardProps {
@@ -151,6 +151,13 @@ const DashboardView: React.FC = memo(() => {
           colorClass="border-blue-500"
           description={`For ${monthName}`}
           onClick={() => switchTab({ id: 'attendance_analytics', name: 'Attendance Analytics' })}
+        />
+        <StatCard
+          title="Sunday Confirmations"
+          value={0}
+          icon={<CheckIcon className="w-full h-full" />}
+          colorClass="border-purple-500"
+          description="Coming Soon"
         />
         <StatCard
           title="Weekly Attendance"
