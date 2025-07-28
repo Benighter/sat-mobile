@@ -331,38 +331,25 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, onSwitchToLogin,
   };
 
   const validateForm = async (): Promise<boolean> => {
-    console.log('🔍 validateForm called with data:', formData);
     const newErrors: Record<string, string> = {};
 
     // Validate all fields
     const firstNameError = validateFirstName(formData.firstName);
-    if (firstNameError) {
-      newErrors.firstName = firstNameError;
-      console.log('❌ First name error:', firstNameError);
-    }
+    if (firstNameError) newErrors.firstName = firstNameError;
 
     const lastNameError = validateLastName(formData.lastName);
-    if (lastNameError) {
-      newErrors.lastName = lastNameError;
-      console.log('❌ Last name error:', lastNameError);
-    }
+    if (lastNameError) newErrors.lastName = lastNameError;
 
     const emailError = validateEmail(formData.email);
     if (emailError) {
       newErrors.email = emailError;
-      console.log('❌ Email error:', emailError);
     } else {
       // Check if email exists only if basic validation passes
       try {
-        console.log('🔍 Checking if email exists:', formData.email);
-        // TEMPORARILY SKIP EMAIL CHECK FOR DEBUGGING
-        console.log('⚠️ TEMPORARILY SKIPPING EMAIL EXISTENCE CHECK FOR DEBUGGING');
-        // const emailExists = await authService.checkEmailExists(formData.email);
-        // console.log('📧 Email exists result:', emailExists);
-        // if (emailExists) {
-        //   newErrors.email = 'This email address is already registered. Please use a different email or sign in instead.';
-        //   console.log('❌ Email already exists error');
-        // }
+        const emailExists = await authService.checkEmailExists(formData.email);
+        if (emailExists) {
+          newErrors.email = 'This email address is already registered. Please use a different email or sign in instead.';
+        }
       } catch (error) {
         console.error('Error checking email existence during form validation:', error);
         // Don't block form submission on email check error
@@ -370,86 +357,35 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, onSwitchToLogin,
     }
 
     const passwordError = validatePassword(formData.password);
-    if (passwordError) {
-      newErrors.password = passwordError;
-      console.log('❌ Password error:', passwordError);
-    }
+    if (passwordError) newErrors.password = passwordError;
 
     const confirmPasswordError = validateConfirmPassword(formData.password, formData.confirmPassword);
-    if (confirmPasswordError) {
-      newErrors.confirmPassword = confirmPasswordError;
-      console.log('❌ Confirm password error:', confirmPasswordError);
-    }
+    if (confirmPasswordError) newErrors.confirmPassword = confirmPasswordError;
 
     const churchNameError = validateChurchName(formData.churchName);
-    if (churchNameError) {
-      newErrors.churchName = churchNameError;
-      console.log('❌ Church name error:', churchNameError);
-    }
+    if (churchNameError) newErrors.churchName = churchNameError;
 
     const phoneError = validatePhoneNumber(formData.phoneNumber);
-    if (phoneError) {
-      newErrors.phoneNumber = phoneError;
-      console.log('❌ Phone error:', phoneError);
-    }
+    if (phoneError) newErrors.phoneNumber = phoneError;
 
-    console.log('📋 All validation errors:', newErrors);
     setErrors(newErrors);
-    const isValid = Object.keys(newErrors).length === 0;
-    console.log('✅ Form validation result:', isValid);
-    return isValid;
+    return Object.keys(newErrors).length === 0;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    console.log('🚀 Form submission started');
-    console.log('📝 Form data:', formData);
-
-    // Quick validation check - ensure required fields are filled
-    if (!formData.firstName.trim()) {
-      console.log('❌ First name is missing');
-      showToast('error', 'Validation Failed', 'First name is required.');
-      return;
-    }
-
-    if (!formData.email.trim()) {
-      console.log('❌ Email is missing');
-      showToast('error', 'Validation Failed', 'Email is required.');
-      return;
-    }
-
-    if (!formData.password) {
-      console.log('❌ Password is missing');
-      showToast('error', 'Validation Failed', 'Password is required.');
-      return;
-    }
-
-    // Church name defaults to "First Love Church", so no validation needed
-    console.log('✅ Using church name:', formData.churchName || 'First Love Church');
-
     setIsLoading(true);
 
+    // Validate form including email existence check
+    const isValid = await validateForm();
+    if (!isValid) {
+      setIsLoading(false);
+      return;
+    }
+
     try {
-      // TEMPORARILY SKIP FULL VALIDATION FOR DEBUGGING
-      console.log('⚠️ SKIPPING FULL VALIDATION FOR DEBUGGING');
-
-      // // Validate form including email existence check
-      // console.log('🔍 Starting form validation...');
-      // const isValid = await validateForm();
-      // console.log('✅ Form validation result:', isValid);
-      // console.log('❌ Current errors:', errors);
-
-      // if (!isValid) {
-      //   console.log('❌ Form validation failed, stopping submission');
-      //   setIsLoading(false);
-      //   showToast('error', 'Validation Failed', 'Please fix the errors in the form and try again.');
-      //   return;
-      // }
-
-      console.log('🔥 Calling authService.register...');
       const churchName = formData.churchName.trim() || 'First Love Church';
-      console.log('🏛️ Using church name:', churchName);
 
       await authService.register(formData.email, formData.password, {
         firstName: formData.firstName.trim(),
@@ -459,25 +395,19 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, onSwitchToLogin,
         role: 'admin' // First user becomes admin
       });
 
-      console.log('✅ Registration successful!');
       showToast('success', 'Registration Successful!',
-        `Welcome to SAT Mobile! Your church "${formData.churchName}" has been set up.`);
+        `Welcome to SAT Mobile! Your church "${churchName}" has been set up.`);
       onSuccess();
     } catch (error: any) {
-      console.error('❌ Registration error:', error);
       showToast('error', 'Registration Failed', getErrorMessage(error.message || error.code || error.toString()));
     } finally {
       setIsLoading(false);
-      console.log('🏁 Form submission completed');
     }
   };
 
   return (
     <div className="space-y-6">
-      <form onSubmit={(e) => {
-        console.log('📝 Form onSubmit event triggered');
-        handleSubmit(e);
-      }} className="space-y-5">
+      <form onSubmit={handleSubmit} className="space-y-5">
 
         {/* Name Fields */}
         <div className="grid grid-cols-2 gap-3">
@@ -653,7 +583,6 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, onSwitchToLogin,
         <button
           type="submit"
           disabled={isLoading}
-          onClick={() => console.log('🔘 Create Account button clicked!')}
           className="w-full py-3.5 bg-gradient-to-r from-green-500 to-emerald-600 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-[1.01] transition-all duration-200 mt-6"
         >
           {isLoading ? (
