@@ -16,31 +16,11 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, size = 
     if (!isOpen) return;
 
     // Store original styles to restore later
-    const originalBodyStyle = {
-      overflow: document.body.style.overflow,
-      position: document.body.style.position,
-      top: document.body.style.top,
-      width: document.body.style.width,
-      height: document.body.style.height
-    };
-
-    const originalHtmlStyle = {
-      overflow: document.documentElement.style.overflow,
-      position: document.documentElement.style.position
-    };
-
-    // Get current scroll position
+    const originalBodyOverflow = document.body.style.overflow;
     const scrollY = window.scrollY;
 
-    // Apply aggressive scroll prevention to both html and body
-    document.documentElement.style.overflow = 'hidden';
-    document.documentElement.style.position = 'fixed';
-
+    // Simple approach: just prevent body overflow
     document.body.style.overflow = 'hidden';
-    document.body.style.position = 'fixed';
-    document.body.style.top = `-${scrollY}px`;
-    document.body.style.width = '100%';
-    document.body.style.height = '100%';
     document.body.classList.add('modal-open');
 
     // Handle ESC key
@@ -50,8 +30,8 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, size = 
       }
     };
 
-    // Simple approach: prevent all background scrolling, allow modal scrolling
-    const preventBackgroundScroll = (e: Event) => {
+    // Mobile-friendly approach: only prevent wheel events outside modal
+    const preventWheelOutsideModal = (e: WheelEvent) => {
       const target = e.target as Element;
       const modalContent = document.querySelector('[data-modal-content]');
 
@@ -61,40 +41,44 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, size = 
         e.stopPropagation();
         return false;
       }
-
-      // If within modal content, allow the event but stop propagation to prevent background effects
-      e.stopPropagation();
     };
 
-    // Add event listeners with simpler approach
-    document.addEventListener('wheel', preventBackgroundScroll, { passive: false, capture: true });
-    document.addEventListener('touchmove', preventBackgroundScroll, { passive: false, capture: true });
-    document.addEventListener('scroll', preventBackgroundScroll, { passive: false, capture: true });
+    // Allow all touch events within modal, prevent only outside
+    const preventTouchOutsideModal = (e: TouchEvent) => {
+      const target = e.target as Element;
+      const modalContent = document.querySelector('[data-modal-content]');
+
+      // If the event is NOT within the modal content, prevent it
+      if (!modalContent || !modalContent.contains(target)) {
+        e.preventDefault();
+        e.stopPropagation();
+        return false;
+      }
+    };
+
+    // Add event listeners - be more selective for mobile compatibility
+    document.addEventListener('wheel', preventWheelOutsideModal, { passive: false, capture: true });
+    document.addEventListener('touchmove', preventTouchOutsideModal, { passive: false, capture: true });
     document.addEventListener('keydown', handleEsc);
 
-    // Prevent scroll on window
-    window.addEventListener('scroll', preventBackgroundScroll, { passive: false });
+    // Only prevent document scroll, not all scroll events
+    const preventDocumentScroll = (e: Event) => {
+      e.preventDefault();
+      e.stopPropagation();
+    };
+    document.addEventListener('scroll', preventDocumentScroll, { passive: false, capture: true });
 
     // Cleanup function
     return () => {
-      // Restore original html styles
-      document.documentElement.style.overflow = originalHtmlStyle.overflow;
-      document.documentElement.style.position = originalHtmlStyle.position;
-
       // Restore original body styles
-      document.body.style.overflow = originalBodyStyle.overflow;
-      document.body.style.position = originalBodyStyle.position;
-      document.body.style.top = originalBodyStyle.top;
-      document.body.style.width = originalBodyStyle.width;
-      document.body.style.height = originalBodyStyle.height;
+      document.body.style.overflow = originalBodyOverflow;
       document.body.classList.remove('modal-open');
 
       // Remove event listeners
-      document.removeEventListener('wheel', preventBackgroundScroll, { capture: true });
-      document.removeEventListener('touchmove', preventBackgroundScroll, { capture: true });
-      document.removeEventListener('scroll', preventBackgroundScroll, { capture: true });
+      document.removeEventListener('wheel', preventWheelOutsideModal, { capture: true });
+      document.removeEventListener('touchmove', preventTouchOutsideModal, { capture: true });
+      document.removeEventListener('scroll', preventDocumentScroll, { capture: true });
       document.removeEventListener('keydown', handleEsc);
-      window.removeEventListener('scroll', preventBackgroundScroll);
 
       // Restore scroll position
       window.scrollTo(0, scrollY);
@@ -178,8 +162,8 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, size = 
           className="p-3 sm:p-4 overflow-y-auto flex-1 modal-scrollable"
           style={{
             overscrollBehavior: 'contain',
-            touchAction: 'pan-y',
-            WebkitOverflowScrolling: 'touch'
+            WebkitOverflowScrolling: 'touch',
+            touchAction: 'auto' // Allow all touch actions within modal content
           }}
         >
           {children}
