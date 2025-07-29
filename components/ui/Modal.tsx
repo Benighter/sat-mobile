@@ -8,67 +8,97 @@ interface ModalProps {
   title: string;
   children: React.ReactNode;
   size?: 'sm' | 'md' | 'lg' | 'xl' | 'full';
+  footer?: React.ReactNode;
 }
 
-const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, size = 'md' }) => {
+const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, size = 'md', footer }) => {
   useEffect(() => {
-    // Combined keyboard event handler
-    const handleKeydown = (event: KeyboardEvent) => {
-      // Handle ESC key
+    if (!isOpen) return;
+
+    // Store original styles to restore later
+    const originalBodyStyle = {
+      overflow: document.body.style.overflow,
+      position: document.body.style.position,
+      top: document.body.style.top,
+      width: document.body.style.width,
+      height: document.body.style.height
+    };
+
+    const originalHtmlStyle = {
+      overflow: document.documentElement.style.overflow,
+      position: document.documentElement.style.position
+    };
+
+    // Get current scroll position
+    const scrollY = window.scrollY;
+
+    // Apply aggressive scroll prevention to both html and body
+    document.documentElement.style.overflow = 'hidden';
+    document.documentElement.style.position = 'fixed';
+
+    document.body.style.overflow = 'hidden';
+    document.body.style.position = 'fixed';
+    document.body.style.top = `-${scrollY}px`;
+    document.body.style.width = '100%';
+    document.body.style.height = '100%';
+    document.body.classList.add('modal-open');
+
+    // Handle ESC key
+    const handleEsc = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         onClose();
-        return;
-      }
-
-      // Prevent keyboard scrolling on background
-      const scrollKeys = ['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', 'Space'];
-      const target = event.target as Element;
-      const modalContent = document.querySelector('[data-modal-content]');
-
-      if (scrollKeys.includes(event.key) && modalContent && !modalContent.contains(target)) {
-        event.preventDefault();
       }
     };
 
-    // Prevent wheel scrolling on background
-    const preventWheelScroll = (e: WheelEvent) => {
+    // Simple approach: prevent all background scrolling, allow modal scrolling
+    const preventBackgroundScroll = (e: Event) => {
       const target = e.target as Element;
       const modalContent = document.querySelector('[data-modal-content]');
 
-      if (modalContent && !modalContent.contains(target)) {
+      // If the event is NOT within the modal content, prevent it
+      if (!modalContent || !modalContent.contains(target)) {
         e.preventDefault();
         e.stopPropagation();
+        return false;
       }
+
+      // If within modal content, allow the event but stop propagation to prevent background effects
+      e.stopPropagation();
     };
 
-    // Prevent touch scrolling on background
-    const preventTouchScroll = (e: TouchEvent) => {
-      const target = e.target as Element;
-      const modalContent = document.querySelector('[data-modal-content]');
+    // Add event listeners with simpler approach
+    document.addEventListener('wheel', preventBackgroundScroll, { passive: false, capture: true });
+    document.addEventListener('touchmove', preventBackgroundScroll, { passive: false, capture: true });
+    document.addEventListener('scroll', preventBackgroundScroll, { passive: false, capture: true });
+    document.addEventListener('keydown', handleEsc);
 
-      if (modalContent && !modalContent.contains(target)) {
-        e.preventDefault();
-        e.stopPropagation();
-      }
+    // Prevent scroll on window
+    window.addEventListener('scroll', preventBackgroundScroll, { passive: false });
+
+    // Cleanup function
+    return () => {
+      // Restore original html styles
+      document.documentElement.style.overflow = originalHtmlStyle.overflow;
+      document.documentElement.style.position = originalHtmlStyle.position;
+
+      // Restore original body styles
+      document.body.style.overflow = originalBodyStyle.overflow;
+      document.body.style.position = originalBodyStyle.position;
+      document.body.style.top = originalBodyStyle.top;
+      document.body.style.width = originalBodyStyle.width;
+      document.body.style.height = originalBodyStyle.height;
+      document.body.classList.remove('modal-open');
+
+      // Remove event listeners
+      document.removeEventListener('wheel', preventBackgroundScroll, { capture: true });
+      document.removeEventListener('touchmove', preventBackgroundScroll, { capture: true });
+      document.removeEventListener('scroll', preventBackgroundScroll, { capture: true });
+      document.removeEventListener('keydown', handleEsc);
+      window.removeEventListener('scroll', preventBackgroundScroll);
+
+      // Restore scroll position
+      window.scrollTo(0, scrollY);
     };
-
-    if (isOpen) {
-      // Apply modal-open class and prevent scrolling
-      document.body.classList.add('modal-open');
-
-      // Add event listeners to prevent background scrolling
-      document.addEventListener('keydown', handleKeydown, { passive: false });
-      document.addEventListener('wheel', preventWheelScroll, { passive: false });
-      document.addEventListener('touchmove', preventTouchScroll, { passive: false });
-
-      // Cleanup function
-      return () => {
-        document.removeEventListener('keydown', handleKeydown);
-        document.removeEventListener('wheel', preventWheelScroll);
-        document.removeEventListener('touchmove', preventTouchScroll);
-        document.body.classList.remove('modal-open');
-      };
-    }
   }, [isOpen, onClose]);
 
   if (!isOpen) return null;
@@ -97,16 +127,33 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, size = 
         padding: '20px',
         paddingTop: '100px', // Account for header height
         paddingBottom: '20px',
-        overflow: 'hidden' // Prevent any scrolling on the backdrop
+        overflow: 'hidden', // Prevent any scrolling on the backdrop
+        touchAction: 'none', // Prevent touch actions
+        overscrollBehavior: 'none' // Prevent overscroll
       }}
       onClick={(e) => {
         if (e.target === e.currentTarget) {
           onClose();
         }
       }}
+      onWheel={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        return false;
+      }}
+      onTouchMove={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        return false;
+      }}
+      onScroll={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        return false;
+      }}
     >
       <div
-        className={`bg-white rounded-lg sm:rounded-xl shadow-xl w-full ${sizeClasses[size]} flex flex-col relative modal-content`}
+        className={`bg-white rounded-lg sm:rounded-xl shadow-xl w-full ${sizeClasses[size]} flex flex-col relative modal-content overflow-hidden`}
         style={{
           zIndex: 10000,
           maxHeight: 'calc(100vh - 140px)', // Ensure modal doesn't exceed viewport
@@ -130,11 +177,18 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, size = 
         <div
           className="p-3 sm:p-4 overflow-y-auto flex-1 modal-scrollable"
           style={{
-            overscrollBehavior: 'contain' // Prevent scroll chaining to parent
+            overscrollBehavior: 'contain',
+            touchAction: 'pan-y',
+            WebkitOverflowScrolling: 'touch'
           }}
         >
           {children}
         </div>
+        {footer && (
+          <div className="p-3 sm:p-4 border-t bg-gray-50/50 flex-shrink-0">
+            {footer}
+          </div>
+        )}
       </div>
     </div>
   );

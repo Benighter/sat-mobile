@@ -165,7 +165,23 @@ const AdminInviteManager: React.FC<AdminInviteManagerProps> = ({ isOpen, onClose
   }
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="">
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title=""
+      footer={
+        <div className="text-center">
+          <Button
+            variant="ghost"
+            onClick={onClose}
+            className="h-12 px-8 bg-gray-100/80 hover:bg-gray-200 text-gray-700 hover:text-gray-800 border-2 border-gray-200/50 hover:border-gray-300 rounded-2xl transition-all duration-300 flex items-center justify-center space-x-3 font-medium shadow-sm hover:shadow-md mx-auto"
+          >
+            <XMarkIcon className="w-5 h-5" />
+            <span>Close</span>
+          </Button>
+        </div>
+      }
+    >
       <div className="max-w-3xl mx-auto">
         {/* Enhanced Header with Animation */}
         <div className="text-center mb-10 relative">
@@ -535,18 +551,6 @@ const AdminInviteManager: React.FC<AdminInviteManagerProps> = ({ isOpen, onClose
               ))}
             </div>
           )}
-        </div>
-
-        {/* Enhanced close button */}
-        <div className="mt-12 text-center">
-          <Button
-            variant="ghost"
-            onClick={onClose}
-            className="h-12 px-8 bg-gray-100/80 hover:bg-gray-200 text-gray-700 hover:text-gray-800 border-2 border-gray-200/50 hover:border-gray-300 rounded-2xl transition-all duration-300 flex items-center justify-center space-x-3 font-medium shadow-sm hover:shadow-md mx-auto"
-          >
-            <XMarkIcon className="w-5 h-5" />
-            <span>Close</span>
-          </Button>
         </div>
       </div>
     </Modal>
