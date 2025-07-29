@@ -5,6 +5,7 @@ import {
   getDoc,
   addDoc,
   updateDoc,
+  deleteDoc,
   query,
   where,
   orderBy,
@@ -366,6 +367,16 @@ export const inviteService = {
       });
     } catch (error: any) {
       throw new Error(`Failed to cancel invite: ${error.message}`);
+    }
+  },
+
+  // Delete an invite permanently
+  deleteInvite: async (inviteId: string): Promise<void> => {
+    try {
+      const inviteDocRef = doc(db, 'adminInvites', inviteId);
+      await deleteDoc(inviteDocRef);
+    } catch (error: any) {
+      throw new Error(`Failed to delete invite: ${error.message}`);
     }
   }
 };
