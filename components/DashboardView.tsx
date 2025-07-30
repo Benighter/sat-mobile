@@ -2,7 +2,7 @@
 import React, { memo } from 'react';
 import { useAppContext } from '../contexts/FirebaseAppContext';
 import { PeopleIcon, AttendanceIcon, CalendarIcon, ChartBarIcon, ChevronRightIcon, CheckIcon } from './icons';
-import { getMonthName, getCurrentOrMostRecentSunday, formatFullDate } from '../utils/dateUtils';
+import { getMonthName, getCurrentOrMostRecentSunday, formatFullDate, getUpcomingSunday } from '../utils/dateUtils';
 
 interface StatCardProps {
   title: string;
@@ -56,7 +56,7 @@ const StatCard: React.FC<StatCardProps> = memo(({ title, value, icon, colorClass
 
 
 const DashboardView: React.FC = memo(() => {
-  const { members, attendanceRecords, newBelievers, bacentas, displayedSundays, displayedDate, switchTab } = useAppContext(); // Use displayedSundays
+  const { members, attendanceRecords, newBelievers, bacentas, displayedSundays, displayedDate, sundayConfirmations, switchTab } = useAppContext(); // Use displayedSundays
 
   const totalMembers = members.length;
   
@@ -110,7 +110,26 @@ const DashboardView: React.FC = memo(() => {
     };
   };
 
+  // Calculate upcoming Sunday confirmations
+  const getUpcomingSundayConfirmations = () => {
+    const upcomingSunday = getUpcomingSunday();
+
+    // Get all confirmation records for the upcoming Sunday
+    const confirmationRecords = sundayConfirmations.filter(
+      record => record.date === upcomingSunday && record.status === 'Confirmed'
+    );
+
+    const confirmedCount = confirmationRecords.length;
+
+    return {
+      total: confirmedCount,
+      date: upcomingSunday,
+      formattedDate: formatFullDate(upcomingSunday)
+    };
+  };
+
   const weeklyAttendance = getCurrentWeekAttendance();
+  const upcomingConfirmations = getUpcomingSundayConfirmations();
 
   const membersPerBacenta = bacentas.map(b => { // Renamed from membersPerCongregation
     const count = members.filter(m => m.bacentaId === b.id).length; // Use bacentaId
@@ -152,12 +171,12 @@ const DashboardView: React.FC = memo(() => {
           description={`For ${monthName}`}
           onClick={() => switchTab({ id: 'attendance_analytics', name: 'Attendance Analytics' })}
         />
-        <StatCard
+        <EnhancedConfirmationCard
           title="Sunday Confirmations"
-          value={0}
-          icon={<CheckIcon className="w-full h-full" />}
-          colorClass="border-purple-500"
-          description="Coming Soon"
+          confirmedCount={upcomingConfirmations.total}
+          totalMembers={totalMembers}
+          date={upcomingConfirmations.date}
+          onClick={() => switchTab({ id: 'sunday_confirmations', name: 'Sunday Confirmations' })}
         />
         <StatCard
           title="Weekly Attendance"
@@ -236,5 +255,92 @@ const DashboardView: React.FC = memo(() => {
 });
 
 DashboardView.displayName = 'DashboardView';
+
+// Clean Confirmation Card Component
+interface EnhancedConfirmationCardProps {
+  title: string;
+  confirmedCount: number;
+  totalMembers: number;
+  date: string;
+  onClick: () => void;
+}
+
+const EnhancedConfirmationCard: React.FC<EnhancedConfirmationCardProps> = memo(({
+  title,
+  confirmedCount,
+  totalMembers,
+  date,
+  onClick
+}) => {
+  const percentage = totalMembers > 0 ? Math.round((confirmedCount / totalMembers) * 100) : 0;
+  const circumference = 2 * Math.PI * 20; // radius = 20 (smaller)
+  const strokeDasharray = circumference;
+  const strokeDashoffset = circumference - (percentage / 100) * circumference;
+
+  return (
+    <div
+      className="glass p-4 sm:p-6 shadow-sm rounded-xl border-l-4 border-green-500 relative min-h-[140px] md:h-40 flex flex-col justify-between cursor-pointer hover:shadow-md transition-shadow duration-200"
+      onClick={onClick}
+    >
+      {/* Header with title and progress ring */}
+      <div className="flex items-start justify-between">
+        <div className="flex-1">
+          <p className="text-xs sm:text-sm font-medium text-gray-600 uppercase tracking-wider mb-2 sm:mb-3">{title}</p>
+        </div>
+        <div className="ml-4 flex-shrink-0 relative">
+          {/* Smaller Progress Ring */}
+          <div className="relative w-10 h-10">
+            <svg className="w-full h-full transform -rotate-90" viewBox="0 0 50 50">
+              {/* Background circle */}
+              <circle
+                cx="25"
+                cy="25"
+                r="20"
+                stroke="currentColor"
+                strokeWidth="4"
+                fill="none"
+                className="text-gray-200"
+              />
+              {/* Progress circle */}
+              <circle
+                cx="25"
+                cy="25"
+                r="20"
+                stroke="currentColor"
+                strokeWidth="4"
+                fill="none"
+                strokeDasharray={strokeDasharray}
+                strokeDashoffset={strokeDashoffset}
+                className="text-green-500 transition-all duration-500 ease-out"
+                strokeLinecap="round"
+              />
+            </svg>
+            {/* Center percentage */}
+            <div className="absolute inset-0 flex items-center justify-center">
+              <span className="text-xs font-bold text-green-600">{percentage}%</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Value section */}
+      <div>
+        <div className="flex items-baseline space-x-2 mb-2">
+          <span className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900">
+            {confirmedCount}
+          </span>
+          <span className="text-sm text-gray-500 font-medium">
+            of {totalMembers}
+          </span>
+        </div>
+        <p className="text-xs sm:text-sm text-gray-500 font-medium">
+          For {formatFullDate(date).split(',')[0]}
+        </p>
+      </div>
+    </div>
+  );
+});
+
+EnhancedConfirmationCard.displayName = 'EnhancedConfirmationCard';
 
 export default DashboardView;

@@ -12,7 +12,8 @@ import {
   ClockIcon,
   ChartBarIcon,
   WarningIcon,
-  UserIcon
+  UserIcon,
+  CheckIcon
 } from './icons';
 
 interface BacentaDrawerProps {
@@ -212,6 +213,16 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
                 isActive={currentTab.id === TabKeys.ALL_BACENTAS}
                 onClick={() => {
                   switchTab({ id: TabKeys.ALL_BACENTAS, name: 'All Bacenta Leaders' });
+                  onClose();
+                }}
+              />
+
+              <NavigationItem
+                icon={<CheckIcon className="w-4 h-4" />}
+                label="Sunday Confirmations"
+                isActive={currentTab.id === TabKeys.SUNDAY_CONFIRMATIONS}
+                onClick={() => {
+                  switchTab({ id: TabKeys.SUNDAY_CONFIRMATIONS, name: 'Sunday Confirmations' });
                   onClose();
                 }}
               />

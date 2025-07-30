@@ -1,13 +1,14 @@
 import React, { useState, useMemo } from 'react';
 import { useAppContext } from '../contexts/FirebaseAppContext';
 import { Member } from '../types';
-import { formatDisplayDate, getSundaysOfMonth, getMonthName, formatDateToYYYYMMDD } from '../utils/dateUtils';
+import { formatDisplayDate, getSundaysOfMonth, getMonthName, formatDateToYYYYMMDD, getUpcomingSunday } from '../utils/dateUtils';
 import { isDateEditable } from '../utils/attendanceUtils';
 import { canDeleteMemberWithRole } from '../utils/permissionUtils';
 import { SmartTextParser } from '../utils/smartTextParser';
 import { UserIcon, TrashIcon, PhoneIcon, CalendarIcon, ChevronLeftIcon, ChevronRightIcon } from './icons';
 import Button from './ui/Button';
 import Input from './ui/Input';
+import ConfirmationMarker from './ConfirmationMarker';
 
 interface MembersTableViewProps {
   bacentaFilter?: string | null;
@@ -17,12 +18,13 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
   const {
     members,
     bacentas,
-
+    sundayConfirmations,
     openMemberForm,
     deleteMemberHandler,
     attendanceRecords,
     markAttendanceHandler,
     clearAttendanceHandler,
+    markConfirmationHandler,
     isLoading,
     userProfile,
     showConfirmation,
@@ -35,6 +37,9 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
   const [searchTerm, setSearchTerm] = useState('');
   const [displayedDate, setDisplayedDate] = useState(new Date());
   const [roleFilter, setRoleFilter] = useState<'all' | 'Bacenta Leader' | 'Fellowship Leader' | 'Member'>('all');
+
+  // Get upcoming Sunday for confirmation
+  const upcomingSunday = useMemo(() => getUpcomingSunday(), []);
 
   // Get displayed month's Sundays
   const currentMonthSundays = useMemo(() => {
@@ -65,6 +70,12 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
   // Get attendance status for a member on a specific date
   const getAttendanceStatus = (memberId: string, date: string) => {
     const record = attendanceRecords.find(ar => ar.memberId === memberId && ar.date === date);
+    return record?.status;
+  };
+
+  // Get confirmation status for a member on a specific date
+  const getConfirmationStatus = (memberId: string, date: string) => {
+    const record = sundayConfirmations.find(cr => cr.memberId === memberId && cr.date === date);
     return record?.status;
   };
 
@@ -232,6 +243,26 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
           </div>
         ),
       },
+      {
+        key: 'confirmation',
+        header: `Confirm ${formatDisplayDate(upcomingSunday).split(',')[0]}`,
+        width: '120px',
+        align: 'center' as const,
+        render: (member: Member) => {
+          const confirmationStatus = getConfirmationStatus(member.id, upcomingSunday);
+          return (
+            <div className="flex justify-center">
+              <ConfirmationMarker
+                memberId={member.id}
+                date={upcomingSunday}
+                currentStatus={confirmationStatus}
+                onConfirm={markConfirmationHandler}
+                compact={true}
+              />
+            </div>
+          );
+        },
+      },
     ];
 
     // Add attendance columns for each Sunday
@@ -352,7 +383,7 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
     };
 
     return [...baseScrollableColumns, ...attendanceColumns, removeColumn];
-  }, [currentMonthSundays, attendanceRecords, deleteMemberHandler, getAttendanceStatus, handleAttendanceToggle]);
+  }, [currentMonthSundays, attendanceRecords, sundayConfirmations, deleteMemberHandler, getAttendanceStatus, getConfirmationStatus, handleAttendanceToggle, upcomingSunday, markConfirmationHandler]);
 
   // Get displayed month name
   const currentMonthName = getMonthName(displayedDate.getMonth());

@@ -34,7 +34,7 @@ import {
   User
 } from 'firebase/auth';
 import { db, auth } from '../firebase.config';
-import { Member, Bacenta, AttendanceRecord, NewBeliever } from '../types';
+import { Member, Bacenta, AttendanceRecord, NewBeliever, SundayConfirmation } from '../types';
 
 // Types for Firebase operations
 export interface FirebaseUser {
@@ -684,6 +684,92 @@ export const attendanceFirebaseService = {
     } catch (error: any) {
       throw new Error(`Failed to batch update attendance: ${error.message}`);
     }
+  }
+};
+
+// Sunday Confirmation Service
+export const confirmationFirebaseService = {
+  // Get all confirmations
+  getAll: async (): Promise<SundayConfirmation[]> => {
+    try {
+      const confirmationsRef = collection(db, getChurchCollectionPath('confirmations'));
+      const querySnapshot = await getDocs(confirmationsRef);
+      return querySnapshot.docs.map(doc => ({
+        ...doc.data(),
+        id: doc.id
+      })) as SundayConfirmation[];
+    } catch (error: any) {
+      throw new Error(`Failed to fetch confirmations: ${error.message}`);
+    }
+  },
+
+  // Get confirmations for a specific date
+  getByDate: async (date: string): Promise<SundayConfirmation[]> => {
+    try {
+      const confirmationsRef = collection(db, getChurchCollectionPath('confirmations'));
+      const q = query(confirmationsRef, where('date', '==', date));
+      const querySnapshot = await getDocs(q);
+      return querySnapshot.docs.map(doc => ({
+        ...doc.data(),
+        id: doc.id
+      })) as SundayConfirmation[];
+    } catch (error: any) {
+      throw new Error(`Failed to fetch confirmations for date ${date}: ${error.message}`);
+    }
+  },
+
+  // Add or update confirmation record
+  addOrUpdate: async (record: SundayConfirmation): Promise<void> => {
+    try {
+      const confirmationsRef = collection(db, getChurchCollectionPath('confirmations'));
+      const recordId = record.id;
+      const docRef = doc(confirmationsRef, recordId);
+
+      // Use setDoc to create/update with specific document ID
+      await setDoc(docRef, {
+        ...record,
+        recordedAt: Timestamp.now(),
+        recordedBy: currentUser?.uid || 'unknown'
+      }, { merge: true });
+    } catch (error: any) {
+      throw new Error(`Failed to save confirmation record: ${error.message}`);
+    }
+  },
+
+  // Delete confirmation record
+  delete: async (recordId: string): Promise<void> => {
+    try {
+      const recordRef = doc(db, getChurchCollectionPath('confirmations'), recordId);
+      console.log('🗑️ Deleting confirmation document:', recordId);
+
+      // Check if document exists before deleting
+      const docSnap = await getDoc(recordRef);
+      if (docSnap.exists()) {
+        console.log('✅ Document exists, deleting...');
+        await deleteDoc(recordRef);
+        console.log('✅ Document deleted successfully');
+      } else {
+        console.log('⚠️ Document does not exist:', recordId);
+        throw new Error(`Confirmation record not found: ${recordId}`);
+      }
+    } catch (error: any) {
+      console.error('❌ Delete error:', error);
+      throw new Error(`Failed to delete confirmation record: ${error.message}`);
+    }
+  },
+
+  // Listen to confirmation changes
+  onSnapshot: (callback: (records: SundayConfirmation[]) => void): Unsubscribe => {
+    const confirmationsRef = collection(db, getChurchCollectionPath('confirmations'));
+    const q = query(confirmationsRef, orderBy('date', 'desc'));
+
+    return onSnapshot(q, (querySnapshot) => {
+      const records = querySnapshot.docs.map(doc => ({
+        ...doc.data(),
+        id: doc.id
+      })) as SundayConfirmation[];
+      callback(records);
+    });
   }
 };
 

@@ -1,6 +1,6 @@
 // Firebase-enabled App Context
 import React, { createContext, useState, useEffect, useCallback, ReactNode, useMemo } from 'react';
-import { Member, AttendanceRecord, Bacenta, TabOption, AttendanceStatus, TabKeys, NavigationHistoryItem, NewBeliever } from '../types';
+import { Member, AttendanceRecord, Bacenta, TabOption, AttendanceStatus, TabKeys, NavigationHistoryItem, NewBeliever, SundayConfirmation, ConfirmationStatus } from '../types';
 import { FIXED_TABS, DEFAULT_TAB_ID } from '../constants';
 import { getSundaysOfMonth, formatDateToYYYYMMDD } from '../utils/dateUtils';
 import {
@@ -8,6 +8,7 @@ import {
   bacentasFirebaseService,
   attendanceFirebaseService,
   newBelieversFirebaseService,
+  confirmationFirebaseService,
   authService,
   firebaseUtils,
   FirebaseUser
@@ -22,6 +23,7 @@ interface AppContextType {
   attendanceRecords: AttendanceRecord[];
   bacentas: Bacenta[];
   newBelievers: NewBeliever[];
+  sundayConfirmations: SundayConfirmation[];
   
   // UI State
   currentTab: TabOption;
@@ -88,6 +90,9 @@ interface AppContextType {
   markAttendanceHandler: (memberId: string, date: string, status: AttendanceStatus) => Promise<void>;
   markNewBelieverAttendanceHandler: (newBelieverId: string, date: string, status: AttendanceStatus) => Promise<void>;
   clearAttendanceHandler: (memberId: string, date: string) => Promise<void>;
+
+  // Confirmation Operations
+  markConfirmationHandler: (memberId: string, date: string, status: ConfirmationStatus) => Promise<void>;
   
   // UI Handlers
   openMemberForm: (member?: Member) => void;
@@ -129,6 +134,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
   const [bacentas, setBacentas] = useState<Bacenta[]>([]);
   const [newBelievers, setNewBelievers] = useState<NewBeliever[]>([]);
+  const [sundayConfirmations, setSundayConfirmations] = useState<SundayConfirmation[]>([]);
   
   // UI state
   const [currentTab, setCurrentTab] = useState<TabOption>(FIXED_TABS.find(t => t.id === DEFAULT_TAB_ID) || FIXED_TABS[0]);
@@ -214,6 +220,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
                 setBacentas([]);
                 setAttendanceRecords([]);
                 setNewBelievers([]);
+                setSundayConfirmations([]);
               }
             } catch (error) {
               console.error('Failed to load user profile:', error);
@@ -226,6 +233,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
             setBacentas([]);
             setAttendanceRecords([]);
             setNewBelievers([]);
+            setSundayConfirmations([]);
           }
           setIsLoading(false);
         });
@@ -272,6 +280,12 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
         setNewBelievers(newBelievers);
       });
       unsubscribers.push(unsubscribeNewBelievers);
+
+      // Listen to confirmations
+      const unsubscribeConfirmations = confirmationFirebaseService.onSnapshot((confirmations) => {
+        setSundayConfirmations(confirmations);
+      });
+      unsubscribers.push(unsubscribeConfirmations);
       
     } catch (error: any) {
       setError(error.message);
@@ -291,17 +305,19 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
       setIsLoading(true);
       setError(null);
       
-      const [membersData, bacentasData, attendanceData, newBelieversData] = await Promise.all([
+      const [membersData, bacentasData, attendanceData, newBelieversData, confirmationsData] = await Promise.all([
         membersFirebaseService.getAll(),
         bacentasFirebaseService.getAll(),
         attendanceFirebaseService.getAll(),
-        newBelieversFirebaseService.getAll()
+        newBelieversFirebaseService.getAll(),
+        confirmationFirebaseService.getAll()
       ]);
-      
+
       setMembers(membersData);
       setBacentas(bacentasData);
       setAttendanceRecords(attendanceData);
       setNewBelievers(newBelieversData);
+      setSundayConfirmations(confirmationsData);
     } catch (error: any) {
       setError(error.message);
       showToast('error', 'Failed to fetch data', error.message);
@@ -610,6 +626,29 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     }
   }, [showToast]);
 
+  // Confirmation handlers
+  const markConfirmationHandler = useCallback(async (memberId: string, date: string, status: ConfirmationStatus) => {
+    try {
+      const recordId = `${memberId}_${date}`;
+      const record: SundayConfirmation = {
+        id: recordId,
+        memberId,
+        date,
+        status,
+        confirmationTimestamp: new Date().toISOString()
+      };
+
+      console.log('✅ Marking confirmation:', recordId, status);
+      await confirmationFirebaseService.addOrUpdate(record);
+      showToast('success', status === 'Confirmed' ? 'Attendance confirmed!' : 'Confirmation removed');
+    } catch (error: any) {
+      console.error('❌ Failed to mark confirmation:', error);
+      setError(error.message);
+      showToast('error', 'Failed to update confirmation', error.message);
+      throw error;
+    }
+  }, [showToast]);
+
   // UI handlers
   const openMemberForm = useCallback((member?: Member) => {
     setEditingMember(member || null);
@@ -829,6 +868,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     attendanceRecords,
     bacentas,
     newBelievers,
+    sundayConfirmations,
 
     // UI State
     currentTab,
@@ -884,6 +924,9 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     markAttendanceHandler,
     markNewBelieverAttendanceHandler,
     clearAttendanceHandler,
+
+    // Confirmation Operations
+    markConfirmationHandler,
 
     // UI Handlers
     openMemberForm,

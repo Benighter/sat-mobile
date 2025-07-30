@@ -3,7 +3,8 @@ import React from 'react';
 import { Member } from '../types';
 import { useAppContext } from '../contexts/FirebaseAppContext';
 import AttendanceMarker from './AttendanceMarker';
-import { formatDisplayDate, formatFullDate, formatDateToYYYYMMDD } from '../utils/dateUtils';
+import ConfirmationMarker from './ConfirmationMarker';
+import { formatDisplayDate, formatFullDate, formatDateToYYYYMMDD, getUpcomingSunday } from '../utils/dateUtils';
 import { isDateEditable } from '../utils/attendanceUtils';
 import { canDeleteMemberWithRole } from '../utils/permissionUtils';
 import { SmartTextParser } from '../utils/smartTextParser';
@@ -16,7 +17,7 @@ interface MemberCardProps {
 }
 
 const MemberCard: React.FC<MemberCardProps> = ({ member }) => {
-  const { displayedSundays, attendanceRecords, markAttendanceHandler, deleteMemberHandler, openMemberForm, bacentas, userProfile, showConfirmation, showToast } = useAppContext();
+  const { displayedSundays, attendanceRecords, sundayConfirmations, markAttendanceHandler, markConfirmationHandler, deleteMemberHandler, openMemberForm, bacentas, userProfile, showConfirmation, showToast } = useAppContext();
 
   // Get user preference for editing previous Sundays
   const allowEditPreviousSundays = userProfile?.preferences?.allowEditPreviousSundays ?? false;
@@ -25,6 +26,13 @@ const MemberCard: React.FC<MemberCardProps> = ({ member }) => {
     const record = attendanceRecords.find(ar => ar.memberId === member.id && ar.date === date);
     return record?.status;
   };
+
+  const getConfirmationStatus = (date: string) => {
+    const record = sundayConfirmations.find(cr => cr.memberId === member.id && cr.date === date);
+    return record?.status;
+  };
+
+  const upcomingSunday = getUpcomingSunday();
 
   const getAttendanceStats = () => {
     const totalServices = displayedSundays.length;
@@ -210,6 +218,38 @@ const MemberCard: React.FC<MemberCardProps> = ({ member }) => {
 
       </div>
 
+
+      {/* Clean Sunday Service Confirmation Section */}
+      <div className="mt-6 pt-6 border-t border-white/20">
+        <div className="flex items-center justify-between mb-4">
+          <h4 className="text-lg font-bold gradient-text flex items-center">
+            <span className="text-xl mr-2">✅</span>
+            Sunday Confirmation
+          </h4>
+        </div>
+
+        <div className="glass p-4 rounded-xl">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-semibold text-gray-700">
+                {formatDisplayDate(upcomingSunday)}
+              </p>
+              <p className="text-xs text-gray-500">
+                Confirm your attendance for the upcoming Sunday service
+              </p>
+            </div>
+            <div className="flex items-center">
+              <ConfirmationMarker
+                memberId={member.id}
+                date={upcomingSunday}
+                currentStatus={getConfirmationStatus(upcomingSunday)}
+                onConfirm={markConfirmationHandler}
+                compact={false}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* Redesigned Attendance Section */}
       <div className="mt-6 pt-6 border-t border-white/20">

@@ -43,6 +43,16 @@ export interface AttendanceRecord {
   status: AttendanceStatus;
 }
 
+export type ConfirmationStatus = 'Confirmed' | 'Not Confirmed';
+
+export interface SundayConfirmation {
+  id: string; // memberId_date (YYYY-MM-DD)
+  memberId: string;
+  date: string; // Sunday date as YYYY-MM-DD
+  status: ConfirmationStatus;
+  confirmationTimestamp: string; // ISO string when confirmation was made
+}
+
 export interface Bacenta { // Renamed from CongregationGroup
   id: string;
   name: string;
@@ -59,6 +69,7 @@ export enum TabKeys {
   ALL_BACENTAS = 'all_bacentas',
   ATTENDANCE_ANALYTICS = 'attendance_analytics',
   WEEKLY_ATTENDANCE = 'weekly_attendance',
+  SUNDAY_CONFIRMATIONS = 'sunday_confirmations',
   NEW_BELIEVERS = 'new_believers',
   PROFILE_SETTINGS = 'profile_settings',
 }

@@ -12,6 +12,7 @@ import {
 
   LazyAttendanceAnalyticsView,
   LazyWeeklyAttendanceView,
+  LazySundayConfirmationsView,
   LazyNewBelieversView
 } from './components/LazyWrapper';
 import ProfileSettingsView from './components/ProfileSettingsView';
@@ -179,6 +180,12 @@ const AppContent: React.FC = memo(() => {
         return (
           <LazyWrapper>
             <LazyWeeklyAttendanceView />
+          </LazyWrapper>
+        );
+      case TabKeys.SUNDAY_CONFIRMATIONS:
+        return (
+          <LazyWrapper>
+            <LazySundayConfirmationsView />
           </LazyWrapper>
         );
       case TabKeys.NEW_BELIEVERS:

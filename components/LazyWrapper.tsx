@@ -14,6 +14,7 @@ export const LazyMemberListView = lazy(() => import('./MemberListView'));
 export const LazyBacentaLeadersView = lazy(() => import('./BacentaLeadersView'));
 
 export const LazyWeeklyAttendanceView = lazy(() => import('./WeeklyAttendanceView'));
+export const LazySundayConfirmationsView = lazy(() => import('./SundayConfirmationsView'));
 export const LazyNewBelieversView = lazy(() => import('./NewBelieversView'));
 
 // Wrapper component for lazy loading
