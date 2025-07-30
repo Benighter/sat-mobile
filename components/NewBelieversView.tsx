@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useAppContext } from '../contexts/FirebaseAppContext';
 import { NewBeliever } from '../types';
 import { formatDateToDisplay } from '../utils/dateUtils';
+import { SmartTextParser } from '../utils/smartTextParser';
 import { PlusIcon, EditIcon, TrashIcon, UserIcon, CalendarIcon, PhoneIcon, MapPinIcon, GridIcon, TableIcon } from './icons';
 import Button from './ui/Button';
 import NewBelieverFormModal from './NewBelieverFormModal';
@@ -9,14 +10,15 @@ import BulkNewBelieverAddModal from './BulkNewBelieverAddModal';
 import NewBelieversTableView from './NewBelieversTableView';
 
 const NewBelieversView: React.FC = () => {
-  const { 
-    newBelievers, 
-    openNewBelieverForm, 
-    isNewBelieverFormOpen, 
-    editingNewBeliever, 
+  const {
+    newBelievers,
+    openNewBelieverForm,
+    isNewBelieverFormOpen,
+    editingNewBeliever,
     closeNewBelieverForm,
     deleteNewBelieverHandler,
-    showConfirmation 
+    showConfirmation,
+    showToast
   } = useAppContext();
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -24,6 +26,10 @@ const NewBelieversView: React.FC = () => {
   const [showFirstTimeOnly, setShowFirstTimeOnly] = useState(false);
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
   const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
+
+  const handleContactClick = async (contact: string) => {
+    await SmartTextParser.copyPhoneToClipboard(contact, showToast);
+  };
 
   // Get unique ministries for filter dropdown
   const uniqueMinistries = useMemo(() => {
@@ -242,7 +248,10 @@ const NewBelieversView: React.FC = () => {
               {/* Contact Information */}
               <div className="space-y-2 mb-4">
                 {newBeliever.contact && (
-                  <div className="flex items-center text-sm text-gray-600">
+                  <div
+                    className="flex items-center text-sm text-gray-600 cursor-pointer hover:bg-blue-50 rounded px-1 py-1 transition-colors"
+                    onClick={() => handleContactClick(newBeliever.contact)}
+                  >
                     <PhoneIcon className="w-4 h-4 mr-2 text-gray-400" />
                     {newBeliever.contact}
                   </div>

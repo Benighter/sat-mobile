@@ -6,6 +6,7 @@ import AttendanceMarker from './AttendanceMarker';
 import { formatDisplayDate, formatFullDate, formatDateToYYYYMMDD } from '../utils/dateUtils';
 import { isDateEditable } from '../utils/attendanceUtils';
 import { canDeleteMemberWithRole } from '../utils/permissionUtils';
+import { SmartTextParser } from '../utils/smartTextParser';
 import { UserIcon, EditIcon, TrashIcon, WarningIcon, PhoneIcon, HomeIcon, CalendarIcon } from './icons';
 import Button from './ui/Button';
 import Badge from './ui/Badge';
@@ -15,7 +16,7 @@ interface MemberCardProps {
 }
 
 const MemberCard: React.FC<MemberCardProps> = ({ member }) => {
-  const { displayedSundays, attendanceRecords, markAttendanceHandler, deleteMemberHandler, openMemberForm, bacentas, userProfile, showConfirmation } = useAppContext();
+  const { displayedSundays, attendanceRecords, markAttendanceHandler, deleteMemberHandler, openMemberForm, bacentas, userProfile, showConfirmation, showToast } = useAppContext();
 
   // Get user preference for editing previous Sundays
   const allowEditPreviousSundays = userProfile?.preferences?.allowEditPreviousSundays ?? false;
@@ -66,6 +67,9 @@ const MemberCard: React.FC<MemberCardProps> = ({ member }) => {
     }
   };
 
+  const handlePhoneClick = async (phoneNumber: string) => {
+    await SmartTextParser.copyPhoneToClipboard(phoneNumber, showToast);
+  };
 
   return (
     <div className="group glass shadow-2xl rounded-2xl p-6 mb-6 border-l-4 border-gray-500 transition-all duration-300 relative overflow-hidden animate-fade-in">
@@ -174,7 +178,12 @@ const MemberCard: React.FC<MemberCardProps> = ({ member }) => {
 
       {/* Enhanced Member Details */}
       <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="glass p-4 rounded-xl hover:scale-102 transition-transform duration-200">
+        <div
+          className={`glass p-4 rounded-xl hover:scale-102 transition-transform duration-200 ${
+            member.phoneNumber && member.phoneNumber.trim() !== '' ? 'cursor-pointer hover:bg-blue-50' : ''
+          }`}
+          onClick={() => member.phoneNumber && handlePhoneClick(member.phoneNumber)}
+        >
           <div className="flex items-center space-x-3">
             <div className="w-10 h-10 bg-gradient-to-br from-blue-100 to-blue-200 rounded-xl flex items-center justify-center">
               <PhoneIcon className="w-5 h-5 text-blue-600"/>

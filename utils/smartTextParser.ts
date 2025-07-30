@@ -276,6 +276,35 @@ export class SmartTextParser {
   }
 
   /**
+   * Copy phone number to clipboard with user feedback
+   */
+  static async copyPhoneToClipboard(phoneNumber: string, showToast?: (type: 'success' | 'error', title: string, message?: string) => void): Promise<boolean> {
+    if (!phoneNumber || phoneNumber.trim() === '' || phoneNumber === '-' || phoneNumber === 'N/A') {
+      return false;
+    }
+
+    try {
+      // Clean the phone number for copying (remove formatting but keep readable)
+      const cleanedPhone = phoneNumber.trim();
+      await navigator.clipboard.writeText(cleanedPhone);
+
+      if (showToast) {
+        showToast('success', 'Copied!', `Phone number ${cleanedPhone} copied to clipboard`);
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Failed to copy phone number:', error);
+
+      if (showToast) {
+        showToast('error', 'Copy Failed', 'Unable to copy phone number to clipboard');
+      }
+
+      return false;
+    }
+  }
+
+  /**
    * Calculate confidence score based on extracted data
    */
   private static calculateConfidence(data: ParsedMemberData): number {

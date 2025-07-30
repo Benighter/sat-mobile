@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useAppContext } from '../contexts/FirebaseAppContext';
 import { NewBeliever, AttendanceStatus } from '../types';
 import Table from './ui/Table';
+import { SmartTextParser } from '../utils/smartTextParser';
 import { UserIcon, EditIcon, TrashIcon, CalendarIcon, PhoneIcon, MapPinIcon } from './icons';
 import Button from './ui/Button';
 import Badge from './ui/Badge';
@@ -11,7 +12,7 @@ import NewBelieverDetailModal from './NewBelieverDetailModal';
 import { formatDisplayDate, formatDateToDisplay } from '../utils/dateUtils';
 
 const NewBelieversTableView: React.FC = () => {
-  const { 
+  const {
     newBelievers,
     attendanceRecords,
     openNewBelieverForm,
@@ -19,13 +20,18 @@ const NewBelieversTableView: React.FC = () => {
     markNewBelieverAttendanceHandler,
     isLoading,
     displayedSundays,
-    showConfirmation
+    showConfirmation,
+    showToast
   } = useAppContext();
   
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedMinistry, setSelectedMinistry] = useState('');
   const [showFirstTimeOnly, setShowFirstTimeOnly] = useState(false);
   const [selectedNewBeliever, setSelectedNewBeliever] = useState<NewBeliever | null>(null);
+
+  const handleContactClick = async (contact: string) => {
+    await SmartTextParser.copyPhoneToClipboard(contact, showToast);
+  };
 
   // Get unique ministries for filter dropdown
   const uniqueMinistries = useMemo(() => {
@@ -108,7 +114,13 @@ const NewBelieversTableView: React.FC = () => {
       render: (newBeliever: NewBeliever) => (
         <div className="space-y-1">
           {newBeliever.contact && (
-            <div className="flex items-center text-sm text-gray-600">
+            <div
+              className="flex items-center text-sm text-gray-600 cursor-pointer hover:bg-blue-50 rounded px-1 py-1 transition-colors"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleContactClick(newBeliever.contact);
+              }}
+            >
               <PhoneIcon className="w-3 h-3 mr-1 text-gray-400" />
               {newBeliever.contact}
             </div>

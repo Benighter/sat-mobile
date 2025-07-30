@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { NewBeliever, AttendanceStatus } from '../types';
 import { useAppContext } from '../contexts/FirebaseAppContext';
 import { formatDateToDisplay, formatDisplayDate } from '../utils/dateUtils';
+import { SmartTextParser } from '../utils/smartTextParser';
 import Modal from './ui/Modal';
 import Button from './ui/Button';
 import Badge from './ui/Badge';
@@ -30,16 +31,21 @@ const NewBelieverDetailModal: React.FC<NewBelieverDetailModalProps> = ({
   onClose, 
   newBeliever 
 }) => {
-  const { 
+  const {
     attendanceRecords,
     displayedSundays,
     markNewBelieverAttendanceHandler,
     openNewBelieverForm,
     deleteNewBelieverHandler,
-    showConfirmation
+    showConfirmation,
+    showToast
   } = useAppContext();
 
   if (!newBeliever) return null;
+
+  const handleContactClick = async (contact: string) => {
+    await SmartTextParser.copyPhoneToClipboard(contact, showToast);
+  };
 
   // Get attendance status for a specific date
   const getAttendanceStatus = (date: string): AttendanceStatus | undefined => {
@@ -130,7 +136,10 @@ const NewBelieverDetailModal: React.FC<NewBelieverDetailModalProps> = ({
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {newBeliever.contact && (
-              <div className="flex items-center space-x-3">
+              <div
+                className="flex items-center space-x-3 cursor-pointer hover:bg-blue-50 rounded p-2 transition-colors"
+                onClick={() => handleContactClick(newBeliever.contact)}
+              >
                 <PhoneIcon className="w-5 h-5 text-gray-400" />
                 <div>
                   <div className="text-sm text-gray-500">Contact</div>

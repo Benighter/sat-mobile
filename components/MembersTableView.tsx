@@ -4,9 +4,9 @@ import { Member } from '../types';
 import { formatDisplayDate, getSundaysOfMonth, getMonthName, formatDateToYYYYMMDD } from '../utils/dateUtils';
 import { isDateEditable } from '../utils/attendanceUtils';
 import { canDeleteMemberWithRole } from '../utils/permissionUtils';
+import { SmartTextParser } from '../utils/smartTextParser';
 import { UserIcon, TrashIcon, PhoneIcon, CalendarIcon, ChevronLeftIcon, ChevronRightIcon } from './icons';
 import Button from './ui/Button';
-import Badge from './ui/Badge';
 import Input from './ui/Input';
 
 interface MembersTableViewProps {
@@ -25,7 +25,8 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
     clearAttendanceHandler,
     isLoading,
     userProfile,
-    showConfirmation
+    showConfirmation,
+    showToast
   } = useAppContext();
 
   // Get user preference for editing previous Sundays
@@ -55,6 +56,10 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
       newDate.setMonth(newDate.getMonth() + 1);
       return newDate;
     });
+  };
+
+  const handlePhoneClick = async (phoneNumber: string) => {
+    await SmartTextParser.copyPhoneToClipboard(phoneNumber, showToast);
   };
 
   // Get attendance status for a member on a specific date
@@ -133,86 +138,98 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
 
 
 
-  // Define fixed column (only name)
-  const fixedColumn = useMemo(() => ({
-    key: 'name',
-    header: 'Name',
-    width: '200px',
-    render: (member: Member) => (
-      <div
-        className="flex items-center space-x-3 cursor-pointer hover:bg-blue-50 rounded-lg p-2 -m-2 transition-colors duration-200"
-        onClick={(e) => {
-          e.stopPropagation();
-          openMemberForm(member);
-        }}
-      >
-        <div className="w-8 h-8 bg-gradient-to-br from-blue-100 to-blue-200 rounded-full flex items-center justify-center overflow-hidden">
-          {member.profilePicture ? (
-            <img
-              src={member.profilePicture}
-              alt={`${member.firstName} ${member.lastName || ''}`}
-              className="w-full h-full object-cover"
-            />
-          ) : (
-            <UserIcon className="w-4 h-4 text-blue-600" />
-          )}
+  // Define fixed columns (numbering and name)
+  const fixedColumns = useMemo(() => [
+    {
+      key: 'number',
+      header: '#',
+      width: '50px',
+      render: (member: Member, index: number) => (
+        <div className="flex items-center justify-center">
+          <span className="text-sm font-medium text-gray-600">
+            {index + 1}
+          </span>
         </div>
-        <div>
-          <div className="font-semibold text-gray-900">
-            {member.firstName} {member.lastName}
+      ),
+    },
+    {
+      key: 'name',
+      header: 'Name',
+      width: '140px',
+      render: (member: Member) => {
+        const roleConfig = {
+          'Bacenta Leader': { icon: '💚' },
+          'Fellowship Leader': { icon: '❤️' },
+          'Member': { icon: '👤' }
+        };
+        const roleIcon = roleConfig[member.role || 'Member'].icon;
+
+        return (
+          <div
+            className="flex items-center space-x-2 cursor-pointer hover:bg-blue-50 rounded-lg p-1 -m-1 transition-colors duration-200"
+            onClick={(e) => {
+              e.stopPropagation();
+              openMemberForm(member);
+            }}
+          >
+            <div className={`w-7 h-7 rounded-full flex items-center justify-center overflow-hidden flex-shrink-0 ${
+              member.bornAgainStatus
+                ? 'bg-gradient-to-br from-green-100 to-green-200 ring-2 ring-green-300'
+                : 'bg-gradient-to-br from-gray-100 to-gray-200'
+            }`}>
+              {member.profilePicture ? (
+                <img
+                  src={member.profilePicture}
+                  alt={member.firstName}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <UserIcon className={`w-3 h-3 ${member.bornAgainStatus ? 'text-green-600' : 'text-gray-600'}`} />
+              )}
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center space-x-1">
+                <span className={`font-semibold text-sm truncate ${
+                  member.bornAgainStatus ? 'text-green-900' : 'text-gray-900'
+                }`}>
+                  {member.firstName}
+                </span>
+                <span className="text-xs flex-shrink-0" title={member.role || 'Member'}>
+                  {roleIcon}
+                </span>
+                {member.bornAgainStatus && (
+                  <span className="text-xs text-green-600 flex-shrink-0" title="Born Again">
+                    ⭐
+                  </span>
+                )}
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
-    ),
-  }), [openMemberForm]);
+        );
+      },
+    }
+  ], [openMemberForm]);
 
   // Define scrollable columns (phone, role, born again, attendance dates, remove)
   const scrollableColumns = useMemo(() => {
-    // Base scrollable columns
+    // Base scrollable columns (role and born again status now integrated into name column)
     const baseScrollableColumns = [
       {
         key: 'phoneNumber',
         header: 'Phone',
         width: '140px',
         render: (member: Member) => (
-          <div className="flex items-center space-x-2">
+          <div
+            className={`flex items-center space-x-2 ${
+              member.phoneNumber && member.phoneNumber.trim() !== '' && member.phoneNumber !== '-'
+                ? 'cursor-pointer hover:bg-blue-50 rounded px-1 py-1 transition-colors'
+                : ''
+            }`}
+            onClick={() => member.phoneNumber && member.phoneNumber !== '-' && handlePhoneClick(member.phoneNumber)}
+          >
             <PhoneIcon className="w-4 h-4 text-gray-400" />
             <span className="text-sm">{member.phoneNumber || '-'}</span>
           </div>
-        ),
-      },
-      {
-        key: 'role',
-        header: 'Role',
-        width: '120px',
-        align: 'center' as const,
-        render: (member: Member) => {
-          const roleConfig = {
-            'Bacenta Leader': { color: 'green' as const, icon: '💚' },
-            'Fellowship Leader': { color: 'red' as const, icon: '❤️' },
-            'Member': { color: 'gray' as const, icon: '👤' }
-          };
-          const config = roleConfig[member.role || 'Member'];
-          return (
-            <Badge color={config.color} size="sm">
-              <span className="mr-1">{config.icon}</span>
-              {member.role || 'Member'}
-            </Badge>
-          );
-        },
-      },
-      {
-        key: 'bornAgainStatus',
-        header: 'Born Again',
-        width: '100px',
-        align: 'center' as const,
-        render: (member: Member) => (
-          <Badge
-            color={member.bornAgainStatus ? 'green' : 'yellow'}
-            size="sm"
-          >
-            {member.bornAgainStatus ? 'Yes' : 'No'}
-          </Badge>
         ),
       },
     ];
@@ -450,18 +467,24 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
             <table className="min-w-full border-collapse">
               <thead>
                 <tr className="bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200">
-                  {/* Fixed Name Header */}
-                  <th
-                    className="sticky left-0 z-20 px-3 py-3 text-xs font-semibold text-gray-700 uppercase tracking-wider text-left border-r border-gray-200"
-                    style={{
-                      width: '200px',
-                      minWidth: '200px',
-                      background: 'linear-gradient(to right, rgb(249 250 251), rgb(243 244 246))',
-                      boxShadow: '2px 0 4px rgba(0, 0, 0, 0.1)'
-                    }}
-                  >
-                    <div className="truncate">{fixedColumn.header}</div>
-                  </th>
+                  {/* Fixed Headers (Number and Name) */}
+                  {fixedColumns.map((column, index) => (
+                    <th
+                      key={column.key}
+                      className={`sticky z-20 px-3 py-3 text-xs font-semibold text-gray-700 uppercase tracking-wider ${
+                        column.key === 'number' ? 'text-center' : 'text-left'
+                      } ${index === fixedColumns.length - 1 ? 'border-r border-gray-200' : ''}`}
+                      style={{
+                        left: index === 0 ? '0px' : '50px',
+                        width: column.width,
+                        minWidth: column.width,
+                        background: 'linear-gradient(to right, rgb(249 250 251), rgb(243 244 246))',
+                        boxShadow: index === fixedColumns.length - 1 ? '2px 0 4px rgba(0, 0, 0, 0.1)' : 'none'
+                      }}
+                    >
+                      <div className="truncate">{column.header}</div>
+                    </th>
+                  ))}
                   {/* Scrollable Headers */}
                   {scrollableColumns.map((column, index) => (
                     <th
@@ -488,18 +511,24 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
                       hover:bg-blue-50/50 transition-colors duration-200
                     `}
                   >
-                    {/* Fixed Name Cell */}
-                    <td
-                      className="sticky left-0 z-10 px-3 py-3 text-sm text-left border-r border-gray-200"
-                      style={{
-                        width: '200px',
-                        minWidth: '200px',
-                        backgroundColor: rowIndex % 2 === 0 ? 'white' : 'rgb(249 250 251)',
-                        boxShadow: '2px 0 4px rgba(0, 0, 0, 0.1)'
-                      }}
-                    >
-                      {fixedColumn.render(member)}
-                    </td>
+                    {/* Fixed Cells (Number and Name) */}
+                    {fixedColumns.map((column, colIndex) => (
+                      <td
+                        key={column.key}
+                        className={`sticky z-10 px-3 py-3 text-sm ${
+                          column.key === 'number' ? 'text-center' : 'text-left'
+                        } ${colIndex === fixedColumns.length - 1 ? 'border-r border-gray-200' : ''}`}
+                        style={{
+                          left: colIndex === 0 ? '0px' : '50px',
+                          width: column.width,
+                          minWidth: column.width,
+                          backgroundColor: rowIndex % 2 === 0 ? 'white' : 'rgb(249 250 251)',
+                          boxShadow: colIndex === fixedColumns.length - 1 ? '2px 0 4px rgba(0, 0, 0, 0.1)' : 'none'
+                        }}
+                      >
+                        {column.render(member, rowIndex)}
+                      </td>
+                    ))}
                     {/* Scrollable Cells */}
                     {scrollableColumns.map((column, colIndex) => {
                       const value = member[column.key as keyof Member];

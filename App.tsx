@@ -245,22 +245,7 @@ const AppContent: React.FC = memo(() => {
             </div>
 
             {/* Center Section - Current Tab Indicator (All Screens) */}
-            <div className="absolute left-1/2 transform -translate-x-1/2 flex items-center space-x-2 px-3 py-2 bg-white/20 rounded-lg border border-white/30">
-              <div className="w-5 h-5">
-                {(() => {
-                  switch (currentTab.id) {
-                    case 'dashboard': return <ChartBarIcon className="w-full h-full text-gray-600" />;
-                    case 'all_members': return <UsersIcon className="w-full h-full text-gray-600" />;
-                    case 'all_bacentas': return <GroupIcon className="w-full h-full text-gray-600" />;
-
-                    case 'attendance_analytics': return <ChartBarIcon className="w-full h-full text-gray-600" />;
-                    case 'weekly_attendance': return <UsersIcon className="w-full h-full text-gray-600" />;
-                    case 'new_believers': return <UsersIcon className="w-full h-full text-gray-600" />;
-                    case 'profile_settings': return <UserIcon className="w-full h-full text-gray-600" />;
-                    default: return <GroupIcon className="w-full h-full text-gray-600" />;
-                  }
-                })()}
-              </div>
+            <div className="absolute left-1/2 transform -translate-x-1/2 flex items-center px-3 py-2 bg-white/20 rounded-lg border border-white/30">
               <span className="text-gray-700 font-medium text-sm truncate max-w-[100px] sm:max-w-[150px]">
                 {currentTab.name}
               </span>
