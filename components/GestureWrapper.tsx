@@ -16,6 +16,12 @@ const GestureWrapper: React.FC<GestureWrapperProps> = ({ children, className = '
     const swipeThreshold = 100; // Minimum distance for swipe
     const velocityThreshold = 500; // Minimum velocity for swipe
 
+    // Don't handle gestures if the target is an input element
+    const target = event.target as Element;
+    if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.closest('input, textarea, select'))) {
+      return;
+    }
+
     // Right swipe (positive X) - navigate back
     if (
       (offset.x > swipeThreshold || velocity.x > velocityThreshold) &&
@@ -28,9 +34,9 @@ const GestureWrapper: React.FC<GestureWrapperProps> = ({ children, className = '
         opacity: 0,
         transition: { duration: 0.3, ease: 'easeOut' }
       });
-      
+
       navigateBack();
-      
+
       // Reset position after navigation
       controls.set({ x: -window.innerWidth, opacity: 0 });
       controls.start({
@@ -50,14 +56,20 @@ const GestureWrapper: React.FC<GestureWrapperProps> = ({ children, className = '
 
   const handlePan = (event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
     const { offset } = info;
-    
+
+    // Don't handle gestures if the target is an input element
+    const target = event.target as Element;
+    if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.closest('input, textarea, select'))) {
+      return;
+    }
+
     // Only allow right swipe for back navigation
     if (offset.x > 0 && canNavigateBack() && Math.abs(offset.y) < Math.abs(offset.x)) {
       // Limit the drag distance and add resistance
       const maxDrag = window.innerWidth * 0.3;
       const dragDistance = Math.min(offset.x, maxDrag);
       const resistance = 1 - (dragDistance / maxDrag) * 0.3;
-      
+
       controls.set({
         x: dragDistance,
         opacity: resistance
@@ -71,9 +83,7 @@ const GestureWrapper: React.FC<GestureWrapperProps> = ({ children, className = '
       animate={controls}
       onPan={handlePan}
       onPanEnd={handlePanEnd}
-      drag="x"
-      dragConstraints={{ left: 0, right: 0 }}
-      dragElastic={0.2}
+      drag={false} // Disable automatic drag, we handle it manually
       style={{
         touchAction: 'pan-y', // Allow vertical scrolling but handle horizontal gestures
       }}

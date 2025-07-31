@@ -65,10 +65,9 @@ const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
     return Object.keys(errors).length === 0;
   };
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
+  const handleInputChange = (name: string, value: string) => {
     setFormData(prev => ({ ...prev, [name]: value }));
-    
+
     // Clear validation error for this field
     if (validationErrors[name]) {
       setValidationErrors(prev => ({ ...prev, [name]: '' }));
@@ -166,7 +165,7 @@ const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
                 type={showPasswords.current ? 'text' : 'password'}
                 name="currentPassword"
                 value={formData.currentPassword}
-                onChange={handleInputChange}
+                onChange={(value) => handleInputChange('currentPassword', value)}
                 placeholder="Enter your current password"
                 required
                 disabled={isLoading}
@@ -200,7 +199,7 @@ const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
                 type={showPasswords.new ? 'text' : 'password'}
                 name="newPassword"
                 value={formData.newPassword}
-                onChange={handleInputChange}
+                onChange={(value) => handleInputChange('newPassword', value)}
                 placeholder="Enter your new password"
                 required
                 disabled={isLoading}
@@ -235,7 +234,7 @@ const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
                 type={showPasswords.confirm ? 'text' : 'password'}
                 name="confirmPassword"
                 value={formData.confirmPassword}
-                onChange={handleInputChange}
+                onChange={(value) => handleInputChange('confirmPassword', value)}
                 placeholder="Confirm your new password"
                 required
                 disabled={isLoading}

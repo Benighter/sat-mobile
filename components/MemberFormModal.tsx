@@ -67,6 +67,7 @@ const MemberFormModal: React.FC<MemberFormModalProps> = ({ isOpen, onClose, memb
     setErrors({});
   }, [isOpen, member, bacentas, currentBacentaId]); // Added currentBacentaId dependency
 
+  // Handler for regular HTML elements (checkbox, select, etc.)
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
 
@@ -76,6 +77,11 @@ const MemberFormModal: React.FC<MemberFormModalProps> = ({ isOpen, onClose, memb
     } else {
         setFormData(prev => ({ ...prev, [name]: value }));
     }
+  };
+
+  // Handler for Input components (receives string value directly)
+  const handleInputChange = (name: string, value: string) => {
+    setFormData(prev => ({ ...prev, [name]: value }));
   };
 
   const handleImageChange = (base64: string | null) => {
@@ -176,7 +182,7 @@ const MemberFormModal: React.FC<MemberFormModalProps> = ({ isOpen, onClose, memb
                 <Input
                   name="firstName"
                   value={formData.firstName}
-                  onChange={handleChange}
+                  onChange={(value) => handleInputChange('firstName', value)}
                   error={errors.firstName}
                   placeholder="Enter first name"
                   className="h-12"
@@ -190,7 +196,7 @@ const MemberFormModal: React.FC<MemberFormModalProps> = ({ isOpen, onClose, memb
                 <Input
                   name="lastName"
                   value={formData.lastName}
-                  onChange={handleChange}
+                  onChange={(value) => handleInputChange('lastName', value)}
                   error={errors.lastName}
                   placeholder="Enter last name"
                   className="h-12"
@@ -213,7 +219,7 @@ const MemberFormModal: React.FC<MemberFormModalProps> = ({ isOpen, onClose, memb
                 name="phoneNumber"
                 type="tel"
                 value={formData.phoneNumber}
-                onChange={handleChange}
+                onChange={(value) => handleInputChange('phoneNumber', value)}
                 error={errors.phoneNumber}
                 placeholder="e.g., (555) 123-4567"
                 className="h-12"
@@ -227,7 +233,7 @@ const MemberFormModal: React.FC<MemberFormModalProps> = ({ isOpen, onClose, memb
               <Input
                 name="buildingAddress"
                 value={formData.buildingAddress}
-                onChange={handleChange}
+                onChange={(value) => handleInputChange('buildingAddress', value)}
                 error={errors.buildingAddress}
                 placeholder="Enter home address"
                 className="h-12"

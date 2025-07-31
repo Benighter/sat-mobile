@@ -118,6 +118,11 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, size = 
       const target = e.target as Element;
       const modalContent = document.querySelector('[data-modal-content]');
 
+      // Always allow touch events on input elements, regardless of location
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT') {
+        return;
+      }
+
       // If the event is NOT within the modal content, prevent it
       if (!modalContent || !modalContent.contains(target)) {
         e.preventDefault();

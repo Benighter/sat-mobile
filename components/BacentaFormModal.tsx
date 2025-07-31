@@ -72,7 +72,7 @@ const BacentaFormModal: React.FC<BacentaFormModalProps> = ({ isOpen, onClose, ba
           label="Bacenta Name"
           name="bacentaName"
           value={name}
-          onChange={(e) => setName(e.target.value)}
+          onChange={(value) => setName(value)}
           error={error || undefined}
           required
           autoFocus

@@ -57,14 +57,25 @@ const NewBelieverFormModal: React.FC<NewBelieverFormModalProps> = ({ isOpen, onC
     setErrors({});
   }, [newBeliever, isOpen]);
 
+  // Handler for regular HTML elements (select, checkbox, etc.)
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
     const checked = (e.target as HTMLInputElement).checked;
-    
+
     setFormData(prev => ({
       ...prev,
       [name]: type === 'checkbox' ? checked : value
     }));
+
+    // Clear error when user starts typing
+    if (errors[name]) {
+      setErrors(prev => ({ ...prev, [name]: '' }));
+    }
+  };
+
+  // Handler for Input components (receives string value directly)
+  const handleInputChange = (name: string, value: string) => {
+    setFormData(prev => ({ ...prev, [name]: value }));
 
     // Clear error when user starts typing
     if (errors[name]) {
@@ -133,20 +144,20 @@ const NewBelieverFormModal: React.FC<NewBelieverFormModalProps> = ({ isOpen, onC
 
         {/* Name and Surname */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Input 
-            label="Name" 
-            name="name" 
-            value={formData.name} 
-            onChange={handleChange} 
+          <Input
+            label="Name"
+            name="name"
+            value={formData.name}
+            onChange={(value) => handleInputChange('name', value)}
             error={errors.name}
-            required 
+            required
             placeholder="Enter first name"
           />
-          <Input 
-            label="Surname" 
-            name="surname" 
-            value={formData.surname} 
-            onChange={handleChange} 
+          <Input
+            label="Surname"
+            name="surname"
+            value={formData.surname}
+            onChange={(value) => handleInputChange('surname', value)}
             error={errors.surname}
             placeholder="Enter last name"
           />
@@ -154,12 +165,12 @@ const NewBelieverFormModal: React.FC<NewBelieverFormModalProps> = ({ isOpen, onC
 
         {/* Contact and Date of Birth */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Input 
-            label="Contact" 
+          <Input
+            label="Contact"
             name="contact"
             type="tel"
-            value={formData.contact} 
-            onChange={handleChange} 
+            value={formData.contact}
+            onChange={(value) => handleInputChange('contact', value)}
             error={errors.contact}
             placeholder="Phone number or email"
           />
@@ -168,26 +179,26 @@ const NewBelieverFormModal: React.FC<NewBelieverFormModalProps> = ({ isOpen, onC
             name="dateOfBirth"
             type="date"
             value={formData.dateOfBirth}
-            onChange={handleChange}
+            onChange={(value) => handleInputChange('dateOfBirth', value)}
             error={errors.dateOfBirth}
           />
         </div>
 
         {/* Residence and Studies */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Input 
-            label="Residence" 
-            name="residence" 
-            value={formData.residence} 
-            onChange={handleChange} 
+          <Input
+            label="Residence"
+            name="residence"
+            value={formData.residence}
+            onChange={(value) => handleInputChange('residence', value)}
             error={errors.residence}
             placeholder="Where they live"
           />
-          <Input 
-            label="Studies" 
-            name="studies" 
-            value={formData.studies} 
-            onChange={handleChange} 
+          <Input
+            label="Studies"
+            name="studies"
+            value={formData.studies}
+            onChange={(value) => handleInputChange('studies', value)}
             error={errors.studies}
             placeholder="Field of study or education"
           />
@@ -195,19 +206,19 @@ const NewBelieverFormModal: React.FC<NewBelieverFormModalProps> = ({ isOpen, onC
 
         {/* Campus and Occupation */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Input 
-            label="Campus" 
-            name="campus" 
-            value={formData.campus} 
-            onChange={handleChange} 
+          <Input
+            label="Campus"
+            name="campus"
+            value={formData.campus}
+            onChange={(value) => handleInputChange('campus', value)}
             error={errors.campus}
             placeholder="School or university campus"
           />
-          <Input 
-            label="Occupation" 
-            name="occupation" 
-            value={formData.occupation} 
-            onChange={handleChange} 
+          <Input
+            label="Occupation"
+            name="occupation"
+            value={formData.occupation}
+            onChange={(value) => handleInputChange('occupation', value)}
             error={errors.occupation}
             placeholder="Job or profession"
           />
@@ -219,7 +230,7 @@ const NewBelieverFormModal: React.FC<NewBelieverFormModalProps> = ({ isOpen, onC
             label="Year"
             name="year"
             value={formData.year}
-            onChange={handleChange}
+            onChange={(value) => handleInputChange('year', value)}
             error={errors.year}
             placeholder="Academic year or year of study"
           />
