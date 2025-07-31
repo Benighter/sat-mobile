@@ -34,6 +34,7 @@ const MemberFormModal: React.FC<MemberFormModalProps> = ({ isOpen, onClose, memb
     lastName: '',
     phoneNumber: '',
     buildingAddress: '',
+    roomNumber: '',
     profilePicture: '',
     bornAgainStatus: false,
     bacentaId: currentBacentaId || (bacentas.length > 0 ? bacentas[0].id : ''),
@@ -49,6 +50,7 @@ const MemberFormModal: React.FC<MemberFormModalProps> = ({ isOpen, onClose, memb
         lastName: member.lastName || '',
         phoneNumber: member.phoneNumber,
         buildingAddress: member.buildingAddress,
+        roomNumber: member.roomNumber || '',
         profilePicture: member.profilePicture || '',
         bornAgainStatus: member.bornAgainStatus,
         bacentaId: member.bacentaId,
@@ -80,12 +82,24 @@ const MemberFormModal: React.FC<MemberFormModalProps> = ({ isOpen, onClose, memb
     setFormData(prev => ({ ...prev, profilePicture: base64 || '' }));
   };
 
+  const handleRoomNumberChange = (value: string) => {
+    setFormData(prev => ({ ...prev, roomNumber: value }));
+  };
+
   const validate = (): boolean => {
     const newErrors: Record<string, string> = {};
     if (!formData.firstName.trim()) newErrors.firstName = 'First name is required.';
     // Last name is now optional - removed validation
     if (formData.phoneNumber && !/^[0-9().+\-\s]+$/.test(formData.phoneNumber)) { // Allow more chars for phone
         newErrors.phoneNumber = 'Phone number format is invalid.';
+    }
+    // Room number validation - allow common room number formats
+    if (formData.roomNumber && formData.roomNumber.trim()) {
+      const roomNumber = formData.roomNumber.trim();
+      // Allow formats like: 101, A-205, B1, 2A, Room 101, Apt 2B, etc.
+      if (!/^[A-Za-z0-9\-\.\/\s]{1,20}$/.test(roomNumber)) {
+        newErrors.roomNumber = 'Room number format is invalid. Use letters, numbers, dashes, dots, or slashes only (max 20 characters).';
+      }
     }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -216,6 +230,23 @@ const MemberFormModal: React.FC<MemberFormModalProps> = ({ isOpen, onClose, memb
                 onChange={handleChange}
                 error={errors.buildingAddress}
                 placeholder="Enter home address"
+                className="h-12"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-gray-700">
+                Room Number
+              </label>
+              <Input
+                name="roomNumber"
+                value={formData.roomNumber}
+                onChange={handleRoomNumberChange}
+                error={errors.roomNumber}
+                placeholder="e.g., 101, A-205"
+                maxLength={20}
+                pattern="[A-Za-z0-9\-\.\/\s]+"
+                title="Room number should contain only letters, numbers, dashes, dots, or slashes"
                 className="h-12"
               />
             </div>

@@ -96,6 +96,7 @@ interface AppContextType {
   // Confirmation Operations
   markConfirmationHandler: (memberId: string, date: string, status: ConfirmationStatus) => Promise<void>;
   removeConfirmationHandler: (confirmationId: string) => Promise<void>;
+  cleanupOrphanedConfirmations: () => Promise<number>;
 
   // Guest Operations
   addGuestHandler: (guestData: Omit<Guest, 'id' | 'createdDate' | 'lastUpdated' | 'createdBy'>) => Promise<void>;
@@ -460,6 +461,18 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
         throw new Error('You do not have permission to delete leaders. Only original administrators can delete Bacenta Leaders and Fellowship Leaders.');
       }
 
+      // Clean up confirmation records for this member
+      const memberConfirmations = sundayConfirmations.filter(conf => conf.memberId === memberId);
+      for (const confirmation of memberConfirmations) {
+        try {
+          await confirmationFirebaseService.delete(confirmation.id);
+          console.log('✅ Cleaned up confirmation record:', confirmation.id);
+        } catch (confirmationError) {
+          console.warn('⚠️ Failed to clean up confirmation record:', confirmation.id, confirmationError);
+          // Don't fail the entire operation if confirmation cleanup fails
+        }
+      }
+
       await membersFirebaseService.delete(memberId);
       showToast('success', 'Member deleted successfully');
     } catch (error: any) {
@@ -469,7 +482,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     } finally {
       setIsLoading(false);
     }
-  }, [showToast, members, userProfile]);
+  }, [showToast, members, userProfile, sundayConfirmations]);
 
   // Bacenta handlers
   const addBacentaHandler = useCallback(async (bacentaData: Omit<Bacenta, 'id'>) => {
@@ -685,6 +698,48 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     }
   }, [showToast, userProfile]);
 
+  // Clean up orphaned confirmation records
+  const cleanupOrphanedConfirmations = useCallback(async () => {
+    try {
+      console.log('🧹 Starting cleanup of orphaned confirmation records...');
+      let cleanedCount = 0;
+
+      const orphanedConfirmations = sundayConfirmations.filter(confirmation => {
+        if (confirmation.memberId) {
+          // Check if member still exists
+          return !members.some(member => member.id === confirmation.memberId);
+        } else if (confirmation.guestId) {
+          // Check if guest still exists
+          return !guests.some(guest => guest.id === confirmation.guestId);
+        }
+        return false; // Invalid confirmation record
+      });
+
+      for (const orphanedConfirmation of orphanedConfirmations) {
+        try {
+          await confirmationFirebaseService.delete(orphanedConfirmation.id);
+          cleanedCount++;
+          console.log('✅ Cleaned up orphaned confirmation:', orphanedConfirmation.id);
+        } catch (error) {
+          console.warn('⚠️ Failed to clean up orphaned confirmation:', orphanedConfirmation.id, error);
+        }
+      }
+
+      if (cleanedCount > 0) {
+        console.log(`✅ Cleanup completed: ${cleanedCount} orphaned confirmation records removed`);
+        showToast('success', 'Data Cleanup', `Cleaned up ${cleanedCount} orphaned confirmation records`);
+      } else {
+        console.log('✅ No orphaned confirmation records found');
+      }
+
+      return cleanedCount;
+    } catch (error: any) {
+      console.error('❌ Failed to cleanup orphaned confirmations:', error);
+      showToast('error', 'Cleanup failed', error.message);
+      throw error;
+    }
+  }, [sundayConfirmations, members, guests, showToast]);
+
   // Guest handlers
   const addGuestHandler = useCallback(async (guestData: Omit<Guest, 'id' | 'createdDate' | 'lastUpdated' | 'createdBy'>) => {
     try {
@@ -736,6 +791,19 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
   const deleteGuestHandler = useCallback(async (guestId: string) => {
     try {
       setIsLoading(true);
+
+      // Clean up confirmation records for this guest
+      const guestConfirmations = sundayConfirmations.filter(conf => conf.guestId === guestId);
+      for (const confirmation of guestConfirmations) {
+        try {
+          await confirmationFirebaseService.delete(confirmation.id);
+          console.log('✅ Cleaned up guest confirmation record:', confirmation.id);
+        } catch (confirmationError) {
+          console.warn('⚠️ Failed to clean up guest confirmation record:', confirmation.id, confirmationError);
+          // Don't fail the entire operation if confirmation cleanup fails
+        }
+      }
+
       await guestFirebaseService.delete(guestId);
       showToast('success', 'Guest deleted successfully');
     } catch (error: any) {
@@ -745,7 +813,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     } finally {
       setIsLoading(false);
     }
-  }, [showToast]);
+  }, [showToast, sundayConfirmations]);
 
   const markGuestConfirmationHandler = useCallback(async (guestId: string, date: string, status: ConfirmationStatus) => {
     try {
@@ -814,6 +882,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
         lastName: guest.lastName?.trim() || '',
         phoneNumber: guest.phoneNumber?.trim() || '',
         buildingAddress: guest.roomNumber?.trim() || '', // Use room number as building address
+        roomNumber: guest.roomNumber?.trim() || '',
         profilePicture: '',
         bornAgainStatus: false, // Default to false
         bacentaId: guest.bacentaId,
@@ -1065,6 +1134,28 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     }
   }, [user, userProfile, members.length, refreshUserProfile]);
 
+  // One-time cleanup of orphaned confirmation records after initial data load
+  useEffect(() => {
+    if (members.length > 0 && guests.length >= 0 && sundayConfirmations.length > 0) {
+      // Run cleanup once after initial data is loaded
+      const runInitialCleanup = async () => {
+        try {
+          console.log('🧹 Running initial cleanup of orphaned confirmation records...');
+          const cleanedCount = await cleanupOrphanedConfirmations();
+          if (cleanedCount > 0) {
+            console.log(`✅ Initial cleanup completed: ${cleanedCount} orphaned records removed`);
+          }
+        } catch (error) {
+          console.warn('⚠️ Initial cleanup failed:', error);
+        }
+      };
+
+      // Run cleanup after a short delay to ensure all data is loaded
+      const timeout = setTimeout(runInitialCleanup, 2000);
+      return () => clearTimeout(timeout);
+    }
+  }, [members.length, guests.length, sundayConfirmations.length, cleanupOrphanedConfirmations]);
+
   // Data export/import (for backup purposes)
   const exportData = useCallback((): string => {
     try {
@@ -1173,6 +1264,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     // Confirmation Operations
     markConfirmationHandler,
     removeConfirmationHandler,
+    cleanupOrphanedConfirmations,
 
     // Guest Operations
     addGuestHandler,

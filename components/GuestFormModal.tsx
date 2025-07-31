@@ -71,6 +71,15 @@ const GuestFormModal: React.FC<GuestFormModalProps> = ({
       newErrors.bacentaId = 'Bacenta selection is required';
     }
 
+    // Room number validation - allow common room number formats
+    if (formData.roomNumber && formData.roomNumber.trim()) {
+      const roomNumber = formData.roomNumber.trim();
+      // Allow formats like: 101, A-205, B1, 2A, Room 101, Apt 2B, etc.
+      if (!/^[A-Za-z0-9\-\.\/\s]{1,20}$/.test(roomNumber)) {
+        newErrors.roomNumber = 'Room number format is invalid. Use letters, numbers, dashes, dots, or slashes only (max 20 characters).';
+      }
+    }
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -205,7 +214,11 @@ const GuestFormModal: React.FC<GuestFormModalProps> = ({
             label="Room Number"
             value={formData.roomNumber}
             onChange={(value) => handleInputChange('roomNumber', value)}
+            error={errors.roomNumber}
             placeholder="e.g., 101, A-205"
+            maxLength={20}
+            pattern="[A-Za-z0-9\-\.\/\s]+"
+            title="Room number should contain only letters, numbers, dashes, dots, or slashes"
           />
 
           {/* Phone Number - Optional */}

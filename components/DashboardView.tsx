@@ -57,7 +57,7 @@ const StatCard: React.FC<StatCardProps> = memo(({ title, value, icon, colorClass
 
 
 const DashboardView: React.FC = memo(() => {
-  const { members, attendanceRecords, newBelievers, bacentas, displayedSundays, displayedDate, sundayConfirmations, switchTab, user, userProfile } = useAppContext(); // Use displayedSundays
+  const { members, attendanceRecords, newBelievers, bacentas, displayedSundays, displayedDate, sundayConfirmations, guests, switchTab, user, userProfile } = useAppContext(); // Use displayedSundays
 
   const totalMembers = members.length;
   const [confirmationTarget, setConfirmationTarget] = useState<number>(totalMembers);
@@ -162,7 +162,24 @@ const DashboardView: React.FC = memo(() => {
       record => record.date === upcomingSunday && record.status === 'Confirmed'
     );
 
-    const confirmedCount = confirmationRecords.length;
+    // Count only confirmations for existing members and guests
+    let confirmedCount = 0;
+
+    confirmationRecords.forEach(record => {
+      if (record.memberId) {
+        // Check if member still exists
+        const memberExists = members.some(member => member.id === record.memberId);
+        if (memberExists) {
+          confirmedCount++;
+        }
+      } else if (record.guestId) {
+        // Check if guest still exists
+        const guestExists = guests.some(guest => guest.id === record.guestId);
+        if (guestExists) {
+          confirmedCount++;
+        }
+      }
+    });
 
     return {
       total: confirmedCount,

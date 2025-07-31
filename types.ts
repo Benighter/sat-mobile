@@ -7,6 +7,7 @@ export interface Member {
   lastName?: string; // Made optional - Last name is no longer required
   phoneNumber: string;
   buildingAddress: string;
+  roomNumber?: string; // Room number for members
   profilePicture?: string; // Base64 encoded image string
   bornAgainStatus: boolean;
   bacentaId: string; // Renamed from congregationGroup, stores Bacenta.id, empty if unassigned
