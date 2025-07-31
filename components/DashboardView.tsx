@@ -1,6 +1,7 @@
 
-import React, { memo } from 'react';
+import React, { memo, useState, useEffect } from 'react';
 import { useAppContext } from '../contexts/FirebaseAppContext';
+import { hasAdminPrivileges } from '../utils/permissionUtils';
 import { PeopleIcon, AttendanceIcon, CalendarIcon, ChartBarIcon, ChevronRightIcon, CheckIcon } from './icons';
 import { getMonthName, getCurrentOrMostRecentSunday, formatFullDate, getUpcomingSunday } from '../utils/dateUtils';
 
@@ -56,9 +57,51 @@ const StatCard: React.FC<StatCardProps> = memo(({ title, value, icon, colorClass
 
 
 const DashboardView: React.FC = memo(() => {
-  const { members, attendanceRecords, newBelievers, bacentas, displayedSundays, displayedDate, sundayConfirmations, switchTab } = useAppContext(); // Use displayedSundays
+  const { members, attendanceRecords, newBelievers, bacentas, displayedSundays, displayedDate, sundayConfirmations, switchTab, user, userProfile } = useAppContext(); // Use displayedSundays
 
   const totalMembers = members.length;
+  const [confirmationTarget, setConfirmationTarget] = useState<number>(totalMembers);
+
+  // Check if current user is admin
+  const isAdmin = hasAdminPrivileges(userProfile);
+
+  // Load target from Firebase for upcoming Sunday
+  useEffect(() => {
+    const loadTarget = async () => {
+      if (!user) return;
+
+      try {
+        const upcomingSunday = getUpcomingSunday();
+        const { db } = await import('../firebase.config');
+        const { doc, getDoc } = await import('firebase/firestore');
+        const { firebaseUtils } = await import('../services/firebaseService');
+
+        // Get the current church ID (same for admin and leaders in the same church)
+        const churchId = firebaseUtils.getCurrentChurchId();
+        if (!churchId) {
+          throw new Error('No church context available');
+        }
+
+        // Use proper church-scoped path
+        const targetDocRef = doc(db, `churches/${churchId}/sundayTargets`, upcomingSunday);
+        const targetDoc = await getDoc(targetDocRef);
+
+        if (targetDoc.exists() && targetDoc.data().target) {
+          const target = targetDoc.data().target;
+          setConfirmationTarget(target);
+        } else {
+          // Default to total member count if no target is set
+          setConfirmationTarget(totalMembers);
+        }
+      } catch (error) {
+        console.error('Error loading confirmation target for dashboard:', error);
+        // Fallback to member count
+        setConfirmationTarget(totalMembers);
+      }
+    };
+
+    loadTarget();
+  }, [user, totalMembers]);
   
   const currentMonthAttendancePercentage = () => {
     if (!displayedSundays.length || !members.length) return 0;
@@ -174,7 +217,7 @@ const DashboardView: React.FC = memo(() => {
         <EnhancedConfirmationCard
           title="Sunday Confirmations"
           confirmedCount={upcomingConfirmations.total}
-          totalMembers={totalMembers}
+          totalMembers={confirmationTarget}
           date={upcomingConfirmations.date}
           onClick={() => switchTab({ id: 'sunday_confirmations', name: 'Sunday Confirmations' })}
         />
@@ -260,7 +303,7 @@ DashboardView.displayName = 'DashboardView';
 interface EnhancedConfirmationCardProps {
   title: string;
   confirmedCount: number;
-  totalMembers: number;
+  totalMembers: number; // This now represents the target, keeping same name for compatibility
   date: string;
   onClick: () => void;
 }
@@ -268,7 +311,7 @@ interface EnhancedConfirmationCardProps {
 const EnhancedConfirmationCard: React.FC<EnhancedConfirmationCardProps> = memo(({
   title,
   confirmedCount,
-  totalMembers,
+  totalMembers, // This now represents the target
   date,
   onClick
 }) => {

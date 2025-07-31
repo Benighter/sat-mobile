@@ -1,19 +1,19 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useAppContext } from '../contexts/FirebaseAppContext';
-import { 
+import {
   getUpcomingSunday,
-  getNextSunday, 
-  getPreviousSunday, 
+  getNextSunday,
+  getPreviousSunday,
   formatFullDate,
-  getTodayYYYYMMDD 
+  getTodayYYYYMMDD
 } from '../utils/dateUtils';
+import { hasAdminPrivileges } from '../utils/permissionUtils';
 import {
   ChevronLeftIcon,
   ChevronRightIcon,
-  CalendarIcon,
-  UsersIcon,
   ClipboardIcon,
-  CheckIcon
+  CheckIcon,
+  EditIcon
 } from './icons';
 import { Member, Bacenta } from '../types';
 
@@ -28,10 +28,123 @@ const SundayConfirmationsView: React.FC = () => {
     members,
     bacentas,
     sundayConfirmations,
-    showToast
+    showToast,
+    user,
+    userProfile
   } = useAppContext();
 
   const [selectedSunday, setSelectedSunday] = useState<string>(getUpcomingSunday());
+  const [confirmationTarget, setConfirmationTarget] = useState<number>(members.length);
+  const [isEditingTarget, setIsEditingTarget] = useState<boolean>(false);
+  const [targetInputValue, setTargetInputValue] = useState<string>(members.length.toString());
+
+  // Check if current user is admin
+  const isAdmin = hasAdminPrivileges(userProfile);
+
+  // Load target from Firebase on component mount and when selectedSunday changes
+  // Everyone can VIEW targets, only admins can EDIT them
+  useEffect(() => {
+    const loadTarget = async () => {
+      if (!user) return;
+
+      try {
+        const { db } = await import('../firebase.config');
+        const { doc, getDoc } = await import('firebase/firestore');
+        const { firebaseUtils } = await import('../services/firebaseService');
+
+        // Get the current church ID (same for admin and leaders in the same church)
+        const churchId = firebaseUtils.getCurrentChurchId();
+        if (!churchId) {
+          throw new Error('No church context available');
+        }
+
+        // Use proper church-scoped path
+        const targetDocRef = doc(db, `churches/${churchId}/sundayTargets`, selectedSunday);
+        const targetDoc = await getDoc(targetDocRef);
+
+        if (targetDoc.exists() && targetDoc.data().target) {
+          const target = targetDoc.data().target;
+          setConfirmationTarget(target);
+          setTargetInputValue(target.toString());
+        } else {
+          // Default to total member count if no target is set
+          const defaultTarget = members.length;
+          setConfirmationTarget(defaultTarget);
+          setTargetInputValue(defaultTarget.toString());
+        }
+      } catch (error) {
+        console.error('Error loading confirmation target:', error);
+        // Fallback to member count
+        const defaultTarget = members.length;
+        setConfirmationTarget(defaultTarget);
+        setTargetInputValue(defaultTarget.toString());
+      }
+    };
+
+    loadTarget();
+  }, [selectedSunday, members.length, user]);
+
+  // Save target to Firebase (admin only)
+  const saveTarget = async (newTarget: number) => {
+    if (!user) return;
+
+    try {
+      const { db } = await import('../firebase.config');
+      const { doc, setDoc } = await import('firebase/firestore');
+      const { firebaseUtils } = await import('../services/firebaseService');
+
+      // Get the current church ID (same for admin and leaders in the same church)
+      const churchId = firebaseUtils.getCurrentChurchId();
+      if (!churchId) {
+        throw new Error('No church context available');
+      }
+
+      // Use proper church-scoped path
+      const targetDocRef = doc(db, `churches/${churchId}/sundayTargets`, selectedSunday);
+      await setDoc(targetDocRef, {
+        target: newTarget,
+        date: selectedSunday,
+        updatedAt: new Date().toISOString(),
+        userId: user.uid,
+        setByAdmin: userProfile?.role === 'admin'
+      });
+      showToast('success', 'Target Updated', `Confirmation target set to ${newTarget}`);
+    } catch (error) {
+      console.error('Error saving confirmation target:', error);
+      showToast('error', 'Error', 'Failed to save confirmation target');
+    }
+  };
+
+  // Handle target editing (admin only)
+  const handleTargetEdit = () => {
+    if (!isAdmin) {
+      showToast('error', 'Access Denied', 'Only administrators can modify confirmation targets');
+      return;
+    }
+    setIsEditingTarget(true);
+  };
+
+  const handleTargetSave = () => {
+    if (!isAdmin) {
+      showToast('error', 'Access Denied', 'Only administrators can modify confirmation targets');
+      return;
+    }
+
+    const newTarget = parseInt(targetInputValue);
+    if (isNaN(newTarget) || newTarget < 0) {
+      showToast('error', 'Invalid Target', 'Please enter a valid number');
+      return;
+    }
+
+    setConfirmationTarget(newTarget);
+    setIsEditingTarget(false);
+    saveTarget(newTarget);
+  };
+
+  const handleTargetCancel = () => {
+    setTargetInputValue(confirmationTarget.toString());
+    setIsEditingTarget(false);
+  };
 
   // Calculate confirmation data for the selected Sunday
   const confirmationData = useMemo(() => {
@@ -89,7 +202,11 @@ const SundayConfirmationsView: React.FC = () => {
   const copyConfirmationText = async () => {
     try {
       const dateText = formatFullDate(selectedSunday);
+      const progressPercentage = Math.round((confirmationData.grandTotal / confirmationTarget) * 100);
+
       let text = `Sunday Service Confirmations - ${dateText}\n\n`;
+      text += `Total Confirmed: ${confirmationData.grandTotal} of ${confirmationTarget} (${progressPercentage}%)\n`;
+      text += `Active Bacentas: ${confirmationData.confirmationList.length}\n\n`;
 
       if (confirmationData.confirmationList.length === 0) {
         text += 'No confirmations recorded for this Sunday.';
@@ -168,32 +285,32 @@ const SundayConfirmationsView: React.FC = () => {
       <div className="max-w-4xl mx-auto">
         {/* Clean Paper-like Container */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-          {/* Clean Header */}
-          <div className="bg-green-500 pt-8 pb-8 px-6 text-center">
+          {/* Clean Neutral Header */}
+          <div className="bg-gray-50 border-b border-gray-200 pt-8 pb-8 px-6 text-center">
             {/* Title Section */}
             <div className="mb-6">
               <div className="flex justify-center mb-4">
-                <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
-                  <CheckIcon className="w-6 h-6 text-white" />
+                <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center">
+                  <CheckIcon className="w-6 h-6 text-gray-600" />
                 </div>
               </div>
-              <h1 className="text-2xl font-bold text-white mb-2">Sunday Confirmations</h1>
-              <p className="text-green-100 text-sm">Members confirmed for Sunday service</p>
+              <h1 className="text-2xl font-bold text-gray-900 mb-2">Sunday Confirmations</h1>
+              <p className="text-gray-600 text-sm">Members confirmed for Sunday service</p>
             </div>
 
             {/* Clean Date Navigation */}
             <div className="flex items-center justify-center space-x-4 mb-6">
               <button
                 onClick={handlePreviousSunday}
-                className="flex items-center justify-center w-28 py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg transition-colors duration-200"
+                className="flex items-center justify-center w-28 py-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-lg transition-colors duration-200"
               >
                 <ChevronLeftIcon className="w-4 h-4 mr-1" />
                 <span className="text-sm font-medium">Previous</span>
               </button>
 
               <div className="text-center px-4">
-                <div className="text-lg font-semibold text-white">{formatFullDate(selectedSunday)}</div>
-                <div className="text-sm text-green-100">
+                <div className="text-lg font-semibold text-gray-900">{formatFullDate(selectedSunday)}</div>
+                <div className="text-sm text-gray-500">
                   {selectedSunday === getUpcomingSunday() ? 'Upcoming Sunday' : 'Selected Sunday'}
                 </div>
               </div>
@@ -203,8 +320,8 @@ const SundayConfirmationsView: React.FC = () => {
                 disabled={!canGoNext}
                 className={`flex items-center justify-center w-28 py-2 rounded-lg transition-colors duration-200 ${
                   canGoNext
-                    ? 'bg-white/20 hover:bg-white/30 text-white'
-                    : 'bg-white/10 text-white/50 cursor-not-allowed'
+                    ? 'bg-white border border-gray-300 hover:bg-gray-50 text-gray-700'
+                    : 'bg-gray-100 border border-gray-200 text-gray-400 cursor-not-allowed'
                 }`}
               >
                 <span className="text-sm font-medium">Next</span>
@@ -212,29 +329,102 @@ const SundayConfirmationsView: React.FC = () => {
               </button>
             </div>
 
-            {/* Clean Statistics and Actions */}
-            <div className="flex flex-col sm:flex-row items-center justify-center space-y-4 sm:space-y-0 sm:space-x-6">
-              {/* Statistics */}
-              <div className="flex space-x-4 text-white">
-                <div className="text-center">
-                  <div className="text-2xl font-bold">{confirmationData.grandTotal}</div>
-                  <div className="text-xs text-green-100">Confirmed</div>
+            {/* Clean Statistics with Target */}
+            <div className="space-y-4">
+              {/* Progress Bar */}
+              <div className="w-full max-w-md mx-auto">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm text-gray-600">Progress to Target</span>
+                  <span className="text-sm font-medium text-gray-900">
+                    {Math.round((confirmationData.grandTotal / confirmationTarget) * 100)}%
+                  </span>
                 </div>
-                <div className="text-center">
-                  <div className="text-2xl font-bold">{confirmationData.confirmationList.length}</div>
-                  <div className="text-xs text-green-100">Bacentas</div>
+                <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div
+                    className="bg-gray-900 h-2 rounded-full transition-all duration-500"
+                    style={{
+                      width: `${Math.min((confirmationData.grandTotal / confirmationTarget) * 100, 100)}%`
+                    }}
+                  ></div>
                 </div>
               </div>
 
-              {/* Copy Button */}
-              <button
-                onClick={copyConfirmationText}
-                className="inline-flex items-center space-x-2 px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg transition-colors duration-200"
-                title="Copy confirmations as text"
-              >
-                <ClipboardIcon className="w-4 h-4" />
-                <span className="text-sm font-medium">Copy Confirmations</span>
-              </button>
+              {/* Statistics and Target */}
+              <div className="flex flex-col sm:flex-row items-center justify-center space-y-4 sm:space-y-0 sm:space-x-8">
+                {/* Statistics */}
+                <div className="flex space-x-8 text-gray-900">
+                  <div className="text-center">
+                    <div className="text-2xl font-bold">{confirmationData.grandTotal}</div>
+                    <div className="text-xs text-gray-500 uppercase tracking-wide">Confirmed</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold">{confirmationData.confirmationList.length}</div>
+                    <div className="text-xs text-gray-500 uppercase tracking-wide">Bacentas</div>
+                  </div>
+                  <div className="text-center">
+                    {isEditingTarget ? (
+                      <div className="flex items-center space-x-2">
+                        <input
+                          type="number"
+                          value={targetInputValue}
+                          onChange={(e) => setTargetInputValue(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') handleTargetSave();
+                            if (e.key === 'Escape') handleTargetCancel();
+                          }}
+                          className="w-16 px-2 py-1 text-center border border-gray-300 rounded text-sm focus:ring-2 focus:ring-gray-500 focus:border-transparent"
+                          min="0"
+                          autoFocus
+                        />
+                        <button
+                          onClick={handleTargetSave}
+                          className="text-gray-600 hover:text-gray-900 transition-colors"
+                          title="Save target"
+                        >
+                          <CheckIcon className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={handleTargetCancel}
+                          className="text-gray-600 hover:text-gray-900 transition-colors"
+                          title="Cancel"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center space-x-1">
+                        <div className="text-2xl font-bold">{confirmationTarget}</div>
+                        {isAdmin ? (
+                          <button
+                            onClick={handleTargetEdit}
+                            className="text-gray-400 hover:text-gray-600 transition-colors"
+                            title="Edit target (Admin only)"
+                          >
+                            <EditIcon className="w-3 h-3" />
+                          </button>
+                        ) : (
+                          <div
+                            className="text-gray-300 cursor-not-allowed"
+                            title="Only administrators can modify targets"
+                          >
+                            <EditIcon className="w-3 h-3" />
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    <div className="text-xs text-gray-500 uppercase tracking-wide">Target</div>
+                  </div>
+                </div>
+
+                {/* Copy Button */}
+                <button
+                  onClick={copyConfirmationText}
+                  className="flex items-center px-4 py-2 bg-white border border-gray-300 hover:bg-gray-50 rounded-lg transition-colors text-gray-700"
+                >
+                  <ClipboardIcon className="w-4 h-4 mr-2" />
+                  <span className="text-sm font-medium">Copy Confirmations</span>
+                </button>
+              </div>
             </div>
           </div>
 
@@ -333,15 +523,26 @@ const SundayConfirmationsView: React.FC = () => {
                   })}
                 </div>
 
-                {/* Clean Grand Total */}
+                {/* Clean Summary Section */}
                 <div className="mt-8 pt-6 border-t border-gray-200">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-lg font-medium text-gray-900">Total Confirmed</h3>
-                    <span className="text-2xl font-semibold text-green-600">{confirmationData.grandTotal}</span>
+                  <div className="text-center">
+                    <div className="text-3xl font-bold text-gray-900 mb-1">
+                      {confirmationData.grandTotal} <span className="text-lg font-normal text-gray-500">of {confirmationTarget}</span>
+                    </div>
+                    <p className="text-sm text-gray-600 mb-4">
+                      Total confirmations • {Math.round((confirmationData.grandTotal / confirmationTarget) * 100)}% of target
+                    </p>
+
+                    {/* Clean progress bar */}
+                    <div className="w-full max-w-xs mx-auto bg-gray-200 rounded-full h-1.5">
+                      <div
+                        className="bg-gray-900 h-1.5 rounded-full transition-all duration-500"
+                        style={{
+                          width: `${Math.min((confirmationData.grandTotal / confirmationTarget) * 100, 100)}%`
+                        }}
+                      ></div>
+                    </div>
                   </div>
-                  <p className="text-sm text-gray-500 mt-1">
-                    Total confirmations across all bacentas for {formatFullDate(selectedSunday)}
-                  </p>
                 </div>
               </>
             )}

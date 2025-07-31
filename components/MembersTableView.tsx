@@ -1,11 +1,11 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useAppContext } from '../contexts/FirebaseAppContext';
-import { Member } from '../types';
+import { Member, ConfirmationStatus } from '../types';
 import { formatDisplayDate, getSundaysOfMonth, getMonthName, formatDateToYYYYMMDD, getUpcomingSunday } from '../utils/dateUtils';
 import { isDateEditable } from '../utils/attendanceUtils';
 import { canDeleteMemberWithRole } from '../utils/permissionUtils';
 import { SmartTextParser } from '../utils/smartTextParser';
-import { UserIcon, TrashIcon, PhoneIcon, CalendarIcon, ChevronLeftIcon, ChevronRightIcon } from './icons';
+import { UserIcon, TrashIcon, PhoneIcon, CalendarIcon, ChevronLeftIcon, ChevronRightIcon, EllipsisVerticalIcon, CheckIcon, ClockIcon } from './icons';
 import Button from './ui/Button';
 import Input from './ui/Input';
 import ConfirmationMarker from './ConfirmationMarker';
@@ -243,26 +243,7 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
           </div>
         ),
       },
-      {
-        key: 'confirmation',
-        header: `Confirm ${formatDisplayDate(upcomingSunday).split(',')[0]}`,
-        width: '120px',
-        align: 'center' as const,
-        render: (member: Member) => {
-          const confirmationStatus = getConfirmationStatus(member.id, upcomingSunday);
-          return (
-            <div className="flex justify-center">
-              <ConfirmationMarker
-                memberId={member.id}
-                date={upcomingSunday}
-                currentStatus={confirmationStatus}
-                onConfirm={markConfirmationHandler}
-                compact={true}
-              />
-            </div>
-          );
-        },
-      },
+
     ];
 
     // Add attendance columns for each Sunday
@@ -338,51 +319,28 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
       };
     });
 
-    // Add remove action column
-    const removeColumn = {
-      key: 'remove',
-      header: 'Remove',
+    // Add actions dropdown column
+    const actionsColumn = {
+      key: 'actions',
+      header: 'Actions',
       width: '80px',
       align: 'center' as const,
       render: (member: Member) => {
-        const canDelete = canDeleteMemberWithRole(userProfile, member.role);
-
-        if (!canDelete) {
-          return (
-            <div
-              className="p-1 opacity-50 cursor-not-allowed"
-              title={member.role === 'Bacenta Leader' || member.role === 'Fellowship Leader'
-                ? "You cannot delete leaders. Only original administrators can delete Bacenta Leaders and Fellowship Leaders."
-                : "You do not have permission to delete this member"
-              }
-            >
-              <TrashIcon className="w-3 h-3 text-gray-400" />
-            </div>
-          );
-        }
-
         return (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={(e) => {
-              e.stopPropagation();
-              showConfirmation(
-                'deleteMember',
-                { member },
-                () => deleteMemberHandler(member.id)
-              );
-            }}
-            className="p-1 hover:bg-red-100"
-            title="Remove member"
-          >
-            <TrashIcon className="w-3 h-3 text-red-600" />
-          </Button>
+          <MemberActionsDropdown
+            member={member}
+            upcomingSunday={upcomingSunday}
+            getConfirmationStatus={getConfirmationStatus}
+            markConfirmationHandler={markConfirmationHandler}
+            deleteMemberHandler={deleteMemberHandler}
+            showConfirmation={showConfirmation}
+            userProfile={userProfile}
+          />
         );
       },
     };
 
-    return [...baseScrollableColumns, ...attendanceColumns, removeColumn];
+    return [...baseScrollableColumns, ...attendanceColumns, actionsColumn];
   }, [currentMonthSundays, attendanceRecords, sundayConfirmations, deleteMemberHandler, getAttendanceStatus, getConfirmationStatus, handleAttendanceToggle, upcomingSunday, markConfirmationHandler]);
 
   // Get displayed month name
@@ -585,6 +543,129 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
           </div>
         )}
       </div>
+    </div>
+  );
+};
+
+// Member Actions Dropdown Component
+interface MemberActionsDropdownProps {
+  member: Member;
+  upcomingSunday: string;
+  getConfirmationStatus: (memberId: string, date: string) => ConfirmationStatus;
+  markConfirmationHandler: (memberId: string, date: string, status: ConfirmationStatus) => void;
+  deleteMemberHandler: (memberId: string) => void;
+  showConfirmation: (type: string, data: any, callback: () => void) => void;
+  userProfile: any;
+}
+
+const MemberActionsDropdown: React.FC<MemberActionsDropdownProps> = ({
+  member,
+  upcomingSunday,
+  getConfirmationStatus,
+  markConfirmationHandler,
+  deleteMemberHandler,
+  showConfirmation,
+  userProfile
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const confirmationStatus = getConfirmationStatus(member.id, upcomingSunday);
+  const isConfirmed = confirmationStatus === 'Confirmed';
+  const canDelete = canDeleteMemberWithRole(userProfile, member.role);
+
+  const handleConfirmationToggle = () => {
+    const newStatus: ConfirmationStatus = isConfirmed ? 'Not Confirmed' : 'Confirmed';
+    markConfirmationHandler(member.id, upcomingSunday, newStatus);
+    setIsOpen(false);
+  };
+
+  const handleRemove = () => {
+    setIsOpen(false);
+    showConfirmation(
+      'deleteMember',
+      { member },
+      () => deleteMemberHandler(member.id)
+    );
+  };
+
+  return (
+    <div className="relative" ref={dropdownRef}>
+      {/* Actions Button */}
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          setIsOpen(!isOpen);
+        }}
+        className="p-1.5 rounded-md hover:bg-gray-100 transition-colors duration-200"
+        title="Member actions"
+      >
+        <EllipsisVerticalIcon className="w-4 h-4 text-gray-600" />
+      </button>
+
+      {/* Dropdown Menu */}
+      {isOpen && (
+        <div className="absolute right-0 top-full mt-1 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50">
+          {/* Sunday Confirmation Action */}
+          <button
+            onClick={handleConfirmationToggle}
+            className={`w-full px-3 py-2 text-left hover:bg-gray-50 transition-colors duration-200 flex items-center space-x-3 ${
+              isConfirmed ? 'text-green-700' : 'text-gray-700'
+            }`}
+          >
+            {isConfirmed ? (
+              <CheckIcon className="w-4 h-4 text-green-600" />
+            ) : (
+              <ClockIcon className="w-4 h-4 text-gray-500" />
+            )}
+            <div className="flex-1">
+              <div className="text-sm font-medium">
+                {isConfirmed ? 'Unconfirm' : 'Confirm'} for Sunday
+              </div>
+              <div className="text-xs text-gray-500">
+                {formatDisplayDate(upcomingSunday)}
+              </div>
+            </div>
+          </button>
+
+          {/* Divider */}
+          <div className="border-t border-gray-100 my-1"></div>
+
+          {/* Remove Action */}
+          {canDelete ? (
+            <button
+              onClick={handleRemove}
+              className="w-full px-3 py-2 text-left hover:bg-red-50 transition-colors duration-200 flex items-center space-x-3 text-red-700"
+            >
+              <TrashIcon className="w-4 h-4 text-red-600" />
+              <span className="text-sm font-medium">Remove Member</span>
+            </button>
+          ) : (
+            <div
+              className="w-full px-3 py-2 flex items-center space-x-3 text-gray-400 cursor-not-allowed"
+              title={member.role === 'Bacenta Leader' || member.role === 'Fellowship Leader'
+                ? "You cannot delete leaders. Only original administrators can delete Bacenta Leaders and Fellowship Leaders."
+                : "You do not have permission to delete this member"
+              }
+            >
+              <TrashIcon className="w-4 h-4 text-gray-400" />
+              <span className="text-sm">Remove Member</span>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };
