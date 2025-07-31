@@ -46,11 +46,28 @@ export interface AttendanceRecord {
 export type ConfirmationStatus = 'Confirmed' | 'Not Confirmed';
 
 export interface SundayConfirmation {
-  id: string; // memberId_date (YYYY-MM-DD)
-  memberId: string;
+  id: string; // memberId_date (YYYY-MM-DD) or guestId_date (YYYY-MM-DD)
+  memberId?: string; // For regular members
+  guestId?: string; // For guests/visitors
   date: string; // Sunday date as YYYY-MM-DD
   status: ConfirmationStatus;
   confirmationTimestamp: string; // ISO string when confirmation was made
+  confirmedBy?: string; // User ID who made the confirmation
+  removedBy?: string; // User ID who removed the confirmation (if applicable)
+  removedAt?: string; // ISO string when confirmation was removed
+}
+
+export interface Guest {
+  id: string; // Unique guest ID
+  firstName: string;
+  lastName?: string;
+  bacentaId: string; // Required bacenta assignment
+  roomNumber?: string; // Room number for guests
+  phoneNumber?: string;
+  notes?: string; // Additional notes about the guest
+  createdDate: string; // ISO string
+  lastUpdated: string; // ISO string
+  createdBy: string; // User ID who added the guest
 }
 
 export interface Bacenta { // Renamed from CongregationGroup

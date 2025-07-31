@@ -203,14 +203,14 @@ const WeeklyAttendanceView: React.FC = () => {
             <div className="flex items-center justify-center space-x-4 mb-4">
               <button
                 onClick={handlePreviousSunday}
-                className="flex items-center justify-center w-28 py-2 border border-gray-200 text-gray-600 hover:text-gray-900 hover:border-gray-300 rounded-md transition-colors duration-200"
+                className="flex items-center justify-center w-10 h-10 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-lg transition-colors duration-200 shadow-sm"
+                title="Previous Sunday"
               >
-                <ChevronLeftIcon className="w-4 h-4 mr-1" />
-                <span className="text-sm font-medium">Previous</span>
+                <ChevronLeftIcon className="w-5 h-5" />
               </button>
 
-              <div className="text-center px-4">
-                <h2 className="text-lg font-semibold text-gray-900">
+              <div className="text-center px-4 min-w-0 flex-shrink-0">
+                <h2 className="text-lg font-semibold text-gray-900 whitespace-nowrap">
                   {formatFullDate(selectedSunday)}
                 </h2>
               </div>
@@ -218,14 +218,14 @@ const WeeklyAttendanceView: React.FC = () => {
               <button
                 onClick={handleNextSunday}
                 disabled={!canGoNext}
-                className={`flex items-center justify-center w-28 py-2 border rounded-md transition-colors duration-200 ${
+                className={`flex items-center justify-center w-10 h-10 rounded-lg transition-colors duration-200 shadow-sm ${
                   canGoNext
-                    ? 'border-gray-200 text-gray-600 hover:text-gray-900 hover:border-gray-300'
-                    : 'border-gray-100 text-gray-300 cursor-not-allowed'
+                    ? 'bg-white border border-gray-300 hover:bg-gray-50 text-gray-700'
+                    : 'bg-gray-100 border border-gray-200 text-gray-400 cursor-not-allowed'
                 }`}
+                title="Next Sunday"
               >
-                <span className="text-sm font-medium">Next</span>
-                <ChevronRightIcon className="w-4 h-4 ml-1" />
+                <ChevronRightIcon className="w-5 h-5" />
               </button>
             </div>
 

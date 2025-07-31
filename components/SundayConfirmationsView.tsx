@@ -13,30 +13,51 @@ import {
   ChevronRightIcon,
   ClipboardIcon,
   CheckIcon,
-  EditIcon
+  EditIcon,
+  UserPlusIcon,
+  UserIcon,
+  MinusIcon
 } from './icons';
-import { Member, Bacenta } from '../types';
+import { Member, Bacenta, Guest } from '../types';
+import Dropdown from './ui/Dropdown';
+import GuestFormModal from './GuestFormModal';
+import GuestConversionModal from './GuestConversionModal';
 
 interface BacentaConfirmation {
   bacenta: Bacenta;
   confirmedMembers: Member[];
+  confirmedGuests: Guest[];
   total: number;
 }
+
+
 
 const SundayConfirmationsView: React.FC = () => {
   const {
     members,
     bacentas,
     sundayConfirmations,
+    guests,
     showToast,
     user,
-    userProfile
+    userProfile,
+    isLoading,
+    removeConfirmationHandler,
+    convertGuestToMemberHandler
   } = useAppContext();
 
   const [selectedSunday, setSelectedSunday] = useState<string>(getUpcomingSunday());
   const [confirmationTarget, setConfirmationTarget] = useState<number>(members.length);
   const [isEditingTarget, setIsEditingTarget] = useState<boolean>(false);
   const [targetInputValue, setTargetInputValue] = useState<string>(members.length.toString());
+
+  // Guest management state
+  const [isGuestModalOpen, setIsGuestModalOpen] = useState<boolean>(false);
+  const [editingGuest, setEditingGuest] = useState<Guest | null>(null);
+
+  // Guest conversion state
+  const [isConversionModalOpen, setIsConversionModalOpen] = useState<boolean>(false);
+  const [convertingGuest, setConvertingGuest] = useState<Guest | null>(null);
 
   // Check if current user is admin
   const isAdmin = hasAdminPrivileges(userProfile);
@@ -146,6 +167,61 @@ const SundayConfirmationsView: React.FC = () => {
     setIsEditingTarget(false);
   };
 
+  // Guest management handlers
+  const handleAddGuest = () => {
+    setEditingGuest(null);
+    setIsGuestModalOpen(true);
+  };
+
+  const handleEditGuest = (guest: Guest) => {
+    setEditingGuest(guest);
+    setIsGuestModalOpen(true);
+  };
+
+  const handleCloseGuestModal = () => {
+    setIsGuestModalOpen(false);
+    setEditingGuest(null);
+  };
+
+  // Confirmation management handlers
+  const handleRemoveConfirmation = async (confirmationId: string, name: string) => {
+    try {
+      await removeConfirmationHandler(confirmationId);
+      showToast('success', 'Confirmation Removed', `${name}'s confirmation has been removed`);
+    } catch (error) {
+      console.error('Failed to remove confirmation:', error);
+    }
+  };
+
+  // Guest conversion handlers
+  const handleConvertGuestToMember = (guest: Guest) => {
+    setConvertingGuest(guest);
+    setIsConversionModalOpen(true);
+  };
+
+  const handleConfirmConversion = async () => {
+    if (!convertingGuest) return;
+
+    const guestName = `${convertingGuest.firstName} ${convertingGuest.lastName || ''}`.trim();
+
+    try {
+      await convertGuestToMemberHandler(convertingGuest.id);
+      setIsConversionModalOpen(false);
+      setConvertingGuest(null);
+      showToast('success', 'Member Converted', `${guestName} has been converted to a member`);
+    } catch (error) {
+      console.error('Failed to convert guest to member:', error);
+      // Don't close modal on error so user can try again
+    }
+  };
+
+  const handleCloseConversionModal = () => {
+    setIsConversionModalOpen(false);
+    setConvertingGuest(null);
+  };
+
+
+
   // Calculate confirmation data for the selected Sunday
   const confirmationData = useMemo(() => {
     // Get all confirmation records for the selected Sunday
@@ -167,6 +243,7 @@ const SundayConfirmationsView: React.FC = () => {
       bacentaConfirmationMap.set(bacenta.id, {
         bacenta,
         confirmedMembers: [],
+        confirmedGuests: [],
         total: 0
       });
     });
@@ -175,6 +252,7 @@ const SundayConfirmationsView: React.FC = () => {
     bacentaConfirmationMap.set('unassigned', {
       bacenta: { id: 'unassigned', name: 'Unassigned Members' },
       confirmedMembers: [],
+      confirmedGuests: [],
       total: 0
     });
 
@@ -188,6 +266,23 @@ const SundayConfirmationsView: React.FC = () => {
       }
     });
 
+    // Group confirmed guests by their assigned bacenta
+    const confirmedGuests = guests.filter(guest => {
+      const guestConfirmation = sundayConfirmations.find(
+        conf => conf.guestId === guest.id && conf.date === selectedSunday && conf.status === 'Confirmed'
+      );
+      return !!guestConfirmation;
+    });
+
+    confirmedGuests.forEach(guest => {
+      const bacentaId = guest.bacentaId || 'unassigned';
+      const confirmation = bacentaConfirmationMap.get(bacentaId);
+      if (confirmation) {
+        confirmation.confirmedGuests.push(guest);
+        confirmation.total++;
+      }
+    });
+
     // Convert to array and filter out bacentas with no confirmations
     const confirmationList = Array.from(bacentaConfirmationMap.values())
       .filter(confirmation => confirmation.total > 0)
@@ -196,7 +291,7 @@ const SundayConfirmationsView: React.FC = () => {
     const grandTotal = confirmationList.reduce((sum, confirmation) => sum + confirmation.total, 0);
 
     return { confirmationList, grandTotal };
-  }, [selectedSunday, sundayConfirmations, members, bacentas]);
+  }, [selectedSunday, sundayConfirmations, members, bacentas, guests]);
 
   // Copy confirmation data as formatted text
   const copyConfirmationText = async () => {
@@ -302,15 +397,15 @@ const SundayConfirmationsView: React.FC = () => {
             <div className="flex items-center justify-center space-x-4 mb-6">
               <button
                 onClick={handlePreviousSunday}
-                className="flex items-center justify-center w-28 py-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-lg transition-colors duration-200"
+                className="flex items-center justify-center w-10 h-10 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-lg transition-colors duration-200 shadow-sm"
+                title="Previous Sunday"
               >
-                <ChevronLeftIcon className="w-4 h-4 mr-1" />
-                <span className="text-sm font-medium">Previous</span>
+                <ChevronLeftIcon className="w-5 h-5" />
               </button>
 
-              <div className="text-center px-4">
-                <div className="text-lg font-semibold text-gray-900">{formatFullDate(selectedSunday)}</div>
-                <div className="text-sm text-gray-500">
+              <div className="text-center px-4 min-w-0 flex-shrink-0">
+                <div className="text-lg font-semibold text-gray-900 whitespace-nowrap">{formatFullDate(selectedSunday)}</div>
+                <div className="text-sm text-gray-500 whitespace-nowrap">
                   {selectedSunday === getUpcomingSunday() ? 'Upcoming Sunday' : 'Selected Sunday'}
                 </div>
               </div>
@@ -318,14 +413,14 @@ const SundayConfirmationsView: React.FC = () => {
               <button
                 onClick={handleNextSunday}
                 disabled={!canGoNext}
-                className={`flex items-center justify-center w-28 py-2 rounded-lg transition-colors duration-200 ${
+                className={`flex items-center justify-center w-10 h-10 rounded-lg transition-colors duration-200 shadow-sm ${
                   canGoNext
                     ? 'bg-white border border-gray-300 hover:bg-gray-50 text-gray-700'
                     : 'bg-gray-100 border border-gray-200 text-gray-400 cursor-not-allowed'
                 }`}
+                title="Next Sunday"
               >
-                <span className="text-sm font-medium">Next</span>
-                <ChevronRightIcon className="w-4 h-4 ml-1" />
+                <ChevronRightIcon className="w-5 h-5" />
               </button>
             </div>
 
@@ -350,80 +445,92 @@ const SundayConfirmationsView: React.FC = () => {
               </div>
 
               {/* Statistics and Target */}
-              <div className="flex flex-col sm:flex-row items-center justify-center space-y-4 sm:space-y-0 sm:space-x-8">
+              <div className="flex flex-col lg:flex-row items-center justify-center space-y-6 lg:space-y-0 lg:space-x-12">
                 {/* Statistics */}
-                <div className="flex space-x-8 text-gray-900">
-                  <div className="text-center">
-                    <div className="text-2xl font-bold">{confirmationData.grandTotal}</div>
-                    <div className="text-xs text-gray-500 uppercase tracking-wide">Confirmed</div>
+                <div className="flex items-center justify-center space-x-12 text-gray-900">
+                  <div className="text-center min-w-0">
+                    <div className="text-3xl font-bold leading-none mb-2">{confirmationData.grandTotal}</div>
+                    <div className="text-xs text-gray-500 uppercase tracking-wide font-medium">Confirmed</div>
                   </div>
-                  <div className="text-center">
-                    <div className="text-2xl font-bold">{confirmationData.confirmationList.length}</div>
-                    <div className="text-xs text-gray-500 uppercase tracking-wide">Bacentas</div>
+                  <div className="text-center min-w-0">
+                    <div className="text-3xl font-bold leading-none mb-2">{confirmationData.confirmationList.length}</div>
+                    <div className="text-xs text-gray-500 uppercase tracking-wide font-medium">Bacentas</div>
                   </div>
-                  <div className="text-center">
-                    {isEditingTarget ? (
-                      <div className="flex items-center space-x-2">
-                        <input
-                          type="number"
-                          value={targetInputValue}
-                          onChange={(e) => setTargetInputValue(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') handleTargetSave();
-                            if (e.key === 'Escape') handleTargetCancel();
-                          }}
-                          className="w-16 px-2 py-1 text-center border border-gray-300 rounded text-sm focus:ring-2 focus:ring-gray-500 focus:border-transparent"
-                          min="0"
-                          autoFocus
-                        />
-                        <button
-                          onClick={handleTargetSave}
-                          className="text-gray-600 hover:text-gray-900 transition-colors"
-                          title="Save target"
-                        >
-                          <CheckIcon className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={handleTargetCancel}
-                          className="text-gray-600 hover:text-gray-900 transition-colors"
-                          title="Cancel"
-                        >
-                          ×
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="flex items-center space-x-1">
-                        <div className="text-2xl font-bold">{confirmationTarget}</div>
-                        {isAdmin ? (
+                  <div className="text-center min-w-0">
+                    <div className="h-12 flex items-center justify-center">
+                      {isEditingTarget ? (
+                        <div className="flex items-center justify-center space-x-2">
+                          <input
+                            type="number"
+                            value={targetInputValue}
+                            onChange={(e) => setTargetInputValue(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') handleTargetSave();
+                              if (e.key === 'Escape') handleTargetCancel();
+                            }}
+                            className="w-20 px-2 py-1 text-center border border-gray-300 rounded text-lg font-bold focus:ring-2 focus:ring-gray-500 focus:border-transparent"
+                            min="0"
+                            autoFocus
+                          />
                           <button
-                            onClick={handleTargetEdit}
-                            className="text-gray-400 hover:text-gray-600 transition-colors"
-                            title="Edit target (Admin only)"
+                            onClick={handleTargetSave}
+                            className="flex items-center justify-center w-8 h-8 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-full transition-colors"
+                            title="Save target"
                           >
-                            <EditIcon className="w-3 h-3" />
+                            <CheckIcon className="w-4 h-4" />
                           </button>
-                        ) : (
-                          <div
-                            className="text-gray-300 cursor-not-allowed"
-                            title="Only administrators can modify targets"
+                          <button
+                            onClick={handleTargetCancel}
+                            className="flex items-center justify-center w-8 h-8 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-full transition-colors text-lg font-bold"
+                            title="Cancel"
                           >
-                            <EditIcon className="w-3 h-3" />
-                          </div>
-                        )}
-                      </div>
-                    )}
-                    <div className="text-xs text-gray-500 uppercase tracking-wide">Target</div>
+                            ×
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-center space-x-1">
+                          <div className="text-3xl font-bold leading-none">{confirmationTarget}</div>
+                          {isAdmin ? (
+                            <button
+                              onClick={handleTargetEdit}
+                              className="flex items-center justify-center w-6 h-6 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors ml-1"
+                              title="Edit target (Admin only)"
+                            >
+                              <EditIcon className="w-3 h-3" />
+                            </button>
+                          ) : (
+                            <div
+                              className="flex items-center justify-center w-6 h-6 text-gray-300 cursor-not-allowed ml-1"
+                              title="Only administrators can modify targets"
+                            >
+                              <EditIcon className="w-3 h-3" />
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    <div className="text-xs text-gray-500 uppercase tracking-wide font-medium">Target</div>
                   </div>
                 </div>
 
-                {/* Copy Button */}
-                <button
-                  onClick={copyConfirmationText}
-                  className="flex items-center px-4 py-2 bg-white border border-gray-300 hover:bg-gray-50 rounded-lg transition-colors text-gray-700"
-                >
-                  <ClipboardIcon className="w-4 h-4 mr-2" />
-                  <span className="text-sm font-medium">Copy Confirmations</span>
-                </button>
+                {/* Action Buttons */}
+                <div className="flex items-center justify-center space-x-3">
+                  <button
+                    onClick={handleAddGuest}
+                    className="flex items-center justify-center px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors shadow-sm"
+                  >
+                    <UserPlusIcon className="w-4 h-4 mr-2" />
+                    <span className="text-sm font-medium">Add Guest</span>
+                  </button>
+
+                  <button
+                    onClick={copyConfirmationText}
+                    className="flex items-center justify-center px-5 py-2.5 bg-white border border-gray-300 hover:bg-gray-50 rounded-lg transition-colors text-gray-700 shadow-sm"
+                  >
+                    <ClipboardIcon className="w-4 h-4 mr-2" />
+                    <span className="text-sm font-medium">Copy Confirmations</span>
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -491,32 +598,111 @@ const SundayConfirmationsView: React.FC = () => {
                           </div>
                         </div>
 
-                        {/* Clean Members List */}
+                        {/* Clean Members and Guests List */}
                         <div className="space-y-2">
-                          {sortedMembers.map((member, index) => (
-                            <div key={member.id} className="flex items-start">
-                              <span className="text-gray-500 text-sm font-medium w-6 pt-0.5">
-                                {index + 1}.
-                              </span>
-                              <div className="flex flex-wrap items-center gap-2">
-                                <span className="text-gray-900">
-                                  {member.firstName} {member.lastName || ''}
-                                </span>
-                                {member.role === 'Bacenta Leader' && (
-                                  <span className="inline-flex items-center text-xs text-green-700">
-                                    <span className="mr-1">💚</span>
-                                    <span className="hidden sm:inline">Bacenta Leader</span>
+                          {/* Members */}
+                          {sortedMembers.map((member, index) => {
+                            const confirmationId = `${member.id}_${selectedSunday}`;
+                            const memberName = `${member.firstName} ${member.lastName || ''}`;
+
+                            return (
+                              <div key={`member-${member.id}`} className="flex items-start justify-between">
+                                <div className="flex items-start flex-1">
+                                  <span className="text-gray-500 text-sm font-medium w-6 pt-0.5">
+                                    {index + 1}.
                                   </span>
-                                )}
-                                {member.role === 'Fellowship Leader' && (
-                                  <span className="inline-flex items-center text-xs text-red-700">
-                                    <span className="mr-1">❤️</span>
-                                    <span className="hidden sm:inline">Fellowship Leader</span>
-                                  </span>
-                                )}
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <span className="text-gray-900">
+                                      {memberName}
+                                    </span>
+                                    {member.role === 'Bacenta Leader' && (
+                                      <span className="inline-flex items-center text-xs text-green-700">
+                                        <span className="mr-1">💚</span>
+                                        <span className="hidden sm:inline">Bacenta Leader</span>
+                                      </span>
+                                    )}
+                                    {member.role === 'Fellowship Leader' && (
+                                      <span className="inline-flex items-center text-xs text-red-700">
+                                        <span className="mr-1">❤️</span>
+                                        <span className="hidden sm:inline">Fellowship Leader</span>
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {/* Actions Dropdown */}
+                                <Dropdown
+                                  items={[
+                                    {
+                                      id: 'remove',
+                                      label: 'Remove Confirmation',
+                                      icon: <MinusIcon className="w-4 h-4" />,
+                                      onClick: () => handleRemoveConfirmation(confirmationId, memberName),
+                                      destructive: true
+                                    }
+                                  ]}
+                                  align="right"
+                                />
                               </div>
-                            </div>
-                          ))}
+                            );
+                          })}
+
+                          {/* Guests */}
+                          {confirmation.confirmedGuests.map((guest, index) => {
+                            const confirmationId = `guest_${guest.id}_${selectedSunday}`;
+                            const guestName = `${guest.firstName} ${guest.lastName || ''}`;
+                            const guestIndex = sortedMembers.length + index + 1;
+
+                            return (
+                              <div key={`guest-${guest.id}`} className="flex items-start justify-between">
+                                <div className="flex items-start flex-1">
+                                  <span className="text-gray-500 text-sm font-medium w-6 pt-0.5">
+                                    {guestIndex}.
+                                  </span>
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <span className="text-gray-900">
+                                      {guestName}
+                                    </span>
+                                    <span className="inline-flex items-center text-xs text-blue-700 bg-blue-50 px-2 py-1 rounded">
+                                      <UserPlusIcon className="w-3 h-3 mr-1" />
+                                      Guest
+                                    </span>
+                                    {guest.roomNumber && (
+                                      <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                                        Room {guest.roomNumber}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {/* Actions Dropdown */}
+                                <Dropdown
+                                  items={[
+                                    {
+                                      id: 'convert',
+                                      label: 'Convert to Member',
+                                      icon: <UserIcon className="w-4 h-4" />,
+                                      onClick: () => handleConvertGuestToMember(guest)
+                                    },
+                                    {
+                                      id: 'edit',
+                                      label: 'Edit Guest',
+                                      icon: <EditIcon className="w-4 h-4" />,
+                                      onClick: () => handleEditGuest(guest)
+                                    },
+                                    {
+                                      id: 'remove',
+                                      label: 'Remove Confirmation',
+                                      icon: <MinusIcon className="w-4 h-4" />,
+                                      onClick: () => handleRemoveConfirmation(confirmationId, guestName),
+                                      destructive: true
+                                    }
+                                  ]}
+                                  align="right"
+                                />
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
                     );
@@ -549,6 +735,23 @@ const SundayConfirmationsView: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Guest Form Modal */}
+      <GuestFormModal
+        isOpen={isGuestModalOpen}
+        onClose={handleCloseGuestModal}
+        editingGuest={editingGuest}
+      />
+
+      {/* Guest Conversion Modal */}
+      <GuestConversionModal
+        isOpen={isConversionModalOpen}
+        onClose={handleCloseConversionModal}
+        onConfirm={handleConfirmConversion}
+        guest={convertingGuest}
+        bacenta={convertingGuest ? bacentas.find(b => b.id === convertingGuest.bacentaId) || null : null}
+        isLoading={isLoading}
+      />
     </div>
   );
 };

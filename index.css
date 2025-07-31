@@ -289,6 +289,12 @@ body.modal-open {
     padding-right: 0.5rem;
   }
 
+  /* More compact spacing on mobile */
+  .compact-layout {
+    padding-top: 0.5rem !important;
+    padding-bottom: 0.5rem !important;
+  }
+
   /* Disable expensive animations on mobile */
   .floating, .shimmer {
     animation: none;
@@ -305,6 +311,20 @@ body.modal-open {
   .container {
     padding-left: 0.25rem;
     padding-right: 0.25rem;
+  }
+
+  /* Extra compact layout for small screens */
+  .compact-layout {
+    padding-top: 0.25rem !important;
+    padding-bottom: 0.25rem !important;
+  }
+
+  .compact-layout .space-y-4 > * + * {
+    margin-top: 0.5rem !important;
+  }
+
+  .compact-layout .space-y-6 > * + * {
+    margin-top: 0.75rem !important;
   }
 
   /* Ensure text doesn't get too small */

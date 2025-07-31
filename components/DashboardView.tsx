@@ -183,10 +183,10 @@ const DashboardView: React.FC = memo(() => {
   const year = displayedDate.getFullYear();
 
   return (
-    <div className="space-y-4 sm:space-y-6 md:space-y-8">
+    <div className="space-y-3 sm:space-y-4 md:space-y-5">
       {/* Enhanced Header */}
-      <div className="text-center mb-4 sm:mb-6 md:mb-8">
-        <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold gradient-text font-serif mb-2">
+      <div className="text-center mb-2 sm:mb-3 md:mb-4">
+        <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold gradient-text font-serif mb-1">
           Dashboard
         </h2>
         <div className="flex items-center justify-center space-x-2 text-gray-600">
@@ -194,11 +194,11 @@ const DashboardView: React.FC = memo(() => {
           <p className="text-sm sm:text-base md:text-lg font-medium">{monthName} {year}</p>
           <span className="text-lg sm:text-xl md:text-2xl">⛪</span>
         </div>
-        <div className="w-16 sm:w-20 md:w-24 h-0.5 sm:h-1 bg-gradient-to-r from-gray-400 to-gray-600 rounded-full mx-auto mt-2 sm:mt-3"></div>
+        <div className="w-16 sm:w-20 md:w-24 h-0.5 sm:h-1 bg-gradient-to-r from-gray-400 to-gray-600 rounded-full mx-auto mt-1 sm:mt-2"></div>
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 md:gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3 md:gap-4">
         <StatCard
           title="Total Members"
           value={totalMembers}
@@ -232,8 +232,8 @@ const DashboardView: React.FC = memo(() => {
       </div>
 
       {/* Enhanced Members per Bacenta Section */}
-      <div className="glass p-4 sm:p-6 md:p-8 shadow-lg rounded-xl sm:rounded-2xl">
-        <div className="flex items-center justify-between mb-4 sm:mb-6">
+      <div className="glass p-3 sm:p-4 md:p-5 shadow-lg rounded-xl sm:rounded-2xl">
+        <div className="flex items-center justify-between mb-3 sm:mb-4">
           <h3 className="text-lg sm:text-xl md:text-2xl font-bold gradient-text flex items-center">
             <ChartBarIcon className="w-5 h-5 sm:w-6 sm:h-6 md:w-8 md:h-8 mr-2 sm:mr-3 text-gray-600" />
             <span className="hidden sm:inline">Members per Bacenta</span>

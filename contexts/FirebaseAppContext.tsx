@@ -1,6 +1,6 @@
 // Firebase-enabled App Context
 import React, { createContext, useState, useEffect, useCallback, ReactNode, useMemo } from 'react';
-import { Member, AttendanceRecord, Bacenta, TabOption, AttendanceStatus, TabKeys, NavigationHistoryItem, NewBeliever, SundayConfirmation, ConfirmationStatus } from '../types';
+import { Member, AttendanceRecord, Bacenta, TabOption, AttendanceStatus, TabKeys, NavigationHistoryItem, NewBeliever, SundayConfirmation, ConfirmationStatus, Guest } from '../types';
 import { FIXED_TABS, DEFAULT_TAB_ID } from '../constants';
 import { getSundaysOfMonth, formatDateToYYYYMMDD } from '../utils/dateUtils';
 import {
@@ -9,6 +9,7 @@ import {
   attendanceFirebaseService,
   newBelieversFirebaseService,
   confirmationFirebaseService,
+  guestFirebaseService,
   authService,
   firebaseUtils,
   FirebaseUser
@@ -24,6 +25,7 @@ interface AppContextType {
   bacentas: Bacenta[];
   newBelievers: NewBeliever[];
   sundayConfirmations: SundayConfirmation[];
+  guests: Guest[];
   
   // UI State
   currentTab: TabOption;
@@ -93,6 +95,14 @@ interface AppContextType {
 
   // Confirmation Operations
   markConfirmationHandler: (memberId: string, date: string, status: ConfirmationStatus) => Promise<void>;
+  removeConfirmationHandler: (confirmationId: string) => Promise<void>;
+
+  // Guest Operations
+  addGuestHandler: (guestData: Omit<Guest, 'id' | 'createdDate' | 'lastUpdated' | 'createdBy'>) => Promise<void>;
+  updateGuestHandler: (guestData: Guest) => Promise<void>;
+  deleteGuestHandler: (guestId: string) => Promise<void>;
+  markGuestConfirmationHandler: (guestId: string, date: string, status: ConfirmationStatus) => Promise<void>;
+  convertGuestToMemberHandler: (guestId: string) => Promise<void>;
   
   // UI Handlers
   openMemberForm: (member?: Member) => void;
@@ -135,6 +145,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
   const [bacentas, setBacentas] = useState<Bacenta[]>([]);
   const [newBelievers, setNewBelievers] = useState<NewBeliever[]>([]);
   const [sundayConfirmations, setSundayConfirmations] = useState<SundayConfirmation[]>([]);
+  const [guests, setGuests] = useState<Guest[]>([]);
   
   // UI state
   const [currentTab, setCurrentTab] = useState<TabOption>(FIXED_TABS.find(t => t.id === DEFAULT_TAB_ID) || FIXED_TABS[0]);
@@ -221,6 +232,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
                 setAttendanceRecords([]);
                 setNewBelievers([]);
                 setSundayConfirmations([]);
+                setGuests([]);
               }
             } catch (error) {
               console.error('Failed to load user profile:', error);
@@ -234,6 +246,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
             setAttendanceRecords([]);
             setNewBelievers([]);
             setSundayConfirmations([]);
+            setGuests([]);
           }
           setIsLoading(false);
         });
@@ -286,6 +299,12 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
         setSundayConfirmations(confirmations);
       });
       unsubscribers.push(unsubscribeConfirmations);
+
+      // Listen to guests
+      const unsubscribeGuests = guestFirebaseService.onSnapshot((guests) => {
+        setGuests(guests);
+      });
+      unsubscribers.push(unsubscribeGuests);
       
     } catch (error: any) {
       setError(error.message);
@@ -649,6 +668,231 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     }
   }, [showToast]);
 
+  // Remove confirmation handler
+  const removeConfirmationHandler = useCallback(async (confirmationId: string) => {
+    try {
+      if (!userProfile?.uid) {
+        throw new Error('User not authenticated');
+      }
+
+      await confirmationFirebaseService.remove(confirmationId, userProfile.uid);
+      showToast('success', 'Confirmation removed successfully');
+    } catch (error: any) {
+      console.error('❌ Failed to remove confirmation:', error);
+      setError(error.message);
+      showToast('error', 'Failed to remove confirmation', error.message);
+      throw error;
+    }
+  }, [showToast, userProfile]);
+
+  // Guest handlers
+  const addGuestHandler = useCallback(async (guestData: Omit<Guest, 'id' | 'createdDate' | 'lastUpdated' | 'createdBy'>) => {
+    try {
+      setIsLoading(true);
+
+      // Add the guest to the database
+      const guestId = await guestFirebaseService.add(guestData);
+
+      // Auto-confirm the guest for the upcoming Sunday
+      const { getUpcomingSunday } = await import('../utils/dateUtils');
+      const upcomingSunday = getUpcomingSunday();
+
+      // Create confirmation record directly
+      const recordId = `guest_${guestId}_${upcomingSunday}`;
+      const record: SundayConfirmation = {
+        id: recordId,
+        guestId,
+        date: upcomingSunday,
+        status: 'Confirmed',
+        confirmationTimestamp: new Date().toISOString(),
+        confirmedBy: userProfile?.uid
+      };
+
+      await confirmationFirebaseService.addOrUpdate(record);
+      showToast('success', 'Guest added and confirmed for upcoming Sunday');
+    } catch (error: any) {
+      setError(error.message);
+      showToast('error', 'Failed to add guest', error.message);
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [showToast, userProfile]);
+
+  const updateGuestHandler = useCallback(async (guestData: Guest) => {
+    try {
+      setIsLoading(true);
+      await guestFirebaseService.update(guestData.id, guestData);
+      showToast('success', 'Guest updated successfully');
+    } catch (error: any) {
+      setError(error.message);
+      showToast('error', 'Failed to update guest', error.message);
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [showToast]);
+
+  const deleteGuestHandler = useCallback(async (guestId: string) => {
+    try {
+      setIsLoading(true);
+      await guestFirebaseService.delete(guestId);
+      showToast('success', 'Guest deleted successfully');
+    } catch (error: any) {
+      setError(error.message);
+      showToast('error', 'Failed to delete guest', error.message);
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [showToast]);
+
+  const markGuestConfirmationHandler = useCallback(async (guestId: string, date: string, status: ConfirmationStatus) => {
+    try {
+      const recordId = `guest_${guestId}_${date}`;
+      const record: SundayConfirmation = {
+        id: recordId,
+        guestId,
+        date,
+        status,
+        confirmationTimestamp: new Date().toISOString(),
+        confirmedBy: userProfile?.uid
+      };
+
+      console.log('✅ Marking guest confirmation:', recordId, status);
+      await confirmationFirebaseService.addOrUpdate(record);
+      showToast('success', status === 'Confirmed' ? 'Guest attendance confirmed!' : 'Guest confirmation removed');
+    } catch (error: any) {
+      console.error('❌ Failed to mark guest confirmation:', error);
+      setError(error.message);
+      showToast('error', 'Failed to update guest confirmation', error.message);
+      throw error;
+    }
+  }, [showToast, userProfile]);
+
+  const convertGuestToMemberHandler = useCallback(async (guestId: string) => {
+    let newMemberId: string | null = null;
+    let createdConfirmations: string[] = [];
+
+    try {
+      setIsLoading(true);
+
+      // Get the guest data
+      const guest = guests.find(g => g.id === guestId);
+      if (!guest) {
+        throw new Error('Guest not found');
+      }
+
+      // Validate guest data
+      if (!guest.firstName.trim()) {
+        throw new Error('Guest must have a first name');
+      }
+      if (!guest.bacentaId) {
+        throw new Error('Guest must be assigned to a Bacenta');
+      }
+
+      // Check if a member with the same name already exists in the same Bacenta
+      const existingMember = members.find(m =>
+        m.firstName.toLowerCase().trim() === guest.firstName.toLowerCase().trim() &&
+        (m.lastName || '').toLowerCase().trim() === (guest.lastName || '').toLowerCase().trim() &&
+        m.bacentaId === guest.bacentaId
+      );
+
+      if (existingMember) {
+        throw new Error(`A member named "${guest.firstName} ${guest.lastName || ''}" already exists in ${bacentas.find(b => b.id === guest.bacentaId)?.name || 'this Bacenta'}`);
+      }
+
+      // Validate that the Bacenta still exists
+      const bacenta = bacentas.find(b => b.id === guest.bacentaId);
+      if (!bacenta) {
+        throw new Error('The assigned Bacenta no longer exists. Please edit the guest and assign them to a valid Bacenta before converting.');
+      }
+
+      // Create member data from guest data
+      const memberData: Omit<Member, 'id' | 'createdDate' | 'lastUpdated'> = {
+        firstName: guest.firstName.trim(),
+        lastName: guest.lastName?.trim() || '',
+        phoneNumber: guest.phoneNumber?.trim() || '',
+        buildingAddress: guest.roomNumber?.trim() || '', // Use room number as building address
+        profilePicture: '',
+        bornAgainStatus: false, // Default to false
+        bacentaId: guest.bacentaId,
+        bacentaLeaderId: '',
+        role: 'Member' as const
+      };
+
+      console.log('🔄 Converting guest to member:', guest.firstName, guest.lastName);
+
+      // Step 1: Add the new member and get the member ID
+      newMemberId = await membersFirebaseService.add(memberData);
+      console.log('✅ Member created with ID:', newMemberId);
+
+      // Step 2: Transfer Sunday confirmations from guest to member
+      const guestConfirmations = sundayConfirmations.filter(conf => conf.guestId === guestId);
+      console.log('🔄 Transferring', guestConfirmations.length, 'confirmations');
+
+      for (const confirmation of guestConfirmations) {
+        try {
+          // Create new confirmation record for the member
+          const memberConfirmationRecord: SundayConfirmation = {
+            id: `${newMemberId}_${confirmation.date}`,
+            memberId: newMemberId,
+            date: confirmation.date,
+            status: confirmation.status,
+            confirmationTimestamp: confirmation.confirmationTimestamp,
+            confirmedBy: confirmation.confirmedBy
+          };
+
+          await confirmationFirebaseService.addOrUpdate(memberConfirmationRecord);
+          createdConfirmations.push(memberConfirmationRecord.id);
+          console.log('✅ Transferred confirmation for date:', confirmation.date);
+
+          // Remove the guest confirmation
+          await confirmationFirebaseService.delete(confirmation.id);
+          console.log('✅ Removed guest confirmation for date:', confirmation.date);
+        } catch (confirmationError: any) {
+          console.error('❌ Failed to transfer confirmation for date:', confirmation.date, confirmationError);
+          throw new Error(`Failed to transfer confirmation for ${confirmation.date}: ${confirmationError.message}`);
+        }
+      }
+
+      // Step 3: Delete the guest record
+      await guestFirebaseService.delete(guestId);
+      console.log('✅ Guest record deleted');
+
+      showToast('success', 'Guest converted to member successfully');
+    } catch (error: any) {
+      console.error('❌ Failed to convert guest to member:', error);
+
+      // Rollback: Clean up any created data
+      if (newMemberId) {
+        try {
+          console.log('🔄 Rolling back: Deleting created member');
+          await membersFirebaseService.delete(newMemberId);
+
+          // Also clean up any confirmations that were created
+          for (const confirmationId of createdConfirmations) {
+            try {
+              await confirmationFirebaseService.delete(confirmationId);
+            } catch (cleanupError) {
+              console.error('❌ Failed to cleanup confirmation during rollback:', confirmationId, cleanupError);
+            }
+          }
+          console.log('✅ Rollback completed');
+        } catch (rollbackError: any) {
+          console.error('❌ Failed to rollback member creation:', rollbackError);
+          // Don't throw rollback errors, just log them
+        }
+      }
+
+      setError(error.message);
+      showToast('error', 'Failed to convert guest to member', error.message);
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [guests, sundayConfirmations, members, bacentas, showToast]);
+
   // UI handlers
   const openMemberForm = useCallback((member?: Member) => {
     setEditingMember(member || null);
@@ -869,6 +1113,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     bacentas,
     newBelievers,
     sundayConfirmations,
+    guests,
 
     // UI State
     currentTab,
@@ -927,6 +1172,14 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
 
     // Confirmation Operations
     markConfirmationHandler,
+    removeConfirmationHandler,
+
+    // Guest Operations
+    addGuestHandler,
+    updateGuestHandler,
+    deleteGuestHandler,
+    markGuestConfirmationHandler,
+    convertGuestToMemberHandler,
 
     // UI Handlers
     openMemberForm,

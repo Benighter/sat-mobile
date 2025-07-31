@@ -272,9 +272,9 @@ const AppContent: React.FC = memo(() => {
       </header>
 
       {/* Scrollable Main Content */}
-      <main className="flex-1 overflow-y-auto pt-20 sm:pt-24 pb-4 sm:pb-6 relative z-10">
+      <main className="flex-1 overflow-y-auto pt-16 sm:pt-18 pb-4 sm:pb-6 relative z-10">
         <GestureWrapper className="h-full">
-          <div className="container mx-auto px-2 sm:px-4 py-3 sm:py-4 md:py-6">
+          <div className="container mx-auto px-2 sm:px-4 py-2 sm:py-3 md:py-4 compact-layout">
             <div className="animate-fade-in">
               {renderView()}
             </div>

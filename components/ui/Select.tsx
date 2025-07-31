@@ -5,21 +5,25 @@ interface SelectOption {
   label: string;
 }
 
-interface SelectProps extends React.SelectHTMLAttributes<HTMLSelectElement> {
+interface SelectProps extends Omit<React.SelectHTMLAttributes<HTMLSelectElement>, 'onChange'> {
   label?: string;
   error?: string;
-  options: SelectOption[];
+  options?: SelectOption[];
   wrapperClassName?: string;
+  children?: React.ReactNode;
+  onChange?: (value: string) => void;
 }
 
-const Select: React.FC<SelectProps> = ({ 
-  label, 
-  id, 
-  error, 
-  options, 
-  className = '', 
-  wrapperClassName = '', 
-  ...props 
+const Select: React.FC<SelectProps> = ({
+  label,
+  id,
+  error,
+  options,
+  children,
+  onChange,
+  className = '',
+  wrapperClassName = '',
+  ...props
 }) => {
   const selectId = id || (label ? label.toLowerCase().replace(/\s+/g, '-') : undefined);
   
@@ -37,13 +41,18 @@ const Select: React.FC<SelectProps> = ({
         } rounded-lg shadow-sm focus:outline-none focus:ring-2 ${
           error ? 'focus:ring-red-500' : 'focus:ring-blue-500'
         } focus:border-transparent transition-colors text-base sm:text-sm bg-white ${className}`}
+        onChange={(e) => onChange?.(e.target.value)}
         {...props}
       >
-        {options.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
+        {options ? (
+          options.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))
+        ) : (
+          children
+        )}
       </select>
       {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
     </div>

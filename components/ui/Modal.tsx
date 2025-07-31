@@ -2,10 +2,47 @@
 import React, { useEffect } from 'react';
 import { XMarkIcon } from '../icons';
 
+// Utility function to detect navbar height
+const detectNavbarHeight = (): number => {
+  // Try multiple common navbar selectors
+  const selectors = [
+    'nav',
+    '.navbar',
+    '[role="navigation"]',
+    '.nav-header',
+    '.app-header',
+    '.top-nav',
+    'header nav',
+    'header'
+  ];
+
+  for (const selector of selectors) {
+    const element = document.querySelector(selector) as HTMLElement;
+    if (element && element.offsetHeight > 0) {
+      return element.offsetHeight;
+    }
+  }
+
+  // Fallback: check for any fixed positioned elements at the top
+  const fixedElements = Array.from(document.querySelectorAll('*')).filter(el => {
+    const style = window.getComputedStyle(el as Element);
+    return style.position === 'fixed' &&
+           (style.top === '0px' || style.top === '0') &&
+           (el as HTMLElement).offsetHeight > 0 &&
+           (el as HTMLElement).offsetHeight < 200; // Reasonable navbar height
+  });
+
+  if (fixedElements.length > 0) {
+    return Math.max(...fixedElements.map(el => (el as HTMLElement).offsetHeight));
+  }
+
+  return 0;
+};
+
 interface ModalProps {
   isOpen: boolean;
   onClose: () => void;
-  title: string;
+  title?: string;
   children: React.ReactNode;
   size?: 'sm' | 'md' | 'lg' | 'xl' | 'full';
   footer?: React.ReactNode;
@@ -18,6 +55,39 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, size = 
     // Store original styles to restore later
     const originalBodyOverflow = document.body.style.overflow;
     const scrollY = window.scrollY;
+
+    // Calculate and set navbar height as CSS custom property
+    const updateNavbarHeight = () => {
+      const navbarHeight = detectNavbarHeight();
+
+      // Set CSS custom properties for dynamic calculations
+      document.documentElement.style.setProperty('--navbar-height', `${navbarHeight}px`);
+
+      // Force recalculation of dependent properties
+      const availableHeight = `calc(100vh - ${navbarHeight}px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px))`;
+      const availableHeightDvh = `calc(100dvh - ${navbarHeight}px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px))`;
+
+      document.documentElement.style.setProperty('--available-height', availableHeight);
+      document.documentElement.style.setProperty('--available-height-dvh', availableHeightDvh);
+
+      console.log(`Modal: Detected navbar height: ${navbarHeight}px`);
+    };
+
+    // Set navbar height immediately and on resize
+    updateNavbarHeight();
+
+    // Also update after a small delay to ensure DOM is fully rendered
+    setTimeout(updateNavbarHeight, 100);
+
+    // Create debounced version for resize events
+    let resizeTimeout: NodeJS.Timeout;
+    const debouncedUpdate = () => {
+      clearTimeout(resizeTimeout);
+      resizeTimeout = setTimeout(updateNavbarHeight, 150);
+    };
+
+    window.addEventListener('resize', debouncedUpdate);
+    window.addEventListener('orientationchange', debouncedUpdate);
 
     // Simple approach: just prevent body overflow
     document.body.style.overflow = 'hidden';
@@ -79,6 +149,9 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, size = 
       document.removeEventListener('touchmove', preventTouchOutsideModal, { capture: true });
       document.removeEventListener('scroll', preventDocumentScroll, { capture: true });
       document.removeEventListener('keydown', handleEsc);
+      document.removeEventListener('resize', debouncedUpdate);
+      document.removeEventListener('orientationchange', debouncedUpdate);
+      clearTimeout(resizeTimeout);
 
       // Restore scroll position
       window.scrollTo(0, scrollY);
@@ -88,60 +161,47 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, size = 
   if (!isOpen) return null;
 
   const sizeClasses = {
-    sm: 'max-w-sm',
-    md: 'max-w-md',
-    lg: 'max-w-lg',
-    xl: 'max-w-2xl',
+    sm: 'max-w-sm sm:max-w-md',
+    md: 'max-w-md sm:max-w-lg',
+    lg: 'max-w-lg sm:max-w-xl',
+    xl: 'max-w-xl sm:max-w-2xl lg:max-w-4xl',
     full: 'max-w-full h-full rounded-none',
   };
 
   return (
     <div
-      className="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm z-[9999] modal-backdrop"
+      className="fixed modal-backdrop z-[10000]"
       style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        zIndex: 9999,
+        top: 'calc(var(--navbar-height, 0px) + env(safe-area-inset-top, 0px))',
+        left: 'env(safe-area-inset-left, 0px)',
+        right: 'env(safe-area-inset-right, 0px)',
+        bottom: 'env(safe-area-inset-bottom, 0px)',
+        height: 'calc(100vh - var(--navbar-height, 0px) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px))',
+        minHeight: 'calc(100dvh - var(--navbar-height, 0px) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px))',
+        background: 'rgba(0, 0, 0, 0.5)',
+        backdropFilter: 'blur(4px)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        padding: '20px',
-        paddingTop: '100px', // Account for header height
-        paddingBottom: '20px',
-        overflow: 'hidden', // Prevent any scrolling on the backdrop
-        touchAction: 'none', // Prevent touch actions
-        overscrollBehavior: 'none' // Prevent overscroll
+        padding: 'clamp(0.5rem, 2vw, 1rem)',
+        overflow: 'auto',
+        touchAction: 'pan-y',
+        overscrollBehavior: 'contain'
       }}
       onClick={(e) => {
         if (e.target === e.currentTarget) {
           onClose();
         }
       }}
-      onWheel={(e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        return false;
-      }}
-      onTouchMove={(e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        return false;
-      }}
-      onScroll={(e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        return false;
-      }}
     >
       <div
-        className={`bg-white rounded-lg sm:rounded-xl shadow-xl w-full ${sizeClasses[size]} flex flex-col relative modal-content overflow-hidden`}
+        className={`bg-white rounded-lg sm:rounded-xl shadow-xl w-full ${sizeClasses[size]} flex flex-col relative modal-content`}
         style={{
-          zIndex: 10000,
-          maxHeight: 'calc(100vh - 140px)', // Ensure modal doesn't exceed viewport
-          minHeight: '200px'
+          maxHeight: 'calc(100vh - var(--navbar-height, 0px) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 2rem)',
+          maxHeight: 'calc(100dvh - var(--navbar-height, 0px) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 2rem)',
+          minHeight: 'auto',
+          maxWidth: 'min(90vw, 100%)',
+          margin: 'auto'
         }}
         data-modal-content
         onClick={(e) => e.stopPropagation()} // Prevent backdrop click when clicking inside modal

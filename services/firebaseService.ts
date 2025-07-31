@@ -34,7 +34,7 @@ import {
   User
 } from 'firebase/auth';
 import { db, auth } from '../firebase.config';
-import { Member, Bacenta, AttendanceRecord, NewBeliever, SundayConfirmation } from '../types';
+import { Member, Bacenta, AttendanceRecord, NewBeliever, SundayConfirmation, Guest } from '../types';
 
 // Types for Firebase operations
 export interface FirebaseUser {
@@ -758,6 +758,21 @@ export const confirmationFirebaseService = {
     }
   },
 
+  // Remove confirmation (soft delete with tracking)
+  remove: async (id: string, removedBy: string): Promise<void> => {
+    try {
+      const confirmationRef = doc(db, getChurchCollectionPath('confirmations'), id);
+      await updateDoc(confirmationRef, {
+        status: 'Not Confirmed',
+        removedBy,
+        removedAt: new Date().toISOString(),
+        lastUpdated: new Date().toISOString()
+      });
+    } catch (error: any) {
+      throw new Error(`Failed to remove confirmation: ${error.message}`);
+    }
+  },
+
   // Listen to confirmation changes
   onSnapshot: (callback: (records: SundayConfirmation[]) => void): Unsubscribe => {
     const confirmationsRef = collection(db, getChurchCollectionPath('confirmations'));
@@ -769,6 +784,76 @@ export const confirmationFirebaseService = {
         id: doc.id
       })) as SundayConfirmation[];
       callback(records);
+    });
+  }
+};
+
+// Guest Service
+export const guestFirebaseService = {
+  // Get all guests
+  getAll: async (): Promise<Guest[]> => {
+    try {
+      const guestsRef = collection(db, getChurchCollectionPath('guests'));
+      const querySnapshot = await getDocs(guestsRef);
+      return querySnapshot.docs.map(doc => ({
+        ...doc.data(),
+        id: doc.id
+      })) as Guest[];
+    } catch (error: any) {
+      throw new Error(`Failed to fetch guests: ${error.message}`);
+    }
+  },
+
+  // Add new guest
+  add: async (guest: Omit<Guest, 'id'>): Promise<string> => {
+    try {
+      const guestsRef = collection(db, getChurchCollectionPath('guests'));
+      const docRef = await addDoc(guestsRef, {
+        ...guest,
+        createdDate: new Date().toISOString(),
+        lastUpdated: new Date().toISOString(),
+        createdBy: currentUser?.uid || 'unknown'
+      });
+      return docRef.id;
+    } catch (error: any) {
+      throw new Error(`Failed to add guest: ${error.message}`);
+    }
+  },
+
+  // Update guest
+  update: async (id: string, updates: Partial<Guest>): Promise<void> => {
+    try {
+      const guestRef = doc(db, getChurchCollectionPath('guests'), id);
+      await updateDoc(guestRef, {
+        ...updates,
+        lastUpdated: new Date().toISOString()
+      });
+    } catch (error: any) {
+      throw new Error(`Failed to update guest: ${error.message}`);
+    }
+  },
+
+  // Delete guest
+  delete: async (id: string): Promise<void> => {
+    try {
+      const guestRef = doc(db, getChurchCollectionPath('guests'), id);
+      await deleteDoc(guestRef);
+    } catch (error: any) {
+      throw new Error(`Failed to delete guest: ${error.message}`);
+    }
+  },
+
+  // Listen to guest changes
+  onSnapshot: (callback: (guests: Guest[]) => void): Unsubscribe => {
+    const guestsRef = collection(db, getChurchCollectionPath('guests'));
+    const q = query(guestsRef, orderBy('createdDate', 'desc'));
+
+    return onSnapshot(q, (querySnapshot) => {
+      const guests = querySnapshot.docs.map(doc => ({
+        ...doc.data(),
+        id: doc.id
+      })) as Guest[];
+      callback(guests);
     });
   }
 };

@@ -79,10 +79,10 @@ const HierarchyModal: React.FC<HierarchyModalProps> = ({ isOpen, bacentaLeader, 
     try {
       const updatedMember = {
         ...fellowshipLeader,
-        bacentaLeaderId: undefined,
+        bacentaLeaderId: '',
         lastUpdated: new Date().toISOString()
       };
-      
+
       await updateMemberHandler(updatedMember);
       showToast('success', 'Removed!', `${fellowshipLeader.firstName} ${fellowshipLeader.lastName} removed from ${bacentaLeader.firstName} ${bacentaLeader.lastName}`);
     } catch (error) {

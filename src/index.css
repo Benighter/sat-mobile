@@ -57,6 +57,48 @@ html, body {
   box-sizing: border-box;
 }
 
+/* Compact Layout Utilities */
+.compact-layout {
+  /* Reduce default spacing for a more professional, dense layout */
+}
+
+.compact-layout .space-y-4 > * + * {
+  margin-top: 0.75rem !important; /* Reduce from 1rem to 0.75rem */
+}
+
+.compact-layout .space-y-6 > * + * {
+  margin-top: 1rem !important; /* Reduce from 1.5rem to 1rem */
+}
+
+.compact-layout .space-y-8 > * + * {
+  margin-top: 1.25rem !important; /* Reduce from 2rem to 1.25rem */
+}
+
+/* Reduce excessive margins in headers and sections */
+.compact-layout .mb-4 {
+  margin-bottom: 0.75rem !important;
+}
+
+.compact-layout .mb-6 {
+  margin-bottom: 1rem !important;
+}
+
+.compact-layout .mb-8 {
+  margin-bottom: 1.25rem !important;
+}
+
+.compact-layout .mt-4 {
+  margin-top: 0.75rem !important;
+}
+
+.compact-layout .mt-6 {
+  margin-top: 1rem !important;
+}
+
+.compact-layout .mt-8 {
+  margin-top: 1.25rem !important;
+}
+
 /* Custom gradient text */
 .gradient-text {
   background: linear-gradient(45deg, #334155, #1e293b);
@@ -157,6 +199,18 @@ html, body {
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
 }
 
+/* CSS Custom Properties for Dynamic Modal Positioning */
+:root {
+  --navbar-height: 0px;
+  --safe-area-top: env(safe-area-inset-top, 0px);
+  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-area-left: env(safe-area-inset-left, 0px);
+  --safe-area-right: env(safe-area-inset-right, 0px);
+  --total-top-offset: calc(var(--navbar-height) + var(--safe-area-top));
+  --available-height: calc(100vh - var(--total-top-offset) - var(--safe-area-bottom));
+  --available-height-dvh: calc(100dvh - var(--total-top-offset) - var(--safe-area-bottom));
+}
+
 /* Modal scroll prevention - mobile-friendly approach */
 .modal-open {
   overflow: hidden !important;
@@ -165,9 +219,36 @@ html, body {
   height: 100% !important;
 }
 
-/* Prevent scroll chaining on modal backdrop */
+/* Enhanced Modal Backdrop with Dynamic Positioning */
 .modal-backdrop {
-  overscroll-behavior: contain;
+  /* Perfect centering using flexbox */
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+
+  /* Dynamic positioning based on navbar height */
+  position: fixed !important;
+  top: var(--total-top-offset) !important;
+  left: var(--safe-area-left) !important;
+  right: var(--safe-area-right) !important;
+  bottom: var(--safe-area-bottom) !important;
+
+  /* Dynamic height calculation */
+  height: var(--available-height) !important;
+  min-height: var(--available-height-dvh) !important;
+
+  /* Responsive padding */
+  padding: clamp(0.5rem, 2vw, 1rem) !important;
+
+  /* Scroll and touch behavior */
+  overflow-y: auto !important;
+  overscroll-behavior: contain !important;
+  -webkit-overflow-scrolling: touch !important;
+
+  /* Visual styling */
+  background: rgba(0, 0, 0, 0.5) !important;
+  backdrop-filter: blur(4px) !important;
+  z-index: 10000 !important;
 }
 
 /* Enhanced modal scrolling - mobile optimized */
@@ -206,4 +287,88 @@ html, body {
 /* Ensure modal content doesn't interfere with background */
 .modal-content {
   isolation: isolate;
+}
+
+/* Dynamic Modal Content Styling */
+.modal-content {
+  /* Perfect centering - no hardcoded margins */
+  margin: auto !important;
+  flex-shrink: 0 !important;
+
+  /* Responsive width constraints */
+  width: 100% !important;
+  max-width: min(90vw, 100%) !important;
+
+  /* Dynamic height based on available space */
+  max-height: calc(var(--available-height) - 2rem) !important;
+  min-height: auto !important;
+
+  /* Ensure proper isolation */
+  isolation: isolate !important;
+
+  /* Smooth transitions */
+  transition: transform 0.2s ease, opacity 0.2s ease !important;
+}
+
+/* Responsive Breakpoints for Modal Content */
+
+/* Small phones (320px - 480px) */
+@media (max-width: 480px) {
+  .modal-content {
+    max-width: 95vw !important;
+    max-height: calc(var(--available-height) - 1rem) !important;
+  }
+
+  .modal-backdrop {
+    padding: 0.5rem !important;
+  }
+}
+
+/* Large phones (481px - 768px) */
+@media (min-width: 481px) and (max-width: 768px) {
+  .modal-content {
+    max-width: 90vw !important;
+    max-height: calc(var(--available-height) - 1.5rem) !important;
+  }
+
+  .modal-backdrop {
+    padding: 0.75rem !important;
+  }
+}
+
+/* Tablets and larger (769px+) */
+@media (min-width: 769px) {
+  .modal-content {
+    max-width: min(85vw, 100%) !important;
+    max-height: calc(var(--available-height) - 2rem) !important;
+  }
+
+  .modal-backdrop {
+    padding: 1rem !important;
+  }
+}
+
+/* Handle very short screens */
+@media (max-height: 500px) {
+  .modal-backdrop {
+    align-items: flex-start !important;
+    padding-top: 0.5rem !important;
+    padding-bottom: 0.5rem !important;
+  }
+
+  .modal-content {
+    max-height: calc(var(--available-height) - 1rem) !important;
+  }
+}
+
+/* Landscape orientation adjustments */
+@media (orientation: landscape) and (max-height: 600px) {
+  .modal-backdrop {
+    align-items: flex-start !important;
+    padding: 0.5rem !important;
+  }
+
+  .modal-content {
+    max-height: calc(var(--available-height) - 1rem) !important;
+  }
 }

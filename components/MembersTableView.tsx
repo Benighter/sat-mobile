@@ -368,44 +368,44 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
           </div>
 
           {/* Role Statistics */}
-          <div className="flex items-center justify-center space-x-4 text-sm mb-4">
-            <div className="flex items-center space-x-1">
-              <span className="w-2 h-2 bg-green-500 rounded-full"></span>
-              <span className="text-gray-700 font-medium">
+          <div className="flex items-center justify-center space-x-8 text-sm mb-4">
+            <div className="flex items-center justify-center space-x-2 min-w-0">
+              <span className="w-3 h-3 bg-green-500 rounded-full flex-shrink-0"></span>
+              <span className="text-gray-700 font-medium whitespace-nowrap">
                 {filteredMembers.filter(m => (m.role || 'Member') === 'Bacenta Leader').length} BL
               </span>
             </div>
-            <div className="flex items-center space-x-1">
-              <span className="w-2 h-2 bg-red-500 rounded-full"></span>
-              <span className="text-gray-700 font-medium">
+            <div className="flex items-center justify-center space-x-2 min-w-0">
+              <span className="w-3 h-3 bg-red-500 rounded-full flex-shrink-0"></span>
+              <span className="text-gray-700 font-medium whitespace-nowrap">
                 {filteredMembers.filter(m => (m.role || 'Member') === 'Fellowship Leader').length} FL
               </span>
             </div>
-            <div className="flex items-center space-x-1">
-              <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
-              <span className="text-gray-700 font-medium">
+            <div className="flex items-center justify-center space-x-2 min-w-0">
+              <span className="w-3 h-3 bg-blue-500 rounded-full flex-shrink-0"></span>
+              <span className="text-gray-700 font-medium whitespace-nowrap">
                 {filteredMembers.filter(m => (m.role || 'Member') === 'Member').length} M
               </span>
             </div>
           </div>
 
           {/* Navigation */}
-          <div className="flex items-center justify-center space-x-3 mb-4">
+          <div className="flex items-center justify-center space-x-4 mb-4">
             <button
               onClick={navigateToPreviousMonth}
-              className="flex items-center space-x-1 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+              className="flex items-center justify-center w-10 h-10 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-lg transition-colors duration-200 shadow-sm"
               aria-label="Previous month"
+              title="Previous month"
             >
-              <ChevronLeftIcon className="w-4 h-4 text-gray-600" />
-              <span className="text-sm text-gray-700">Previous</span>
+              <ChevronLeftIcon className="w-5 h-5" />
             </button>
             <button
               onClick={navigateToNextMonth}
-              className="flex items-center space-x-1 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+              className="flex items-center justify-center w-10 h-10 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-lg transition-colors duration-200 shadow-sm"
               aria-label="Next month"
+              title="Next month"
             >
-              <span className="text-sm text-gray-700">Next</span>
-              <ChevronRightIcon className="w-4 h-4 text-gray-600" />
+              <ChevronRightIcon className="w-5 h-5" />
             </button>
           </div>
 
