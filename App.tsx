@@ -38,6 +38,7 @@ import NewBelieverFormModal from './components/NewBelieverFormModal'; // Import 
 import HierarchyModal from './components/HierarchyModal';
 import DataManagement from './components/DataManagement';
 import EnhancedProfileDropdown from './components/EnhancedProfileDropdown';
+import OfflineIndicator from './components/OfflineIndicator';
 import PendingInviteNotification from './components/PendingInviteNotification';
 import DeletionRequestNotificationBadge from './components/DeletionRequestNotificationBadge';
 import { DeleteMemberModal, DeleteBacentaModal, DeleteNewBelieverModal, ClearAllDataModal, ClearSelectedDataModal, CreateDeletionRequestModal } from './components/ConfirmationModal';
@@ -222,6 +223,9 @@ const AppContent: React.FC = memo(() => {
 
   return (
     <div className="h-screen flex flex-col relative overflow-hidden">
+      {/* Offline Indicator */}
+      <OfflineIndicator />
+
       {/* Animated background overlay */}
       <div className="fixed inset-0 bg-gradient-to-br from-white/50 via-gray-50/30 to-gray-100/20 pointer-events-none"></div>
 

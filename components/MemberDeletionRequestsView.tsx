@@ -16,7 +16,8 @@ import {
   ExclamationTriangleIcon,
   SearchIcon,
   CalendarIcon,
-  UserGroupIcon
+  UserGroupIcon,
+  InformationCircleIcon
 } from './icons';
 
 interface MemberDeletionRequestsViewProps {
@@ -30,6 +31,8 @@ const MemberDeletionRequestsView: React.FC<MemberDeletionRequestsViewProps> = ()
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | DeletionRequestStatus>('all');
   const [processingRequestId, setProcessingRequestId] = useState<string | null>(null);
+  const [isClearingCompleted, setIsClearingCompleted] = useState(false);
+  const [showClearConfirmation, setShowClearConfirmation] = useState(false);
 
   // Check if current user is admin
   const isAdmin = hasAdminPrivileges(userProfile);
@@ -131,24 +134,54 @@ const MemberDeletionRequestsView: React.FC<MemberDeletionRequestsViewProps> = ()
         adminNotes: adminNotes || 'Request rejected by administrator'
       });
       
-      showToast('success', 'Request Rejected', 
+      showToast('success', 'Request Rejected',
         `Deletion request for ${request.memberName} has been rejected.`);
     } catch (error: any) {
       console.error('Error rejecting deletion request:', error);
-      showToast('error', 'Rejection Failed', 
+      showToast('error', 'Rejection Failed',
         'Failed to reject deletion request. Please try again.');
     } finally {
       setProcessingRequestId(null);
     }
   };
 
-  // Get status badge variant
-  const getStatusBadgeVariant = (status: DeletionRequestStatus) => {
+  // Handle clear completed requests
+  const handleClearCompleted = async () => {
+    if (!isAdmin) {
+      showToast('error', 'Access Denied', 'Only administrators can clear completed requests');
+      return;
+    }
+
+    try {
+      setIsClearingCompleted(true);
+      const clearedCount = await memberDeletionRequestService.clearCompletedRequests();
+
+      if (clearedCount > 0) {
+        showToast('success', 'Completed Requests Cleared',
+          `Successfully cleared ${clearedCount} completed deletion request${clearedCount !== 1 ? 's' : ''}`);
+
+        // Refresh the deletion requests list
+        const updatedRequests = await memberDeletionRequestService.getAll();
+        setDeletionRequests(updatedRequests);
+      } else {
+        showToast('info', 'No Requests to Clear', 'There are no completed deletion requests to clear');
+      }
+    } catch (error: any) {
+      console.error('❌ Failed to clear completed requests:', error);
+      showToast('error', 'Failed to clear requests', error.message);
+    } finally {
+      setIsClearingCompleted(false);
+      setShowClearConfirmation(false);
+    }
+  };
+
+  // Get status badge color
+  const getStatusBadgeColor = (status: DeletionRequestStatus): 'gray' | 'red' | 'yellow' | 'green' | 'blue' => {
     switch (status) {
-      case 'pending': return 'warning';
-      case 'approved': return 'success';
-      case 'rejected': return 'error';
-      default: return 'default';
+      case 'pending': return 'yellow';
+      case 'approved': return 'green';
+      case 'rejected': return 'red';
+      default: return 'gray';
     }
   };
 
@@ -173,21 +206,49 @@ const MemberDeletionRequestsView: React.FC<MemberDeletionRequestsViewProps> = ()
     <div className="flex flex-col h-full bg-gray-50">
       {/* Header */}
       <div className="bg-white border-b border-gray-200 px-6 py-4">
-        <div className="flex items-center space-x-3">
-          <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
-            <ExclamationTriangleIcon className="w-6 h-6 text-red-600" />
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
+              <ExclamationTriangleIcon className="w-6 h-6 text-red-600" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">Member Deletion Requests</h1>
+              <p className="text-sm text-gray-600">
+                Review and manage member deletion requests from leaders
+                {pendingCount > 0 && (
+                  <span className="ml-2 inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                    {pendingCount} pending
+                  </span>
+                )}
+              </p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Member Deletion Requests</h1>
-            <p className="text-sm text-gray-600">
-              Review and manage member deletion requests from leaders
-              {pendingCount > 0 && (
-                <span className="ml-2 inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-                  {pendingCount} pending
-                </span>
-              )}
-            </p>
-          </div>
+
+          {/* Clear Completed Requests Button */}
+          {(() => {
+            const completedCount = deletionRequests.filter(r => r.status === 'approved' || r.status === 'rejected').length;
+            return completedCount > 0 && (
+              <Button
+                onClick={() => setShowClearConfirmation(true)}
+                variant="secondary"
+                size="sm"
+                disabled={isClearingCompleted}
+                className="flex items-center space-x-2 text-gray-600 hover:text-gray-800"
+              >
+                {isClearingCompleted ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600"></div>
+                    <span>Clearing...</span>
+                  </>
+                ) : (
+                  <>
+                    <TrashIcon className="w-4 h-4" />
+                    <span>Clear Completed ({completedCount})</span>
+                  </>
+                )}
+              </Button>
+            );
+          })()}
         </div>
       </div>
 
@@ -250,7 +311,7 @@ const MemberDeletionRequestsView: React.FC<MemberDeletionRequestsViewProps> = ()
                   onApprove={() => handleApprove(request)}
                   onReject={(notes) => handleReject(request, notes)}
                   isProcessing={processingRequestId === request.id}
-                  getStatusBadgeVariant={getStatusBadgeVariant}
+                  getStatusBadgeColor={getStatusBadgeColor}
                   getStatusIcon={getStatusIcon}
                 />
               ))}
@@ -258,6 +319,75 @@ const MemberDeletionRequestsView: React.FC<MemberDeletionRequestsViewProps> = ()
           )}
         </div>
       </div>
+
+      {/* Clear Completed Requests Confirmation Modal */}
+      {showClearConfirmation && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black bg-opacity-50 backdrop-blur-sm" onClick={() => setShowClearConfirmation(false)}></div>
+          <div className="relative bg-white rounded-xl shadow-2xl p-6 max-w-md w-full">
+            <div className="flex items-center space-x-3 mb-4">
+              <div className="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center">
+                <TrashIcon className="w-5 h-5 text-orange-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Clear Completed Requests</h3>
+                <p className="text-sm text-gray-600">Permanently delete processed requests</p>
+              </div>
+            </div>
+
+            <div className="mb-4">
+              <p className="text-sm text-gray-700 mb-3">
+                This will permanently delete all deletion request records that have been approved or rejected.
+                Pending requests will not be affected.
+              </p>
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                <div className="flex items-start space-x-2">
+                  <ExclamationTriangleIcon className="w-4 h-4 text-yellow-600 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <p className="text-sm font-medium text-yellow-800 mb-1">Important</p>
+                    <ul className="text-xs text-yellow-700 space-y-1">
+                      <li>• This action cannot be undone</li>
+                      <li>• Only request records will be deleted (not member data)</li>
+                      <li>• {deletionRequests.filter(r => r.status === 'approved' || r.status === 'rejected').length} completed requests will be removed</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end space-x-3">
+              <Button
+                onClick={() => setShowClearConfirmation(false)}
+                variant="secondary"
+                size="sm"
+                className="px-4 py-2"
+                disabled={isClearingCompleted}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleClearCompleted}
+                variant="danger"
+                size="sm"
+                className="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white"
+                disabled={isClearingCompleted}
+              >
+                {isClearingCompleted ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    Clearing...
+                  </>
+                ) : (
+                  <>
+                    <TrashIcon className="w-4 h-4 mr-2" />
+                    Clear Completed
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -268,7 +398,7 @@ interface RequestCardProps {
   onApprove: () => void;
   onReject: (notes?: string) => void;
   isProcessing: boolean;
-  getStatusBadgeVariant: (status: DeletionRequestStatus) => string;
+  getStatusBadgeColor: (status: DeletionRequestStatus) => 'gray' | 'red' | 'yellow' | 'green' | 'blue';
   getStatusIcon: (status: DeletionRequestStatus) => React.ReactNode;
 }
 
@@ -277,7 +407,7 @@ const RequestCard: React.FC<RequestCardProps> = ({
   onApprove,
   onReject,
   isProcessing,
-  getStatusBadgeVariant,
+  getStatusBadgeColor,
   getStatusIcon
 }) => {
   const [showRejectModal, setShowRejectModal] = useState(false);
@@ -291,115 +421,172 @@ const RequestCard: React.FC<RequestCardProps> = ({
 
   return (
     <>
-      <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm hover:shadow-md transition-shadow">
-        <div className="flex items-start justify-between mb-4">
-          <div className="flex items-start space-x-4">
-            <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
-              <UserIcon className="w-6 h-6 text-blue-600" />
-            </div>
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900">{request.memberName}</h3>
-              <p className="text-sm text-gray-600">
-                Requested by: <span className="font-medium">{request.requestedByName}</span>
-              </p>
-              <div className="flex items-center space-x-4 mt-2 text-sm text-gray-500">
-                <div className="flex items-center space-x-1">
-                  <CalendarIcon className="w-4 h-4" />
-                  <span>Requested: {formatISODate(request.requestedAt)}</span>
-                </div>
-                {request.reviewedAt && (
-                  <div className="flex items-center space-x-1">
-                    <CalendarIcon className="w-4 h-4" />
-                    <span>Reviewed: {formatISODate(request.reviewedAt)}</span>
-                  </div>
-                )}
+      <div className="bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-lg transition-all duration-200 overflow-hidden">
+        {/* Header Section with Status Badge */}
+        <div className="bg-gradient-to-r from-gray-50 to-gray-100 px-6 py-4 border-b border-gray-200">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
+                <UserIcon className="w-5 h-5 text-blue-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">{request.memberName}</h3>
+                <p className="text-sm text-gray-600">Member deletion request</p>
               </div>
             </div>
-          </div>
-          <div className="flex items-center space-x-3">
-            <Badge variant={getStatusBadgeVariant(request.status)} className="flex items-center space-x-1">
+            <Badge
+              color={getStatusBadgeColor(request.status)}
+              className="flex items-center space-x-1.5 px-3 py-1.5 text-sm font-medium"
+            >
               {getStatusIcon(request.status)}
               <span className="capitalize">{request.status}</span>
             </Badge>
           </div>
         </div>
 
-        {request.reason && (
-          <div className="mb-4 p-3 bg-gray-50 rounded-lg">
-            <p className="text-sm text-gray-700">
-              <span className="font-medium">Reason:</span> {request.reason}
-            </p>
-          </div>
-        )}
+        {/* Main Content Section */}
+        <div className="p-6 space-y-4">
+          {/* Request Details */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <div className="flex items-center space-x-2 text-sm">
+                <UserIcon className="w-4 h-4 text-gray-400" />
+                <span className="text-gray-600">Requested by:</span>
+                <span className="font-medium text-gray-900">{request.requestedByName}</span>
+              </div>
+              <div className="flex items-center space-x-2 text-sm">
+                <CalendarIcon className="w-4 h-4 text-gray-400" />
+                <span className="text-gray-600">Requested:</span>
+                <span className="font-medium text-gray-900">{formatISODate(request.requestedAt)}</span>
+              </div>
+            </div>
 
-        {request.adminNotes && (
-          <div className="mb-4 p-3 bg-blue-50 rounded-lg">
-            <p className="text-sm text-blue-700">
-              <span className="font-medium">Admin Notes:</span> {request.adminNotes}
-            </p>
-          </div>
-        )}
-
-        {request.reviewedByName && (
-          <div className="mb-4 text-sm text-gray-600">
-            Reviewed by: <span className="font-medium">{request.reviewedByName}</span>
-          </div>
-        )}
-
-        {request.status === 'pending' && (
-          <div className="flex items-center space-x-3 pt-4 border-t border-gray-200">
-            <Button
-              onClick={onApprove}
-              variant="danger"
-              size="sm"
-              disabled={isProcessing}
-              className="flex items-center space-x-2"
-            >
-              <CheckIcon className="w-4 h-4" />
-              <span>Approve & Delete</span>
-            </Button>
-            <Button
-              onClick={() => setShowRejectModal(true)}
-              variant="secondary"
-              size="sm"
-              disabled={isProcessing}
-              className="flex items-center space-x-2"
-            >
-              <XMarkIcon className="w-4 h-4" />
-              <span>Reject</span>
-            </Button>
-            {isProcessing && (
-              <div className="flex items-center space-x-2 text-sm text-gray-600">
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
-                <span>Processing...</span>
+            {request.reviewedAt && (
+              <div className="space-y-2">
+                <div className="flex items-center space-x-2 text-sm">
+                  <CalendarIcon className="w-4 h-4 text-gray-400" />
+                  <span className="text-gray-600">Reviewed:</span>
+                  <span className="font-medium text-gray-900">{formatISODate(request.reviewedAt)}</span>
+                </div>
+                {request.reviewedByName && (
+                  <div className="flex items-center space-x-2 text-sm">
+                    <UserIcon className="w-4 h-4 text-gray-400" />
+                    <span className="text-gray-600">Reviewed by:</span>
+                    <span className="font-medium text-gray-900">{request.reviewedByName}</span>
+                  </div>
+                )}
               </div>
             )}
+          </div>
+
+          {/* Reason Section */}
+          {request.reason && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+              <div className="flex items-start space-x-2">
+                <ExclamationTriangleIcon className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="text-sm font-medium text-amber-800 mb-1">Deletion Reason</p>
+                  <p className="text-sm text-amber-700">{request.reason}</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Admin Notes Section */}
+          {request.adminNotes && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <div className="flex items-start space-x-2">
+                <InformationCircleIcon className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="text-sm font-medium text-blue-800 mb-1">Admin Notes</p>
+                  <p className="text-sm text-blue-700">{request.adminNotes}</p>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Action Buttons for Pending Requests */}
+        {request.status === 'pending' && (
+          <div className="bg-gray-50 px-6 py-4 border-t border-gray-200">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <Button
+                  onClick={onApprove}
+                  variant="danger"
+                  size="sm"
+                  disabled={isProcessing}
+                  className="flex items-center space-x-2 bg-green-600 hover:bg-green-700 text-white border-green-600 hover:border-green-700"
+                >
+                  <CheckIcon className="w-4 h-4" />
+                  <span>Approve & Delete</span>
+                </Button>
+                <Button
+                  onClick={() => setShowRejectModal(true)}
+                  variant="secondary"
+                  size="sm"
+                  disabled={isProcessing}
+                  className="flex items-center space-x-2 bg-red-600 hover:bg-red-700 text-white border-red-600 hover:border-red-700"
+                >
+                  <XMarkIcon className="w-4 h-4" />
+                  <span>Reject</span>
+                </Button>
+              </div>
+              {isProcessing && (
+                <div className="flex items-center space-x-2 text-sm text-gray-600">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                  <span>Processing...</span>
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>
 
       {/* Reject Modal */}
       {showRejectModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black bg-opacity-50" onClick={() => setShowRejectModal(false)}></div>
-          <div className="relative bg-white rounded-lg p-6 max-w-md w-full mx-4">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Reject Deletion Request</h3>
-            <p className="text-sm text-gray-600 mb-4">
-              Provide a reason for rejecting the deletion request for {request.memberName}:
-            </p>
-            <textarea
-              value={rejectNotes}
-              onChange={(e) => setRejectNotes(e.target.value)}
-              placeholder="Enter rejection reason (optional)..."
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
-              rows={3}
-            />
-            <div className="flex items-center space-x-3 mt-4">
-              <Button onClick={handleRejectSubmit} variant="danger" size="sm">
-                Reject Request
-              </Button>
-              <Button onClick={() => setShowRejectModal(false)} variant="secondary" size="sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black bg-opacity-50 backdrop-blur-sm" onClick={() => setShowRejectModal(false)}></div>
+          <div className="relative bg-white rounded-xl shadow-2xl p-6 max-w-md w-full">
+            <div className="flex items-center space-x-3 mb-4">
+              <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
+                <XMarkIcon className="w-5 h-5 text-red-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Reject Deletion Request</h3>
+                <p className="text-sm text-gray-600">For {request.memberName}</p>
+              </div>
+            </div>
+
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Rejection Reason (Optional)
+              </label>
+              <textarea
+                value={rejectNotes}
+                onChange={(e) => setRejectNotes(e.target.value)}
+                placeholder="Provide a reason for rejecting this deletion request..."
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 resize-none"
+                rows={3}
+              />
+            </div>
+
+            <div className="flex items-center justify-end space-x-3">
+              <Button
+                onClick={() => setShowRejectModal(false)}
+                variant="secondary"
+                size="sm"
+                className="px-4 py-2"
+              >
                 Cancel
+              </Button>
+              <Button
+                onClick={handleRejectSubmit}
+                variant="danger"
+                size="sm"
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white"
+              >
+                Reject Request
               </Button>
             </div>
           </div>

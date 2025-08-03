@@ -93,8 +93,19 @@ const DashboardView: React.FC = memo(() => {
           // Default to total member count if no target is set
           setConfirmationTarget(totalMembers);
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error loading confirmation target for dashboard:', error);
+
+        // Check if it's an offline error
+        const isOffline = error?.code === 'unavailable' ||
+                         error?.message?.includes('offline') ||
+                         error?.message?.includes('network') ||
+                         error?.message?.includes('backend');
+
+        if (isOffline) {
+          console.log('Dashboard operating in offline mode - using cached data');
+        }
+
         // Fallback to member count
         setConfirmationTarget(totalMembers);
       }

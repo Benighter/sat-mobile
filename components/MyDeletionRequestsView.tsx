@@ -51,13 +51,13 @@ const MyDeletionRequestsView: React.FC<MyDeletionRequestsViewProps> = () => {
     });
   }, [myRequests, searchTerm, statusFilter]);
 
-  // Get status badge variant
-  const getStatusBadgeVariant = (status: DeletionRequestStatus) => {
+  // Get status badge color
+  const getStatusBadgeColor = (status: DeletionRequestStatus): 'gray' | 'red' | 'yellow' | 'green' | 'blue' => {
     switch (status) {
-      case 'pending': return 'warning';
-      case 'approved': return 'success';
-      case 'rejected': return 'error';
-      default: return 'default';
+      case 'pending': return 'yellow';
+      case 'approved': return 'green';
+      case 'rejected': return 'red';
+      default: return 'gray';
     }
   };
 
@@ -183,7 +183,7 @@ const MyDeletionRequestsView: React.FC<MyDeletionRequestsViewProps> = () => {
                 <RequestCard
                   key={request.id}
                   request={request}
-                  getStatusBadgeVariant={getStatusBadgeVariant}
+                  getStatusBadgeColor={getStatusBadgeColor}
                   getStatusIcon={getStatusIcon}
                   getStatusDescription={getStatusDescription}
                   isCloseToExpiry={isCloseToExpiry}
@@ -218,7 +218,7 @@ const MyDeletionRequestsView: React.FC<MyDeletionRequestsViewProps> = () => {
 // Request Card Component
 interface RequestCardProps {
   request: MemberDeletionRequest;
-  getStatusBadgeVariant: (status: DeletionRequestStatus) => string;
+  getStatusBadgeColor: (status: DeletionRequestStatus) => 'gray' | 'red' | 'yellow' | 'green' | 'blue';
   getStatusIcon: (status: DeletionRequestStatus) => React.ReactNode;
   getStatusDescription: (status: DeletionRequestStatus, expiresAt?: string) => string;
   isCloseToExpiry: (expiresAt?: string) => boolean;
@@ -226,75 +226,121 @@ interface RequestCardProps {
 
 const RequestCard: React.FC<RequestCardProps> = ({
   request,
-  getStatusBadgeVariant,
+  getStatusBadgeColor,
   getStatusIcon,
   getStatusDescription,
   isCloseToExpiry
 }) => {
   return (
-    <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm hover:shadow-md transition-shadow">
-      <div className="flex items-start justify-between mb-4">
-        <div className="flex items-start space-x-4">
-          <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
-            <UserIcon className="w-6 h-6 text-blue-600" />
-          </div>
-          <div>
-            <h3 className="text-lg font-semibold text-gray-900">{request.memberName}</h3>
-            <p className="text-sm text-gray-600">Deletion request</p>
-            <div className="flex items-center space-x-4 mt-2 text-sm text-gray-500">
-              <div className="flex items-center space-x-1">
-                <CalendarIcon className="w-4 h-4" />
-                <span>Submitted: {formatISODate(request.requestedAt)}</span>
-              </div>
-              {request.reviewedAt && (
-                <div className="flex items-center space-x-1">
-                  <CalendarIcon className="w-4 h-4" />
-                  <span>Reviewed: {formatISODate(request.reviewedAt)}</span>
-                </div>
-              )}
+    <div className="bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-lg transition-all duration-200 overflow-hidden">
+      {/* Header Section with Status Badge */}
+      <div className="bg-gradient-to-r from-gray-50 to-gray-100 px-6 py-4 border-b border-gray-200">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
+              <UserIcon className="w-5 h-5 text-blue-600" />
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">{request.memberName}</h3>
+              <p className="text-sm text-gray-600">My deletion request</p>
             </div>
           </div>
-        </div>
-        <div className="flex items-center space-x-3">
-          <Badge variant={getStatusBadgeVariant(request.status)} className="flex items-center space-x-1">
+          <Badge
+            color={getStatusBadgeColor(request.status)}
+            className="flex items-center space-x-1.5 px-3 py-1.5 text-sm font-medium"
+          >
             {getStatusIcon(request.status)}
             <span className="capitalize">{request.status}</span>
           </Badge>
         </div>
       </div>
 
-      <div className={`mb-4 p-3 rounded-lg ${isCloseToExpiry(request.expiresAt) ? 'bg-yellow-50 border border-yellow-200' : 'bg-gray-50'}`}>
-        <p className={`text-sm ${isCloseToExpiry(request.expiresAt) ? 'text-yellow-700' : 'text-gray-700'}`}>
-          <span className="font-medium">Status:</span> {getStatusDescription(request.status, request.expiresAt)}
-        </p>
-        {isCloseToExpiry(request.expiresAt) && (
-          <p className="text-xs text-yellow-600 mt-1 font-medium">
-            ⚠️ This request will expire soon!
-          </p>
+      {/* Main Content Section */}
+      <div className="p-6 space-y-4">
+        {/* Request Details */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <div className="flex items-center space-x-2 text-sm">
+              <CalendarIcon className="w-4 h-4 text-gray-400" />
+              <span className="text-gray-600">Submitted:</span>
+              <span className="font-medium text-gray-900">{formatISODate(request.requestedAt)}</span>
+            </div>
+            {request.expiresAt && (
+              <div className="flex items-center space-x-2 text-sm">
+                <ClockIcon className="w-4 h-4 text-gray-400" />
+                <span className="text-gray-600">Expires:</span>
+                <span className={`font-medium ${isCloseToExpiry(request.expiresAt) ? 'text-yellow-600' : 'text-gray-900'}`}>
+                  {formatISODate(request.expiresAt)}
+                </span>
+              </div>
+            )}
+          </div>
+
+          {request.reviewedAt && (
+            <div className="space-y-2">
+              <div className="flex items-center space-x-2 text-sm">
+                <CalendarIcon className="w-4 h-4 text-gray-400" />
+                <span className="text-gray-600">Reviewed:</span>
+                <span className="font-medium text-gray-900">{formatISODate(request.reviewedAt)}</span>
+              </div>
+              {request.reviewedByName && (
+                <div className="flex items-center space-x-2 text-sm">
+                  <UserIcon className="w-4 h-4 text-gray-400" />
+                  <span className="text-gray-600">Reviewed by:</span>
+                  <span className="font-medium text-gray-900">{request.reviewedByName}</span>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Status Description */}
+        <div className={`rounded-lg p-4 ${isCloseToExpiry(request.expiresAt) ? 'bg-yellow-50 border border-yellow-200' : 'bg-gray-50 border border-gray-200'}`}>
+          <div className="flex items-start space-x-2">
+            <InformationCircleIcon className={`w-4 h-4 mt-0.5 flex-shrink-0 ${isCloseToExpiry(request.expiresAt) ? 'text-yellow-600' : 'text-gray-600'}`} />
+            <div>
+              <p className={`text-sm font-medium mb-1 ${isCloseToExpiry(request.expiresAt) ? 'text-yellow-800' : 'text-gray-800'}`}>
+                Request Status
+              </p>
+              <p className={`text-sm ${isCloseToExpiry(request.expiresAt) ? 'text-yellow-700' : 'text-gray-700'}`}>
+                {getStatusDescription(request.status, request.expiresAt)}
+              </p>
+              {isCloseToExpiry(request.expiresAt) && (
+                <p className="text-xs text-yellow-600 mt-2 font-medium flex items-center space-x-1">
+                  <ExclamationTriangleIcon className="w-3 h-3" />
+                  <span>This request will expire soon!</span>
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Reason Section */}
+        {request.reason && (
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+            <div className="flex items-start space-x-2">
+              <ExclamationTriangleIcon className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
+              <div>
+                <p className="text-sm font-medium text-amber-800 mb-1">Deletion Reason</p>
+                <p className="text-sm text-amber-700">{request.reason}</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Admin Notes Section */}
+        {request.adminNotes && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <div className="flex items-start space-x-2">
+              <InformationCircleIcon className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
+              <div>
+                <p className="text-sm font-medium text-blue-800 mb-1">Admin Notes</p>
+                <p className="text-sm text-blue-700">{request.adminNotes}</p>
+              </div>
+            </div>
+          </div>
         )}
       </div>
-
-      {request.reason && (
-        <div className="mb-4 p-3 bg-blue-50 rounded-lg">
-          <p className="text-sm text-blue-700">
-            <span className="font-medium">Reason:</span> {request.reason}
-          </p>
-        </div>
-      )}
-
-      {request.adminNotes && (
-        <div className="mb-4 p-3 bg-yellow-50 rounded-lg">
-          <p className="text-sm text-yellow-700">
-            <span className="font-medium">Admin Notes:</span> {request.adminNotes}
-          </p>
-        </div>
-      )}
-
-      {request.reviewedByName && (
-        <div className="text-sm text-gray-600">
-          Reviewed by: <span className="font-medium">{request.reviewedByName}</span>
-        </div>
-      )}
     </div>
   );
 };

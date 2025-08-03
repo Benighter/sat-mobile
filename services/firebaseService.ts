@@ -347,15 +347,17 @@ export const membersFirebaseService = {
   // Get all members
   getAll: async (): Promise<Member[]> => {
     try {
-      const membersRef = collection(db, getChurchCollectionPath('members'));
-      const querySnapshot = await getDocs(query(membersRef, where('isActive', '==', true)));
-      
-      return querySnapshot.docs.map(doc => ({
-        ...doc.data(),
-        id: doc.id
-      })) as Member[];
+      return await firebaseUtils.retryOperation(async () => {
+        const membersRef = collection(db, getChurchCollectionPath('members'));
+        const querySnapshot = await getDocs(query(membersRef, where('isActive', '==', true)));
+
+        return querySnapshot.docs.map(doc => ({
+          ...doc.data(),
+          id: doc.id
+        })) as Member[];
+      });
     } catch (error: any) {
-      throw new Error(`Failed to fetch members: ${error.message}`);
+      throw firebaseUtils.handleOfflineError('Fetch members', error);
     }
   },
 
@@ -974,6 +976,35 @@ export const memberDeletionRequestService = {
     });
   },
 
+  // Clear all completed requests (approved/rejected) regardless of age
+  clearCompletedRequests: async (): Promise<number> => {
+    try {
+      const requestsRef = collection(db, getChurchCollectionPath('memberDeletionRequests'));
+
+      // Get all approved/rejected requests
+      const completedRequestsQuery = query(
+        requestsRef,
+        where('status', 'in', ['approved', 'rejected'])
+      );
+
+      const completedRequestsSnapshot = await getDocs(completedRequestsQuery);
+      const batch = writeBatch(db);
+
+      completedRequestsSnapshot.docs.forEach(doc => {
+        batch.delete(doc.ref);
+      });
+
+      await batch.commit();
+
+      const totalCleared = completedRequestsSnapshot.docs.length;
+      console.log(`Cleared ${totalCleared} completed deletion requests`);
+      return totalCleared;
+    } catch (error: any) {
+      console.error('Failed to clear completed deletion requests:', error);
+      throw new Error(`Failed to clear completed deletion requests: ${error.message}`);
+    }
+  },
+
   // Clean up old requests (approved/rejected older than 30 days)
   cleanupOldRequests: async (): Promise<void> => {
     try {
@@ -1065,6 +1096,44 @@ export const memberDeletionRequestService = {
 
 // Utility Functions
 export const firebaseUtils = {
+  // Check if error is due to offline status
+  isOfflineError: (error: any): boolean => {
+    return error?.code === 'unavailable' ||
+           error?.message?.includes('offline') ||
+           error?.message?.includes('network') ||
+           error?.message?.includes('backend');
+  },
+
+  // Handle offline errors gracefully
+  handleOfflineError: (operation: string, error: any): Error => {
+    if (firebaseUtils.isOfflineError(error)) {
+      return new Error(`${operation} failed: You appear to be offline. Please check your internet connection and try again.`);
+    }
+    return new Error(`${operation} failed: ${error.message}`);
+  },
+
+  // Retry operation with exponential backoff
+  retryOperation: async <T>(
+    operation: () => Promise<T>,
+    maxRetries: number = 3,
+    baseDelay: number = 1000
+  ): Promise<T> => {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        return await operation();
+      } catch (error: any) {
+        if (attempt === maxRetries || !firebaseUtils.isOfflineError(error)) {
+          throw error;
+        }
+
+        const delay = baseDelay * Math.pow(2, attempt - 1);
+        console.log(`Attempt ${attempt} failed, retrying in ${delay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+    throw new Error('Max retries exceeded');
+  },
+
   // Enable offline persistence
   enableOffline: async (): Promise<void> => {
     try {
