@@ -13,7 +13,9 @@ import {
   LazyAttendanceAnalyticsView,
   LazyWeeklyAttendanceView,
   LazySundayConfirmationsView,
-  LazyNewBelieversView
+  LazyNewBelieversView,
+  LazyMyDeletionRequestsView,
+  LazyMemberDeletionRequestsView
 } from './components/LazyWrapper';
 import ProfileSettingsView from './components/ProfileSettingsView';
 import GestureWrapper from './components/GestureWrapper';
@@ -37,7 +39,8 @@ import HierarchyModal from './components/HierarchyModal';
 import DataManagement from './components/DataManagement';
 import EnhancedProfileDropdown from './components/EnhancedProfileDropdown';
 import PendingInviteNotification from './components/PendingInviteNotification';
-import { DeleteMemberModal, DeleteBacentaModal, DeleteNewBelieverModal, ClearAllDataModal, ClearSelectedDataModal } from './components/ConfirmationModal';
+import DeletionRequestNotificationBadge from './components/DeletionRequestNotificationBadge';
+import { DeleteMemberModal, DeleteBacentaModal, DeleteNewBelieverModal, ClearAllDataModal, ClearSelectedDataModal, CreateDeletionRequestModal } from './components/ConfirmationModal';
 import WhatsNewModal from './components/WhatsNewModal';
 import { useWhatsNew } from './hooks/useWhatsNew';
 
@@ -196,6 +199,18 @@ const AppContent: React.FC = memo(() => {
         );
       case TabKeys.PROFILE_SETTINGS:
         return <ProfileSettingsView />;
+      case TabKeys.MY_DELETION_REQUESTS:
+        return (
+          <LazyWrapper>
+            <LazyMyDeletionRequestsView />
+          </LazyWrapper>
+        );
+      case TabKeys.ADMIN_DELETION_REQUESTS:
+        return (
+          <LazyWrapper>
+            <LazyMemberDeletionRequestsView />
+          </LazyWrapper>
+        );
       default:
         return (
           <LazyWrapper>
@@ -258,8 +273,11 @@ const AppContent: React.FC = memo(() => {
               </span>
             </div>
 
-            {/* Right Section - Profile */}
+            {/* Right Section - Notifications and Profile */}
             <div className="flex items-center space-x-2 sm:space-x-3">
+              {/* Deletion Request Notification Badge */}
+              <DeletionRequestNotificationBadge />
+
               {/* Enhanced Profile Dropdown */}
               <EnhancedProfileDropdown
                 user={user}
@@ -387,6 +405,15 @@ const AppContent: React.FC = memo(() => {
           totalAttendance={confirmationModal.data?.totalAttendance || 0}
           totalNewBelievers={confirmationModal.data?.totalNewBelievers || 0}
           includeUnassigned={confirmationModal.data?.includeUnassigned || false}
+        />
+      )}
+
+      {confirmationModal.type === 'createDeletionRequest' && (
+        <CreateDeletionRequestModal
+          isOpen={confirmationModal.isOpen}
+          onClose={closeConfirmationModal}
+          onConfirm={confirmationModal.onConfirm}
+          memberName={`${confirmationModal.data?.member?.firstName || ''} ${confirmationModal.data?.member?.lastName || ''}`.trim() || 'Unknown Member'}
         />
       )}
 

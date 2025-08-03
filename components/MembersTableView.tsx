@@ -1,10 +1,11 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useAppContext } from '../contexts/FirebaseAppContext';
-import { Member, ConfirmationStatus } from '../types';
+import { Member, ConfirmationStatus, MemberDeletionRequest } from '../types';
 import { formatDisplayDate, getSundaysOfMonth, getMonthName, formatDateToYYYYMMDD, getUpcomingSunday } from '../utils/dateUtils';
 import { isDateEditable } from '../utils/attendanceUtils';
-import { canDeleteMemberWithRole } from '../utils/permissionUtils';
+import { canDeleteMemberWithRole, hasAdminPrivileges } from '../utils/permissionUtils';
 import { SmartTextParser } from '../utils/smartTextParser';
+import { memberDeletionRequestService } from '../services/firebaseService';
 import { UserIcon, TrashIcon, PhoneIcon, CalendarIcon, ChevronLeftIcon, ChevronRightIcon, EllipsisVerticalIcon, CheckIcon, ClockIcon } from './icons';
 import Button from './ui/Button';
 import Input from './ui/Input';
@@ -335,6 +336,8 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
             deleteMemberHandler={deleteMemberHandler}
             showConfirmation={showConfirmation}
             userProfile={userProfile}
+            members={members}
+            showToast={showToast}
           />
         );
       },
@@ -556,6 +559,8 @@ interface MemberActionsDropdownProps {
   deleteMemberHandler: (memberId: string) => void;
   showConfirmation: (type: string, data: any, callback: () => void) => void;
   userProfile: any;
+  members: Member[];
+  showToast: (type: string, title: string, message: string) => void;
 }
 
 const MemberActionsDropdown: React.FC<MemberActionsDropdownProps> = ({
@@ -565,7 +570,9 @@ const MemberActionsDropdown: React.FC<MemberActionsDropdownProps> = ({
   markConfirmationHandler,
   deleteMemberHandler,
   showConfirmation,
-  userProfile
+  userProfile,
+  members,
+  showToast
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -592,13 +599,78 @@ const MemberActionsDropdown: React.FC<MemberActionsDropdownProps> = ({
     setIsOpen(false);
   };
 
-  const handleRemove = () => {
+  const handleRemove = async () => {
     setIsOpen(false);
-    showConfirmation(
-      'deleteMember',
-      { member },
-      () => deleteMemberHandler(member.id)
-    );
+
+    const isAdmin = hasAdminPrivileges(userProfile);
+
+    if (isAdmin) {
+      // Admins can delete directly
+      showConfirmation(
+        'deleteMember',
+        { member },
+        () => deleteMemberHandler(member.id)
+      );
+    } else {
+      // Leaders must create deletion requests
+      try {
+        // Check if there's already a pending request for this member
+        const hasPending = await memberDeletionRequestService.hasPendingRequest(member.id);
+
+        if (hasPending) {
+          showToast('warning', 'Request Already Exists',
+            `A deletion request for ${member.firstName} ${member.lastName || ''} is already pending admin approval.`);
+          return;
+        }
+
+        // Verify member still exists and hasn't been modified
+        const currentMember = members.find(m => m.id === member.id);
+        if (!currentMember) {
+          showToast('error', 'Member Not Found',
+            'This member no longer exists and cannot be deleted.');
+          return;
+        }
+
+        // Check if member details have changed significantly
+        if (currentMember.firstName !== member.firstName ||
+            currentMember.lastName !== member.lastName ||
+            currentMember.role !== member.role) {
+          showToast('warning', 'Member Details Changed',
+            'This member\'s details have been updated. Please refresh and try again.');
+          return;
+        }
+
+        // Show confirmation dialog explaining the approval process
+        showConfirmation(
+          'createDeletionRequest',
+          { member },
+          async () => {
+            try {
+              await memberDeletionRequestService.create({
+                memberId: member.id,
+                memberName: `${member.firstName} ${member.lastName || ''}`.trim(),
+                requestedBy: userProfile?.uid || '',
+                requestedByName: `${userProfile?.firstName || ''} ${userProfile?.lastName || ''}`.trim(),
+                requestedAt: new Date().toISOString(),
+                status: 'pending',
+                reason: '', // Could be enhanced to ask for reason
+                churchId: userProfile?.churchId || ''
+              });
+
+              showToast('success', 'Deletion Request Submitted',
+                `Your request to delete ${member.firstName} ${member.lastName || ''} has been submitted for admin approval.`);
+            } catch (error: any) {
+              console.error('Error creating deletion request:', error);
+              showToast('error', 'Request Failed',
+                'Failed to submit deletion request. Please try again.');
+            }
+          }
+        );
+      } catch (error: any) {
+        console.error('Error checking pending requests:', error);
+        showToast('error', 'Error', 'Failed to check existing requests. Please try again.');
+      }
+    }
   };
 
   return (

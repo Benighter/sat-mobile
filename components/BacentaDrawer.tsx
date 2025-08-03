@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAppContext } from '../contexts/FirebaseAppContext';
 import { Bacenta, TabKeys } from '../types';
+import { hasAdminPrivileges } from '../utils/permissionUtils';
 import {
   XMarkIcon,
   SearchIcon,
@@ -13,7 +14,8 @@ import {
   ChartBarIcon,
   WarningIcon,
   UserIcon,
-  CheckIcon
+  CheckIcon,
+  ExclamationTriangleIcon
 } from './icons';
 
 interface BacentaDrawerProps {
@@ -236,6 +238,19 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
                   onClose();
                 }}
               />
+
+              {/* Admin Deletion Requests - Only for Admins */}
+              {hasAdminPrivileges(userProfile) && (
+                <NavigationItem
+                  icon={<ExclamationTriangleIcon className="w-4 h-4" />}
+                  label="Admin Deletion Requests"
+                  isActive={currentTab.id === TabKeys.ADMIN_DELETION_REQUESTS}
+                  onClick={() => {
+                    switchTab({ id: TabKeys.ADMIN_DELETION_REQUESTS, name: 'Admin Deletion Requests' });
+                    onClose();
+                  }}
+                />
+              )}
             </div>
           </div>
 

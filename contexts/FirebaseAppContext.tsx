@@ -1,6 +1,6 @@
 // Firebase-enabled App Context
 import React, { createContext, useState, useEffect, useCallback, ReactNode, useMemo } from 'react';
-import { Member, AttendanceRecord, Bacenta, TabOption, AttendanceStatus, TabKeys, NavigationHistoryItem, NewBeliever, SundayConfirmation, ConfirmationStatus, Guest } from '../types';
+import { Member, AttendanceRecord, Bacenta, TabOption, AttendanceStatus, TabKeys, NavigationHistoryItem, NewBeliever, SundayConfirmation, ConfirmationStatus, Guest, MemberDeletionRequest } from '../types';
 import { FIXED_TABS, DEFAULT_TAB_ID } from '../constants';
 import { getSundaysOfMonth, formatDateToYYYYMMDD } from '../utils/dateUtils';
 import {
@@ -10,6 +10,7 @@ import {
   newBelieversFirebaseService,
   confirmationFirebaseService,
   guestFirebaseService,
+  memberDeletionRequestService,
   authService,
   firebaseUtils,
   FirebaseUser
@@ -26,6 +27,7 @@ interface AppContextType {
   newBelievers: NewBeliever[];
   sundayConfirmations: SundayConfirmation[];
   guests: Guest[];
+  memberDeletionRequests: MemberDeletionRequest[];
   
   // UI State
   currentTab: TabOption;
@@ -49,11 +51,11 @@ interface AppContextType {
   // Confirmation Modal
   confirmationModal: {
     isOpen: boolean;
-    type: 'deleteMember' | 'deleteBacenta' | 'deleteNewBeliever' | 'clearData' | 'clearSelectedData' | null;
+    type: 'deleteMember' | 'deleteBacenta' | 'deleteNewBeliever' | 'clearData' | 'clearSelectedData' | 'createDeletionRequest' | null;
     data: any;
     onConfirm: () => void;
   };
-  showConfirmation: (type: 'deleteMember' | 'deleteBacenta' | 'deleteNewBeliever' | 'clearData' | 'clearSelectedData', data: any, onConfirm: () => void) => void;
+  showConfirmation: (type: 'deleteMember' | 'deleteBacenta' | 'deleteNewBeliever' | 'clearData' | 'clearSelectedData' | 'createDeletionRequest', data: any, onConfirm: () => void) => void;
   closeConfirmation: () => void;
   
   // Toasts
@@ -104,6 +106,11 @@ interface AppContextType {
   deleteGuestHandler: (guestId: string) => Promise<void>;
   markGuestConfirmationHandler: (guestId: string, date: string, status: ConfirmationStatus) => Promise<void>;
   convertGuestToMemberHandler: (guestId: string) => Promise<void>;
+
+  // Member Deletion Request Operations
+  createDeletionRequestHandler: (memberId: string, reason?: string) => Promise<void>;
+  approveDeletionRequestHandler: (requestId: string) => Promise<void>;
+  rejectDeletionRequestHandler: (requestId: string, adminNotes?: string) => Promise<void>;
   
   // UI Handlers
   openMemberForm: (member?: Member) => void;
@@ -147,6 +154,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
   const [newBelievers, setNewBelievers] = useState<NewBeliever[]>([]);
   const [sundayConfirmations, setSundayConfirmations] = useState<SundayConfirmation[]>([]);
   const [guests, setGuests] = useState<Guest[]>([]);
+  const [memberDeletionRequests, setMemberDeletionRequests] = useState<MemberDeletionRequest[]>([]);
   
   // UI state
   const [currentTab, setCurrentTab] = useState<TabOption>(FIXED_TABS.find(t => t.id === DEFAULT_TAB_ID) || FIXED_TABS[0]);
@@ -168,7 +176,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
   // Confirmation modal
   const [confirmationModal, setConfirmationModal] = useState<{
     isOpen: boolean;
-    type: 'deleteMember' | 'deleteBacenta' | 'deleteNewBeliever' | 'clearData' | 'clearSelectedData' | null;
+    type: 'deleteMember' | 'deleteBacenta' | 'deleteNewBeliever' | 'clearData' | 'clearSelectedData' | 'createDeletionRequest' | null;
     data: any;
     onConfirm: () => void;
   }>({
@@ -306,6 +314,12 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
         setGuests(guests);
       });
       unsubscribers.push(unsubscribeGuests);
+
+      // Listen to member deletion requests
+      const unsubscribeDeletionRequests = memberDeletionRequestService.onSnapshot((requests) => {
+        setMemberDeletionRequests(requests);
+      });
+      unsubscribers.push(unsubscribeDeletionRequests);
       
     } catch (error: any) {
       setError(error.message);
@@ -365,7 +379,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
   }, []);
 
   // Confirmation modal functions
-  const showConfirmation = useCallback((type: 'deleteMember' | 'deleteBacenta' | 'deleteNewBeliever' | 'clearData' | 'clearSelectedData', data: any, onConfirm: () => void) => {
+  const showConfirmation = useCallback((type: 'deleteMember' | 'deleteBacenta' | 'deleteNewBeliever' | 'clearData' | 'clearSelectedData' | 'createDeletionRequest', data: any, onConfirm: () => void) => {
     setConfirmationModal({
       isOpen: true,
       type,
@@ -962,6 +976,141 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     }
   }, [guests, sundayConfirmations, members, bacentas, showToast]);
 
+  // Member Deletion Request handlers
+  const createDeletionRequestHandler = useCallback(async (memberId: string, reason?: string) => {
+    try {
+      if (!userProfile?.uid) {
+        throw new Error('User not authenticated');
+      }
+
+      // Find the member to get their name
+      const member = members.find(m => m.id === memberId);
+      if (!member) {
+        throw new Error('Member not found');
+      }
+
+      // Check if there's already a pending request for this member
+      const hasPending = await memberDeletionRequestService.hasPendingRequest(memberId);
+      if (hasPending) {
+        throw new Error('A deletion request for this member is already pending');
+      }
+
+      await memberDeletionRequestService.create({
+        memberId,
+        memberName: `${member.firstName} ${member.lastName || ''}`.trim(),
+        requestedBy: userProfile.uid,
+        requestedByName: `${userProfile.firstName || ''} ${userProfile.lastName || ''}`.trim(),
+        requestedAt: new Date().toISOString(),
+        status: 'pending',
+        reason: reason || '',
+        churchId: userProfile.churchId || ''
+      });
+
+      showToast('success', 'Deletion Request Submitted',
+        `Your request to delete ${member.firstName} ${member.lastName || ''} has been submitted for admin approval.`);
+    } catch (error: any) {
+      console.error('❌ Failed to create deletion request:', error);
+      setError(error.message);
+      showToast('error', 'Failed to create deletion request', error.message);
+      throw error;
+    }
+  }, [members, userProfile, showToast]);
+
+  const approveDeletionRequestHandler = useCallback(async (requestId: string) => {
+    try {
+      if (!userProfile?.uid) {
+        throw new Error('User not authenticated');
+      }
+
+      // Find the request
+      const request = memberDeletionRequests.find(r => r.id === requestId);
+      if (!request) {
+        throw new Error('Deletion request not found');
+      }
+
+      // Update the request status
+      await memberDeletionRequestService.update(requestId, {
+        status: 'approved',
+        reviewedBy: userProfile.uid,
+        reviewedByName: `${userProfile.firstName || ''} ${userProfile.lastName || ''}`.trim(),
+        reviewedAt: new Date().toISOString()
+      });
+
+      // Delete the actual member
+      await deleteMemberHandler(request.memberId);
+
+      showToast('success', 'Request Approved',
+        `Deletion request for ${request.memberName} has been approved and the member has been deleted.`);
+    } catch (error: any) {
+      console.error('❌ Failed to approve deletion request:', error);
+      setError(error.message);
+      showToast('error', 'Failed to approve deletion request', error.message);
+      throw error;
+    }
+  }, [memberDeletionRequests, userProfile, showToast, deleteMemberHandler]);
+
+  const rejectDeletionRequestHandler = useCallback(async (requestId: string, adminNotes?: string) => {
+    try {
+      if (!userProfile?.uid) {
+        throw new Error('User not authenticated');
+      }
+
+      // Find the request
+      const request = memberDeletionRequests.find(r => r.id === requestId);
+      if (!request) {
+        throw new Error('Deletion request not found');
+      }
+
+      await memberDeletionRequestService.update(requestId, {
+        status: 'rejected',
+        reviewedBy: userProfile.uid,
+        reviewedByName: `${userProfile.firstName || ''} ${userProfile.lastName || ''}`.trim(),
+        reviewedAt: new Date().toISOString(),
+        adminNotes: adminNotes || 'Request rejected by administrator'
+      });
+
+      showToast('success', 'Request Rejected',
+        `Deletion request for ${request.memberName} has been rejected.`);
+    } catch (error: any) {
+      console.error('❌ Failed to reject deletion request:', error);
+      setError(error.message);
+      showToast('error', 'Failed to reject deletion request', error.message);
+      throw error;
+    }
+  }, [memberDeletionRequests, userProfile, showToast]);
+
+  // Cleanup old deletion requests (run periodically)
+  const cleanupOldDeletionRequests = useCallback(async () => {
+    try {
+      await memberDeletionRequestService.cleanupOldRequests();
+      const expiredCount = await memberDeletionRequestService.handleExpiredRequests();
+
+      if (expiredCount > 0) {
+        console.log(`✅ ${expiredCount} expired deletion requests auto-rejected`);
+      }
+
+      console.log('✅ Old deletion requests cleaned up');
+    } catch (error: any) {
+      console.error('❌ Failed to cleanup old deletion requests:', error);
+      // Don't show toast for cleanup errors as this runs in background
+    }
+  }, []);
+
+  // Set up periodic cleanup of old deletion requests
+  useEffect(() => {
+    if (!firebaseUtils.isReady()) return;
+
+    // Run cleanup immediately
+    cleanupOldDeletionRequests();
+
+    // Set up periodic cleanup (every 24 hours)
+    const cleanupInterval = setInterval(() => {
+      cleanupOldDeletionRequests();
+    }, 24 * 60 * 60 * 1000); // 24 hours
+
+    return () => clearInterval(cleanupInterval);
+  }, [cleanupOldDeletionRequests]);
+
   // UI handlers
   const openMemberForm = useCallback((member?: Member) => {
     setEditingMember(member || null);
@@ -1205,6 +1354,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     newBelievers,
     sundayConfirmations,
     guests,
+    memberDeletionRequests,
 
     // UI State
     currentTab,
@@ -1272,6 +1422,11 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     deleteGuestHandler,
     markGuestConfirmationHandler,
     convertGuestToMemberHandler,
+
+    // Member Deletion Request Operations
+    createDeletionRequestHandler,
+    approveDeletionRequestHandler,
+    rejectDeletionRequestHandler,
 
     // UI Handlers
     openMemberForm,

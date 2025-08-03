@@ -34,7 +34,7 @@ import {
   User
 } from 'firebase/auth';
 import { db, auth } from '../firebase.config';
-import { Member, Bacenta, AttendanceRecord, NewBeliever, SundayConfirmation, Guest } from '../types';
+import { Member, Bacenta, AttendanceRecord, NewBeliever, SundayConfirmation, Guest, MemberDeletionRequest, DeletionRequestStatus } from '../types';
 
 // Types for Firebase operations
 export interface FirebaseUser {
@@ -855,6 +855,211 @@ export const guestFirebaseService = {
       })) as Guest[];
       callback(guests);
     });
+  }
+};
+
+// Member Deletion Request Service
+export const memberDeletionRequestService = {
+  // Get all deletion requests for the current church
+  getAll: async (): Promise<MemberDeletionRequest[]> => {
+    try {
+      const requestsRef = collection(db, getChurchCollectionPath('memberDeletionRequests'));
+      const q = query(requestsRef, orderBy('requestedAt', 'desc'));
+      const querySnapshot = await getDocs(q);
+      return querySnapshot.docs.map(doc => ({
+        ...doc.data(),
+        id: doc.id
+      })) as MemberDeletionRequest[];
+    } catch (error: any) {
+      throw new Error(`Failed to fetch deletion requests: ${error.message}`);
+    }
+  },
+
+  // Get pending deletion requests for a specific admin
+  getPendingForAdmin: async (adminId: string): Promise<MemberDeletionRequest[]> => {
+    try {
+      const requestsRef = collection(db, getChurchCollectionPath('memberDeletionRequests'));
+      const q = query(
+        requestsRef,
+        where('status', '==', 'pending'),
+        orderBy('requestedAt', 'desc')
+      );
+      const querySnapshot = await getDocs(q);
+      const allPending = querySnapshot.docs.map(doc => ({
+        ...doc.data(),
+        id: doc.id
+      })) as MemberDeletionRequest[];
+
+      // Filter for requests from leaders supervised by this admin
+      // For now, return all pending requests - can be refined based on hierarchy
+      return allPending;
+    } catch (error: any) {
+      throw new Error(`Failed to fetch pending deletion requests: ${error.message}`);
+    }
+  },
+
+  // Create a new deletion request
+  create: async (request: Omit<MemberDeletionRequest, 'id'>): Promise<string> => {
+    try {
+      const requestsRef = collection(db, getChurchCollectionPath('memberDeletionRequests'));
+
+      // Set expiration date (7 days from now)
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 7);
+
+      const docRef = await addDoc(requestsRef, {
+        ...request,
+        requestedAt: new Date().toISOString(),
+        status: 'pending' as DeletionRequestStatus,
+        churchId: firebaseUtils.getCurrentChurchId(),
+        expiresAt: expiresAt.toISOString()
+      });
+      return docRef.id;
+    } catch (error: any) {
+      throw new Error(`Failed to create deletion request: ${error.message}`);
+    }
+  },
+
+  // Update deletion request (approve/reject)
+  update: async (requestId: string, updates: Partial<MemberDeletionRequest>): Promise<void> => {
+    try {
+      const requestRef = doc(db, getChurchCollectionPath('memberDeletionRequests'), requestId);
+      await updateDoc(requestRef, {
+        ...updates,
+        reviewedAt: new Date().toISOString()
+      });
+    } catch (error: any) {
+      throw new Error(`Failed to update deletion request: ${error.message}`);
+    }
+  },
+
+  // Delete a deletion request (cleanup)
+  delete: async (requestId: string): Promise<void> => {
+    try {
+      const requestRef = doc(db, getChurchCollectionPath('memberDeletionRequests'), requestId);
+      await deleteDoc(requestRef);
+    } catch (error: any) {
+      throw new Error(`Failed to delete deletion request: ${error.message}`);
+    }
+  },
+
+  // Check if a member has pending deletion requests
+  hasPendingRequest: async (memberId: string): Promise<boolean> => {
+    try {
+      const requestsRef = collection(db, getChurchCollectionPath('memberDeletionRequests'));
+      const q = query(
+        requestsRef,
+        where('memberId', '==', memberId),
+        where('status', '==', 'pending')
+      );
+      const querySnapshot = await getDocs(q);
+      return !querySnapshot.empty;
+    } catch (error: any) {
+      console.error('Error checking pending requests:', error);
+      return false;
+    }
+  },
+
+  // Listen to deletion requests changes
+  onSnapshot: (callback: (requests: MemberDeletionRequest[]) => void): Unsubscribe => {
+    const requestsRef = collection(db, getChurchCollectionPath('memberDeletionRequests'));
+    const q = query(requestsRef, orderBy('requestedAt', 'desc'));
+
+    return onSnapshot(q, (querySnapshot) => {
+      const requests = querySnapshot.docs.map(doc => ({
+        ...doc.data(),
+        id: doc.id
+      })) as MemberDeletionRequest[];
+      callback(requests);
+    });
+  },
+
+  // Clean up old requests (approved/rejected older than 30 days)
+  cleanupOldRequests: async (): Promise<void> => {
+    try {
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+      const requestsRef = collection(db, getChurchCollectionPath('memberDeletionRequests'));
+
+      // Clean up old approved/rejected requests
+      const oldRequestsQuery = query(
+        requestsRef,
+        where('status', 'in', ['approved', 'rejected']),
+        where('reviewedAt', '<', thirtyDaysAgo.toISOString())
+      );
+
+      const oldRequestsSnapshot = await getDocs(oldRequestsQuery);
+      const batch = writeBatch(db);
+
+      oldRequestsSnapshot.docs.forEach(doc => {
+        batch.delete(doc.ref);
+      });
+
+      // Also handle expired pending requests
+      const now = new Date().toISOString();
+      const expiredRequestsQuery = query(
+        requestsRef,
+        where('status', '==', 'pending'),
+        where('expiresAt', '<', now)
+      );
+
+      const expiredRequestsSnapshot = await getDocs(expiredRequestsQuery);
+
+      expiredRequestsSnapshot.docs.forEach(doc => {
+        // Update expired requests to rejected status instead of deleting
+        const docRef = doc.ref;
+        batch.update(docRef, {
+          status: 'rejected',
+          reviewedAt: now,
+          adminNotes: 'Request automatically rejected due to expiration (7 days)',
+          reviewedBy: 'system',
+          reviewedByName: 'System Auto-Rejection'
+        });
+      });
+
+      await batch.commit();
+
+      const totalCleaned = oldRequestsSnapshot.docs.length;
+      const totalExpired = expiredRequestsSnapshot.docs.length;
+
+      console.log(`Cleaned up ${totalCleaned} old deletion requests and expired ${totalExpired} pending requests`);
+    } catch (error: any) {
+      console.error('Failed to cleanup old deletion requests:', error);
+    }
+  },
+
+  // Check and handle expired requests
+  handleExpiredRequests: async (): Promise<number> => {
+    try {
+      const now = new Date().toISOString();
+      const requestsRef = collection(db, getChurchCollectionPath('memberDeletionRequests'));
+
+      const expiredQuery = query(
+        requestsRef,
+        where('status', '==', 'pending'),
+        where('expiresAt', '<', now)
+      );
+
+      const querySnapshot = await getDocs(expiredQuery);
+      const batch = writeBatch(db);
+
+      querySnapshot.docs.forEach(doc => {
+        batch.update(doc.ref, {
+          status: 'rejected',
+          reviewedAt: now,
+          adminNotes: 'Request automatically rejected due to expiration (7 days)',
+          reviewedBy: 'system',
+          reviewedByName: 'System Auto-Rejection'
+        });
+      });
+
+      await batch.commit();
+      return querySnapshot.docs.length;
+    } catch (error: any) {
+      console.error('Failed to handle expired requests:', error);
+      return 0;
+    }
   }
 };
 

@@ -90,6 +90,8 @@ export enum TabKeys {
   SUNDAY_CONFIRMATIONS = 'sunday_confirmations',
   NEW_BELIEVERS = 'new_believers',
   PROFILE_SETTINGS = 'profile_settings',
+  MY_DELETION_REQUESTS = 'my_deletion_requests',
+  ADMIN_DELETION_REQUESTS = 'admin_deletion_requests',
 }
 
 export interface NavigationHistoryItem {
@@ -163,4 +165,24 @@ export interface AdminInvite {
   respondedAt?: string;
   revokedAt?: string; // When leader access was revoked
   accessChurchId?: string; // Church ID that the leader should have access to
+}
+
+// Member Deletion Request System Types
+export type DeletionRequestStatus = 'pending' | 'approved' | 'rejected';
+
+export interface MemberDeletionRequest {
+  id: string; // Auto-generated document ID
+  memberId: string; // ID of member to be deleted
+  memberName: string; // Cached member name for display purposes
+  requestedBy: string; // ID of leader who requested deletion
+  requestedByName: string; // Cached requester name for display
+  requestedAt: string; // ISO timestamp of request
+  status: DeletionRequestStatus;
+  reason?: string; // Optional reason for deletion request
+  reviewedBy?: string; // ID of admin who approved/rejected (if applicable)
+  reviewedByName?: string; // Cached reviewer name for display
+  reviewedAt?: string; // ISO timestamp of admin decision (if applicable)
+  adminNotes?: string; // Optional notes from admin during review
+  churchId: string; // Church context for the request
+  expiresAt?: string; // Optional expiration timestamp (auto-reject after 7 days)
 }

@@ -16,6 +16,8 @@ export const LazyBacentaLeadersView = lazy(() => import('./BacentaLeadersView'))
 export const LazyWeeklyAttendanceView = lazy(() => import('./WeeklyAttendanceView'));
 export const LazySundayConfirmationsView = lazy(() => import('./SundayConfirmationsView'));
 export const LazyNewBelieversView = lazy(() => import('./NewBelieversView'));
+export const LazyMyDeletionRequestsView = lazy(() => import('./MyDeletionRequestsView'));
+export const LazyMemberDeletionRequestsView = lazy(() => import('./MemberDeletionRequestsView'));
 
 // Wrapper component for lazy loading
 interface LazyWrapperProps {

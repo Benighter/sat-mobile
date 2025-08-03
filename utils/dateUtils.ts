@@ -32,6 +32,17 @@ export const formatDisplayDate = (dateString: string): string => {
   return date.toLocaleDateString(undefined, { weekday: 'short', month: 'numeric', day: 'numeric' });
 };
 
+// Formats an ISO date string (with time) to a readable date format
+export const formatISODate = (isoString: string): string => {
+  const date = new Date(isoString);
+  return date.toLocaleDateString(undefined, {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric'
+  });
+};
+
 // Formats a YYYY-MM-DD string or Date object to a more readable long format
 export const formatFullDate = (dateInput: string | Date): string => {
   const date = typeof dateInput === 'string' ? new Date(dateInput + 'T00:00:00') : dateInput;

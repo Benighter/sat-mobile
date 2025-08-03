@@ -280,4 +280,28 @@ export const ClearAllDataModal: React.FC<{
   />
 );
 
+export const CreateDeletionRequestModal: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+  memberName: string;
+}> = ({ isOpen, onClose, onConfirm, memberName }) => (
+  <ConfirmationModal
+    isOpen={isOpen}
+    onClose={onClose}
+    onConfirm={onConfirm}
+    title="Request Member Deletion"
+    message={`Submit a deletion request for ${memberName}?`}
+    confirmText="Submit Request"
+    cancelText="Cancel"
+    type="warning"
+    details={[
+      "Your deletion request will be sent to an administrator for review",
+      "You will be notified when the admin makes a decision",
+      "The member will remain active until the request is approved",
+      "Typical review time is 1-2 business days"
+    ]}
+  />
+);
+
 export default ConfirmationModal;
