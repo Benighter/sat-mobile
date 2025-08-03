@@ -89,15 +89,18 @@ export const getPreviousSunday = (dateString: string): string => {
   return formatDateToYYYYMMDD(date);
 };
 
-// Get the next upcoming Sunday (if today is Sunday, return next Sunday)
+// Get the next upcoming Sunday (if today is Monday, return next Sunday; if today is Sunday, return today)
 export const getUpcomingSunday = (): string => {
   const today = new Date();
   const dayOfWeek = today.getDay(); // 0 = Sunday, 1 = Monday, etc.
 
   if (dayOfWeek === 0) {
-    // Today is Sunday, get next Sunday
+    // Today is Sunday, return today's date
+    return formatDateToYYYYMMDD(today);
+  } else if (dayOfWeek === 1) {
+    // Today is Monday, get next Sunday (6 days ahead)
     const nextSunday = new Date(today);
-    nextSunday.setDate(today.getDate() + 7);
+    nextSunday.setDate(today.getDate() + 6);
     return formatDateToYYYYMMDD(nextSunday);
   } else {
     // Get the upcoming Sunday

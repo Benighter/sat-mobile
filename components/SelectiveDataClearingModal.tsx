@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useAppContext } from '../contexts/FirebaseAppContext';
+import { hasAdminPrivileges } from '../utils/permissionUtils';
 import Modal from './ui/Modal';
 import Button from './ui/Button';
 import {
@@ -27,9 +28,17 @@ const SelectiveDataClearingModal: React.FC<SelectiveDataClearingModalProps> = ({
   isOpen,
   onClose
 }) => {
-  const { bacentas, members, attendanceRecords, newBelievers, showConfirmation, deleteBacentaHandler, deleteMemberHandler, deleteNewBelieverHandler, showToast } = useAppContext();
+  const { bacentas, members, attendanceRecords, newBelievers, showConfirmation, deleteBacentaHandler, deleteMemberHandler, deleteNewBelieverHandler, showToast, userProfile } = useAppContext();
   const [selectedBacentas, setSelectedBacentas] = useState<Set<string>>(new Set());
   const [includeUnassigned, setIncludeUnassigned] = useState(false);
+
+  // Check if current user is admin - extra security layer
+  const isAdmin = hasAdminPrivileges(userProfile);
+
+  // If not admin, don't render the modal
+  if (!isAdmin) {
+    return null;
+  }
 
   // Calculate data summary for each bacenta
   const bacentaDataSummary = useMemo((): BacentaDataSummary[] => {

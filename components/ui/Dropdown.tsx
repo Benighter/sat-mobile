@@ -14,14 +14,16 @@ interface DropdownProps {
   items: DropdownItem[];
   trigger?: React.ReactNode;
   align?: 'left' | 'right';
+  position?: 'above' | 'below';
   disabled?: boolean;
 }
 
-const Dropdown: React.FC<DropdownProps> = ({ 
-  items, 
-  trigger, 
+const Dropdown: React.FC<DropdownProps> = ({
+  items,
+  trigger,
   align = 'right',
-  disabled = false 
+  position = 'below',
+  disabled = false
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -94,8 +96,10 @@ const Dropdown: React.FC<DropdownProps> = ({
       {/* Dropdown Menu */}
       {isOpen && (
         <div
-          className={`absolute z-50 mt-1 w-48 bg-white rounded-md shadow-lg border border-gray-200 py-1 ${
+          className={`absolute z-50 w-48 bg-white rounded-md shadow-lg border border-gray-200 py-1 ${
             align === 'right' ? 'right-0' : 'left-0'
+          } ${
+            position === 'above' ? 'bottom-full mb-1' : 'top-full mt-1'
           }`}
         >
           {items.map((item) => (

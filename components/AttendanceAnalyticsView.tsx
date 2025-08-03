@@ -184,32 +184,32 @@ const InteractiveBarChart: React.FC<{
     return height;
   };
 
-  const getBarColor = (index: number, value: number) => {
+  const getBarColor = (index: number, _value: number) => {
     const isHovered = hoveredIndex === index;
 
-    // Define a set of beautiful gradient colors for variety
+    // Define a set of beautiful gradient colors optimized for white text readability
     const colorPalette = [
-      'bg-gradient-to-t from-blue-600 to-blue-400',      // Blue
-      'bg-gradient-to-t from-emerald-600 to-emerald-400', // Emerald
-      'bg-gradient-to-t from-purple-600 to-purple-400',   // Purple
-      'bg-gradient-to-t from-rose-600 to-rose-400',       // Rose
-      'bg-gradient-to-t from-amber-600 to-amber-400',     // Amber
-      'bg-gradient-to-t from-teal-600 to-teal-400',       // Teal
-      'bg-gradient-to-t from-indigo-600 to-indigo-400',   // Indigo
-      'bg-gradient-to-t from-cyan-600 to-cyan-400',       // Cyan
+      'bg-gradient-to-t from-blue-700 to-blue-500',      // Blue
+      'bg-gradient-to-t from-emerald-700 to-emerald-500', // Emerald
+      'bg-gradient-to-t from-purple-700 to-purple-500',   // Purple
+      'bg-gradient-to-t from-rose-700 to-rose-500',       // Rose
+      'bg-gradient-to-t from-amber-700 to-amber-500',     // Amber
+      'bg-gradient-to-t from-teal-700 to-teal-500',       // Teal
+      'bg-gradient-to-t from-indigo-700 to-indigo-500',   // Indigo
+      'bg-gradient-to-t from-cyan-700 to-cyan-500',       // Cyan
     ];
 
-    // Hover state - make it brighter
+    // Hover state - make it brighter but still readable
     if (isHovered) {
       const hoverColors = [
-        'bg-gradient-to-t from-blue-500 to-blue-300',
-        'bg-gradient-to-t from-emerald-500 to-emerald-300',
-        'bg-gradient-to-t from-purple-500 to-purple-300',
-        'bg-gradient-to-t from-rose-500 to-rose-300',
-        'bg-gradient-to-t from-amber-500 to-amber-300',
-        'bg-gradient-to-t from-teal-500 to-teal-300',
-        'bg-gradient-to-t from-indigo-500 to-indigo-300',
-        'bg-gradient-to-t from-cyan-500 to-cyan-300',
+        'bg-gradient-to-t from-blue-600 to-blue-400',
+        'bg-gradient-to-t from-emerald-600 to-emerald-400',
+        'bg-gradient-to-t from-purple-600 to-purple-400',
+        'bg-gradient-to-t from-rose-600 to-rose-400',
+        'bg-gradient-to-t from-amber-600 to-amber-400',
+        'bg-gradient-to-t from-teal-600 to-teal-400',
+        'bg-gradient-to-t from-indigo-600 to-indigo-400',
+        'bg-gradient-to-t from-cyan-600 to-cyan-400',
       ];
       return hoverColors[index % hoverColors.length];
     }
@@ -219,58 +219,84 @@ const InteractiveBarChart: React.FC<{
   };
 
   return (
-    <div className={`${height} relative`}>
-      {/* Grid Lines */}
-      {showGrid && (
-        <div className="absolute inset-0 flex flex-col justify-between py-4 pr-4 pl-12">
-          {gridLines.map((value, index) => (
-            <div key={index} className="flex items-center">
-              <span className="text-xs text-gray-400 w-8 text-right mr-2">{value}</span>
-              <div className="flex-1 h-px bg-gray-200"></div>
+    <div className={`${height} relative flex`}>
+      {/* Y-Axis Area */}
+      <div className="w-16 flex-shrink-0 relative">
+        {/* Y-Axis Labels */}
+        {showGrid && (
+          <div className="absolute inset-0 flex flex-col justify-between py-6">
+            {gridLines.map((value, index) => (
+              <div key={index} className="flex items-center justify-end pr-3">
+                <span className="text-sm text-gray-500 font-medium">{value}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Chart Area */}
+      <div className="flex-1 relative">
+        {/* Grid Lines */}
+        {showGrid && (
+          <div className="absolute inset-0 flex flex-col justify-between py-6 pr-6">
+            {gridLines.map((_, index) => (
+              <div key={index} className="flex items-center">
+                <div className="w-full h-px bg-gray-300 opacity-60"></div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Chart Bars */}
+        <div className="absolute inset-0 flex items-end justify-center space-x-6 p-6">
+          {data.map((item, index) => (
+            <div
+              key={index}
+              className="flex flex-col items-center space-y-4 flex-1 max-w-32 group"
+              onMouseEnter={() => setHoveredIndex(index)}
+              onMouseLeave={() => setHoveredIndex(null)}
+            >
+              {/* Bar Container */}
+              <div className="relative w-full flex flex-col justify-end" style={{ height: '320px' }}>
+                <div
+                  className={`relative w-full rounded-lg transition-all duration-700 ease-out shadow-lg hover:shadow-xl cursor-pointer ${getBarColor(index, item.value)} flex items-center justify-center`}
+                  style={{
+                    height: animationComplete ? `${getBarHeight(item.value)}%` : '0%',
+                    minHeight: item.value > 0 ? '48px' : '0px',
+                    transform: hoveredIndex === index ? 'scale(1.02)' : 'scale(1)',
+                  }}
+                >
+                  {/* Shine effect */}
+                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white to-transparent opacity-20 rounded-lg"></div>
+
+                  {/* Value embedded in bar */}
+                  {item.value > 0 && (
+                    <div className={`relative z-10 text-white font-bold transition-all duration-200 ${
+                      getBarHeight(item.value) > 15 ? 'text-lg' : 'text-sm'
+                    } ${hoveredIndex === index ? 'scale-110' : ''}`}>
+                      {item.value}
+                    </div>
+                  )}
+                </div>
+
+                {/* Hover tooltip for additional info */}
+                {hoveredIndex === index && (
+                  <div className="absolute -top-12 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs px-3 py-2 rounded-lg shadow-lg z-20 whitespace-nowrap">
+                    <div className="font-semibold">{item.value} attendees</div>
+                    <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-800"></div>
+                  </div>
+                )}
+              </div>
+
+              {/* Label */}
+              <div className={`text-sm text-gray-700 text-center font-medium transition-all duration-200 px-2 ${
+                hoveredIndex === index ? 'text-gray-900 font-semibold scale-105' : ''
+              }`}>
+                {formatDateLabel(item.label)}
+              </div>
             </div>
           ))}
         </div>
-      )}
-
-      {/* Chart Bars */}
-      <div className="absolute inset-0 flex items-end justify-center space-x-4 p-4 pl-12">
-        {data.map((item, index) => (
-          <div
-            key={index}
-            className="flex flex-col items-center space-y-3 flex-1 max-w-24 group"
-            onMouseEnter={() => setHoveredIndex(index)}
-            onMouseLeave={() => setHoveredIndex(null)}
-          >
-            {/* Value tooltip */}
-            <div className={`text-xs font-bold text-gray-700 transition-all duration-200 ${
-              hoveredIndex === index ? 'opacity-100 scale-110' : 'opacity-70'
-            }`}>
-              {item.value}
-            </div>
-
-            {/* Bar */}
-            <div className="relative w-full flex flex-col justify-end" style={{ height: '280px' }}>
-              <div
-                className={`w-full rounded-t-lg transition-all duration-700 ease-out shadow-lg hover:shadow-xl cursor-pointer ${getBarColor(index, item.value)}`}
-                style={{
-                  height: animationComplete ? `${getBarHeight(item.value)}%` : '0%',
-                  minHeight: item.value > 0 ? '4px' : '0px',
-                  transform: hoveredIndex === index ? 'scale(1.05)' : 'scale(1)',
-                }}
-              >
-                {/* Shine effect */}
-                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white to-transparent opacity-20 rounded-t-lg"></div>
-              </div>
-            </div>
-
-            {/* Label */}
-            <div className={`text-xs text-gray-600 text-center font-medium transition-all duration-200 ${
-              hoveredIndex === index ? 'text-gray-800 font-bold' : ''
-            }`}>
-              {formatDateLabel(item.label)}
-            </div>
-          </div>
-        ))}
       </div>
     </div>
   );
@@ -905,19 +931,19 @@ const AttendanceAnalyticsView: React.FC = () => {
 
       {/* Chart Display */}
       {currentView === 'overview' && (
-        <div className="glass p-8 shadow-lg rounded-2xl chart-container">
-          <h3 className="text-2xl font-bold gradient-text mb-8 flex items-center">
+        <div className="glass p-10 shadow-lg rounded-2xl chart-container">
+          <h3 className="text-2xl font-bold gradient-text mb-10 flex items-center justify-center">
             <ChartBarIcon className="w-8 h-8 mr-3 text-gray-600" />
             Weekly Attendance Overview
           </h3>
-          <div className="px-2">
+          <div className="px-4 py-2">
             {chartType === 'bar' ? (
               <InteractiveBarChart
                 data={analyticsData.weeklyData.map(d => ({
                   label: d.label,
                   value: d.attendance
                 }))}
-                height="h-96"
+                height="h-[28rem]"
                 showGrid={true}
                 animated={true}
               />
@@ -927,7 +953,7 @@ const AttendanceAnalyticsView: React.FC = () => {
                   label: d.label,
                   value: d.attendance
                 }))}
-                height="h-96"
+                height="h-[28rem]"
                 showGrid={true}
                 animated={true}
               />
@@ -939,7 +965,7 @@ const AttendanceAnalyticsView: React.FC = () => {
       {currentView === 'bacentas' && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           <div className="glass p-8 shadow-lg rounded-2xl">
-            <h3 className="text-2xl font-bold gradient-text mb-6 flex items-center">
+            <h3 className="text-2xl font-bold gradient-text mb-6 flex items-center justify-center">
               <ChartBarIcon className="w-8 h-8 mr-3 text-gray-600" />
               Bacenta Performance
             </h3>
@@ -1037,8 +1063,10 @@ const AttendanceAnalyticsView: React.FC = () => {
           {/* Member Analysis Grid */}
           <div className="glass p-8 shadow-lg rounded-2xl">
             <h3 className="text-2xl font-bold gradient-text mb-6 flex items-center">
-              <UsersIcon className="w-8 h-8 mr-3 text-gray-600" />
-              Member Attendance Analysis
+              <div className="flex items-center justify-center flex-1">
+                <UsersIcon className="w-8 h-8 mr-3 text-gray-600" />
+                Member Attendance Analysis
+              </div>
               <span className="ml-auto text-sm font-normal text-gray-500">
                 {analyticsData.memberStats.filter(member => {
                   const matchesSearch = searchTerm === '' ||
@@ -1167,19 +1195,19 @@ const AttendanceAnalyticsView: React.FC = () => {
 
       {currentView === 'trends' && (
         <div className="space-y-8">
-          <div className="glass p-8 shadow-lg rounded-2xl chart-container">
-            <h3 className="text-2xl font-bold gradient-text mb-8 flex items-center">
+          <div className="glass p-10 shadow-lg rounded-2xl chart-container">
+            <h3 className="text-2xl font-bold gradient-text mb-10 flex items-center justify-center">
               <TrendingUpIcon className="w-8 h-8 mr-3 text-gray-600" />
               Attendance Trends & Growth
             </h3>
-            <div className="px-2">
+            <div className="px-4 py-2">
               {chartType === 'bar' ? (
                 <InteractiveBarChart
                   data={analyticsData.weeklyData.map(d => ({
                     label: d.label,
                     value: d.attendance
                   }))}
-                  height="h-96"
+                  height="h-[28rem]"
                   showGrid={true}
                   animated={true}
                 />
@@ -1189,7 +1217,7 @@ const AttendanceAnalyticsView: React.FC = () => {
                     label: d.label,
                     value: d.attendance
                   }))}
-                  height="h-96"
+                  height="h-[28rem]"
                   showGrid={true}
                   animated={true}
                 />

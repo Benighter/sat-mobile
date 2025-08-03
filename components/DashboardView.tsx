@@ -60,7 +60,7 @@ const DashboardView: React.FC = memo(() => {
   const { members, attendanceRecords, newBelievers, bacentas, displayedSundays, displayedDate, sundayConfirmations, guests, switchTab, user, userProfile } = useAppContext(); // Use displayedSundays
 
   const totalMembers = members.length;
-  const [confirmationTarget, setConfirmationTarget] = useState<number>(totalMembers);
+  const [confirmationTarget, setConfirmationTarget] = useState<number>(0);
 
   // Check if current user is admin
   const isAdmin = hasAdminPrivileges(userProfile);
@@ -101,7 +101,7 @@ const DashboardView: React.FC = memo(() => {
     };
 
     loadTarget();
-  }, [user, totalMembers]);
+  }, [user]);
   
   const currentMonthAttendancePercentage = () => {
     if (!displayedSundays.length || !members.length) return 0;

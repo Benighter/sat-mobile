@@ -202,7 +202,6 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, size = 
       <div
         className={`bg-white rounded-lg sm:rounded-xl shadow-xl w-full ${sizeClasses[size]} flex flex-col relative modal-content`}
         style={{
-          maxHeight: 'calc(100vh - var(--navbar-height, 0px) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 2rem)',
           maxHeight: 'calc(100dvh - var(--navbar-height, 0px) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 2rem)',
           minHeight: 'auto',
           maxWidth: 'min(90vw, 100%)',

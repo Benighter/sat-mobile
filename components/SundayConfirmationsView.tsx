@@ -47,9 +47,9 @@ const SundayConfirmationsView: React.FC = () => {
   } = useAppContext();
 
   const [selectedSunday, setSelectedSunday] = useState<string>(getUpcomingSunday());
-  const [confirmationTarget, setConfirmationTarget] = useState<number>(members.length);
+  const [confirmationTarget, setConfirmationTarget] = useState<number>(0);
   const [isEditingTarget, setIsEditingTarget] = useState<boolean>(false);
-  const [targetInputValue, setTargetInputValue] = useState<string>(members.length.toString());
+  const [targetInputValue, setTargetInputValue] = useState<string>('0');
 
   // Guest management state
   const [isGuestModalOpen, setIsGuestModalOpen] = useState<boolean>(false);
@@ -103,7 +103,7 @@ const SundayConfirmationsView: React.FC = () => {
     };
 
     loadTarget();
-  }, [selectedSunday, members.length, user]);
+  }, [selectedSunday, user]);
 
   // Save target to Firebase (admin only)
   const saveTarget = async (newTarget: number) => {
@@ -642,6 +642,7 @@ const SundayConfirmationsView: React.FC = () => {
                                     }
                                   ]}
                                   align="right"
+                                  position="above"
                                 />
                               </div>
                             );
@@ -699,6 +700,7 @@ const SundayConfirmationsView: React.FC = () => {
                                     }
                                   ]}
                                   align="right"
+                                  position="above"
                                 />
                               </div>
                             );
