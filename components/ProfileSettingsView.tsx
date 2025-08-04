@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../contexts/FirebaseAppContext';
+import { useTheme } from '../contexts/ThemeContext';
 import { userService } from '../services/userService';
 import { inviteService } from '../services/inviteService';
 import Button from './ui/Button';
@@ -38,9 +39,10 @@ interface ProfileFormData {
 
 const ProfileSettingsView: React.FC = () => {
   const { userProfile, user, showToast, refreshUserProfile } = useAppContext();
-  
+  const { theme, setTheme } = useTheme();
+
   const [preferences, setPreferences] = useState<UserPreferences>({
-    theme: userProfile?.preferences?.theme ?? 'light',
+    theme: theme,
     allowEditPreviousSundays: userProfile?.preferences?.allowEditPreviousSundays ?? true
   });
 
@@ -61,7 +63,7 @@ const ProfileSettingsView: React.FC = () => {
   useEffect(() => {
     if (userProfile) {
       setPreferences({
-        theme: userProfile.preferences?.theme ?? 'light',
+        theme: theme,
         allowEditPreviousSundays: userProfile.preferences?.allowEditPreviousSundays ?? true
       });
 
@@ -74,10 +76,15 @@ const ProfileSettingsView: React.FC = () => {
 
       setImagePreview(userProfile.profilePicture || '');
     }
-  }, [userProfile]);
+  }, [userProfile, theme]);
 
   const handlePreferenceChange = (key: keyof UserPreferences, value: any) => {
     setPreferences(prev => ({ ...prev, [key]: value }));
+
+    // If theme is being changed, update the theme context immediately
+    if (key === 'theme') {
+      setTheme(value);
+    }
   };
 
   const handleProfileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -171,10 +178,10 @@ const ProfileSettingsView: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-dark-900 dark:via-dark-800 dark:to-dark-900">
       <div className="max-w-5xl mx-auto p-4 sm:p-6 lg:p-8">
         {/* Header Section */}
-        <div className="bg-white rounded-3xl shadow-xl border border-gray-100 p-6 sm:p-8 mb-8">
+        <div className="bg-white dark:bg-dark-800 rounded-3xl shadow-xl border border-gray-100 dark:border-dark-600 p-6 sm:p-8 mb-8">
           <div className="flex flex-col lg:flex-row lg:items-center gap-6">
             {/* Profile Picture */}
             <div className="flex-shrink-0 mx-auto lg:mx-0">
@@ -195,19 +202,19 @@ const ProfileSettingsView: React.FC = () => {
 
             {/* User Info */}
             <div className="flex-1 text-center lg:text-left">
-              <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">
+              <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 dark:text-dark-100 mb-4">
                 {userProfile.displayName || `${userProfile.firstName} ${userProfile.lastName}` || 'User Profile'}
               </h1>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="flex items-center justify-center lg:justify-start text-gray-600 bg-gray-50 rounded-2xl p-3">
+                <div className="flex items-center justify-center lg:justify-start text-gray-600 dark:text-dark-300 bg-gray-50 dark:bg-dark-700 rounded-2xl p-3">
                   <EnvelopeIcon className="w-5 h-5 mr-3 text-blue-500" />
                   <span className="text-sm font-medium truncate">{userProfile.email}</span>
                 </div>
-                <div className="flex items-center justify-center lg:justify-start text-gray-600 bg-gray-50 rounded-2xl p-3">
+                <div className="flex items-center justify-center lg:justify-start text-gray-600 dark:text-dark-300 bg-gray-50 dark:bg-dark-700 rounded-2xl p-3">
                   <BuildingOfficeIcon className="w-5 h-5 mr-3 text-green-500" />
                   <span className="text-sm font-medium truncate">{userProfile.churchName || 'Church Member'}</span>
                 </div>
-                <div className="flex items-center justify-center lg:justify-start text-gray-600 bg-gray-50 rounded-2xl p-3">
+                <div className="flex items-center justify-center lg:justify-start text-gray-600 dark:text-dark-300 bg-gray-50 dark:bg-dark-700 rounded-2xl p-3">
                   <ShieldCheckIcon className="w-5 h-5 mr-3 text-purple-500" />
                   <span className="text-sm font-medium capitalize">{userProfile.role || 'Member'}</span>
                 </div>
@@ -217,17 +224,17 @@ const ProfileSettingsView: React.FC = () => {
         </div>
 
         {/* Personal Information */}
-        <div className="bg-white rounded-3xl shadow-xl border border-gray-100 p-6 sm:p-8 mb-8">
+        <div className="bg-white dark:bg-dark-800 rounded-3xl shadow-xl border border-gray-100 dark:border-dark-600 p-6 sm:p-8 mb-8">
           <div className="flex items-center mb-8">
             <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center mr-4">
               <UserIcon className="w-6 h-6 text-white" />
             </div>
-            <h2 className="text-2xl font-bold text-gray-900">Personal Information</h2>
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-dark-100">Personal Information</h2>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div className="space-y-2">
-              <label className="block text-sm font-semibold text-gray-700">
+              <label className="block text-sm font-semibold text-gray-700 dark:text-dark-200">
                 First Name *
               </label>
               <Input
@@ -237,12 +244,12 @@ const ProfileSettingsView: React.FC = () => {
                 onChange={handleProfileChange}
                 placeholder="Enter first name"
                 required
-                className="h-14 text-base border-2 border-gray-200 focus:border-blue-500 rounded-2xl px-4 transition-all duration-200"
+                className="h-14 text-base border-2 border-gray-200 dark:border-dark-600 focus:border-blue-500 dark:focus:border-blue-400 rounded-2xl px-4 transition-all duration-200 bg-white dark:bg-dark-700 text-gray-900 dark:text-dark-100"
               />
             </div>
 
             <div className="space-y-2">
-              <label className="block text-sm font-semibold text-gray-700">
+              <label className="block text-sm font-semibold text-gray-700 dark:text-dark-200">
                 Last Name
               </label>
               <Input
@@ -251,12 +258,12 @@ const ProfileSettingsView: React.FC = () => {
                 value={profileData.lastName}
                 onChange={handleProfileChange}
                 placeholder="Enter last name"
-                className="h-14 text-base border-2 border-gray-200 focus:border-blue-500 rounded-2xl px-4 transition-all duration-200"
+                className="h-14 text-base border-2 border-gray-200 dark:border-dark-600 focus:border-blue-500 dark:focus:border-blue-400 rounded-2xl px-4 transition-all duration-200 bg-white dark:bg-dark-700 text-gray-900 dark:text-dark-100"
               />
             </div>
 
             <div className="lg:col-span-2 space-y-2">
-              <label className="block text-sm font-semibold text-gray-700">
+              <label className="block text-sm font-semibold text-gray-700 dark:text-dark-200">
                 Phone Number
               </label>
               <Input
@@ -265,7 +272,7 @@ const ProfileSettingsView: React.FC = () => {
                 value={profileData.phoneNumber}
                 onChange={handleProfileChange}
                 placeholder="Enter phone number"
-                className="h-14 text-base border-2 border-gray-200 focus:border-blue-500 rounded-2xl px-4 transition-all duration-200"
+                className="h-14 text-base border-2 border-gray-200 dark:border-dark-600 focus:border-blue-500 dark:focus:border-blue-400 rounded-2xl px-4 transition-all duration-200 bg-white dark:bg-dark-700 text-gray-900 dark:text-dark-100"
               />
             </div>
           </div>
@@ -273,25 +280,25 @@ const ProfileSettingsView: React.FC = () => {
 
 
         {/* App Preferences */}
-        <div className="bg-white rounded-3xl shadow-xl border border-gray-100 p-6 sm:p-8 mb-8">
+        <div className="bg-white dark:bg-dark-800 rounded-3xl shadow-xl border border-gray-100 dark:border-dark-600 p-6 sm:p-8 mb-8">
           <div className="flex items-center mb-8">
             <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-pink-600 rounded-2xl flex items-center justify-center mr-4">
               <SunIcon className="w-6 h-6 text-white" />
             </div>
-            <h2 className="text-2xl font-bold text-gray-900">App Preferences</h2>
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-dark-100">App Preferences</h2>
           </div>
 
           <div className="space-y-6">
-            <div className="bg-gradient-to-r from-orange-50 to-pink-50 rounded-2xl p-6 border border-orange-100">
+            <div className="bg-gradient-to-r from-orange-50 to-pink-50 dark:from-orange-900/20 dark:to-pink-900/20 rounded-2xl p-6 border border-orange-100 dark:border-orange-800">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div className="flex-1">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Theme</h3>
-                  <p className="text-gray-600">Choose your preferred theme appearance</p>
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-dark-100 mb-2">Theme</h3>
+                  <p className="text-gray-600 dark:text-dark-300">Choose your preferred theme appearance</p>
                 </div>
                 <select
                   value={preferences.theme}
                   onChange={(e) => handlePreferenceChange('theme', e.target.value)}
-                  className="h-12 px-4 border-2 border-gray-200 rounded-2xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 bg-white text-base font-medium min-w-[140px]"
+                  className="h-12 px-4 border-2 border-gray-200 dark:border-dark-600 rounded-2xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 bg-white dark:bg-dark-700 text-base font-medium min-w-[140px] text-gray-900 dark:text-dark-100"
                 >
                   <option value="light">☀️ Light</option>
                   <option value="dark">🌙 Dark</option>

@@ -24,9 +24,9 @@ const StatCard: React.FC<StatCardProps> = memo(({ title, value, icon, colorClass
     {/* Header with title and icon */}
     <div className="flex items-start justify-between">
       <div className="flex-1">
-        <p className="text-xs sm:text-sm font-medium text-gray-600 uppercase tracking-wider mb-2 sm:mb-3">{title}</p>
+        <p className="text-xs sm:text-sm font-medium text-gray-600 dark:text-dark-300 uppercase tracking-wider mb-2 sm:mb-3">{title}</p>
       </div>
-      <div className="text-gray-400 ml-2 sm:ml-4 flex-shrink-0">
+      <div className="text-gray-400 dark:text-dark-400 ml-2 sm:ml-4 flex-shrink-0">
         <div className="w-6 h-6 sm:w-8 sm:h-8 md:w-12 md:h-12">
           {icon}
         </div>
@@ -38,7 +38,7 @@ const StatCard: React.FC<StatCardProps> = memo(({ title, value, icon, colorClass
       <div className="flex items-center space-x-2 sm:space-x-3">
         <p className="text-2xl sm:text-3xl md:text-4xl font-bold gradient-text">{value}</p>
         {title === "Attendance Rate" && (
-          <div className="flex-1 max-w-12 sm:max-w-16 h-1.5 sm:h-2 bg-gray-200 rounded-full overflow-hidden">
+          <div className="flex-1 max-w-12 sm:max-w-16 h-1.5 sm:h-2 bg-gray-200 dark:bg-dark-600 rounded-full overflow-hidden">
             <div
               className="h-full bg-gradient-to-r from-blue-400 to-blue-600 rounded-full"
               style={{ width: `${typeof value === 'string' ? parseInt(value) : 0}%` }}

@@ -200,7 +200,7 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, size = 
       }}
     >
       <div
-        className={`bg-white rounded-lg sm:rounded-xl shadow-xl w-full ${sizeClasses[size]} flex flex-col relative modal-content`}
+        className={`bg-white dark:bg-dark-800 rounded-lg sm:rounded-xl shadow-xl w-full ${sizeClasses[size]} flex flex-col relative modal-content`}
         style={{
           maxHeight: 'calc(100dvh - var(--navbar-height, 0px) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 2rem)',
           minHeight: 'auto',
@@ -211,11 +211,11 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, size = 
         onClick={(e) => e.stopPropagation()} // Prevent backdrop click when clicking inside modal
       >
         {title && (
-          <div className="flex items-center justify-between p-3 sm:p-4 border-b flex-shrink-0">
-            <h3 className="text-base sm:text-lg font-semibold text-gray-800 truncate pr-2">{title}</h3>
+          <div className="flex items-center justify-between p-3 sm:p-4 border-b dark:border-dark-600 flex-shrink-0">
+            <h3 className="text-base sm:text-lg font-semibold text-gray-800 dark:text-dark-100 truncate pr-2">{title}</h3>
             <button
               onClick={onClose}
-              className="text-gray-400 hover:text-gray-600 p-1 rounded-full hover:bg-gray-100 flex-shrink-0"
+              className="text-gray-400 dark:text-dark-400 hover:text-gray-600 dark:hover:text-dark-200 p-1 rounded-full hover:bg-gray-100 dark:hover:bg-dark-700 flex-shrink-0"
               aria-label="Close modal"
             >
               <XMarkIcon className="w-5 h-5 sm:w-6 sm:h-6" />

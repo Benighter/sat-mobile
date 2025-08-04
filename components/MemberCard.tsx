@@ -80,13 +80,13 @@ const MemberCard: React.FC<MemberCardProps> = ({ member }) => {
   };
 
   return (
-    <div className="group glass shadow-2xl rounded-2xl p-6 mb-6 border-l-4 border-gray-500 transition-all duration-300 relative overflow-hidden animate-fade-in">
+    <div className="group glass shadow-2xl rounded-2xl p-6 mb-6 border-l-4 border-gray-500 dark:border-dark-400 transition-all duration-300 relative overflow-hidden animate-fade-in">
       {/* Animated background gradient */}
-      <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+      <div className="absolute inset-0 bg-gradient-to-br from-white/10 dark:from-dark-700/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
 
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between relative z-10">
         <div className="flex items-start mb-4 sm:mb-0 flex-1">
-          <div className="relative w-16 h-16 rounded-2xl mr-4 shadow-lg floating overflow-hidden bg-gradient-to-br from-gray-100 to-gray-200">
+          <div className="relative w-16 h-16 rounded-2xl mr-4 shadow-lg floating overflow-hidden bg-gradient-to-br from-gray-100 to-gray-200 dark:from-dark-600 dark:to-dark-700">
             {member.profilePicture ? (
               <img
                 src={member.profilePicture}
@@ -95,13 +95,13 @@ const MemberCard: React.FC<MemberCardProps> = ({ member }) => {
               />
             ) : (
               <div className="w-full h-full flex items-center justify-center">
-                <UserIcon className="w-8 h-8 text-gray-600" />
+                <UserIcon className="w-8 h-8 text-gray-600 dark:text-dark-300" />
               </div>
             )}
           </div>
           <div className="flex-1">
             <div className="flex items-center space-x-2 mb-2">
-              <h3 className="text-xl font-bold text-gray-800 group-hover:text-gray-900 transition-colors">
+              <h3 className="text-xl font-bold text-gray-800 dark:text-dark-100 group-hover:text-gray-900 dark:group-hover:text-white transition-colors">
                 {member.firstName} {member.lastName || ''}
               </h3>
 
@@ -110,19 +110,19 @@ const MemberCard: React.FC<MemberCardProps> = ({ member }) => {
             {/* Role Badge */}
             <div className="flex items-center space-x-2 mb-2">
               {member.role === 'Bacenta Leader' && (
-                <div className="flex items-center space-x-1 bg-gradient-to-r from-green-100 to-green-200 text-green-700 px-3 py-1 rounded-full text-sm font-semibold shadow-sm">
+                <div className="flex items-center space-x-1 bg-gradient-to-r from-green-100 to-green-200 dark:from-green-900/30 dark:to-green-800/30 text-green-700 dark:text-green-200 px-3 py-1 rounded-full text-sm font-semibold shadow-sm">
                   <span>💚</span>
                   <span>Bacenta Leader</span>
                 </div>
               )}
               {member.role === 'Fellowship Leader' && (
-                <div className="flex items-center space-x-1 bg-gradient-to-r from-red-100 to-red-200 text-red-700 px-3 py-1 rounded-full text-sm font-semibold shadow-sm">
+                <div className="flex items-center space-x-1 bg-gradient-to-r from-red-100 to-red-200 dark:from-red-900/30 dark:to-red-800/30 text-red-700 dark:text-red-200 px-3 py-1 rounded-full text-sm font-semibold shadow-sm">
                   <span>❤️</span>
                   <span>Fellowship Leader</span>
                 </div>
               )}
               {member.role === 'Member' && (
-                <div className="flex items-center space-x-1 bg-gradient-to-r from-gray-100 to-gray-200 text-gray-700 px-3 py-1 rounded-full text-sm font-semibold shadow-sm">
+                <div className="flex items-center space-x-1 bg-gradient-to-r from-gray-100 to-gray-200 dark:from-gray-700/30 dark:to-gray-600/30 text-gray-700 dark:text-gray-200 px-3 py-1 rounded-full text-sm font-semibold shadow-sm">
                   <span>👤</span>
                   <span>Member</span>
                 </div>
@@ -130,14 +130,14 @@ const MemberCard: React.FC<MemberCardProps> = ({ member }) => {
             </div>
 
             <div className="flex items-center space-x-2 mb-2">
-              <span className="text-sm text-gray-600">📍</span>
-              <p className="text-sm font-medium text-gray-600">
-                {memberBacenta?.name || <span className="italic text-gray-400">Unassigned</span>}
+              <span className="text-sm text-gray-600 dark:text-dark-300">📍</span>
+              <p className="text-sm font-medium text-gray-600 dark:text-dark-300">
+                {memberBacenta?.name || <span className="italic text-gray-400 dark:text-dark-500">Unassigned</span>}
               </p>
             </div>
 
             {member.bornAgainStatus && (
-              <div className="inline-flex items-center space-x-1 bg-gradient-to-r from-blue-100 to-blue-200 text-blue-700 px-3 py-1 rounded-full text-sm font-semibold shadow-sm">
+              <div className="inline-flex items-center space-x-1 bg-gradient-to-r from-blue-100 to-blue-200 dark:from-blue-900/30 dark:to-blue-800/30 text-blue-700 dark:text-blue-200 px-3 py-1 rounded-full text-sm font-semibold shadow-sm">
                 <span>✨</span>
                 <span>Born Again</span>
               </div>

@@ -2,6 +2,7 @@
 import React, { useEffect, useState, memo } from 'react';
 import { PerformanceMonitor } from './utils/performance';
 import { FirebaseAppProvider, useAppContext } from './contexts/FirebaseAppContext';
+import { ThemeProvider } from './contexts/ThemeContext';
 import { AuthScreen } from './components/AuthScreen';
 
 import DashboardView from './components/DashboardView';
@@ -227,10 +228,10 @@ const AppContent: React.FC = memo(() => {
       <OfflineIndicator />
 
       {/* Animated background overlay */}
-      <div className="fixed inset-0 bg-gradient-to-br from-white/50 via-gray-50/30 to-gray-100/20 pointer-events-none"></div>
+      <div className="fixed inset-0 bg-gradient-to-br from-white/50 via-gray-50/30 to-gray-100/20 dark:from-dark-900/50 dark:via-dark-800/30 dark:to-dark-700/20 pointer-events-none"></div>
 
       {/* Fixed Header - Clean Single Line Design */}
-      <header className="fixed top-0 left-0 right-0 z-50 bg-gradient-to-r from-blue-50/95 via-white/95 to-indigo-50/95 backdrop-blur-md border-b border-gray-200/50 shadow-xl">
+      <header className="fixed top-0 left-0 right-0 z-50 bg-gradient-to-r from-blue-50/95 via-white/95 to-indigo-50/95 dark:from-dark-800/95 dark:via-dark-900/95 dark:to-dark-800/95 backdrop-blur-md border-b border-gray-200/50 dark:border-dark-600/50 shadow-xl">
         <div className="container mx-auto px-3 sm:px-6 py-3 sm:py-4">
           <div className="relative flex items-center justify-between">
 
@@ -239,7 +240,7 @@ const AppContent: React.FC = memo(() => {
               {/* Hamburger Menu */}
               <button
                 onClick={openBacentaDrawer}
-                className="group flex items-center space-x-2 px-2 sm:px-3 py-2 text-gray-600 hover:text-gray-900 transition-all duration-300 rounded-lg hover:bg-white/50"
+                className="group flex items-center space-x-2 px-2 sm:px-3 py-2 text-gray-600 dark:text-dark-300 hover:text-gray-900 dark:hover:text-dark-100 transition-all duration-300 rounded-lg hover:bg-white/50 dark:hover:bg-dark-700/50"
                 title="Open Navigation Menu"
                 aria-label="Open Navigation Menu"
               >
@@ -256,14 +257,14 @@ const AppContent: React.FC = memo(() => {
                 aria-label="Go to Dashboard"
                 title="Go to Dashboard"
               >
-                <div className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 bg-white rounded-lg sm:rounded-xl flex items-center justify-center shadow-lg group-hover:shadow-xl transition-all duration-300 ring-2 ring-blue-100 p-0.5">
+                <div className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 bg-white dark:bg-dark-700 rounded-lg sm:rounded-xl flex items-center justify-center shadow-lg group-hover:shadow-xl transition-all duration-300 ring-2 ring-blue-100 dark:ring-dark-600 p-0.5">
                   <img src="/logo.png" alt={DEFAULT_CHURCH.NAME} className="w-full h-full object-contain" />
                 </div>
                 <div className="hidden sm:block">
-                  <h1 className="text-lg sm:text-xl font-bold gradient-text font-serif group-hover:text-gray-700 transition-colors duration-300">
+                  <h1 className="text-lg sm:text-xl font-bold gradient-text font-serif group-hover:text-gray-700 dark:group-hover:text-dark-200 transition-colors duration-300">
                     {isBacentaTab ? currentTab.name : 'SAT Mobile'}
                   </h1>
-                  <p className="text-xs text-gray-600 font-medium group-hover:text-gray-700 transition-colors duration-300">
+                  <p className="text-xs text-gray-600 dark:text-dark-300 font-medium group-hover:text-gray-700 dark:group-hover:text-dark-200 transition-colors duration-300">
                     {isBacentaTab ? 'Bacenta Management' : DEFAULT_CHURCH.NAME}
                   </p>
                 </div>
@@ -271,8 +272,8 @@ const AppContent: React.FC = memo(() => {
             </div>
 
             {/* Center Section - Current Tab Indicator (All Screens) */}
-            <div className="absolute left-1/2 transform -translate-x-1/2 flex items-center px-3 py-2 bg-white/20 rounded-lg border border-white/30">
-              <span className="text-gray-700 font-medium text-sm truncate max-w-[100px] sm:max-w-[150px]">
+            <div className="absolute left-1/2 transform -translate-x-1/2 flex items-center px-3 py-2 bg-white/20 dark:bg-dark-700/20 rounded-lg border border-white/30 dark:border-dark-600/30">
+              <span className="text-gray-700 dark:text-dark-200 font-medium text-sm truncate max-w-[100px] sm:max-w-[150px]">
                 {currentTab.name}
               </span>
             </div>
@@ -438,24 +439,24 @@ const AppContent: React.FC = memo(() => {
           onClick={() => removeToast(toast.id)}
         >
           <div className={`
-            ${toast.type === 'success' ? 'bg-green-50 border-green-200' :
-              toast.type === 'error' ? 'bg-red-50 border-red-200' :
-              toast.type === 'warning' ? 'bg-yellow-50 border-yellow-200' :
-              'bg-blue-50 border-blue-200'
+            ${toast.type === 'success' ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-700' :
+              toast.type === 'error' ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-700' :
+              toast.type === 'warning' ? 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-700' :
+              'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-700'
             } border rounded-lg sm:rounded-xl shadow-lg backdrop-blur-sm p-3 sm:p-4 relative overflow-hidden cursor-pointer
           `}>
             <div className="flex items-start space-x-2 sm:space-x-3">
               <div className={`flex-shrink-0 w-6 h-6 sm:w-8 sm:h-8 ${
-                toast.type === 'success' ? 'bg-green-100' :
-                toast.type === 'error' ? 'bg-red-100' :
-                toast.type === 'warning' ? 'bg-yellow-100' :
-                'bg-blue-100'
+                toast.type === 'success' ? 'bg-green-100 dark:bg-green-800' :
+                toast.type === 'error' ? 'bg-red-100 dark:bg-red-800' :
+                toast.type === 'warning' ? 'bg-yellow-100 dark:bg-yellow-800' :
+                'bg-blue-100 dark:bg-blue-800'
               } rounded-full flex items-center justify-center`}>
                 <span className={`text-xs sm:text-sm ${
-                  toast.type === 'success' ? 'text-green-600' :
-                  toast.type === 'error' ? 'text-red-600' :
-                  toast.type === 'warning' ? 'text-yellow-600' :
-                  'text-blue-600'
+                  toast.type === 'success' ? 'text-green-600 dark:text-green-200' :
+                  toast.type === 'error' ? 'text-red-600 dark:text-red-200' :
+                  toast.type === 'warning' ? 'text-yellow-600 dark:text-yellow-200' :
+                  'text-blue-600 dark:text-blue-200'
                 }`}>
                   {toast.type === 'success' ? '✓' :
                    toast.type === 'error' ? '✗' :
@@ -464,19 +465,19 @@ const AppContent: React.FC = memo(() => {
               </div>
               <div className="flex-1 min-w-0">
                 <h4 className={`font-semibold text-xs sm:text-sm ${
-                  toast.type === 'success' ? 'text-green-800' :
-                  toast.type === 'error' ? 'text-red-800' :
-                  toast.type === 'warning' ? 'text-yellow-800' :
-                  'text-blue-800'
+                  toast.type === 'success' ? 'text-green-800 dark:text-green-100' :
+                  toast.type === 'error' ? 'text-red-800 dark:text-red-100' :
+                  toast.type === 'warning' ? 'text-yellow-800 dark:text-yellow-100' :
+                  'text-blue-800 dark:text-blue-100'
                 }`}>
                   {toast.title}
                 </h4>
                 {toast.message && (
                   <p className={`mt-1 text-xs sm:text-sm ${
-                    toast.type === 'success' ? 'text-green-700' :
-                    toast.type === 'error' ? 'text-red-700' :
-                    toast.type === 'warning' ? 'text-yellow-700' :
-                    'text-blue-700'
+                    toast.type === 'success' ? 'text-green-700 dark:text-green-200' :
+                    toast.type === 'error' ? 'text-red-700 dark:text-red-200' :
+                    toast.type === 'warning' ? 'text-yellow-700 dark:text-yellow-200' :
+                    'text-blue-700 dark:text-blue-200'
                   }`}>
                     {toast.message}
                   </p>
@@ -503,9 +504,11 @@ const AuthenticatedApp: React.FC = () => {
 
 const App: React.FC = () => {
   return (
-    <FirebaseAppProvider>
-      <AuthenticatedApp />
-    </FirebaseAppProvider>
+    <ThemeProvider>
+      <FirebaseAppProvider>
+        <AuthenticatedApp />
+      </FirebaseAppProvider>
+    </ThemeProvider>
   );
 };
 

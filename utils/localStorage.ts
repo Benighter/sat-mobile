@@ -11,6 +11,7 @@ const STORAGE_KEYS = {
   DISPLAYED_DATE: 'church_connect_displayed_date',
   APP_VERSION: 'church_connect_version',
   LAST_BACKUP: 'church_connect_last_backup',
+  THEME_PREFERENCE: 'church_connect_theme_preference',
 } as const;
 
 // Current app version for migration purposes
@@ -228,23 +229,38 @@ export const appStateStorage = {
   saveCurrentTab: (tab: TabOption): void => {
     setItem(STORAGE_KEYS.CURRENT_TAB, tab);
   },
-  
+
   loadCurrentTab: (): TabOption | null => {
     return getItem<TabOption | null>(STORAGE_KEYS.CURRENT_TAB, null);
   },
-  
+
   saveDisplayedDate: (date: Date): void => {
     setItem(STORAGE_KEYS.DISPLAYED_DATE, date.toISOString());
   },
-  
+
   loadDisplayedDate: (): Date => {
     const dateString = getItem<string>(STORAGE_KEYS.DISPLAYED_DATE, new Date().toISOString());
     return new Date(dateString);
   },
-  
+
   clear: (): void => {
     removeItem(STORAGE_KEYS.CURRENT_TAB);
     removeItem(STORAGE_KEYS.DISPLAYED_DATE);
+  }
+};
+
+// Theme storage
+export const themeStorage = {
+  saveTheme: (theme: 'light' | 'dark' | 'system'): void => {
+    setItem(STORAGE_KEYS.THEME_PREFERENCE, theme);
+  },
+
+  loadTheme: (): 'light' | 'dark' | 'system' => {
+    return getItem<'light' | 'dark' | 'system'>(STORAGE_KEYS.THEME_PREFERENCE, 'system');
+  },
+
+  clear: (): void => {
+    removeItem(STORAGE_KEYS.THEME_PREFERENCE);
   }
 };
 
