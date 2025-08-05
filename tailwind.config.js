@@ -8,6 +8,13 @@ export default {
   darkMode: 'class',
   theme: {
     extend: {
+      screens: {
+        'xs': '475px',
+        'desktop': '1024px',
+        'desktop-lg': '1280px',
+        'desktop-xl': '1536px',
+        'ultra-wide': '1920px',
+      },
       fontFamily: {
         'sans': ['Inter', 'system-ui', 'sans-serif'],
         'serif': ['Playfair Display', 'serif'],
@@ -116,6 +123,31 @@ export default {
       },
       backdropBlur: {
         xs: '2px',
+      },
+      spacing: {
+        '18': '4.5rem',
+        '88': '22rem',
+        '128': '32rem',
+        '144': '36rem',
+      },
+      maxWidth: {
+        '8xl': '88rem',
+        '9xl': '96rem',
+        '10xl': '104rem',
+      },
+      gridTemplateColumns: {
+        '13': 'repeat(13, minmax(0, 1fr))',
+        '14': 'repeat(14, minmax(0, 1fr))',
+        '15': 'repeat(15, minmax(0, 1fr))',
+        '16': 'repeat(16, minmax(0, 1fr))',
+        'auto-fit-250': 'repeat(auto-fit, minmax(250px, 1fr))',
+        'auto-fit-300': 'repeat(auto-fit, minmax(300px, 1fr))',
+        'auto-fit-350': 'repeat(auto-fit, minmax(350px, 1fr))',
+        'auto-fit-400': 'repeat(auto-fit, minmax(400px, 1fr))',
+      },
+      minHeight: {
+        '128': '32rem',
+        '144': '36rem',
       },
     }
   },

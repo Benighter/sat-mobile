@@ -5,6 +5,7 @@ import {
   getNextSunday,
   getPreviousSunday,
   formatFullDate,
+  formatCompactDate,
   getTodayYYYYMMDD
 } from '../../utils/dateUtils';
 import { hasAdminPrivileges } from '../../utils/permissionUtils';
@@ -422,53 +423,57 @@ const SundayConfirmationsView: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-50 p-4 sm:p-6 lg:p-8">
       <div className="max-w-4xl mx-auto">
-        {/* Clean Paper-like Container */}
+        {/* Professional Container */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-          {/* Clean Neutral Header */}
-          <div className="bg-gray-50 border-b border-gray-200 pt-8 pb-8 px-6 text-center">
+          {/* Professional Header */}
+          <div className="bg-white border-b border-gray-200 pt-8 pb-8 px-6 text-center">
             {/* Title Section */}
             <div className="mb-6">
               <div className="flex justify-center mb-4">
-                <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center">
-                  <CheckIcon className="w-6 h-6 text-gray-600" />
+                <div className="w-12 h-12 bg-slate-100 rounded-lg flex items-center justify-center">
+                  <CheckIcon className="w-6 h-6 text-slate-600" />
                 </div>
               </div>
               <h1 className="text-2xl font-bold text-gray-900 mb-2">Sunday Confirmations</h1>
               <p className="text-gray-600 text-sm">Members confirmed for Sunday service</p>
             </div>
 
-            {/* Clean Date Navigation */}
-            <div className="flex items-center justify-center space-x-4 mb-6">
-              <button
-                onClick={handlePreviousSunday}
-                className="flex items-center justify-center w-10 h-10 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-lg transition-colors duration-200 shadow-sm"
-                title="Previous Sunday"
-              >
-                <ChevronLeftIcon className="w-5 h-5" />
-              </button>
+            {/* Professional Date Navigation - Optimized for Full Date Display */}
+            <div className="flex items-center justify-center mb-6 px-2 sm:px-4">
+              <div className="flex items-center w-full max-w-sm sm:max-w-md lg:max-w-lg">
+                <button
+                  onClick={handlePreviousSunday}
+                  className="flex items-center justify-center w-10 h-10 sm:w-11 sm:h-11 bg-white border border-gray-300 hover:bg-gray-50 hover:border-gray-400 text-gray-700 rounded-xl transition-all duration-200 shadow-sm hover:shadow-md flex-shrink-0"
+                  title="Previous Sunday"
+                >
+                  <ChevronLeftIcon className="w-4 h-4 sm:w-5 sm:h-5" />
+                </button>
 
-              <div className="text-center px-4 min-w-0 flex-shrink-0">
-                <div className="text-lg font-semibold text-gray-900 whitespace-nowrap">{formatFullDate(selectedSunday)}</div>
-                <div className="text-sm text-gray-500 whitespace-nowrap">
-                  {selectedSunday === getUpcomingSunday() ? 'Upcoming Sunday' : 'Selected Sunday'}
+                <div className="text-center flex-1 min-w-0 mx-3 sm:mx-4">
+                  <div className="text-sm sm:text-base lg:text-lg font-semibold text-gray-900 leading-tight">
+                    {formatCompactDate(selectedSunday)}
+                  </div>
+                  <div className="text-xs sm:text-sm text-gray-500 mt-0.5">
+                    {selectedSunday === getUpcomingSunday() ? 'Upcoming Sunday' : 'Selected Sunday'}
+                  </div>
                 </div>
-              </div>
 
-              <button
-                onClick={handleNextSunday}
-                disabled={!canGoNext}
-                className={`flex items-center justify-center w-10 h-10 rounded-lg transition-colors duration-200 shadow-sm ${
-                  canGoNext
-                    ? 'bg-white border border-gray-300 hover:bg-gray-50 text-gray-700'
-                    : 'bg-gray-100 border border-gray-200 text-gray-400 cursor-not-allowed'
-                }`}
-                title="Next Sunday"
-              >
-                <ChevronRightIcon className="w-5 h-5" />
-              </button>
+                <button
+                  onClick={handleNextSunday}
+                  disabled={!canGoNext}
+                  className={`flex items-center justify-center w-10 h-10 sm:w-11 sm:h-11 rounded-xl transition-all duration-200 shadow-sm flex-shrink-0 ${
+                    canGoNext
+                      ? 'bg-white border border-gray-300 hover:bg-gray-50 hover:border-gray-400 text-gray-700 hover:shadow-md'
+                      : 'bg-gray-100 border border-gray-200 text-gray-400 cursor-not-allowed'
+                  }`}
+                  title="Next Sunday"
+                >
+                  <ChevronRightIcon className="w-4 h-4 sm:w-5 sm:h-5" />
+                </button>
+              </div>
             </div>
 
-            {/* Clean Statistics with Target */}
+            {/* Professional Statistics with Target */}
             <div className="space-y-4">
               {/* Progress Bar */}
               <div className="w-full max-w-md mx-auto">
@@ -480,7 +485,7 @@ const SundayConfirmationsView: React.FC = () => {
                 </div>
                 <div className="w-full bg-gray-200 rounded-full h-2">
                   <div
-                    className="bg-gray-900 h-2 rounded-full transition-all duration-500"
+                    className="bg-slate-600 h-2 rounded-full transition-all duration-500"
                     style={{
                       width: isLoadingTarget ? '0%' : `${Math.min((confirmationData.grandTotal / (confirmationTarget || 1)) * 100, 100)}%`
                     }}
@@ -512,20 +517,20 @@ const SundayConfirmationsView: React.FC = () => {
                               if (e.key === 'Enter') handleTargetSave();
                               if (e.key === 'Escape') handleTargetCancel();
                             }}
-                            className="w-20 px-2 py-1 text-center border border-gray-300 rounded text-lg font-bold focus:ring-2 focus:ring-gray-500 focus:border-transparent"
+                            className="w-20 px-2 py-1 text-center border border-gray-300 bg-white text-gray-900 rounded text-lg font-bold focus:ring-2 focus:ring-slate-500 focus:border-transparent transition-all duration-200"
                             min="0"
                             autoFocus
                           />
                           <button
                             onClick={handleTargetSave}
-                            className="flex items-center justify-center w-8 h-8 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-full transition-colors"
+                            className="flex items-center justify-center w-8 h-8 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-all duration-200"
                             title="Save target"
                           >
                             <CheckIcon className="w-4 h-4" />
                           </button>
                           <button
                             onClick={handleTargetCancel}
-                            className="flex items-center justify-center w-8 h-8 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-full transition-colors text-lg font-bold"
+                            className="flex items-center justify-center w-8 h-8 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-all duration-200 text-lg font-bold"
                             title="Cancel"
                           >
                             ×
@@ -542,7 +547,7 @@ const SundayConfirmationsView: React.FC = () => {
                             <button
                               onClick={handleTargetEdit}
                               disabled={isLoadingTarget}
-                              className="flex items-center justify-center w-6 h-6 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors ml-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                              className="flex items-center justify-center w-6 h-6 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-all duration-200 ml-1 disabled:opacity-50 disabled:cursor-not-allowed"
                               title="Edit target (Admin only)"
                             >
                               <EditIcon className="w-3 h-3" />
@@ -566,7 +571,7 @@ const SundayConfirmationsView: React.FC = () => {
                 <div className="flex items-center justify-center space-x-3">
                   <button
                     onClick={handleAddGuest}
-                    className="flex items-center justify-center px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors shadow-sm"
+                    className="flex items-center justify-center px-5 py-2.5 bg-slate-600 hover:bg-slate-700 text-white rounded-lg transition-all duration-200 shadow-sm"
                   >
                     <UserPlusIcon className="w-4 h-4 mr-2" />
                     <span className="text-sm font-medium">Add Guest</span>
@@ -574,7 +579,7 @@ const SundayConfirmationsView: React.FC = () => {
 
                   <button
                     onClick={copyConfirmationText}
-                    className="flex items-center justify-center px-5 py-2.5 bg-white border border-gray-300 hover:bg-gray-50 rounded-lg transition-colors text-gray-700 shadow-sm"
+                    className="flex items-center justify-center px-5 py-2.5 bg-white border border-gray-300 hover:bg-gray-50 rounded-lg transition-all duration-200 text-gray-700 shadow-sm"
                   >
                     <ClipboardIcon className="w-4 h-4 mr-2" />
                     <span className="text-sm font-medium">Copy Confirmations</span>
@@ -584,7 +589,7 @@ const SundayConfirmationsView: React.FC = () => {
             </div>
           </div>
 
-          {/* Clean Confirmation Content */}
+          {/* Professional Confirmation Content */}
           <div className="p-6">
             {confirmationData.confirmationList.length === 0 ? (
               <div className="text-center py-12">
@@ -593,8 +598,8 @@ const SundayConfirmationsView: React.FC = () => {
                 <p className="text-gray-500 text-sm mb-6">
                   No members have confirmed attendance for this Sunday.
                 </p>
-                <div className="bg-green-50 rounded-lg p-4 border border-green-100 max-w-md mx-auto">
-                  <p className="text-green-700 text-sm">
+                <div className="bg-emerald-50 rounded-lg p-4 border border-emerald-200 max-w-md mx-auto">
+                  <p className="text-emerald-700 text-sm">
                     Members can confirm their attendance by clicking the confirmation button
                     in the Members table or their individual member cards.
                   </p>
@@ -602,7 +607,7 @@ const SundayConfirmationsView: React.FC = () => {
               </div>
             ) : (
               <>
-                {/* Clean Confirmation List */}
+                {/* Professional Confirmation List */}
                 <div className="divide-y divide-gray-100">
                   {confirmationData.confirmationList.map((confirmation, bacentaIndex) => {
                     // Sort members by role priority
@@ -628,10 +633,10 @@ const SundayConfirmationsView: React.FC = () => {
 
                     return (
                       <div key={confirmation.bacenta.id} className={`py-4 ${bacentaIndex > 0 ? 'pt-6' : ''}`}>
-                        {/* Clean Bacenta Header */}
+                        {/* Professional Bacenta Header */}
                         <div className="flex items-center justify-between mb-4">
                           <div className="flex items-center space-x-3">
-                            <div className="w-10 h-10 bg-green-500 rounded-lg flex items-center justify-center">
+                            <div className="w-10 h-10 bg-amber-500 rounded-lg flex items-center justify-center">
                               <span className="text-white font-bold">
                                 {confirmation.bacenta.name.charAt(0)}
                               </span>
@@ -641,13 +646,13 @@ const SundayConfirmationsView: React.FC = () => {
                               <p className="text-sm text-gray-500">Bacenta Community</p>
                             </div>
                           </div>
-                          <div className="bg-green-100 text-green-800 px-3 py-1 rounded-lg">
+                          <div className="bg-amber-100 text-amber-800 px-3 py-1 rounded-lg border border-amber-200">
                             <span className="text-lg font-bold">{confirmation.total}</span>
                             <span className="text-sm ml-1">confirmed</span>
                           </div>
                         </div>
 
-                        {/* Clean Members and Guests List */}
+                        {/* Professional Members and Guests List */}
                         <div className="space-y-2">
                           {/* Members */}
                           {sortedMembers.map((member, index) => {
@@ -665,13 +670,13 @@ const SundayConfirmationsView: React.FC = () => {
                                       {memberName}
                                     </span>
                                     {member.role === 'Bacenta Leader' && (
-                                      <span className="inline-flex items-center text-xs text-green-700">
+                                      <span className="inline-flex items-center px-2 py-1 text-xs bg-emerald-100 text-emerald-700 rounded-md border border-emerald-200">
                                         <span className="mr-1">💚</span>
                                         <span className="hidden sm:inline">Bacenta Leader</span>
                                       </span>
                                     )}
                                     {member.role === 'Fellowship Leader' && (
-                                      <span className="inline-flex items-center text-xs text-red-700">
+                                      <span className="inline-flex items-center px-2 py-1 text-xs bg-rose-100 text-rose-700 rounded-md border border-rose-200">
                                         <span className="mr-1">❤️</span>
                                         <span className="hidden sm:inline">Fellowship Leader</span>
                                       </span>

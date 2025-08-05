@@ -166,16 +166,16 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, size = 
   if (!isOpen) return null;
 
   const sizeClasses = {
-    sm: 'max-w-sm sm:max-w-md',
-    md: 'max-w-md sm:max-w-lg',
-    lg: 'max-w-lg sm:max-w-xl',
-    xl: 'max-w-xl sm:max-w-2xl lg:max-w-4xl',
+    sm: 'max-w-sm sm:max-w-md desktop:max-w-lg',
+    md: 'max-w-md sm:max-w-lg desktop:max-w-xl desktop-lg:max-w-2xl',
+    lg: 'max-w-lg sm:max-w-xl desktop:max-w-2xl desktop-lg:max-w-4xl',
+    xl: 'max-w-xl sm:max-w-2xl lg:max-w-4xl desktop:max-w-5xl desktop-lg:max-w-6xl',
     full: 'max-w-full h-full rounded-none',
   };
 
   return (
     <div
-      className="fixed modal-backdrop z-[10000]"
+      className="fixed modal-backdrop desktop-modal-backdrop z-[10000]"
       style={{
         top: 'calc(var(--navbar-height, 0px) + env(safe-area-inset-top, 0px))',
         left: 'env(safe-area-inset-left, 0px)',
@@ -200,7 +200,7 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, size = 
       }}
     >
       <div
-        className={`bg-white dark:bg-dark-800 rounded-lg sm:rounded-xl shadow-xl w-full ${sizeClasses[size]} flex flex-col relative modal-content`}
+        className={`bg-white dark:bg-dark-800 rounded-lg sm:rounded-xl desktop:rounded-2xl shadow-xl desktop:shadow-2xl w-full ${sizeClasses[size]} flex flex-col relative modal-content desktop-modal-content`}
         style={{
           maxHeight: 'calc(100dvh - var(--navbar-height, 0px) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 2rem)',
           minHeight: 'auto',
@@ -211,20 +211,20 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, size = 
         onClick={(e) => e.stopPropagation()} // Prevent backdrop click when clicking inside modal
       >
         {title && (
-          <div className="flex items-center justify-between p-3 sm:p-4 border-b dark:border-dark-600 flex-shrink-0">
-            <h3 className="text-base sm:text-lg font-semibold text-gray-800 dark:text-dark-100 truncate pr-2">{title}</h3>
+          <div className="flex items-center justify-between p-3 sm:p-4 desktop:p-5 desktop-lg:p-6 border-b dark:border-dark-600 flex-shrink-0">
+            <h3 className="text-base sm:text-lg desktop:text-xl desktop-lg:text-2xl font-semibold text-gray-800 dark:text-dark-100 truncate pr-2">{title}</h3>
             <button
               onClick={onClose}
-              className="text-gray-500 dark:text-dark-400 hover:text-gray-700 dark:hover:text-dark-200 p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-dark-700 flex-shrink-0 transition-all duration-200 min-h-[44px] min-w-[44px] flex items-center justify-center"
+              className="text-gray-500 dark:text-dark-400 hover:text-gray-700 dark:hover:text-dark-200 p-2 desktop:p-3 rounded-lg desktop:rounded-xl hover:bg-gray-100 dark:hover:bg-dark-700 flex-shrink-0 transition-all duration-200 min-h-[44px] min-w-[44px] desktop:min-h-[48px] desktop:min-w-[48px] flex items-center justify-center"
               aria-label="Close modal"
               title="Close"
             >
-              <XMarkIcon className="w-5 h-5 sm:w-6 sm:h-6" />
+              <XMarkIcon className="w-5 h-5 sm:w-6 sm:h-6 desktop:w-6 desktop:h-6" />
             </button>
           </div>
         )}
         <div
-          className="p-3 sm:p-4 overflow-y-auto flex-1 modal-scrollable"
+          className="p-3 sm:p-4 desktop:p-5 desktop-lg:p-6 overflow-y-auto flex-1 modal-scrollable desktop-scroll"
           style={{
             overscrollBehavior: 'contain',
             WebkitOverflowScrolling: 'touch',
@@ -234,7 +234,7 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, size = 
           {children}
         </div>
         {footer && (
-          <div className="p-3 sm:p-4 border-t bg-gray-50/50 flex-shrink-0">
+          <div className="p-3 sm:p-4 desktop:p-5 desktop-lg:p-6 border-t bg-gray-50/50 desktop:bg-gray-50/70 flex-shrink-0">
             {footer}
           </div>
         )}

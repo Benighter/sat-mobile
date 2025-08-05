@@ -5,6 +5,7 @@ import {
   getNextSunday,
   getPreviousSunday,
   formatFullDate,
+  formatCompactDate,
   getTodayYYYYMMDD
 } from '../../utils/dateUtils';
 import {
@@ -186,53 +187,57 @@ const WeeklyAttendanceView: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-50 p-4 sm:p-6 lg:p-8">
       <div className="max-w-4xl mx-auto">
-        {/* Paper-like Container */}
+        {/* Professional Container */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-          {/* Header */}
+          {/* Professional Header */}
           <div className="border-b border-gray-200 pt-8 pb-6 px-6 text-center">
             {/* Title */}
             <div className="mb-6">
-              <div className="flex justify-center mb-2">
-                <CalendarIcon className="w-7 h-7 text-blue-600" />
+              <div className="flex justify-center mb-4">
+                <div className="w-12 h-12 bg-slate-100 rounded-lg flex items-center justify-center">
+                  <CalendarIcon className="w-6 h-6 text-slate-600" />
+                </div>
               </div>
-              <h1 className="text-2xl font-semibold text-gray-900">Weekly Attendance</h1>
+              <h1 className="text-2xl font-bold text-gray-900">Weekly Attendance</h1>
               <p className="text-gray-600 text-sm mt-1">Sunday attendance summary</p>
             </div>
 
-            {/* Date Navigation */}
-            <div className="flex items-center justify-center space-x-4 mb-4">
-              <button
-                onClick={handlePreviousSunday}
-                className="flex items-center justify-center w-10 h-10 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-lg transition-colors duration-200 shadow-sm"
-                title="Previous Sunday"
-              >
-                <ChevronLeftIcon className="w-5 h-5" />
-              </button>
+            {/* Professional Date Navigation - Optimized for Full Date Display */}
+            <div className="flex items-center justify-center mb-4 px-2 sm:px-4">
+              <div className="flex items-center w-full max-w-sm sm:max-w-md lg:max-w-lg">
+                <button
+                  onClick={handlePreviousSunday}
+                  className="flex items-center justify-center w-10 h-10 sm:w-11 sm:h-11 bg-white border border-gray-300 hover:bg-gray-50 hover:border-gray-400 text-gray-700 rounded-xl transition-all duration-200 shadow-sm hover:shadow-md flex-shrink-0"
+                  title="Previous Sunday"
+                >
+                  <ChevronLeftIcon className="w-4 h-4 sm:w-5 sm:h-5" />
+                </button>
 
-              <div className="text-center px-4 min-w-0 flex-shrink-0">
-                <h2 className="text-lg font-semibold text-gray-900 whitespace-nowrap">
-                  {formatFullDate(selectedSunday)}
-                </h2>
+                <div className="text-center flex-1 min-w-0 mx-3 sm:mx-4">
+                  <h2 className="text-sm sm:text-base lg:text-lg font-semibold text-gray-900 leading-tight">
+                    {formatCompactDate(selectedSunday)}
+                  </h2>
+                </div>
+
+                <button
+                  onClick={handleNextSunday}
+                  disabled={!canGoNext}
+                  className={`flex items-center justify-center w-10 h-10 sm:w-11 sm:h-11 rounded-xl transition-all duration-200 shadow-sm flex-shrink-0 ${
+                    canGoNext
+                      ? 'bg-white border border-gray-300 hover:bg-gray-50 hover:border-gray-400 text-gray-700 hover:shadow-md'
+                      : 'bg-gray-100 border border-gray-200 text-gray-400 cursor-not-allowed'
+                  }`}
+                  title="Next Sunday"
+                >
+                  <ChevronRightIcon className="w-4 h-4 sm:w-5 sm:h-5" />
+                </button>
               </div>
-
-              <button
-                onClick={handleNextSunday}
-                disabled={!canGoNext}
-                className={`flex items-center justify-center w-10 h-10 rounded-lg transition-colors duration-200 shadow-sm ${
-                  canGoNext
-                    ? 'bg-white border border-gray-300 hover:bg-gray-50 text-gray-700'
-                    : 'bg-gray-100 border border-gray-200 text-gray-400 cursor-not-allowed'
-                }`}
-                title="Next Sunday"
-              >
-                <ChevronRightIcon className="w-5 h-5" />
-              </button>
             </div>
 
             {/* Copy Button */}
             <button
               onClick={copyAttendanceText}
-              className="inline-flex items-center space-x-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors duration-200 text-sm font-medium"
+              className="inline-flex items-center space-x-2 px-4 py-2 bg-slate-600 hover:bg-slate-700 text-white rounded-lg transition-all duration-200 text-sm font-medium shadow-sm"
               title="Copy attendance as text"
             >
               <ClipboardIcon className="w-4 h-4" />
@@ -240,7 +245,7 @@ const WeeklyAttendanceView: React.FC = () => {
             </button>
           </div>
 
-          {/* Attendance Content */}
+          {/* Professional Attendance Content */}
           <div className="p-6">
             {attendanceData.attendanceList.length === 0 ? (
               <div className="text-center py-12">
@@ -250,7 +255,7 @@ const WeeklyAttendanceView: React.FC = () => {
               </div>
             ) : (
               <>
-                {/* Attendance List */}
+                {/* Professional Attendance List */}
                 <div className="divide-y divide-gray-100">
                   {attendanceData.attendanceList.map((attendance, bacentaIndex) => {
                     // Sort members by role priority
@@ -276,16 +281,27 @@ const WeeklyAttendanceView: React.FC = () => {
 
                     return (
                       <div key={attendance.bacenta.id} className={`py-4 ${bacentaIndex > 0 ? 'pt-6' : ''}`}>
-                        {/* Bacenta Header */}
-                        <div className="flex items-center justify-between mb-3">
-                          <h3 className="text-lg font-medium text-gray-900">{attendance.bacenta.name}</h3>
-                          <span className="text-sm font-medium text-gray-700">
-                            Total: {attendance.total}
-                          </span>
+                        {/* Professional Bacenta Header */}
+                        <div className="flex items-center justify-between mb-4">
+                          <div className="flex items-center space-x-3">
+                            <div className="w-10 h-10 bg-indigo-500 rounded-lg flex items-center justify-center">
+                              <span className="text-white font-bold">
+                                {attendance.bacenta.name.charAt(0)}
+                              </span>
+                            </div>
+                            <div>
+                              <h3 className="text-lg font-semibold text-gray-900">{attendance.bacenta.name}</h3>
+                              <p className="text-sm text-gray-500">Bacenta Community</p>
+                            </div>
+                          </div>
+                          <div className="bg-indigo-100 text-indigo-800 px-3 py-1 rounded-lg border border-indigo-200">
+                            <span className="text-lg font-bold">{attendance.total}</span>
+                            <span className="text-sm ml-1">present</span>
+                          </div>
                         </div>
 
-                        {/* Members List */}
-                        <div className="space-y-2 pl-2">
+                        {/* Professional Members List */}
+                        <div className="space-y-2">
                           {sortedMembers.map((member, index) => (
                             <div key={member.id} className="flex items-start">
                               <span className="text-gray-500 text-sm font-medium w-6 pt-0.5">
@@ -297,13 +313,13 @@ const WeeklyAttendanceView: React.FC = () => {
                                 </span>
                                 {/* Role Indicator */}
                                 {member.role === 'Bacenta Leader' && (
-                                  <span className="inline-flex items-center text-xs text-green-700">
+                                  <span className="inline-flex items-center px-2 py-1 text-xs bg-emerald-100 text-emerald-700 rounded-md border border-emerald-200">
                                     <span className="mr-1">💚</span>
                                     <span className="hidden sm:inline">Bacenta Leader</span>
                                   </span>
                                 )}
                                 {member.role === 'Fellowship Leader' && (
-                                  <span className="inline-flex items-center text-xs text-red-700">
+                                  <span className="inline-flex items-center px-2 py-1 text-xs bg-rose-100 text-rose-700 rounded-md border border-rose-200">
                                     <span className="mr-1">❤️</span>
                                     <span className="hidden sm:inline">Fellowship Leader</span>
                                   </span>
@@ -322,7 +338,7 @@ const WeeklyAttendanceView: React.FC = () => {
                                 <span className="text-gray-900">
                                   {newBeliever.name} {newBeliever.surname}
                                 </span>
-                                <span className="text-xs text-green-700">
+                                <span className="inline-flex items-center px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded-md border border-blue-200">
                                   New Believer
                                 </span>
                               </div>
@@ -334,11 +350,11 @@ const WeeklyAttendanceView: React.FC = () => {
                   })}
                 </div>
 
-                {/* Grand Total */}
+                {/* Professional Grand Total */}
                 <div className="mt-8 pt-6 border-t border-gray-200">
                   <div className="flex items-center justify-between">
-                    <h3 className="text-lg font-medium text-gray-900">Grand Total</h3>
-                    <span className="text-2xl font-semibold text-blue-600">{attendanceData.grandTotal}</span>
+                    <h3 className="text-lg font-semibold text-gray-900">Grand Total</h3>
+                    <span className="text-2xl font-bold text-slate-600">{attendanceData.grandTotal}</span>
                   </div>
                   <p className="text-sm text-gray-500 mt-1">
                     Total attendance across all bacentas for {formatFullDate(selectedSunday)}

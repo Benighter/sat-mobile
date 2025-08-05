@@ -130,15 +130,15 @@ const MemberFormModal: React.FC<MemberFormModalProps> = ({ isOpen, onClose, memb
       title={member ? 'Edit Member' : 'Add New Member'}
       size="lg"
     >
-      <div className="p-6">
+      <div className="p-6 desktop:p-0">
         {/* Header */}
-        <div className="text-center mb-8">
-          <p className="text-gray-600 dark:text-dark-300">
+        <div className="text-center mb-8 desktop:mb-6">
+          <p className="text-gray-600 dark:text-dark-300 desktop:text-lg">
             {member ? 'Update member information' : 'Add a new member to your community'}
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-8">
+        <form onSubmit={handleSubmit} className="space-y-8 desktop:space-y-6 desktop-form">
           {/* Profile Picture Section */}
           <div className="flex flex-col items-center space-y-4">
             <div className="text-center">
@@ -170,13 +170,13 @@ const MemberFormModal: React.FC<MemberFormModalProps> = ({ isOpen, onClose, memb
           )}
 
           {/* Personal Information */}
-          <div className="space-y-6">
+          <div className="space-y-6 desktop:space-y-4">
             <div className="flex items-center space-x-2 pb-2 border-b border-gray-200">
-              <User className="w-5 h-5 text-gray-600" />
-              <h3 className="text-lg font-semibold text-gray-900">Personal Information</h3>
+              <User className="w-5 h-5 desktop:w-6 desktop:h-6 text-gray-600" />
+              <h3 className="text-lg desktop:text-xl font-semibold text-gray-900">Personal Information</h3>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 desktop:grid-cols-2 gap-6 desktop:gap-4 desktop-lg:gap-6">
               <div className="space-y-2">
                 <label className="block text-sm font-medium text-gray-700">
                   First Name <span className="text-red-500">*</span>
@@ -207,10 +207,10 @@ const MemberFormModal: React.FC<MemberFormModalProps> = ({ isOpen, onClose, memb
             </div>
           </div>
           {/* Contact Information */}
-          <div className="space-y-6">
+          <div className="space-y-6 desktop:space-y-4">
             <div className="flex items-center space-x-2 pb-2 border-b border-gray-200">
-              <Phone className="w-5 h-5 text-gray-600" />
-              <h3 className="text-lg font-semibold text-gray-900">Contact Information</h3>
+              <Phone className="w-5 h-5 desktop:w-6 desktop:h-6 text-gray-600" />
+              <h3 className="text-lg desktop:text-xl font-semibold text-gray-900">Contact Information</h3>
             </div>
 
             <div className="space-y-2">

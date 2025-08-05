@@ -351,14 +351,14 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
   const currentYear = displayedDate.getFullYear();
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3 desktop:space-y-4">
       {/* Clean Header */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+      <div className="bg-white rounded-lg desktop:rounded-xl shadow-sm desktop:shadow-md border border-gray-200 p-4 desktop:p-5 desktop-lg:p-6">
         <div className="text-center">
           {/* Title */}
           <div className="flex items-center justify-center space-x-2 mb-3">
-            <CalendarIcon className="w-5 h-5 text-blue-600" />
-            <h2 className="text-xl font-semibold text-gray-900">
+            <CalendarIcon className="w-5 h-5 desktop:w-6 desktop:h-6 text-blue-600" />
+            <h2 className="text-xl desktop:text-2xl desktop-lg:text-3xl font-semibold text-gray-900">
               Attendance for {currentMonthName} {currentYear}
             </h2>
           </div>
@@ -455,10 +455,10 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
             </div>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full border-collapse">
+          <div className="overflow-x-auto desktop:overflow-x-visible desktop-table-container">
+            <table className="min-w-full border-collapse desktop-table desktop:w-full">
               <thead>
-                <tr className="bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200">
+                <tr className="bg-gradient-to-r from-gray-50 to-gray-100 desktop:from-gray-50 desktop:to-gray-50 border-b border-gray-200 desktop:border-gray-300">
                   {/* Fixed Headers (Number and Name) */}
                   {fixedColumns.map((column, index) => (
                     <th

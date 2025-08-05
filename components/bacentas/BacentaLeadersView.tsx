@@ -242,13 +242,13 @@ const BacentaLeadersView: React.FC = () => {
   ] : baseColumns;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 desktop:space-y-8">
       {/* Header with current month and search */}
-      <div className="glass p-4 rounded-2xl shadow-lg">
+      <div className="glass p-4 desktop:p-5 desktop-lg:p-6 rounded-2xl desktop:rounded-xl desktop-lg:rounded-2xl shadow-lg desktop:shadow-md desktop-lg:shadow-lg">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-4 sm:space-y-0">
           <div>
-            <h3 className="text-lg font-semibold text-gray-800 flex items-center">
-              <UserIcon className="w-5 h-5 mr-2 text-green-600" />
+            <h3 className="text-lg desktop:text-xl desktop-lg:text-2xl font-semibold text-gray-800 flex items-center">
+              <UserIcon className="w-5 h-5 desktop:w-6 desktop:h-6 mr-2 text-green-600" />
               Bacenta Leaders - {currentMonthName}
             </h3>
             <p className="text-sm text-gray-600 mt-1">
@@ -283,8 +283,8 @@ const BacentaLeadersView: React.FC = () => {
 
       {/* Summary */}
       {bacentaLeaders.length > 0 && (
-        <div className="glass p-4 rounded-2xl shadow-lg">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm">
+        <div className="glass p-4 desktop:p-5 desktop-lg:p-6 rounded-2xl desktop:rounded-xl desktop-lg:rounded-2xl shadow-lg desktop:shadow-md desktop-lg:shadow-lg">
+          <div className="grid grid-cols-1 md:grid-cols-4 desktop:grid-cols-4 desktop-lg:grid-cols-4 gap-4 desktop:gap-6 text-sm desktop:text-base">
             <div className="text-center">
               <div className="font-semibold text-gray-900">Total Leaders</div>
               <div className="text-2xl font-bold text-green-600">{bacentaLeaders.length}</div>

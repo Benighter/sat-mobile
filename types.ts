@@ -30,6 +30,7 @@ export interface NewBeliever {
   year: string;
   isFirstTime: boolean; // First Time? boolean field
   ministry: string; // Ministry dropdown selection
+  joinedDate: string; // ISO string, YYYY-MM-DD - when they joined
   createdDate: string; // ISO string
   lastUpdated: string; // ISO string
 }

@@ -226,41 +226,41 @@ const AppContent: React.FC = memo(() => {
       {/* Animated background overlay */}
       <div className="fixed inset-0 bg-gradient-to-br from-white/50 via-gray-50/30 to-gray-100/20 dark:from-dark-900/50 dark:via-dark-800/30 dark:to-dark-700/20 pointer-events-none"></div>
 
-      {/* Fixed Header - Clean Single Line Design */}
-      <header className="fixed top-0 left-0 right-0 z-50 bg-gradient-to-r from-blue-50/95 via-white/95 to-indigo-50/95 dark:from-dark-800/95 dark:via-dark-900/95 dark:to-dark-800/95 backdrop-blur-md border-b border-gray-200/50 dark:border-dark-600/50 shadow-xl">
-        <div className="container mx-auto px-3 sm:px-6 py-3 sm:py-4">
+      {/* Fixed Header - Clean Single Line Design with Desktop Enhancements */}
+      <header className="fixed top-0 left-0 right-0 z-50 bg-gradient-to-r from-blue-50/95 via-white/95 to-indigo-50/95 dark:from-dark-800/95 dark:via-dark-900/95 dark:to-dark-800/95 backdrop-blur-md desktop:backdrop-blur-lg border-b border-gray-200/50 dark:border-dark-600/50 shadow-xl desktop:shadow-lg desktop-nav">
+        <div className="container mx-auto px-3 sm:px-6 desktop:px-8 desktop-lg:px-12 py-3 sm:py-4 desktop:py-4 desktop-lg:py-5">
           <div className="relative flex items-center justify-between">
 
             {/* Left Section - Hamburger Menu and Logo */}
-            <div className="flex items-center space-x-3 sm:space-x-4">
+            <div className="flex items-center space-x-3 sm:space-x-4 desktop:space-x-6">
               {/* Hamburger Menu */}
               <button
                 onClick={openBacentaDrawer}
-                className="group flex items-center space-x-2 px-2 sm:px-3 py-2 text-gray-600 dark:text-dark-300 hover:text-gray-900 dark:hover:text-dark-100 transition-all duration-300 rounded-lg hover:bg-white/50 dark:hover:bg-dark-700/50"
+                className="group flex items-center space-x-2 px-2 sm:px-3 desktop:px-4 py-2 desktop:py-3 text-gray-600 dark:text-dark-300 hover:text-gray-900 dark:hover:text-dark-100 transition-all duration-300 rounded-lg desktop:rounded-xl hover:bg-white/50 dark:hover:bg-dark-700/50 desktop:hover:bg-white/70"
                 title="Open Navigation Menu"
                 aria-label="Open Navigation Menu"
               >
                 <div className="relative">
-                  <Bars3Icon className="w-5 h-5 sm:w-6 sm:h-6 transition-colors duration-200" />
+                  <Bars3Icon className="w-5 h-5 sm:w-6 sm:h-6 desktop:w-6 desktop:h-6 transition-colors duration-200" />
                 </div>
-                <span className="hidden sm:inline font-medium text-sm">Menu</span>
+                <span className="hidden sm:inline desktop:inline font-medium text-sm desktop:text-base">Menu</span>
               </button>
 
               {/* Logo - Always visible */}
               <button
                 onClick={() => switchTab({ id: 'dashboard', name: 'Dashboard' })}
-                className="flex items-center space-x-2 sm:space-x-3 transition-all duration-300 group"
+                className="flex items-center space-x-2 sm:space-x-3 desktop:space-x-4 transition-all duration-300 group"
                 aria-label="Go to Dashboard"
                 title="Go to Dashboard"
               >
-                <div className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 bg-white dark:bg-dark-700 rounded-lg sm:rounded-xl flex items-center justify-center shadow-lg group-hover:shadow-xl transition-all duration-300 ring-2 ring-blue-100 dark:ring-dark-600 p-0.5">
+                <div className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 desktop:w-12 desktop:h-12 desktop-lg:w-14 desktop-lg:h-14 bg-white dark:bg-dark-700 rounded-lg sm:rounded-xl desktop:rounded-xl desktop-lg:rounded-2xl flex items-center justify-center shadow-lg group-hover:shadow-xl desktop:group-hover:shadow-2xl transition-all duration-300 ring-2 ring-blue-100 dark:ring-dark-600 p-0.5">
                   <img src="/logo.png" alt={DEFAULT_CHURCH.NAME} className="w-full h-full object-contain" />
                 </div>
-                <div className="hidden sm:block">
-                  <h1 className="text-lg sm:text-xl font-bold gradient-text font-serif group-hover:text-gray-700 dark:group-hover:text-dark-200 transition-colors duration-300">
+                <div className="hidden sm:block desktop:block">
+                  <h1 className="text-lg sm:text-xl desktop:text-xl desktop-lg:text-2xl font-bold gradient-text font-serif group-hover:text-gray-700 dark:group-hover:text-dark-200 transition-colors duration-300">
                     {isBacentaTab ? currentTab.name : 'SAT Mobile'}
                   </h1>
-                  <p className="text-xs text-gray-600 dark:text-dark-300 font-medium group-hover:text-gray-700 dark:group-hover:text-dark-200 transition-colors duration-300">
+                  <p className="text-xs desktop:text-sm text-gray-600 dark:text-dark-300 font-medium group-hover:text-gray-700 dark:group-hover:text-dark-200 transition-colors duration-300">
                     {isBacentaTab ? 'Bacenta Management' : DEFAULT_CHURCH.NAME}
                   </p>
                 </div>
@@ -268,14 +268,14 @@ const AppContent: React.FC = memo(() => {
             </div>
 
             {/* Center Section - Current Tab Indicator (All Screens) */}
-            <div className="absolute left-1/2 transform -translate-x-1/2 flex items-center px-3 py-2 bg-white/40 dark:bg-dark-700/60 rounded-lg border border-gray-300/50 dark:border-dark-500/50 shadow-sm">
-              <span className="text-gray-800 dark:text-dark-100 font-medium text-sm truncate max-w-[100px] sm:max-w-[150px]">
+            <div className="absolute left-1/2 transform -translate-x-1/2 flex items-center px-3 py-2 desktop:px-4 desktop:py-3 bg-white/40 dark:bg-dark-700/60 desktop:bg-white/60 desktop:dark:bg-dark-700/80 rounded-lg desktop:rounded-xl border border-gray-300/50 dark:border-dark-500/50 desktop:border-gray-300/70 shadow-sm desktop:shadow-md">
+              <span className="text-gray-800 dark:text-dark-100 font-medium text-sm desktop:text-base truncate max-w-[100px] sm:max-w-[150px] desktop:max-w-[200px] desktop-lg:max-w-[250px]">
                 {currentTab.name}
               </span>
             </div>
 
             {/* Right Section - Notifications and Profile */}
-            <div className="flex items-center space-x-2 sm:space-x-3">
+            <div className="flex items-center space-x-2 sm:space-x-3 desktop:space-x-4">
               {/* Admin Notification Badge */}
               <NotificationBadge />
               
@@ -294,9 +294,9 @@ const AppContent: React.FC = memo(() => {
       </header>
 
       {/* Scrollable Main Content */}
-      <main className="flex-1 overflow-y-auto pt-16 sm:pt-18 pb-4 sm:pb-6 relative z-10">
+      <main className="flex-1 overflow-y-auto pt-16 sm:pt-18 desktop:pt-20 desktop-lg:pt-24 pb-4 sm:pb-6 desktop:pb-8 relative z-10">
         <GestureWrapper className="h-full">
-          <div className="container mx-auto px-2 sm:px-4 py-2 sm:py-3 md:py-4 compact-layout">
+          <div className="container mx-auto px-2 sm:px-4 desktop:px-8 desktop-lg:px-12 py-2 sm:py-3 md:py-4 desktop:py-6 desktop-lg:py-8 compact-layout desktop:desktop-dense-layout">
             <div className="animate-fade-in">
               {renderView()}
             </div>

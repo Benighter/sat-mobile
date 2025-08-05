@@ -49,6 +49,25 @@ export const formatFullDate = (dateInput: string | Date): string => {
    return date.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
 };
 
+// Formats a YYYY-MM-DD string or Date object to an abbreviated format (e.g., "Sun, Aug 10, 2025")
+export const formatAbbreviatedDate = (dateInput: string | Date): string => {
+  const date = typeof dateInput === 'string' ? new Date(dateInput + 'T00:00:00') : dateInput;
+  return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric', weekday: 'short' });
+};
+
+// Formats a YYYY-MM-DD string or Date object to a compact format (e.g., "Sun Aug 10, 2025")
+export const formatCompactDate = (dateInput: string | Date): string => {
+  const date = typeof dateInput === 'string' ? new Date(dateInput + 'T00:00:00') : dateInput;
+  const options: Intl.DateTimeFormatOptions = {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    weekday: 'short'
+  };
+  // Remove comma after weekday for more compact display
+  return date.toLocaleDateString(undefined, options).replace(/,\s/, ' ');
+};
+
 // Formats a YYYY-MM-DD string to a display format like 'Jan 15, 2024'
 export const formatDateToDisplay = (dateString: string): string => {
   const date = new Date(dateString + 'T00:00:00'); // Ensure parsing as local date

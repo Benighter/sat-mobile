@@ -63,18 +63,18 @@ const StatCard: React.FC<StatCardProps> = memo(({ title, value, icon, descriptio
 
   return (
     <div
-      className={`p-4 sm:p-5 md:p-6 bg-white dark:bg-dark-800 border border-gray-200 dark:border-dark-600 ${accents.border} rounded-lg shadow-sm hover:shadow-md relative min-h-[120px] sm:min-h-[140px] md:h-40 flex flex-col justify-between transition-all duration-200 ${
+      className={`p-4 sm:p-5 md:p-6 desktop:p-5 desktop-lg:p-6 bg-white dark:bg-dark-800 border border-gray-200 dark:border-dark-600 ${accents.border} rounded-lg desktop:rounded-xl shadow-sm hover:shadow-md desktop:hover:shadow-lg relative min-h-[120px] sm:min-h-[140px] md:h-40 desktop:h-36 desktop-lg:h-40 flex flex-col justify-between transition-all duration-200 desktop-card-hover ${
         onClick ? `cursor-pointer ${accents.hover}` : ''
       }`}
       onClick={onClick}
     >
       {/* Header with title and icon */}
-      <div className="flex items-start justify-between mb-3">
+      <div className="flex items-start justify-between mb-3 desktop:mb-2">
         <div className="flex-1">
-          <p className="text-xs sm:text-sm font-semibold text-gray-500 dark:text-dark-400 uppercase tracking-wide">{title}</p>
+          <p className="text-xs sm:text-sm desktop:text-xs desktop-lg:text-sm font-semibold text-gray-500 dark:text-dark-400 uppercase tracking-wide">{title}</p>
         </div>
         <div className={`${accents.icon} ml-3 flex-shrink-0`}>
-          <div className="w-5 h-5 sm:w-6 sm:h-6 md:w-7 md:h-7">
+          <div className="w-5 h-5 sm:w-6 sm:h-6 md:w-7 md:h-7 desktop:w-6 desktop:h-6 desktop-lg:w-7 desktop-lg:h-7">
             {icon}
           </div>
         </div>
@@ -83,9 +83,9 @@ const StatCard: React.FC<StatCardProps> = memo(({ title, value, icon, descriptio
       {/* Value section */}
       <div className="flex-1 flex flex-col justify-center">
         <div className="flex items-center space-x-3">
-          <p className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 dark:text-dark-100">{value}</p>
+          <p className="text-2xl sm:text-3xl md:text-4xl desktop:text-3xl desktop-lg:text-4xl font-bold text-gray-900 dark:text-dark-100">{value}</p>
           {title === "Attendance Rate" && (
-            <div className="flex-1 max-w-12 sm:max-w-16 h-2 bg-gray-200 dark:bg-dark-600 rounded-full overflow-hidden">
+            <div className="flex-1 max-w-12 sm:max-w-16 desktop:max-w-14 desktop-lg:max-w-16 h-2 bg-gray-200 dark:bg-dark-600 rounded-full overflow-hidden">
               <div
                 className="h-full bg-emerald-500 dark:bg-emerald-400 rounded-full transition-all duration-500"
                 style={{ width: `${typeof value === 'string' ? parseInt(value) : 0}%` }}
@@ -96,8 +96,8 @@ const StatCard: React.FC<StatCardProps> = memo(({ title, value, icon, descriptio
       </div>
 
       {/* Description section */}
-      <div className="mt-2">
-        {description && <p className="text-xs sm:text-sm text-gray-600 dark:text-dark-300 font-medium">{description}</p>}
+      <div className="mt-2 desktop:mt-1">
+        {description && <p className="text-xs sm:text-sm desktop:text-xs desktop-lg:text-sm text-gray-600 dark:text-dark-300 font-medium">{description}</p>}
       </div>
     </div>
   );
@@ -283,22 +283,22 @@ const DashboardView: React.FC = memo(() => {
   const year = displayedDate.getFullYear();
 
   return (
-    <div className="space-y-4 sm:space-y-5 md:space-y-6">
+    <div className="space-y-4 sm:space-y-5 md:space-y-6 desktop:space-y-4 desktop-lg:space-y-6">
       {/* Clean, Professional Header with subtle accent */}
-      <div className="text-center mb-3 sm:mb-4 md:mb-5">
-        <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 dark:text-dark-100 mb-2">
+      <div className="text-center mb-3 sm:mb-4 md:mb-5 desktop:mb-4 desktop-lg:mb-6">
+        <h2 className="text-2xl sm:text-3xl md:text-4xl desktop:text-3xl desktop-lg:text-4xl font-bold text-gray-900 dark:text-dark-100 mb-2">
           Dashboard
         </h2>
         <div className="flex items-center justify-center space-x-3 text-gray-600 dark:text-dark-300">
           <div className="w-2 h-2 bg-slate-400 dark:bg-slate-500 rounded-full"></div>
-          <p className="text-sm sm:text-base md:text-lg font-medium">{monthName} {year}</p>
+          <p className="text-sm sm:text-base md:text-lg desktop:text-base desktop-lg:text-lg font-medium">{monthName} {year}</p>
           <div className="w-2 h-2 bg-slate-400 dark:bg-slate-500 rounded-full"></div>
         </div>
-        <div className="w-12 sm:w-16 md:w-20 h-0.5 bg-gradient-to-r from-slate-300 via-slate-400 to-slate-300 dark:from-slate-600 dark:via-slate-500 dark:to-slate-600 rounded-full mx-auto mt-2 sm:mt-3"></div>
+        <div className="w-12 sm:w-16 md:w-20 desktop:w-16 desktop-lg:w-20 h-0.5 bg-gradient-to-r from-slate-300 via-slate-400 to-slate-300 dark:from-slate-600 dark:via-slate-500 dark:to-slate-600 rounded-full mx-auto mt-2 sm:mt-3 desktop:mt-2 desktop-lg:mt-3"></div>
       </div>
 
-      {/* Stats Grid - Clean, professional layout with subtle color accents */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 sm:gap-5 md:gap-6">
+      {/* Stats Grid - Desktop-optimized layout with better space utilization */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 desktop:grid-cols-auto-fit-250 desktop-lg:grid-cols-5 desktop-xl:grid-cols-6 gap-4 sm:gap-5 md:gap-6 desktop:gap-4 desktop-lg:gap-5 ultra-wide:gap-6">
         <StatCard
           title="Total Members"
           value={totalMembers}
@@ -393,13 +393,13 @@ const EnhancedConfirmationCard: React.FC<EnhancedConfirmationCardProps> = memo((
 
   return (
     <div
-      className={`p-4 sm:p-5 md:p-6 bg-white dark:bg-dark-800 border border-gray-200 dark:border-dark-600 border-l-4 ${borderColor} rounded-lg shadow-sm hover:shadow-md relative min-h-[120px] sm:min-h-[140px] md:h-40 flex flex-col justify-between cursor-pointer transition-all duration-200`}
+      className={`p-4 sm:p-5 md:p-6 desktop:p-5 desktop-lg:p-6 bg-white dark:bg-dark-800 border border-gray-200 dark:border-dark-600 border-l-4 ${borderColor} rounded-lg desktop:rounded-xl shadow-sm hover:shadow-md desktop:hover:shadow-lg relative min-h-[120px] sm:min-h-[140px] md:h-40 desktop:h-36 desktop-lg:h-40 flex flex-col justify-between cursor-pointer transition-all duration-200 desktop-card-hover`}
       onClick={onClick}
     >
       {/* Header with title */}
-      <div className="flex items-start justify-between mb-3">
+      <div className="flex items-start justify-between mb-3 desktop:mb-2">
         <div className="flex-1">
-          <p className="text-xs sm:text-sm font-semibold text-gray-500 dark:text-dark-400 uppercase tracking-wide">{title}</p>
+          <p className="text-xs sm:text-sm desktop:text-xs desktop-lg:text-sm font-semibold text-gray-500 dark:text-dark-400 uppercase tracking-wide">{title}</p>
         </div>
       </div>
 
@@ -408,14 +408,14 @@ const EnhancedConfirmationCard: React.FC<EnhancedConfirmationCardProps> = memo((
         {/* Value section */}
         <div className="flex-1">
           <div className="flex items-baseline space-x-2 mb-1">
-            <span className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 dark:text-dark-100">
+            <span className="text-2xl sm:text-3xl md:text-4xl desktop:text-3xl desktop-lg:text-4xl font-bold text-gray-900 dark:text-dark-100">
               {confirmedCount}
             </span>
-            <span className="text-sm text-gray-600 dark:text-dark-300 font-medium">
+            <span className="text-sm desktop:text-xs desktop-lg:text-sm text-gray-600 dark:text-dark-300 font-medium">
               of {isLoadingTarget ? '...' : totalMembers}
             </span>
           </div>
-          <p className="text-xs sm:text-sm text-gray-600 dark:text-dark-300 font-medium">
+          <p className="text-xs sm:text-sm desktop:text-xs desktop-lg:text-sm text-gray-600 dark:text-dark-300 font-medium">
             For {formatFullDate(date).split(',')[0]}
           </p>
         </div>

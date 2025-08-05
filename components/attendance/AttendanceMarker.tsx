@@ -64,12 +64,12 @@ const AttendanceMarker: React.FC<AttendanceMarkerProps> = ({ memberId, date, cur
           isEditable ? 'hover:scale-105' : ''
         } ${
           currentStatus === 'Present' && isEditable
-            ? 'bg-green-500 text-white shadow-md'
+            ? 'bg-emerald-500 text-white shadow-md'
             : isEditable
-            ? 'bg-gray-100 hover:bg-green-100 text-gray-400 hover:text-green-600'
+            ? 'bg-gray-100 hover:bg-emerald-100 text-gray-400 hover:text-emerald-600 border border-gray-200'
             : isPastMonth
-            ? 'bg-gray-200 text-gray-400 cursor-not-allowed opacity-60'
-            : 'bg-blue-50 text-blue-400 cursor-not-allowed opacity-60'
+            ? 'bg-gray-200 text-gray-400 cursor-not-allowed opacity-60 border border-gray-200'
+            : 'bg-blue-50 text-blue-400 cursor-not-allowed opacity-60 border border-blue-200'
         } ${!isEditable ? 'cursor-not-allowed' : ''}`}
         aria-label={`Mark ${memberId} Present on ${date}`}
         title={getTooltipMessage('Present')}
@@ -92,12 +92,12 @@ const AttendanceMarker: React.FC<AttendanceMarkerProps> = ({ memberId, date, cur
           isEditable ? 'hover:scale-105' : ''
         } ${
           currentStatus === 'Absent' && isEditable
-            ? 'bg-red-500 text-white shadow-md'
+            ? 'bg-rose-500 text-white shadow-md'
             : isEditable
-            ? 'bg-gray-100 hover:bg-red-100 text-gray-400 hover:text-red-600'
+            ? 'bg-gray-100 hover:bg-rose-100 text-gray-400 hover:text-rose-600 border border-gray-200'
             : isPastMonth
-            ? 'bg-gray-200 text-gray-400 cursor-not-allowed opacity-60'
-            : 'bg-blue-50 text-blue-400 cursor-not-allowed opacity-60'
+            ? 'bg-gray-200 text-gray-400 cursor-not-allowed opacity-60 border border-gray-200'
+            : 'bg-blue-50 text-blue-400 cursor-not-allowed opacity-60 border border-blue-200'
         } ${!isEditable ? 'cursor-not-allowed' : ''}`}
         aria-label={`Mark ${memberId} Absent on ${date}`}
         title={getTooltipMessage('Absent')}

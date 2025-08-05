@@ -80,13 +80,13 @@ const MemberCard: React.FC<MemberCardProps> = ({ member }) => {
   };
 
   return (
-    <div className="group glass shadow-2xl rounded-2xl p-6 mb-6 border-l-4 border-gray-500 dark:border-dark-400 transition-all duration-300 relative overflow-hidden animate-fade-in">
+    <div className="group glass shadow-2xl desktop:shadow-lg desktop-lg:shadow-xl rounded-2xl desktop:rounded-xl desktop-lg:rounded-2xl p-6 desktop:p-5 desktop-lg:p-6 mb-6 desktop:mb-4 desktop-lg:mb-6 border-l-4 border-gray-500 dark:border-dark-400 transition-all duration-300 desktop-card-hover relative overflow-hidden animate-fade-in">
       {/* Animated background gradient */}
       <div className="absolute inset-0 bg-gradient-to-br from-white/10 dark:from-dark-700/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
 
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between relative z-10">
         <div className="flex items-start mb-4 sm:mb-0 flex-1">
-          <div className="relative w-16 h-16 rounded-2xl mr-4 shadow-lg floating overflow-hidden bg-gradient-to-br from-gray-100 to-gray-200 dark:from-dark-600 dark:to-dark-700">
+          <div className="relative w-16 h-16 desktop:w-14 desktop:h-14 desktop-lg:w-16 desktop-lg:h-16 rounded-2xl desktop:rounded-xl desktop-lg:rounded-2xl mr-4 desktop:mr-3 desktop-lg:mr-4 shadow-lg floating overflow-hidden bg-gradient-to-br from-gray-100 to-gray-200 dark:from-dark-600 dark:to-dark-700">
             {member.profilePicture ? (
               <img
                 src={member.profilePicture}
@@ -101,7 +101,7 @@ const MemberCard: React.FC<MemberCardProps> = ({ member }) => {
           </div>
           <div className="flex-1">
             <div className="flex items-center space-x-2 mb-2">
-              <h3 className="text-xl font-bold text-gray-800 dark:text-dark-100 group-hover:text-gray-900 dark:group-hover:text-white transition-colors">
+              <h3 className="text-xl desktop:text-lg desktop-lg:text-xl font-bold text-gray-800 dark:text-dark-100 group-hover:text-gray-900 dark:group-hover:text-white transition-colors">
                 {member.firstName} {member.lastName || ''}
               </h3>
 

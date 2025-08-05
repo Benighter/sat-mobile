@@ -29,15 +29,15 @@ const ConfirmationMarker: React.FC<ConfirmationMarkerProps> = ({
   };
 
   if (compact) {
-    // Clean compact version for table view
+    // Professional compact version for table view
     return (
       <button
         onClick={handleToggle}
         disabled={disabled}
-        className={`p-2 rounded-lg transition-colors duration-200 ${
+        className={`p-2 rounded-lg transition-all duration-200 ${
           isConfirmed
-            ? 'bg-green-500 text-white'
-            : 'bg-gray-100 hover:bg-green-50 text-gray-400 hover:text-green-600'
+            ? 'bg-emerald-500 text-white shadow-sm'
+            : 'bg-gray-100 hover:bg-emerald-50 text-gray-400 hover:text-emerald-600 border border-gray-200'
         } ${disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
         aria-label={`${isConfirmed ? 'Unconfirm' : 'Confirm'} attendance for ${date}`}
         title={isConfirmed ? 'Confirmed for Sunday' : 'Click to confirm attendance'}
@@ -51,16 +51,16 @@ const ConfirmationMarker: React.FC<ConfirmationMarkerProps> = ({
     );
   }
 
-  // Clean full version for card view
+  // Professional full version for card view
   return (
     <div className="flex items-center space-x-2">
       <button
         onClick={handleToggle}
         disabled={disabled}
-        className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors duration-200 ${
+        className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-all duration-200 ${
           isConfirmed
-            ? 'bg-green-500 text-white'
-            : 'bg-gray-100 hover:bg-green-50 text-gray-600 hover:text-green-700 border border-gray-200'
+            ? 'bg-emerald-500 text-white shadow-sm'
+            : 'bg-gray-100 hover:bg-emerald-50 text-gray-600 hover:text-emerald-700 border border-gray-200'
         } ${disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
         aria-label={`${isConfirmed ? 'Unconfirm' : 'Confirm'} attendance for ${date}`}
       >

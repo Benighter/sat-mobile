@@ -29,6 +29,7 @@ const NewBelieverFormModal: React.FC<NewBelieverFormModalProps> = ({ isOpen, onC
     year: '',
     isFirstTime: false,
     ministry: '',
+    joinedDate: formatDateToYYYYMMDD(new Date()), // Default to today
   };
 
   const [formData, setFormData] = useState(initialFormData);

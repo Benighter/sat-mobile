@@ -85,16 +85,16 @@ const StatCard: React.FC<StatCardProps> = ({
   isClickable = false
 }) => (
   <div
-    className={`glass p-6 shadow-lg rounded-2xl border-l-4 ${colorClass} relative h-32 flex flex-col justify-between transition-all duration-200 ${
-      isClickable ? 'cursor-pointer hover:shadow-xl hover:scale-105' : ''
+    className={`glass p-6 desktop:p-5 desktop-lg:p-6 shadow-lg desktop:shadow-md desktop-lg:shadow-lg rounded-2xl desktop:rounded-xl desktop-lg:rounded-2xl border-l-4 ${colorClass} relative h-32 desktop:h-28 desktop-lg:h-32 flex flex-col justify-between transition-all duration-200 desktop-card-hover ${
+      isClickable ? 'cursor-pointer hover:shadow-xl desktop:hover:shadow-lg desktop-lg:hover:shadow-xl hover:scale-105 desktop:hover:scale-102 desktop-lg:hover:scale-105' : ''
     }`}
     onClick={onClick}
   >
     <div className="flex items-start justify-between">
       <div className="flex-1">
-        <p className="text-sm font-medium text-gray-600 uppercase tracking-wider mb-2">{title}</p>
-        <p className="text-3xl font-bold gradient-text">{value}</p>
-        {subtitle && <p className="text-xs text-gray-500 mt-1">{subtitle}</p>}
+        <p className="text-sm desktop:text-xs desktop-lg:text-sm font-medium text-gray-600 uppercase tracking-wider mb-2 desktop:mb-1 desktop-lg:mb-2">{title}</p>
+        <p className="text-3xl desktop:text-2xl desktop-lg:text-3xl font-bold gradient-text">{value}</p>
+        {subtitle && <p className="text-xs desktop:text-xs desktop-lg:text-xs text-gray-500 mt-1">{subtitle}</p>}
       </div>
       <div className="text-gray-400">
         {icon}

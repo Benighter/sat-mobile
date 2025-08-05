@@ -398,6 +398,110 @@ html, body {
   }
 }
 
+/* Desktop Modal Enhancements (1024px+) */
+@media (min-width: 1024px) {
+  .desktop-modal-backdrop {
+    backdrop-filter: blur(8px) !important;
+    background: rgba(0, 0, 0, 0.4) !important;
+    padding: 2rem !important;
+  }
+
+  .desktop-modal-content {
+    border-radius: 16px !important;
+    box-shadow: 0 25px 50px rgba(0, 0, 0, 0.25) !important;
+    max-height: 90vh !important;
+    overflow-y: auto;
+    max-width: min(80vw, 100%) !important;
+  }
+
+  /* Desktop form layouts */
+  .desktop-form {
+    max-width: none;
+  }
+
+  .desktop-form .grid {
+    gap: 1.5rem;
+  }
+
+  .desktop-form .space-y-6 > * + * {
+    margin-top: 1rem;
+  }
+
+  .desktop-form .space-y-8 > * + * {
+    margin-top: 1.5rem;
+  }
+
+  /* Desktop form sections */
+  .desktop-form-section {
+    background: rgba(249, 250, 251, 0.5);
+    border-radius: 12px;
+    padding: 1.5rem;
+    border: 1px solid rgba(229, 231, 235, 0.8);
+  }
+
+  .desktop-form-section h3 {
+    font-size: 1.25rem;
+    margin-bottom: 1rem;
+  }
+
+  /* Desktop button groups */
+  .desktop-button-group {
+    display: flex;
+    gap: 1rem;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    margin-top: 2rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid rgba(229, 231, 235, 0.8);
+  }
+
+  .desktop-button-group button {
+    min-width: 120px;
+    padding: 0.75rem 1.5rem;
+  }
+}
+
+/* Large Desktop Modal Enhancements (1280px+) */
+@media (min-width: 1280px) {
+  .desktop-modal-content {
+    max-width: min(75vw, 100%) !important;
+    border-radius: 20px !important;
+  }
+
+  .desktop-modal-backdrop {
+    padding: 3rem !important;
+  }
+
+  .desktop-form {
+    padding: 0 1rem;
+  }
+
+  .desktop-form-section {
+    padding: 2rem;
+    border-radius: 16px;
+  }
+
+  .desktop-button-group {
+    margin-top: 2.5rem;
+    padding-top: 2rem;
+  }
+}
+
+/* Ultra-wide Desktop Modal Enhancements (1536px+) */
+@media (min-width: 1536px) {
+  .desktop-modal-content {
+    max-width: min(70vw, 100%) !important;
+  }
+
+  .desktop-modal-backdrop {
+    padding: 4rem !important;
+  }
+
+  .desktop-form {
+    padding: 0 2rem;
+  }
+}
+
 /* Handle very short screens */
 @media (max-height: 500px) {
   .modal-backdrop {
@@ -421,4 +525,333 @@ html, body {
   .modal-content {
     max-height: calc(var(--available-height) - 1rem) !important;
   }
+}
+
+/* ===== DESKTOP RESPONSIVE DESIGN ENHANCEMENTS ===== */
+
+/* Desktop-specific layout utilities */
+@media (min-width: 1024px) {
+  /* Desktop container with better max-width */
+  .desktop-container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 0 2rem;
+  }
+
+  /* Desktop grid systems for better space utilization */
+  .desktop-grid-2 {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 2rem;
+  }
+
+  .desktop-grid-3 {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 2rem;
+  }
+
+  .desktop-grid-4 {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1.5rem;
+  }
+
+  .desktop-grid-5 {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 1.5rem;
+  }
+
+  .desktop-grid-6 {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 1rem;
+  }
+
+  /* Desktop card layouts with optimized spacing */
+  .desktop-card-compact {
+    padding: 1.25rem;
+    min-height: 140px;
+  }
+
+  .desktop-card-dense {
+    padding: 1rem;
+    min-height: 120px;
+  }
+
+  /* Desktop-optimized spacing */
+  .desktop-space-y-3 > * + * {
+    margin-top: 0.75rem;
+  }
+
+  .desktop-space-y-4 > * + * {
+    margin-top: 1rem;
+  }
+
+  .desktop-space-y-6 > * + * {
+    margin-top: 1.5rem;
+  }
+
+  /* Desktop layout density improvements */
+  .desktop-dense-layout {
+    padding: 1rem 2rem;
+  }
+
+  .desktop-dense-layout .space-y-4 > * + * {
+    margin-top: 0.75rem;
+  }
+
+  .desktop-dense-layout .space-y-6 > * + * {
+    margin-top: 1rem;
+  }
+
+  .desktop-dense-layout .space-y-8 > * + * {
+    margin-top: 1.5rem;
+  }
+
+  /* Desktop sidebar layout */
+  .desktop-sidebar-layout {
+    display: grid;
+    grid-template-columns: 300px 1fr;
+    gap: 2rem;
+    min-height: calc(100vh - 5rem);
+  }
+
+  .desktop-sidebar-layout.wide {
+    grid-template-columns: 350px 1fr;
+  }
+
+  /* Desktop two-column content layout */
+  .desktop-two-column {
+    display: grid;
+    grid-template-columns: 1fr 400px;
+    gap: 2rem;
+  }
+
+  .desktop-two-column.balanced {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  /* Desktop three-column layout */
+  .desktop-three-column {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 1.5rem;
+  }
+
+  /* Desktop masonry-style layout */
+  .desktop-masonry {
+    columns: 3;
+    column-gap: 1.5rem;
+  }
+
+  .desktop-masonry-item {
+    break-inside: avoid;
+    margin-bottom: 1.5rem;
+  }
+}
+
+/* Large desktop optimizations (1280px+) */
+@media (min-width: 1280px) {
+  .desktop-container {
+    max-width: 1600px;
+    padding: 0 3rem;
+  }
+
+  .desktop-grid-auto {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1.5rem;
+  }
+
+  .desktop-grid-auto-large {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+    gap: 2rem;
+  }
+
+  /* Enhanced desktop card layouts */
+  .desktop-card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1.25rem;
+  }
+
+  .desktop-card-grid-large {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+    gap: 1.5rem;
+  }
+
+  /* Desktop dashboard specific layouts */
+  .desktop-dashboard-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1.25rem;
+    max-width: none;
+  }
+
+  /* Desktop table optimizations */
+  .desktop-table-container {
+    overflow-x: visible;
+    border-radius: 1rem;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+  }
+
+  /* Desktop modal optimizations */
+  .desktop-modal-large {
+    max-width: 80vw;
+    max-height: 85vh;
+  }
+
+  .desktop-modal-medium {
+    max-width: 60vw;
+    max-height: 75vh;
+  }
+
+  .desktop-modal-small {
+    max-width: 40vw;
+    max-height: 60vh;
+  }
+}
+
+/* Extra large desktop (1536px+) */
+@media (min-width: 1536px) {
+  .desktop-container {
+    max-width: 1800px;
+    padding: 0 4rem;
+  }
+
+  /* Ultra-wide desktop layouts */
+  .desktop-ultra-wide {
+    display: grid;
+    grid-template-columns: 300px 1fr 300px;
+    gap: 2rem;
+  }
+
+  .desktop-ultra-wide-balanced {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr 1fr;
+    gap: 1.5rem;
+  }
+
+  /* Enhanced dashboard for ultra-wide screens */
+  .desktop-dashboard-ultra {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 1.25rem;
+  }
+
+  /* Navigation Arrow Improvements for Desktop */
+  .nav-arrow-container {
+    min-width: 320px;
+    max-width: 480px;
+    margin: 0 auto;
+  }
+
+  .nav-arrow-button {
+    min-width: 48px;
+    min-height: 48px;
+    touch-action: manipulation;
+  }
+
+  .nav-arrow-button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
+  }
+
+  .nav-arrow-button:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  }
+
+  /* Date display improvements */
+  .date-display {
+    min-width: 0;
+    flex: 1;
+    padding: 0 1.5rem;
+  }
+
+  .date-display h2,
+  .date-display div {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+/* Navigation Arrow Base Styles - All Screen Sizes */
+.nav-arrow-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  max-width: 400px;
+  margin: 0 auto;
+  padding: 0 1rem;
+}
+
+.nav-arrow-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  border-radius: 0.75rem;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  touch-action: manipulation;
+  flex-shrink: 0;
+}
+
+.nav-arrow-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.nav-arrow-button:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+.nav-arrow-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+/* Date display base styles */
+.date-display {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+  padding: 0 0.75rem;
+}
+
+.date-display h2,
+.date-display div {
+  word-break: break-word;
+  hyphens: auto;
+}
+
+/* Specific styles for date navigation containers */
+.date-nav-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  max-width: 400px;
+  margin: 0 auto;
+}
+
+.date-nav-text {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+  line-height: 1.2;
+}
+
+.date-nav-text h2,
+.date-nav-text div {
+  word-break: break-word;
+  hyphens: auto;
 }
