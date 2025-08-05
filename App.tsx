@@ -430,58 +430,65 @@ const AppContent: React.FC = memo(() => {
         onClose={closeWhatsNew}
       />
 
-      {/* Toast Notifications */}
+      {/* Toast Notifications - Centered at Top */}
       {toasts.map((toast) => (
         <div
           key={toast.id}
-          className="fixed top-2 sm:top-4 right-2 sm:right-4 z-50 max-w-xs sm:max-w-sm w-full transform transition-all duration-300 ease-out translate-x-0 opacity-100 scale-100"
+          className="toast-container fixed top-4 sm:top-6 left-1/2 transform -translate-x-1/2 z-50 max-w-xs sm:max-w-sm w-full px-4"
           onClick={() => removeToast(toast.id)}
         >
           <div className={`
-            ${toast.type === 'success' ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-700' :
-              toast.type === 'error' ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-700' :
-              toast.type === 'warning' ? 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-700' :
-              'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-700'
-            } border rounded-lg sm:rounded-xl shadow-lg backdrop-blur-sm p-3 sm:p-4 relative overflow-hidden cursor-pointer
+            ${toast.type === 'success' ? 'bg-green-600 border-green-500' :
+              toast.type === 'error' ? 'bg-red-600 border-red-500' :
+              toast.type === 'warning' ? 'bg-yellow-600 border-yellow-500' :
+              'bg-blue-600 border-blue-500'
+            } border rounded-xl shadow-xl backdrop-blur-sm p-4 relative overflow-hidden cursor-pointer text-white
           `}>
-            <div className="flex items-start space-x-2 sm:space-x-3">
-              <div className={`flex-shrink-0 w-6 h-6 sm:w-8 sm:h-8 ${
-                toast.type === 'success' ? 'bg-green-100 dark:bg-green-800' :
-                toast.type === 'error' ? 'bg-red-100 dark:bg-red-800' :
-                toast.type === 'warning' ? 'bg-yellow-100 dark:bg-yellow-800' :
-                'bg-blue-100 dark:bg-blue-800'
-              } rounded-full flex items-center justify-center`}>
-                <span className={`text-xs sm:text-sm ${
-                  toast.type === 'success' ? 'text-green-600 dark:text-green-200' :
-                  toast.type === 'error' ? 'text-red-600 dark:text-red-200' :
-                  toast.type === 'warning' ? 'text-yellow-600 dark:text-yellow-200' :
-                  'text-blue-600 dark:text-blue-200'
-                }`}>
+            {/* Subtle gradient overlay for depth */}
+            <div className="absolute inset-0 bg-gradient-to-r from-white/10 to-transparent pointer-events-none"></div>
+
+            <div className="relative flex items-start space-x-3">
+              <div className={`flex-shrink-0 w-8 h-8 ${
+                toast.type === 'success' ? 'bg-green-500' :
+                toast.type === 'error' ? 'bg-red-500' :
+                toast.type === 'warning' ? 'bg-yellow-500' :
+                'bg-blue-500'
+              } rounded-full flex items-center justify-center shadow-sm`}>
+                <span className="text-white text-sm font-medium">
                   {toast.type === 'success' ? '✓' :
                    toast.type === 'error' ? '✗' :
                    toast.type === 'warning' ? '⚠' : 'ℹ'}
                 </span>
               </div>
               <div className="flex-1 min-w-0">
-                <h4 className={`font-semibold text-xs sm:text-sm ${
-                  toast.type === 'success' ? 'text-green-800 dark:text-green-100' :
-                  toast.type === 'error' ? 'text-red-800 dark:text-red-100' :
-                  toast.type === 'warning' ? 'text-yellow-800 dark:text-yellow-100' :
-                  'text-blue-800 dark:text-blue-100'
-                }`}>
+                <h4 className="font-semibold text-sm text-white leading-tight">
                   {toast.title}
                 </h4>
                 {toast.message && (
-                  <p className={`mt-1 text-xs sm:text-sm ${
-                    toast.type === 'success' ? 'text-green-700 dark:text-green-200' :
-                    toast.type === 'error' ? 'text-red-700 dark:text-red-200' :
-                    toast.type === 'warning' ? 'text-yellow-700 dark:text-yellow-200' :
-                    'text-blue-700 dark:text-blue-200'
-                  }`}>
+                  <p className="mt-1 text-sm text-white/90 leading-tight">
                     {toast.message}
                   </p>
                 )}
               </div>
+
+              {/* Close button */}
+              <button
+                className="flex-shrink-0 w-6 h-6 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center transition-colors duration-200"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  removeToast(toast.id);
+                }}
+              >
+                <span className="text-white text-xs">×</span>
+              </button>
+            </div>
+
+            {/* Progress bar for auto-dismiss */}
+            <div className="absolute bottom-0 left-0 right-0 h-1 bg-white/20">
+              <div
+                className="h-full bg-white/40 animate-toast-progress"
+                style={{ animationDuration: '5s' }}
+              ></div>
             </div>
           </div>
         </div>

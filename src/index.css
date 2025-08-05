@@ -194,6 +194,11 @@ html, body {
   100% { transform: translateX(100%); }
 }
 
+@keyframes toast-progress {
+  0% { width: 100%; }
+  100% { width: 0%; }
+}
+
 /* Enhanced animations for the redesigned AdminInviteManager */
 @keyframes slideInUp {
   0% {
@@ -237,6 +242,10 @@ html, body {
 
 .animate-pulse-glow {
   animation: pulseGlow 2s ease-in-out infinite;
+}
+
+.animate-toast-progress {
+  animation: toast-progress linear forwards;
 }
 
 /* Enhanced hover effects */
@@ -854,4 +863,40 @@ html, body {
 .date-nav-text div {
   word-break: break-word;
   hyphens: auto;
+}
+
+/* Toast Notification Enhancements */
+.toast-container {
+  animation: slideInFromTop 0.3s ease-out;
+}
+
+.toast-container:hover .animate-toast-progress {
+  animation-play-state: paused;
+}
+
+@keyframes slideInFromTop {
+  0% {
+    transform: translate(-50%, -100%);
+    opacity: 0;
+  }
+  100% {
+    transform: translate(-50%, 0);
+    opacity: 1;
+  }
+}
+
+/* Toast exit animation */
+.toast-exit {
+  animation: slideOutToTop 0.2s ease-in forwards;
+}
+
+@keyframes slideOutToTop {
+  0% {
+    transform: translate(-50%, 0);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -100%);
+    opacity: 0;
+  }
 }

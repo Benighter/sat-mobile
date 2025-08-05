@@ -48,6 +48,7 @@ const SundayConfirmationsView: React.FC = () => {
     currentChurchId,
     isLoading,
     removeConfirmationHandler,
+    removeGuestConfirmationHandler,
     convertGuestToMemberHandler
   } = useAppContext();
 
@@ -235,6 +236,15 @@ const SundayConfirmationsView: React.FC = () => {
       showToast('success', 'Confirmation Removed', `${name}'s confirmation has been removed`);
     } catch (error) {
       console.error('Failed to remove confirmation:', error);
+    }
+  };
+
+  const handleRemoveGuestConfirmation = async (guestId: string, name: string) => {
+    try {
+      await removeGuestConfirmationHandler(guestId, selectedSunday);
+      showToast('success', 'Guest Confirmation Removed', `${name}'s confirmation has been removed`);
+    } catch (error) {
+      console.error('Failed to remove guest confirmation:', error);
     }
   };
 
@@ -508,7 +518,7 @@ const SundayConfirmationsView: React.FC = () => {
                   <div className="text-center min-w-0">
                     <div className="h-12 flex items-center justify-center">
                       {isEditingTarget ? (
-                        <div className="flex items-center justify-center space-x-2">
+                        <div className="flex items-center space-x-1">
                           <input
                             type="number"
                             value={targetInputValue}
@@ -517,23 +527,23 @@ const SundayConfirmationsView: React.FC = () => {
                               if (e.key === 'Enter') handleTargetSave();
                               if (e.key === 'Escape') handleTargetCancel();
                             }}
-                            className="w-20 px-2 py-1 text-center border border-gray-300 bg-white text-gray-900 rounded text-lg font-bold focus:ring-2 focus:ring-slate-500 focus:border-transparent transition-all duration-200"
+                            className="w-14 px-1 py-0.5 text-center border border-gray-300 bg-white text-gray-900 rounded text-2xl font-bold focus:ring-1 focus:ring-slate-500 focus:border-transparent transition-all duration-200"
                             min="0"
                             autoFocus
                           />
                           <button
                             onClick={handleTargetSave}
-                            className="flex items-center justify-center w-8 h-8 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-all duration-200"
+                            className="flex items-center justify-center w-6 h-6 bg-green-500 hover:bg-green-600 text-white rounded-full transition-all duration-200 shadow-sm"
                             title="Save target"
                           >
-                            <CheckIcon className="w-4 h-4" />
+                            <CheckIcon className="w-3 h-3" />
                           </button>
                           <button
                             onClick={handleTargetCancel}
-                            className="flex items-center justify-center w-8 h-8 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-all duration-200 text-lg font-bold"
+                            className="flex items-center justify-center w-6 h-6 bg-red-500 hover:bg-red-600 text-white rounded-full transition-all duration-200 shadow-sm"
                             title="Cancel"
                           >
-                            ×
+                            <span className="text-xs font-bold leading-none">×</span>
                           </button>
                         </div>
                       ) : (
@@ -749,7 +759,7 @@ const SundayConfirmationsView: React.FC = () => {
                                       id: 'remove',
                                       label: 'Remove Confirmation',
                                       icon: <MinusIcon className="w-4 h-4" />,
-                                      onClick: () => handleRemoveConfirmation(confirmationId, guestName),
+                                      onClick: () => handleRemoveGuestConfirmation(guest.id, guestName),
                                       destructive: true
                                     }
                                   ]}

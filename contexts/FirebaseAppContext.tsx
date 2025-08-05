@@ -115,6 +115,7 @@ interface AppContextType {
   updateGuestHandler: (guestData: Guest) => Promise<void>;
   deleteGuestHandler: (guestId: string) => Promise<void>;
   markGuestConfirmationHandler: (guestId: string, date: string, status: ConfirmationStatus) => Promise<void>;
+  removeGuestConfirmationHandler: (guestId: string, date: string) => Promise<void>;
   convertGuestToMemberHandler: (guestId: string) => Promise<void>;
 
   // Member Deletion Request Operations
@@ -888,6 +889,19 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     }
   }, [showToast, userProfile]);
 
+  const removeGuestConfirmationHandler = useCallback(async (guestId: string, date: string) => {
+    try {
+      const recordId = `guest_${guestId}_${date}`;
+      console.log('✅ Removing guest confirmation:', recordId);
+      await confirmationFirebaseService.delete(recordId);
+      showToast('success', 'Guest Confirmation Removed', 'Guest confirmation has been removed');
+    } catch (error: any) {
+      console.error('❌ Failed to remove guest confirmation:', error);
+      showToast('error', 'Error', `Failed to remove guest confirmation: ${error.message}`);
+      throw error;
+    }
+  }, [showToast]);
+
   const convertGuestToMemberHandler = useCallback(async (guestId: string) => {
     let newMemberId: string | null = null;
     let createdConfirmations: string[] = [];
@@ -1458,6 +1472,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     updateGuestHandler,
     deleteGuestHandler,
     markGuestConfirmationHandler,
+    removeGuestConfirmationHandler,
     convertGuestToMemberHandler,
 
     // Member Deletion Request Operations
