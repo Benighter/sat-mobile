@@ -8,6 +8,9 @@ import {
   getTodayYYYYMMDD
 } from '../utils/dateUtils';
 import { hasAdminPrivileges } from '../utils/permissionUtils';
+import { db } from '../firebase.config';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { firebaseUtils } from '../services/firebaseService';
 import {
   ChevronLeftIcon,
   ChevronRightIcon,
@@ -41,6 +44,7 @@ const SundayConfirmationsView: React.FC = () => {
     showToast,
     user,
     userProfile,
+    currentChurchId,
     isLoading,
     removeConfirmationHandler,
     convertGuestToMemberHandler
@@ -50,6 +54,7 @@ const SundayConfirmationsView: React.FC = () => {
   const [confirmationTarget, setConfirmationTarget] = useState<number>(0);
   const [isEditingTarget, setIsEditingTarget] = useState<boolean>(false);
   const [targetInputValue, setTargetInputValue] = useState<string>('0');
+  const [isLoadingTarget, setIsLoadingTarget] = useState<boolean>(true);
 
   // Guest management state
   const [isGuestModalOpen, setIsGuestModalOpen] = useState<boolean>(false);
@@ -66,18 +71,30 @@ const SundayConfirmationsView: React.FC = () => {
   // Everyone can VIEW targets, only admins can EDIT them
   useEffect(() => {
     const loadTarget = async () => {
-      if (!user) return;
+      if (!user) {
+        setIsLoadingTarget(false);
+        return;
+      }
 
+      setIsLoadingTarget(true);
       try {
-        const { db } = await import('../firebase.config');
-        const { doc, getDoc } = await import('firebase/firestore');
-        const { firebaseUtils } = await import('../services/firebaseService');
 
         // Get the current church ID (same for admin and leaders in the same church)
         const churchId = firebaseUtils.getCurrentChurchId();
         if (!churchId) {
-          throw new Error('No church context available');
+          console.warn('No church context available yet, will retry when available');
+          setIsLoadingTarget(false);
+          return;
         }
+
+        // Validate inputs before making Firestore request
+        if (!selectedSunday || selectedSunday.length !== 10 || !/^\d{4}-\d{2}-\d{2}$/.test(selectedSunday)) {
+          console.error('Invalid selectedSunday format:', selectedSunday);
+          setIsLoadingTarget(false);
+          return;
+        }
+
+        console.log('Loading target for:', { churchId, selectedSunday });
 
         // Use proper church-scoped path
         const targetDocRef = doc(db, `churches/${churchId}/sundayTargets`, selectedSunday);
@@ -89,36 +106,56 @@ const SundayConfirmationsView: React.FC = () => {
           setTargetInputValue(target.toString());
         } else {
           // Default to total member count if no target is set
-          const defaultTarget = members.length;
+          // Only use members.length if we actually have members loaded
+          const defaultTarget = members.length > 0 ? members.length : 0;
           setConfirmationTarget(defaultTarget);
           setTargetInputValue(defaultTarget.toString());
         }
-      } catch (error) {
-        console.error('Error loading confirmation target:', error);
-        // Fallback to member count
-        const defaultTarget = members.length;
+      } catch (error: any) {
+        console.error('Error loading confirmation target:', {
+          error: error.message,
+          code: error.code,
+          stack: error.stack,
+          churchId: firebaseUtils.getCurrentChurchId(),
+          selectedSunday
+        });
+        // Fallback to member count, but only if we have members loaded
+        const defaultTarget = members.length > 0 ? members.length : 0;
         setConfirmationTarget(defaultTarget);
         setTargetInputValue(defaultTarget.toString());
+      } finally {
+        setIsLoadingTarget(false);
       }
     };
 
-    loadTarget();
-  }, [selectedSunday, user]);
+    // Only load target if we have user and either members are loaded or we're not using them as fallback
+    if (user) {
+      loadTarget();
+    }
+  }, [selectedSunday, user, members.length, currentChurchId]); // Added members.length and currentChurchId as dependencies
 
   // Save target to Firebase (admin only)
   const saveTarget = async (newTarget: number) => {
     if (!user) return;
 
     try {
-      const { db } = await import('../firebase.config');
-      const { doc, setDoc } = await import('firebase/firestore');
-      const { firebaseUtils } = await import('../services/firebaseService');
 
       // Get the current church ID (same for admin and leaders in the same church)
       const churchId = firebaseUtils.getCurrentChurchId();
       if (!churchId) {
         throw new Error('No church context available');
       }
+
+      // Validate inputs before making Firestore request
+      if (!selectedSunday || selectedSunday.length !== 10 || !/^\d{4}-\d{2}-\d{2}$/.test(selectedSunday)) {
+        throw new Error(`Invalid selectedSunday format: ${selectedSunday}`);
+      }
+
+      if (typeof newTarget !== 'number' || newTarget < 0 || !Number.isInteger(newTarget)) {
+        throw new Error(`Invalid target value: ${newTarget}`);
+      }
+
+      console.log('Saving target:', { churchId, selectedSunday, newTarget });
 
       // Use proper church-scoped path
       const targetDocRef = doc(db, `churches/${churchId}/sundayTargets`, selectedSunday);
@@ -130,9 +167,16 @@ const SundayConfirmationsView: React.FC = () => {
         setByAdmin: userProfile?.role === 'admin'
       });
       showToast('success', 'Target Updated', `Confirmation target set to ${newTarget}`);
-    } catch (error) {
-      console.error('Error saving confirmation target:', error);
-      showToast('error', 'Error', 'Failed to save confirmation target');
+    } catch (error: any) {
+      console.error('Error saving confirmation target:', {
+        error: error.message,
+        code: error.code,
+        stack: error.stack,
+        churchId: firebaseUtils.getCurrentChurchId(),
+        selectedSunday,
+        newTarget
+      });
+      showToast('error', 'Error', `Failed to save confirmation target: ${error.message}`);
     }
   };
 
@@ -431,14 +475,14 @@ const SundayConfirmationsView: React.FC = () => {
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm text-gray-600">Progress to Target</span>
                   <span className="text-sm font-medium text-gray-900">
-                    {Math.round((confirmationData.grandTotal / confirmationTarget) * 100)}%
+                    {isLoadingTarget ? '...' : `${Math.round((confirmationData.grandTotal / (confirmationTarget || 1)) * 100)}%`}
                   </span>
                 </div>
                 <div className="w-full bg-gray-200 rounded-full h-2">
                   <div
                     className="bg-gray-900 h-2 rounded-full transition-all duration-500"
                     style={{
-                      width: `${Math.min((confirmationData.grandTotal / confirmationTarget) * 100, 100)}%`
+                      width: isLoadingTarget ? '0%' : `${Math.min((confirmationData.grandTotal / (confirmationTarget || 1)) * 100, 100)}%`
                     }}
                   ></div>
                 </div>
@@ -489,11 +533,16 @@ const SundayConfirmationsView: React.FC = () => {
                         </div>
                       ) : (
                         <div className="flex items-center justify-center space-x-1">
-                          <div className="text-3xl font-bold leading-none">{confirmationTarget}</div>
+                          {isLoadingTarget ? (
+                            <div className="text-3xl font-bold leading-none text-gray-400">...</div>
+                          ) : (
+                            <div className="text-3xl font-bold leading-none">{confirmationTarget}</div>
+                          )}
                           {isAdmin ? (
                             <button
                               onClick={handleTargetEdit}
-                              className="flex items-center justify-center w-6 h-6 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors ml-1"
+                              disabled={isLoadingTarget}
+                              className="flex items-center justify-center w-6 h-6 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors ml-1 disabled:opacity-50 disabled:cursor-not-allowed"
                               title="Edit target (Admin only)"
                             >
                               <EditIcon className="w-3 h-3" />
