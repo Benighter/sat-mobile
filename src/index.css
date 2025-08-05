@@ -49,6 +49,16 @@ body {
   transition: background-color 0.3s ease, color 0.3s ease;
 }
 
+/* Dashboard Progress Circle Animation */
+@keyframes dashOffset {
+  0% {
+    stroke-dashoffset: 176; /* Full circle (2 * π * 28) */
+  }
+  100% {
+    stroke-dashoffset: var(--final-offset);
+  }
+}
+
 /* Enhanced scrollbar with theme support */
 ::-webkit-scrollbar {
   width: 6px;

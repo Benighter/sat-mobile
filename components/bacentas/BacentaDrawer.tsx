@@ -166,35 +166,35 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
       />
       
       {/* Drawer */}
-      <div className={`fixed top-0 left-0 h-full w-80 max-w-[85vw] bg-white shadow-2xl z-50 transform transition-all duration-300 ease-out ${
-        isOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full shadow-none'
-      } border-r border-gray-200/50 flex flex-col`}>
-        
+      <div className={`fixed top-0 left-0 h-full w-80 max-w-[85vw] bg-white dark:bg-dark-800 shadow-xl z-50 transform transition-all duration-300 ease-out ${
+        isOpen ? 'translate-x-0 shadow-xl' : '-translate-x-full shadow-none'
+      } border-r border-gray-200 dark:border-dark-600 flex flex-col`}>
+
         {/* Header */}
-        <div className="glass-card border-b border-gray-200/50 p-4 flex-shrink-0">
+        <div className="bg-white dark:bg-dark-800 border-b border-gray-200 dark:border-dark-600 p-4 flex-shrink-0">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-bold text-gray-800 flex items-center">
-              <ChartBarIcon className="w-6 h-6 mr-2 text-blue-600" />
+            <h2 className="text-xl font-bold text-gray-900 dark:text-dark-100 flex items-center">
+              <ChartBarIcon className="w-6 h-6 mr-3 text-slate-500 dark:text-slate-400" />
               Navigation
             </h2>
             <button
               onClick={onClose}
-              className="p-2 hover:bg-gray-100 rounded-full transition-colors duration-200"
+              className="p-2 hover:bg-gray-100 dark:hover:bg-dark-700 rounded-lg transition-colors duration-200"
               aria-label="Close drawer"
             >
-              <XMarkIcon className="w-5 h-5 text-gray-600" />
+              <XMarkIcon className="w-5 h-5 text-gray-500 dark:text-dark-400" />
             </button>
           </div>
           
           {/* Search Input */}
           <div className="relative">
-            <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-dark-500" />
             <input
               type="text"
               placeholder="Search bacentas..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+              className="w-full pl-10 pr-4 py-2.5 border border-gray-300 dark:border-dark-600 bg-white dark:bg-dark-700 text-gray-900 dark:text-dark-100 rounded-lg focus:ring-2 focus:ring-slate-400 dark:focus:ring-slate-500 focus:border-transparent transition-all duration-200 placeholder-gray-500 dark:placeholder-dark-400"
             />
           </div>
         </div>
@@ -204,8 +204,8 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
 
           {/* Main Navigation */}
           <div>
-            <h3 className="text-sm font-semibold text-gray-600 mb-3 flex items-center">
-              <ChartBarIcon className="w-4 h-4 mr-1" />
+            <h3 className="text-sm font-semibold text-gray-500 dark:text-dark-400 mb-3 flex items-center">
+              <ChartBarIcon className="w-4 h-4 mr-2 text-slate-500 dark:text-slate-400" />
               Navigation
             </h3>
             <div className="space-y-2">
@@ -220,16 +220,6 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
               />
 
               <NavigationItem
-                icon={<CheckIcon className="w-4 h-4" />}
-                label="Sunday Confirmations"
-                isActive={currentTab.id === TabKeys.SUNDAY_CONFIRMATIONS}
-                onClick={() => {
-                  switchTab({ id: TabKeys.SUNDAY_CONFIRMATIONS, name: 'Sunday Confirmations' });
-                  onClose();
-                }}
-              />
-
-              <NavigationItem
                 icon={<UsersIcon className="w-4 h-4" />}
                 label="New Believers"
                 isActive={currentTab.id === TabKeys.NEW_BELIEVERS}
@@ -238,19 +228,6 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
                   onClose();
                 }}
               />
-
-              {/* Admin Deletion Requests - Only for Admins */}
-              {hasAdminPrivileges(userProfile) && (
-                <NavigationItem
-                  icon={<ExclamationTriangleIcon className="w-4 h-4" />}
-                  label="Admin Deletion Requests"
-                  isActive={currentTab.id === TabKeys.ADMIN_DELETION_REQUESTS}
-                  onClick={() => {
-                    switchTab({ id: TabKeys.ADMIN_DELETION_REQUESTS, name: 'Admin Deletion Requests' });
-                    onClose();
-                  }}
-                />
-              )}
             </div>
           </div>
 
@@ -260,17 +237,17 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
           {/* Add New Bacenta Button */}
           <button
             onClick={handleAddBacenta}
-            className="w-full flex items-center justify-center space-x-2 p-4 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl"
+            className="w-full flex items-center justify-center space-x-2 p-4 bg-slate-600 dark:bg-slate-700 hover:bg-slate-700 dark:hover:bg-slate-600 text-white rounded-lg transition-all duration-200 shadow-sm hover:shadow-md border border-slate-500 dark:border-slate-600"
           >
             <PlusCircleIcon className="w-5 h-5" />
-            <span className="font-semibold">Create New Bacenta</span>
+            <span className="font-medium">Create New Bacenta</span>
           </button>
 
           {/* Recent Bacentas */}
           {!searchQuery && validRecentBacentas.length > 0 && (
             <div>
-              <h3 className="text-sm font-semibold text-gray-600 mb-3 flex items-center">
-                <ClockIcon className="w-4 h-4 mr-1" />
+              <h3 className="text-sm font-semibold text-gray-500 dark:text-dark-400 mb-3 flex items-center">
+                <ClockIcon className="w-4 h-4 mr-2 text-slate-500 dark:text-slate-400" />
                 Recent
               </h3>
               <div className="space-y-2">
@@ -307,16 +284,16 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
             </div>
 
             {filteredBacentas.length === 0 ? (
-              <div className="text-center py-8 text-gray-500 flex-1 flex flex-col justify-center">
+              <div className="text-center py-8 text-gray-500 dark:text-dark-400 flex-1 flex flex-col justify-center">
                 {searchQuery ? (
                   <>
-                    <SearchIcon className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-                    <p>No bacentas found matching "{searchQuery}"</p>
+                    <SearchIcon className="w-12 h-12 mx-auto mb-3 text-gray-300 dark:text-dark-500" />
+                    <p className="font-medium">No bacentas found matching "{searchQuery}"</p>
                   </>
                 ) : (
                   <>
-                    <GroupIcon className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-                    <p>No bacentas created yet</p>
+                    <GroupIcon className="w-12 h-12 mx-auto mb-3 text-gray-300 dark:text-dark-500" />
+                    <p className="font-medium">No bacentas created yet</p>
                     <p className="text-sm mt-1">Create your first bacenta to get started!</p>
                   </>
                 )}
@@ -487,18 +464,18 @@ const BacentaItem: React.FC<BacentaItemProps> = ({
         onMouseDown={handleMouseDown}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
-        className={`group relative p-3 rounded-xl cursor-pointer transition-all duration-200 select-none ${
+        className={`group relative p-3 rounded-lg cursor-pointer transition-all duration-200 select-none ${
           isActive
-            ? 'bg-blue-50 border-2 border-blue-200 shadow-md'
-            : 'bg-gray-50 hover:bg-gray-100 border border-gray-200'
-        } ${showContextMenu ? 'bg-blue-100 border-blue-300' : ''}`}
+            ? 'bg-amber-100 dark:bg-amber-900/40 border border-amber-300 dark:border-amber-600 border-l-4 border-l-amber-600 dark:border-l-amber-400 shadow-sm'
+            : 'bg-white dark:bg-dark-700 hover:bg-gray-50 dark:hover:bg-dark-600 border border-gray-300 dark:border-dark-600 border-l-4 border-l-transparent hover:border-l-amber-500 dark:hover:border-l-amber-500'
+        } ${showContextMenu ? 'bg-amber-100 dark:bg-amber-900/40 border-amber-400 dark:border-amber-500' : ''}`}
       >
       <div className="flex items-center justify-between">
         <div className="flex-1 min-w-0">
-          <h4 className={`font-semibold truncate ${isActive ? 'text-blue-800' : 'text-gray-800'}`}>
+          <h4 className={`font-medium truncate ${isActive ? 'text-amber-900 dark:text-amber-100' : 'text-gray-800 dark:text-dark-100'} transition-colors duration-200`}>
             {bacenta.name}
           </h4>
-          <div className="flex items-center mt-1 text-sm text-gray-600">
+          <div className={`flex items-center mt-1 text-sm ${isActive ? 'text-amber-700 dark:text-amber-200' : 'text-gray-600 dark:text-dark-300'} transition-colors duration-200`}>
             <UsersIcon className="w-3 h-3 mr-1" />
             <span>{memberCount} member{memberCount !== 1 ? 's' : ''}</span>
           </div>
@@ -506,20 +483,15 @@ const BacentaItem: React.FC<BacentaItemProps> = ({
 
         {/* Long Press Indicator */}
         {showContextMenu && (
-          <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
+          <div className="w-2 h-2 bg-amber-600 dark:bg-amber-400 rounded-full animate-pulse" />
         )}
       </div>
-
-      {/* Active Indicator */}
-      {isActive && (
-        <div className="absolute left-0 top-1/2 transform -translate-y-1/2 w-1 h-8 bg-blue-500 rounded-r-full" />
-      )}
     </div>
 
     {/* Context Menu */}
     {showContextMenu && (
       <div
-        className="context-menu-container fixed z-50 bg-white rounded-xl shadow-2xl border border-gray-200 py-2 min-w-[160px]"
+        className="context-menu-container fixed z-50 bg-white dark:bg-dark-800 rounded-lg shadow-xl border border-gray-200 dark:border-dark-600 py-2 min-w-[160px]"
         style={{
           left: Math.min(contextMenuPosition.x, (window.innerWidth || 1024) - 180),
           top: Math.min(contextMenuPosition.y, (window.innerHeight || 768) - 120),
@@ -532,10 +504,10 @@ const BacentaItem: React.FC<BacentaItemProps> = ({
             console.log('📝 Context menu Edit button clicked');
             onEdit(e);
           }}
-          className="w-full px-4 py-3 text-left hover:bg-gray-50 transition-colors duration-200 flex items-center space-x-3"
+          className="w-full px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-dark-700 transition-colors duration-200 flex items-center space-x-3"
         >
-          <EditIcon className="w-4 h-4 text-blue-600" />
-          <span className="text-sm font-medium text-gray-700">Edit Bacenta</span>
+          <EditIcon className="w-4 h-4 text-slate-500 dark:text-slate-400" />
+          <span className="text-sm font-medium text-gray-700 dark:text-dark-200">Edit Bacenta</span>
         </button>
         <button
           onClick={(e) => {
@@ -543,10 +515,10 @@ const BacentaItem: React.FC<BacentaItemProps> = ({
             console.log('🗑️ Context menu Delete button clicked');
             onDelete(e);
           }}
-          className="w-full px-4 py-3 text-left hover:bg-red-50 transition-colors duration-200 flex items-center space-x-3"
+          className="w-full px-4 py-3 text-left hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-colors duration-200 flex items-center space-x-3"
         >
-          <TrashIcon className="w-4 h-4 text-red-600" />
-          <span className="text-sm font-medium text-red-700">Delete Bacenta</span>
+          <TrashIcon className="w-4 h-4 text-rose-500 dark:text-rose-400" />
+          <span className="text-sm font-medium text-rose-600 dark:text-rose-300">Delete Bacenta</span>
         </button>
       </div>
     )}
@@ -570,33 +542,57 @@ const NavigationItem: React.FC<NavigationItemProps> = ({
   onClick,
   badge
 }) => {
+  // Get accent color based on label with improved contrast
+  const getAccentColor = (label: string) => {
+    switch (label) {
+      case 'All Bacenta Leaders':
+        return {
+          active: 'bg-blue-100 dark:bg-blue-900/40 border-l-4 border-l-blue-600 dark:border-l-blue-400 shadow-sm',
+          icon: 'text-blue-700 dark:text-blue-300',
+          text: 'text-blue-900 dark:text-blue-100',
+          hover: 'hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:border-l-blue-500 dark:hover:border-l-blue-500'
+        };
+      case 'New Believers':
+        return {
+          active: 'bg-emerald-100 dark:bg-emerald-900/40 border-l-4 border-l-emerald-600 dark:border-l-emerald-400 shadow-sm',
+          icon: 'text-emerald-700 dark:text-emerald-300',
+          text: 'text-emerald-900 dark:text-emerald-100',
+          hover: 'hover:bg-emerald-50 dark:hover:bg-emerald-900/20 hover:border-l-emerald-500 dark:hover:border-l-emerald-500'
+        };
+      default:
+        return {
+          active: 'bg-slate-100 dark:bg-slate-900/40 border-l-4 border-l-slate-600 dark:border-l-slate-400 shadow-sm',
+          icon: 'text-slate-700 dark:text-slate-300',
+          text: 'text-slate-900 dark:text-slate-100',
+          hover: 'hover:bg-slate-50 dark:hover:bg-slate-900/20 hover:border-l-slate-500 dark:hover:border-l-slate-500'
+        };
+    }
+  };
+
+  const colors = getAccentColor(label);
+
   return (
     <button
       onClick={onClick}
-      className={`relative w-full flex items-center justify-between p-3 rounded-xl cursor-pointer transition-all duration-200 ${
+      className={`relative w-full flex items-center justify-between p-3 rounded-lg cursor-pointer transition-all duration-200 ${
         isActive
-          ? 'bg-blue-50 border-2 border-blue-200 shadow-md'
-          : 'bg-gray-50 hover:bg-gray-100 border border-gray-200'
+          ? `${colors.active}`
+          : `bg-white dark:bg-dark-700 hover:bg-gray-50 dark:hover:bg-dark-600 border border-gray-300 dark:border-dark-600 border-l-4 border-l-transparent ${colors.hover}`
       }`}
     >
       <div className="flex items-center space-x-3">
-        <div className={`${isActive ? 'text-blue-600' : 'text-gray-600'}`}>
+        <div className={`${isActive ? colors.icon : 'text-gray-600 dark:text-dark-300'} transition-colors duration-200`}>
           {icon}
         </div>
-        <span className={`font-semibold ${isActive ? 'text-blue-800' : 'text-gray-800'}`}>
+        <span className={`font-medium ${isActive ? colors.text : 'text-gray-800 dark:text-dark-100'} transition-colors duration-200`}>
           {label}
         </span>
       </div>
 
       {badge && (
-        <span className="bg-red-500 text-white text-xs px-2 py-1 rounded-full font-bold">
+        <span className="bg-rose-500 dark:bg-rose-600 text-white text-xs px-2 py-1 rounded-full font-bold shadow-sm">
           {badge}
         </span>
-      )}
-
-      {/* Active Indicator */}
-      {isActive && (
-        <div className="absolute left-0 top-1/2 transform -translate-y-1/2 w-1 h-8 bg-blue-500 rounded-r-full" />
       )}
     </button>
   );

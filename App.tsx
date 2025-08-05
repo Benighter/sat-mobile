@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState, memo } from 'react';
 import { PerformanceMonitor } from './utils/performance';
 import { FirebaseAppProvider, useAppContext } from './contexts/FirebaseAppContext';
@@ -269,8 +268,8 @@ const AppContent: React.FC = memo(() => {
             </div>
 
             {/* Center Section - Current Tab Indicator (All Screens) */}
-            <div className="absolute left-1/2 transform -translate-x-1/2 flex items-center px-3 py-2 bg-white/20 dark:bg-dark-700/20 rounded-lg border border-white/30 dark:border-dark-600/30">
-              <span className="text-gray-700 dark:text-dark-200 font-medium text-sm truncate max-w-[100px] sm:max-w-[150px]">
+            <div className="absolute left-1/2 transform -translate-x-1/2 flex items-center px-3 py-2 bg-white/40 dark:bg-dark-700/60 rounded-lg border border-gray-300/50 dark:border-dark-500/50 shadow-sm">
+              <span className="text-gray-800 dark:text-dark-100 font-medium text-sm truncate max-w-[100px] sm:max-w-[150px]">
                 {currentTab.name}
               </span>
             </div>

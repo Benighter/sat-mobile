@@ -74,7 +74,7 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
   const defaultIcon = type === 'danger' ? <TrashIcon className="w-6 h-6" /> : <ExclamationTriangleIcon className="w-6 h-6" />;
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="">
+    <Modal isOpen={isOpen} onClose={onClose} title={title}>
       <div className="text-center">
         {/* Icon */}
         <div className={`mx-auto flex items-center justify-center w-16 h-16 ${styles.iconBg} rounded-full mb-6 animate-scale-in`}>

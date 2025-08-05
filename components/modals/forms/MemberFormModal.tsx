@@ -124,14 +124,16 @@ const MemberFormModal: React.FC<MemberFormModalProps> = ({ isOpen, onClose, memb
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="" size="lg">
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={member ? 'Edit Member' : 'Add New Member'}
+      size="lg"
+    >
       <div className="p-6">
         {/* Header */}
         <div className="text-center mb-8">
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">
-            {member ? 'Edit Member' : 'Add New Member'}
-          </h2>
-          <p className="text-gray-600">
+          <p className="text-gray-600 dark:text-dark-300">
             {member ? 'Update member information' : 'Add a new member to your community'}
           </p>
         </div>

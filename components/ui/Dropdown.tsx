@@ -96,7 +96,7 @@ const Dropdown: React.FC<DropdownProps> = ({
       {/* Dropdown Menu */}
       {isOpen && (
         <div
-          className={`absolute z-50 w-48 bg-white rounded-md shadow-lg border border-gray-200 py-1 ${
+          className={`absolute z-50 w-48 bg-white dark:bg-dark-800 rounded-md shadow-lg border border-gray-300 dark:border-dark-600 py-1 ${
             align === 'right' ? 'right-0' : 'left-0'
           } ${
             position === 'above' ? 'bottom-full mb-1' : 'top-full mt-1'
@@ -109,10 +109,10 @@ const Dropdown: React.FC<DropdownProps> = ({
               disabled={item.disabled}
               className={`w-full px-4 py-2 text-left text-sm flex items-center space-x-2 transition-colors ${
                 item.disabled
-                  ? 'text-gray-400 cursor-not-allowed'
+                  ? 'text-gray-400 dark:text-dark-500 cursor-not-allowed'
                   : item.destructive
-                  ? 'text-red-600 hover:bg-red-50 hover:text-red-700'
-                  : 'text-gray-700 hover:bg-gray-100'
+                  ? 'text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-700 dark:hover:text-red-300'
+                  : 'text-gray-800 dark:text-dark-100 hover:bg-gray-100 dark:hover:bg-dark-700'
               }`}
             >
               {item.icon && (

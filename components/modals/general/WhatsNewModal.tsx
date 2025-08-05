@@ -60,7 +60,9 @@ const WhatsNewModal: React.FC<WhatsNewModalProps> = ({ isOpen, onClose }) => {
           <div className="absolute top-4 right-4">
             <button
               onClick={onClose}
-              className="p-2 hover:bg-white hover:bg-opacity-20 rounded-full transition-colors"
+              className="p-2 hover:bg-white hover:bg-opacity-20 rounded-lg transition-all duration-200 min-h-[44px] min-w-[44px] flex items-center justify-center"
+              aria-label="Close what's new modal"
+              title="Close"
             >
               <X className="w-5 h-5" />
             </button>

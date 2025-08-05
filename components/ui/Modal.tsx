@@ -215,8 +215,9 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, size = 
             <h3 className="text-base sm:text-lg font-semibold text-gray-800 dark:text-dark-100 truncate pr-2">{title}</h3>
             <button
               onClick={onClose}
-              className="text-gray-400 dark:text-dark-400 hover:text-gray-600 dark:hover:text-dark-200 p-1 rounded-full hover:bg-gray-100 dark:hover:bg-dark-700 flex-shrink-0"
+              className="text-gray-500 dark:text-dark-400 hover:text-gray-700 dark:hover:text-dark-200 p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-dark-700 flex-shrink-0 transition-all duration-200 min-h-[44px] min-w-[44px] flex items-center justify-center"
               aria-label="Close modal"
+              title="Close"
             >
               <XMarkIcon className="w-5 h-5 sm:w-6 sm:h-6" />
             </button>

@@ -107,14 +107,14 @@ const HierarchyModal: React.FC<HierarchyModalProps> = ({ isOpen, bacentaLeader, 
                 </p>
               </div>
             </div>
-            <Button
-              variant="ghost"
-              size="sm"
+            <button
               onClick={onClose}
-              className="text-white hover:bg-white/20 p-2 flex-shrink-0"
+              className="text-white/80 hover:text-white hover:bg-white/20 p-2 rounded-lg transition-all duration-200 flex-shrink-0 min-h-[44px] min-w-[44px] flex items-center justify-center"
+              aria-label="Close hierarchy modal"
+              title="Close"
             >
               <XMarkIcon className="w-5 h-5" />
-            </Button>
+            </button>
           </div>
         </div>
 

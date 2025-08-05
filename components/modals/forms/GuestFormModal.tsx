@@ -144,29 +144,21 @@ const GuestFormModal: React.FC<GuestFormModalProps> = ({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} size="md">
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={editingGuest ? 'Edit Guest' : 'Add Guest'}
+      size="md"
+    >
       <div className="p-6">
         {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-              <UserPlusIcon className="w-5 h-5 text-blue-600" />
-            </div>
-            <div>
-              <h2 className="text-xl font-semibold text-gray-900">
-                {editingGuest ? 'Edit Guest' : 'Add Guest'}
-              </h2>
-              <p className="text-sm text-gray-600">
-                {editingGuest ? 'Update guest information' : 'Add a new guest for Sunday service'}
-              </p>
-            </div>
+        <div className="text-center mb-6">
+          <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center mx-auto mb-3">
+            <UserPlusIcon className="w-5 h-5 text-blue-600 dark:text-blue-400" />
           </div>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
-          >
-            <XMarkIcon className="w-6 h-6" />
-          </button>
+          <p className="text-sm text-gray-600 dark:text-dark-300">
+            {editingGuest ? 'Update guest information' : 'Add a new guest for Sunday service'}
+          </p>
         </div>
 
         {/* Form */}

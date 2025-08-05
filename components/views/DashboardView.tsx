@@ -12,51 +12,96 @@ interface StatCardProps {
   title: string;
   value: string | number;
   icon: React.ReactNode;
-  colorClass: string;
   description?: string;
   onClick?: () => void;
+  accentColor?: string;
 }
 
-const StatCard: React.FC<StatCardProps> = memo(({ title, value, icon, colorClass, description, onClick }) => (
-  <div
-    className={`p-3 sm:p-4 md:p-6 shadow-lg rounded-xl sm:rounded-2xl border-l-4 ${colorClass} relative min-h-[120px] sm:min-h-[140px] md:h-40 flex flex-col justify-between ${
-      onClick ? 'cursor-pointer hover:shadow-xl hover:-translate-y-1 transition-all duration-300' : ''
-    }`}
-    onClick={onClick}
-  >
-    {/* Header with title and icon */}
-    <div className="flex items-start justify-between">
-      <div className="flex-1">
-        <p className="text-xs sm:text-sm font-medium text-gray-600 dark:text-dark-300 uppercase tracking-wider mb-2 sm:mb-3">{title}</p>
-      </div>
-      <div className="text-gray-400 dark:text-dark-400 ml-2 sm:ml-4 flex-shrink-0">
-        <div className="w-6 h-6 sm:w-8 sm:h-8 md:w-12 md:h-12">
-          {icon}
+const StatCard: React.FC<StatCardProps> = memo(({ title, value, icon, description, onClick, accentColor = 'slate' }) => {
+  const getAccentClasses = (color: string) => {
+    switch (color) {
+      case 'blue':
+        return {
+          border: 'border-l-4 border-l-blue-400 dark:border-l-blue-500',
+          icon: 'text-blue-500 dark:text-blue-400',
+          hover: 'hover:border-blue-300 dark:hover:border-blue-600'
+        };
+      case 'emerald':
+        return {
+          border: 'border-l-4 border-l-emerald-400 dark:border-l-emerald-500',
+          icon: 'text-emerald-500 dark:text-emerald-400',
+          hover: 'hover:border-emerald-300 dark:hover:border-emerald-600'
+        };
+      case 'amber':
+        return {
+          border: 'border-l-4 border-l-amber-400 dark:border-l-amber-500',
+          icon: 'text-amber-500 dark:text-amber-400',
+          hover: 'hover:border-amber-300 dark:hover:border-amber-600'
+        };
+      case 'rose':
+        return {
+          border: 'border-l-4 border-l-rose-400 dark:border-l-rose-500',
+          icon: 'text-rose-500 dark:text-rose-400',
+          hover: 'hover:border-rose-300 dark:hover:border-rose-600'
+        };
+      case 'indigo':
+        return {
+          border: 'border-l-4 border-l-indigo-400 dark:border-l-indigo-500',
+          icon: 'text-indigo-500 dark:text-indigo-400',
+          hover: 'hover:border-indigo-300 dark:hover:border-indigo-600'
+        };
+      default:
+        return {
+          border: 'border-l-4 border-l-slate-300 dark:border-l-slate-600',
+          icon: 'text-slate-500 dark:text-slate-400',
+          hover: 'hover:border-slate-400 dark:hover:border-slate-500'
+        };
+    }
+  };
+
+  const accents = getAccentClasses(accentColor);
+
+  return (
+    <div
+      className={`p-4 sm:p-5 md:p-6 bg-white dark:bg-dark-800 border border-gray-200 dark:border-dark-600 ${accents.border} rounded-lg shadow-sm hover:shadow-md relative min-h-[120px] sm:min-h-[140px] md:h-40 flex flex-col justify-between transition-all duration-200 ${
+        onClick ? `cursor-pointer ${accents.hover}` : ''
+      }`}
+      onClick={onClick}
+    >
+      {/* Header with title and icon */}
+      <div className="flex items-start justify-between mb-3">
+        <div className="flex-1">
+          <p className="text-xs sm:text-sm font-semibold text-gray-500 dark:text-dark-400 uppercase tracking-wide">{title}</p>
+        </div>
+        <div className={`${accents.icon} ml-3 flex-shrink-0`}>
+          <div className="w-5 h-5 sm:w-6 sm:h-6 md:w-7 md:h-7">
+            {icon}
+          </div>
         </div>
       </div>
-    </div>
 
-    {/* Value section */}
-    <div className="flex-1 flex flex-col justify-center">
-      <div className="flex items-center space-x-2 sm:space-x-3">
-        <p className="text-2xl sm:text-3xl md:text-4xl font-bold gradient-text">{value}</p>
-        {title === "Attendance Rate" && (
-          <div className="flex-1 max-w-12 sm:max-w-16 h-1.5 sm:h-2 bg-gray-200 dark:bg-dark-600 rounded-full overflow-hidden">
-            <div
-              className="h-full bg-gradient-to-r from-blue-400 to-blue-600 rounded-full"
-              style={{ width: `${typeof value === 'string' ? parseInt(value) : 0}%` }}
-            ></div>
-          </div>
-        )}
+      {/* Value section */}
+      <div className="flex-1 flex flex-col justify-center">
+        <div className="flex items-center space-x-3">
+          <p className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 dark:text-dark-100">{value}</p>
+          {title === "Attendance Rate" && (
+            <div className="flex-1 max-w-12 sm:max-w-16 h-2 bg-gray-200 dark:bg-dark-600 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-emerald-500 dark:bg-emerald-400 rounded-full transition-all duration-500"
+                style={{ width: `${typeof value === 'string' ? parseInt(value) : 0}%` }}
+              ></div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Description section */}
+      <div className="mt-2">
+        {description && <p className="text-xs sm:text-sm text-gray-600 dark:text-dark-300 font-medium">{description}</p>}
       </div>
     </div>
-
-    {/* Description section */}
-    <div>
-      {description && <p className="text-xs sm:text-sm text-gray-500 font-medium">{description}</p>}
-    </div>
-  </div>
-));
+  );
+});
 
 
 const DashboardView: React.FC = memo(() => {
@@ -238,34 +283,42 @@ const DashboardView: React.FC = memo(() => {
   const year = displayedDate.getFullYear();
 
   return (
-    <div className="space-y-3 sm:space-y-4 md:space-y-5">
-      {/* Enhanced Header */}
-      <div className="text-center mb-2 sm:mb-3 md:mb-4">
-        <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold gradient-text font-serif mb-1">
+    <div className="space-y-4 sm:space-y-5 md:space-y-6">
+      {/* Clean, Professional Header with subtle accent */}
+      <div className="text-center mb-3 sm:mb-4 md:mb-5">
+        <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 dark:text-dark-100 mb-2">
           Dashboard
         </h2>
-        <div className="flex items-center justify-center space-x-2 text-gray-600">
-          <span className="text-lg sm:text-xl md:text-2xl">📊</span>
+        <div className="flex items-center justify-center space-x-3 text-gray-600 dark:text-dark-300">
+          <div className="w-2 h-2 bg-slate-400 dark:bg-slate-500 rounded-full"></div>
           <p className="text-sm sm:text-base md:text-lg font-medium">{monthName} {year}</p>
-          <span className="text-lg sm:text-xl md:text-2xl">⛪</span>
+          <div className="w-2 h-2 bg-slate-400 dark:bg-slate-500 rounded-full"></div>
         </div>
-        <div className="w-16 sm:w-20 md:w-24 h-0.5 sm:h-1 bg-gradient-to-r from-gray-400 to-gray-600 rounded-full mx-auto mt-1 sm:mt-2"></div>
+        <div className="w-12 sm:w-16 md:w-20 h-0.5 bg-gradient-to-r from-slate-300 via-slate-400 to-slate-300 dark:from-slate-600 dark:via-slate-500 dark:to-slate-600 rounded-full mx-auto mt-2 sm:mt-3"></div>
       </div>
 
-      {/* Stats Grid - Utilizing full space with better layout */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4 md:gap-6">
+      {/* Stats Grid - Clean, professional layout with subtle color accents */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 sm:gap-5 md:gap-6">
         <StatCard
           title="Total Members"
           value={totalMembers}
           icon={<PeopleIcon className="w-full h-full" />}
-          colorClass="border-blue-500 bg-gradient-to-br from-blue-50 to-blue-100"
+          accentColor="blue"
           onClick={() => switchTab({ id: 'all_members', name: 'All Members' })}
+        />
+        <EnhancedConfirmationCard
+          title="Sunday Confirmations"
+          confirmedCount={upcomingConfirmations.total}
+          totalMembers={confirmationTarget}
+          isLoadingTarget={isLoadingTarget}
+          date={upcomingConfirmations.date}
+          onClick={() => switchTab({ id: 'sunday_confirmations', name: 'Sunday Confirmations' })}
         />
         <StatCard
           title="Attendance Rate"
           value={`${currentMonthAttendancePercentage()}%`}
           icon={<AttendanceIcon className="w-full h-full" />}
-          colorClass="border-green-500 bg-gradient-to-br from-green-50 to-green-100"
+          accentColor="emerald"
           description={`For ${monthName}`}
           onClick={() => switchTab({ id: 'attendance_analytics', name: 'Attendance Analytics' })}
         />
@@ -273,7 +326,7 @@ const DashboardView: React.FC = memo(() => {
           title="Weekly Attendance"
           value={weeklyAttendance.total}
           icon={<CalendarIcon className="w-full h-full" />}
-          colorClass="border-purple-500 bg-gradient-to-br from-purple-50 to-purple-100"
+          accentColor="amber"
           description={`For ${formatFullDate(weeklyAttendance.date).split(',')[0]}`}
           onClick={() => switchTab({ id: 'weekly_attendance', name: 'Weekly Attendance' })}
         />
@@ -281,20 +334,10 @@ const DashboardView: React.FC = memo(() => {
           title="Outreach"
           value="Coming Soon"
           icon={<ChartBarIcon className="w-full h-full" />}
-          colorClass="border-orange-500 bg-gradient-to-br from-orange-50 to-orange-100"
+          accentColor="rose"
           description="Community outreach programs"
           onClick={() => {}}
         />
-        <div className="sm:col-span-2 lg:col-span-4 xl:col-span-1">
-          <EnhancedConfirmationCard
-            title="Sunday Confirmations"
-            confirmedCount={upcomingConfirmations.total}
-            totalMembers={confirmationTarget}
-            isLoadingTarget={isLoadingTarget}
-            date={upcomingConfirmations.date}
-            onClick={() => switchTab({ id: 'sunday_confirmations', name: 'Sunday Confirmations' })}
-          />
-        </div>
       </div>
 
 
@@ -323,71 +366,104 @@ const EnhancedConfirmationCard: React.FC<EnhancedConfirmationCardProps> = memo((
   onClick
 }) => {
   const percentage = !isLoadingTarget && totalMembers > 0 ? Math.round((confirmedCount / totalMembers) * 100) : 0;
-  const circumference = 2 * Math.PI * 20; // radius = 20 (smaller)
+  const radius = 28; // Larger radius for better visibility
+  const circumference = 2 * Math.PI * radius;
   const strokeDasharray = circumference;
   const strokeDashoffset = circumference - (percentage / 100) * circumference;
 
+  // Dynamic color based on percentage
+  const getProgressColor = (percent: number) => {
+    if (percent >= 90) return 'text-emerald-500 dark:text-emerald-400'; // Excellent - Green
+    if (percent >= 75) return 'text-blue-500 dark:text-blue-400';       // Good - Blue
+    if (percent >= 50) return 'text-amber-500 dark:text-amber-400';     // Fair - Amber
+    if (percent >= 25) return 'text-orange-500 dark:text-orange-400';   // Low - Orange
+    return 'text-red-500 dark:text-red-400';                            // Very Low - Red
+  };
+
+  const getBorderColor = (percent: number) => {
+    if (percent >= 90) return 'border-l-emerald-400 dark:border-l-emerald-500 hover:border-emerald-300 dark:hover:border-emerald-600';
+    if (percent >= 75) return 'border-l-blue-400 dark:border-l-blue-500 hover:border-blue-300 dark:hover:border-blue-600';
+    if (percent >= 50) return 'border-l-amber-400 dark:border-l-amber-500 hover:border-amber-300 dark:hover:border-amber-600';
+    if (percent >= 25) return 'border-l-orange-400 dark:border-l-orange-500 hover:border-orange-300 dark:hover:border-orange-600';
+    return 'border-l-red-400 dark:border-l-red-500 hover:border-red-300 dark:hover:border-red-600';
+  };
+
+  const progressColor = getProgressColor(percentage);
+  const borderColor = getBorderColor(percentage);
+
   return (
     <div
-      className="p-4 sm:p-6 shadow-lg rounded-xl border-l-4 border-indigo-500 bg-gradient-to-br from-indigo-50 to-indigo-100 relative min-h-[140px] md:h-40 flex flex-col justify-between cursor-pointer hover:shadow-xl hover:-translate-y-1 transition-all duration-300"
+      className={`p-4 sm:p-5 md:p-6 bg-white dark:bg-dark-800 border border-gray-200 dark:border-dark-600 border-l-4 ${borderColor} rounded-lg shadow-sm hover:shadow-md relative min-h-[120px] sm:min-h-[140px] md:h-40 flex flex-col justify-between cursor-pointer transition-all duration-200`}
       onClick={onClick}
     >
-      {/* Header with title and progress ring */}
-      <div className="flex items-start justify-between">
+      {/* Header with title */}
+      <div className="flex items-start justify-between mb-3">
         <div className="flex-1">
-          <p className="text-xs sm:text-sm font-medium text-gray-600 uppercase tracking-wider mb-2 sm:mb-3">{title}</p>
+          <p className="text-xs sm:text-sm font-semibold text-gray-500 dark:text-dark-400 uppercase tracking-wide">{title}</p>
         </div>
+      </div>
+
+      {/* Main content with large progress circle */}
+      <div className="flex-1 flex items-center justify-between">
+        {/* Value section */}
+        <div className="flex-1">
+          <div className="flex items-baseline space-x-2 mb-1">
+            <span className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 dark:text-dark-100">
+              {confirmedCount}
+            </span>
+            <span className="text-sm text-gray-600 dark:text-dark-300 font-medium">
+              of {isLoadingTarget ? '...' : totalMembers}
+            </span>
+          </div>
+          <p className="text-xs sm:text-sm text-gray-600 dark:text-dark-300 font-medium">
+            For {formatFullDate(date).split(',')[0]}
+          </p>
+        </div>
+
+        {/* Large Progress Ring */}
         <div className="ml-4 flex-shrink-0 relative">
-          {/* Smaller Progress Ring */}
-          <div className="relative w-10 h-10">
-            <svg className="w-full h-full transform -rotate-90" viewBox="0 0 50 50">
+          <div className="relative w-16 h-16 sm:w-18 sm:h-18 group">
+            {/* Subtle glow background */}
+            <div className={`absolute inset-0 rounded-full opacity-20 ${progressColor.replace('text-', 'bg-')} blur-sm group-hover:opacity-30 transition-opacity duration-300`}></div>
+
+            <svg className="w-full h-full transform -rotate-90 relative z-10" viewBox="0 0 72 72">
               {/* Background circle */}
               <circle
-                cx="25"
-                cy="25"
-                r="20"
+                cx="36"
+                cy="36"
+                r={radius}
                 stroke="currentColor"
                 strokeWidth="4"
                 fill="none"
-                className="text-gray-200"
+                className="text-gray-200 dark:text-dark-600"
               />
-              {/* Progress circle */}
+              {/* Progress circle with dynamic color and smooth animation */}
               <circle
-                cx="25"
-                cy="25"
-                r="20"
+                cx="36"
+                cy="36"
+                r={radius}
                 stroke="currentColor"
                 strokeWidth="4"
                 fill="none"
                 strokeDasharray={strokeDasharray}
                 strokeDashoffset={isLoadingTarget ? circumference : strokeDashoffset}
-                className="text-indigo-500 transition-all duration-500 ease-out"
+                className={`${progressColor} transition-all duration-1000 ease-out`}
                 strokeLinecap="round"
+                style={{
+                  filter: 'drop-shadow(0 0 3px currentColor)',
+                  transformOrigin: 'center'
+                }}
               />
             </svg>
-            {/* Center percentage */}
-            <div className="absolute inset-0 flex items-center justify-center">
-              <span className="text-xs font-bold text-indigo-600">
+
+            {/* Center percentage with dynamic color and subtle pulse */}
+            <div className="absolute inset-0 flex items-center justify-center z-20">
+              <span className={`text-sm sm:text-base font-bold ${progressColor} transition-all duration-500 ${percentage >= 90 ? 'animate-pulse' : ''}`}>
                 {isLoadingTarget ? '...' : `${percentage}%`}
               </span>
             </div>
           </div>
         </div>
-      </div>
-
-      {/* Value section */}
-      <div>
-        <div className="flex items-baseline space-x-2 mb-2">
-          <span className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900">
-            {confirmedCount}
-          </span>
-          <span className="text-sm text-gray-500 font-medium">
-            of {isLoadingTarget ? '...' : totalMembers}
-          </span>
-        </div>
-        <p className="text-xs sm:text-sm text-gray-500 font-medium">
-          For {formatFullDate(date).split(',')[0]}
-        </p>
       </div>
     </div>
   );

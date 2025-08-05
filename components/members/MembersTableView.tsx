@@ -418,7 +418,7 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
               <Input
                 placeholder="Search members..."
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                onChange={(value) => setSearchTerm(value)}
                 className="text-center"
               />
             </div>
