@@ -18,6 +18,15 @@ import {
 import { dataMigrationService } from '../utils/dataMigration';
 import { userService } from '../services/userService';
 import { inviteService } from '../services/inviteService';
+import { setNotificationContext } from '../services/notificationService';
+import { 
+  memberOperationsWithNotifications, 
+  newBelieverOperationsWithNotifications,
+  guestOperationsWithNotifications,
+  confirmationOperationsWithNotifications,
+  attendanceOperationsWithNotifications,
+  setNotificationIntegrationContext
+} from '../services/notificationIntegration';
 
 interface AppContextType {
   // Data
@@ -69,6 +78,7 @@ interface AppContextType {
   // Firebase-specific
   user: FirebaseUser | null;
   userProfile: any;
+  currentChurchId: string | null;
   isOnline: boolean;
   needsMigration: boolean;
   
@@ -197,6 +207,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
   // Firebase-specific state
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [userProfile, setUserProfile] = useState<any>(null);
+  const [currentChurchId, setCurrentChurchId] = useState<string | null>(null);
   const [isOnline, setIsOnline] = useState<boolean>(true);
   const [needsMigration, setNeedsMigration] = useState<boolean>(false);
   
@@ -230,6 +241,14 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
               const profile = await userService.getUserProfile(user.uid);
               setUserProfile(profile);
 
+              // Set up notification context if we have church context
+              const churchId = firebaseUtils.getCurrentChurchId();
+              setCurrentChurchId(churchId);
+              if (profile && churchId) {
+                setNotificationContext(profile, churchId);
+                setNotificationIntegrationContext(profile, churchId);
+              }
+
               // Check if Firebase is ready (has church context) and set up data listeners
               if (firebaseUtils.isReady()) {
                 setupDataListeners();
@@ -250,6 +269,9 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
           } else {
             // User not authenticated, clear data
             setUserProfile(null);
+            setCurrentChurchId(null);
+            setNotificationContext(null, null);
+            setNotificationIntegrationContext(null, null);
             setMembers([]);
             setBacentas([]);
             setAttendanceRecords([]);
@@ -401,7 +423,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
   const addMemberHandler = useCallback(async (memberData: Omit<Member, 'id' | 'createdDate' | 'lastUpdated'>) => {
     try {
       setIsLoading(true);
-      await membersFirebaseService.add(memberData);
+      await memberOperationsWithNotifications.add(memberData);
       showToast('success', 'Member added successfully');
     } catch (error: any) {
       setError(error.message);
@@ -421,7 +443,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
 
       for (const memberData of membersData) {
         try {
-          const memberId = await membersFirebaseService.add(memberData);
+          const memberId = await memberOperationsWithNotifications.add(memberData);
           successful.push({ ...memberData, id: memberId, createdDate: new Date().toISOString(), lastUpdated: new Date().toISOString() });
         } catch (error: any) {
           failed.push({ data: memberData, error: error.message });
@@ -487,7 +509,9 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
         }
       }
 
-      await membersFirebaseService.delete(memberId);
+      // Use notification-enabled delete operation
+      const memberName = `${memberToDelete.firstName} ${memberToDelete.lastName || ''}`.trim();
+      await memberOperationsWithNotifications.delete(memberId, memberName);
       showToast('success', 'Member deleted successfully');
     } catch (error: any) {
       setError(error.message);
@@ -545,7 +569,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
   const addNewBelieverHandler = useCallback(async (newBelieverData: Omit<NewBeliever, 'id' | 'createdDate' | 'lastUpdated'>) => {
     try {
       setIsLoading(true);
-      await newBelieversFirebaseService.add(newBelieverData);
+      await newBelieverOperationsWithNotifications.add(newBelieverData);
       showToast('success', 'New believer added successfully');
     } catch (error: any) {
       setError(error.message);
@@ -565,7 +589,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
 
       for (const newBelieverData of newBelieversData) {
         try {
-          const newBelieverId = await newBelieversFirebaseService.add(newBelieverData);
+          const newBelieverId = await newBelieverOperationsWithNotifications.add(newBelieverData);
           successful.push({ ...newBelieverData, id: newBelieverId, createdDate: new Date().toISOString(), lastUpdated: new Date().toISOString() });
         } catch (error: any) {
           failed.push({ data: newBelieverData, error: error.message });
@@ -685,7 +709,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
       };
 
       console.log('✅ Marking confirmation:', recordId, status);
-      await confirmationFirebaseService.addOrUpdate(record);
+      await confirmationOperationsWithNotifications.addOrUpdate(record);
       showToast('success', status === 'Confirmed' ? 'Attendance confirmed!' : 'Confirmation removed');
     } catch (error: any) {
       console.error('❌ Failed to mark confirmation:', error);
@@ -702,7 +726,19 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
         throw new Error('User not authenticated');
       }
 
-      await confirmationFirebaseService.remove(confirmationId, userProfile.uid);
+      // Parse the confirmation ID to extract memberId and date
+      const parts = confirmationId.split('_');
+      if (parts.length >= 2) {
+        const memberId = parts[0];
+        const date = parts[1];
+
+        // Use notification-enabled remove operation
+        await confirmationOperationsWithNotifications.remove(memberId, date);
+      } else {
+        // Fallback to direct service call for non-standard IDs
+        await confirmationFirebaseService.remove(confirmationId, userProfile.uid);
+      }
+
       showToast('success', 'Confirmation removed successfully');
     } catch (error: any) {
       console.error('❌ Failed to remove confirmation:', error);
@@ -760,7 +796,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
       setIsLoading(true);
 
       // Add the guest to the database
-      const guestId = await guestFirebaseService.add(guestData);
+      const guestId = await guestOperationsWithNotifications.add(guestData);
 
       // Auto-confirm the guest for the upcoming Sunday
       const { getUpcomingSunday } = await import('../utils/dateUtils');
@@ -1385,6 +1421,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     // Firebase-specific
     user,
     userProfile,
+    currentChurchId,
     isOnline,
     needsMigration,
 

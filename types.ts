@@ -186,3 +186,45 @@ export interface MemberDeletionRequest {
   churchId: string; // Church context for the request
   expiresAt?: string; // Optional expiration timestamp (auto-reject after 7 days)
 }
+
+// Admin Notification System Types
+export type NotificationActivityType = 
+  | 'member_added' 
+  | 'member_updated' 
+  | 'member_deleted'
+  | 'attendance_confirmed' 
+  | 'attendance_updated'
+  | 'new_believer_added'
+  | 'new_believer_updated'
+  | 'guest_added'
+  | 'bacenta_assignment_changed';
+
+export interface AdminNotification {
+  id: string; // Auto-generated document ID
+  leaderId: string; // ID of leader who performed the action
+  leaderName: string; // Cached leader name for display
+  adminId: string; // ID of admin who should receive this notification
+  activityType: NotificationActivityType;
+  timestamp: string; // ISO timestamp of the activity
+  isRead: boolean; // Whether the admin has read this notification
+  churchId: string; // Church context for the notification
+  
+  // Activity-specific details
+  details: {
+    memberName?: string; // For member-related activities
+    memberRole?: string; // For member role changes
+    bacentaName?: string; // For bacenta-related activities
+    attendanceDate?: string; // For attendance activities
+    newBelieverName?: string; // For new believer activities
+    guestName?: string; // For guest activities
+    description: string; // Human-readable description of the activity
+  };
+  
+  // Optional metadata
+  metadata?: {
+    previousValue?: string; // For update activities
+    newValue?: string; // For update activities
+    attendanceCount?: number; // For attendance activities
+    [key: string]: any; // Flexible metadata
+  };
+}

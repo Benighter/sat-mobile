@@ -41,6 +41,7 @@ import DataManagement from './components/DataManagement';
 import EnhancedProfileDropdown from './components/EnhancedProfileDropdown';
 import OfflineIndicator from './components/OfflineIndicator';
 import PendingInviteNotification from './components/PendingInviteNotification';
+import NotificationBadge from './components/NotificationBadge';
 import DeletionRequestNotificationBadge from './components/DeletionRequestNotificationBadge';
 import { DeleteMemberModal, DeleteBacentaModal, DeleteNewBelieverModal, ClearAllDataModal, ClearSelectedDataModal, CreateDeletionRequestModal } from './components/ConfirmationModal';
 import WhatsNewModal from './components/WhatsNewModal';
@@ -280,6 +281,9 @@ const AppContent: React.FC = memo(() => {
 
             {/* Right Section - Notifications and Profile */}
             <div className="flex items-center space-x-2 sm:space-x-3">
+              {/* Admin Notification Badge */}
+              <NotificationBadge />
+              
               {/* Deletion Request Notification Badge */}
               <DeletionRequestNotificationBadge />
 
