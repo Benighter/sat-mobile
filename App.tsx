@@ -3,9 +3,9 @@ import React, { useEffect, useState, memo } from 'react';
 import { PerformanceMonitor } from './utils/performance';
 import { FirebaseAppProvider, useAppContext } from './contexts/FirebaseAppContext';
 import { ThemeProvider } from './contexts/ThemeContext';
-import { AuthScreen } from './components/AuthScreen';
+import { AuthScreen } from './components/auth/AuthScreen';
 
-import DashboardView from './components/DashboardView';
+import DashboardView from './components/views/DashboardView';
 import {
   LazyWrapper,
   LazyMemberListView,
@@ -17,34 +17,30 @@ import {
   LazyNewBelieversView,
   LazyMyDeletionRequestsView,
   LazyMemberDeletionRequestsView
-} from './components/LazyWrapper';
-import ProfileSettingsView from './components/ProfileSettingsView';
-import GestureWrapper from './components/GestureWrapper';
-import SwipeIndicator from './components/SwipeIndicator';
+} from './components/common/LazyWrapper';
+import ProfileSettingsView from './components/views/ProfileSettingsView';
+import GestureWrapper from './components/layout/GestureWrapper';
+import SwipeIndicator from './components/layout/SwipeIndicator';
 import {
   LoadingSpinnerIcon,
-  Bars3Icon,
-  ChartBarIcon,
-  UsersIcon,
-  GroupIcon,
-  UserIcon
+  Bars3Icon
 } from './components/icons';
 import { TabKeys } from './types';
 import { DEFAULT_CHURCH } from './constants';
-import MemberFormModal from './components/MemberFormModal';
-import BulkMemberAddModal from './components/BulkMemberAddModal';
-import BacentaFormModal from './components/BacentaFormModal'; // Import BacentaFormModal
-import BacentaDrawer from './components/BacentaDrawer'; // Import BacentaDrawer
-import NewBelieverFormModal from './components/NewBelieverFormModal'; // Import NewBelieverFormModal
-import HierarchyModal from './components/HierarchyModal';
-import DataManagement from './components/DataManagement';
-import EnhancedProfileDropdown from './components/EnhancedProfileDropdown';
-import OfflineIndicator from './components/OfflineIndicator';
-import PendingInviteNotification from './components/PendingInviteNotification';
-import NotificationBadge from './components/NotificationBadge';
-import DeletionRequestNotificationBadge from './components/DeletionRequestNotificationBadge';
-import { DeleteMemberModal, DeleteBacentaModal, DeleteNewBelieverModal, ClearAllDataModal, ClearSelectedDataModal, CreateDeletionRequestModal } from './components/ConfirmationModal';
-import WhatsNewModal from './components/WhatsNewModal';
+import MemberFormModal from './components/modals/forms/MemberFormModal';
+import BulkMemberAddModal from './components/members/BulkMemberAddModal';
+import BacentaFormModal from './components/modals/forms/BacentaFormModal'; // Import BacentaFormModal
+import BacentaDrawer from './components/bacentas/BacentaDrawer'; // Import BacentaDrawer
+import NewBelieverFormModal from './components/modals/forms/NewBelieverFormModal'; // Import NewBelieverFormModal
+import HierarchyModal from './components/modals/general/HierarchyModal';
+import DataManagement from './components/admin/DataManagement';
+import EnhancedProfileDropdown from './components/layout/EnhancedProfileDropdown';
+import OfflineIndicator from './components/common/OfflineIndicator';
+import PendingInviteNotification from './components/notifications/PendingInviteNotification';
+import NotificationBadge from './components/notifications/NotificationBadge';
+import DeletionRequestNotificationBadge from './components/notifications/DeletionRequestNotificationBadge';
+import { DeleteMemberModal, DeleteBacentaModal, DeleteNewBelieverModal, ClearAllDataModal, ClearSelectedDataModal, CreateDeletionRequestModal } from './components/modals/confirmations/ConfirmationModal';
+import WhatsNewModal from './components/modals/general/WhatsNewModal';
 import { useWhatsNew } from './hooks/useWhatsNew';
 
 const AppContent: React.FC = memo(() => {
