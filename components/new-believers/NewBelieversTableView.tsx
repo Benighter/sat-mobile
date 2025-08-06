@@ -236,17 +236,18 @@ const NewBelieversTableView: React.FC = () => {
           </div>
           
           {/* Filters */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <Input
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 items-end">
+            <input
+              type="text"
               placeholder="Search new believers..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="border-0 bg-white/50 focus:bg-white/80 transition-colors"
+              className="w-full px-3 py-3 sm:py-2 border-0 bg-white/50 focus:bg-white/80 rounded-lg transition-colors text-base sm:text-sm placeholder-gray-500"
             />
             <select
               value={selectedMinistry}
               onChange={(e) => setSelectedMinistry(e.target.value)}
-              className="px-3 py-2 border-0 bg-white/50 focus:bg-white/80 rounded-lg transition-colors"
+              className="w-full px-3 py-3 sm:py-2 border-0 bg-white/50 focus:bg-white/80 rounded-lg transition-colors text-base sm:text-sm"
             >
               <option value="">All Ministries</option>
               {uniqueMinistries.map(ministry => (

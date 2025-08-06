@@ -413,20 +413,21 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
           </div>
 
           {/* Search and Filter */}
-          <div className="flex flex-col sm:flex-row items-center justify-center space-y-2 sm:space-y-0 sm:space-x-3">
+          <div className="flex flex-col space-y-3 sm:flex-row sm:space-y-0 sm:space-x-3 sm:items-end justify-center">
             <div className="w-full sm:w-64">
-              <Input
+              <input
+                type="text"
                 placeholder="Search members..."
                 value={searchTerm}
-                onChange={(value) => setSearchTerm(value)}
-                className="text-center"
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full px-3 py-3 sm:py-2 border border-gray-300 dark:border-dark-600 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent transition-colors text-base sm:text-sm bg-white dark:bg-dark-700 text-gray-900 dark:text-dark-100 placeholder-gray-500 dark:placeholder-dark-400 text-center"
               />
             </div>
             <div className="w-full sm:w-48">
               <select
                 value={roleFilter}
                 onChange={(e) => setRoleFilter(e.target.value as 'all' | 'Bacenta Leader' | 'Fellowship Leader' | 'Member')}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-center cursor-pointer"
+                className="w-full px-3 py-3 sm:py-2 border border-gray-300 dark:border-dark-600 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent transition-colors text-base sm:text-sm bg-white dark:bg-dark-700 text-gray-900 dark:text-dark-100 text-center cursor-pointer"
               >
                 <option value="all">All Roles</option>
                 <option value="Bacenta Leader">💚 Bacenta Leaders</option>
