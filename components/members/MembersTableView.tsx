@@ -365,19 +365,12 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
       {currentBacentaName && (
         <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg desktop:rounded-xl shadow-sm border border-blue-200 p-3 desktop:p-4">
           <div className="text-center">
-            <div className="flex items-center justify-center space-x-2">
-              <div className="w-8 h-8 desktop:w-10 desktop:h-10 bg-blue-100 rounded-lg desktop:rounded-xl flex items-center justify-center">
-                <span className="text-blue-600 font-bold text-lg desktop:text-xl">🏠</span>
-              </div>
-              <div>
-                <h1 className="text-lg desktop:text-xl desktop-lg:text-2xl font-bold text-blue-900">
-                  {currentBacentaName}
-                </h1>
-                <p className="text-sm desktop:text-base text-blue-700 font-medium">
-                  Bacenta
-                </p>
-              </div>
-            </div>
+            <h1 className="text-lg desktop:text-xl desktop-lg:text-2xl font-bold text-blue-900">
+              {currentBacentaName}
+            </h1>
+            <p className="text-sm desktop:text-base text-blue-700 font-medium">
+              Bacenta
+            </p>
           </div>
         </div>
       )}
