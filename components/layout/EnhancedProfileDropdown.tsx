@@ -89,9 +89,9 @@ const EnhancedProfileDropdown: React.FC<EnhancedProfileDropdownProps> = ({
 
   const ProfileAvatar = ({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' }) => {
     const sizeClasses = {
-      sm: 'w-8 h-8 text-sm',
-      md: 'w-10 h-10 text-base',
-      lg: 'w-16 h-16 text-xl'
+      sm: 'w-6 h-6 xs:w-7 xs:h-7 sm:w-8 sm:h-8 text-xs xs:text-sm',
+      md: 'w-8 h-8 xs:w-9 xs:h-9 sm:w-10 sm:h-10 text-sm xs:text-base',
+      lg: 'w-14 h-14 xs:w-15 xs:h-15 sm:w-16 sm:h-16 text-lg xs:text-xl'
     };
 
     // Check if user has a profile picture from userProfile context
@@ -121,19 +121,19 @@ const EnhancedProfileDropdown: React.FC<EnhancedProfileDropdownProps> = ({
       {/* Profile Button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center space-x-2 px-3 py-2 rounded-xl glass hover:glass-dark transition-all duration-300 group shadow-lg"
+        className="flex items-center space-x-1 xs:space-x-2 px-1.5 xs:px-2 sm:px-3 py-1.5 xs:py-2 rounded-lg xs:rounded-xl glass hover:glass-dark transition-all duration-300 group shadow-lg touch-manipulation"
         aria-label="Open profile menu"
       >
         <ProfileAvatar size="sm" />
         <div className="hidden sm:block text-left min-w-0">
-          <p className="text-gray-700 font-medium text-sm truncate max-w-[100px] lg:max-w-[120px]">
+          <p className="text-gray-700 font-medium text-sm truncate max-w-[80px] md:max-w-[100px] lg:max-w-[120px]">
             {userProfile?.displayName || `${userProfile?.firstName || ''} ${userProfile?.lastName || ''}`.trim() || user.displayName || 'User'}
           </p>
-          <p className="text-gray-500 text-xs truncate max-w-[100px] lg:max-w-[120px]">
+          <p className="text-gray-500 text-xs truncate max-w-[80px] md:max-w-[100px] lg:max-w-[120px]">
             Church Member
           </p>
         </div>
-        <ChevronDownIcon className={`w-4 h-4 text-gray-500 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+        <ChevronDownIcon className={`w-3 h-3 xs:w-4 xs:h-4 text-gray-500 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
       </button>
 
       {/* Dropdown Menu */}

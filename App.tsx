@@ -228,20 +228,20 @@ const AppContent: React.FC = memo(() => {
 
       {/* Fixed Header - Clean Single Line Design with Desktop Enhancements */}
       <header className="fixed top-0 left-0 right-0 z-50 bg-gradient-to-r from-blue-50/95 via-white/95 to-indigo-50/95 dark:from-dark-800/95 dark:via-dark-900/95 dark:to-dark-800/95 backdrop-blur-md desktop:backdrop-blur-lg border-b border-gray-200/50 dark:border-dark-600/50 shadow-xl desktop:shadow-lg desktop-nav">
-        <div className="container mx-auto px-3 sm:px-6 desktop:px-8 desktop-lg:px-12 py-3 sm:py-4 desktop:py-4 desktop-lg:py-5">
+        <div className="container mx-auto px-2 xs:px-3 sm:px-6 desktop:px-8 desktop-lg:px-12 py-2 xs:py-3 sm:py-4 desktop:py-4 desktop-lg:py-5">
           <div className="relative flex items-center justify-between">
 
             {/* Left Section - Hamburger Menu and Logo */}
-            <div className="flex items-center space-x-3 sm:space-x-4 desktop:space-x-6">
+            <div className="flex items-center space-x-1 xs:space-x-2 sm:space-x-4 desktop:space-x-6 flex-shrink-0">
               {/* Hamburger Menu */}
               <button
                 onClick={openBacentaDrawer}
-                className="group flex items-center space-x-2 px-2 sm:px-3 desktop:px-4 py-2 desktop:py-3 text-gray-600 dark:text-dark-300 hover:text-gray-900 dark:hover:text-dark-100 transition-all duration-300 rounded-lg desktop:rounded-xl hover:bg-white/50 dark:hover:bg-dark-700/50 desktop:hover:bg-white/70"
+                className="group flex items-center space-x-1 xs:space-x-2 px-1 xs:px-2 sm:px-3 desktop:px-4 py-1.5 xs:py-2 desktop:py-3 text-gray-600 dark:text-dark-300 hover:text-gray-900 dark:hover:text-dark-100 transition-all duration-300 rounded-lg desktop:rounded-xl hover:bg-white/50 dark:hover:bg-dark-700/50 desktop:hover:bg-white/70"
                 title="Open Navigation Menu"
                 aria-label="Open Navigation Menu"
               >
                 <div className="relative">
-                  <Bars3Icon className="w-5 h-5 sm:w-6 sm:h-6 desktop:w-6 desktop:h-6 transition-colors duration-200" />
+                  <Bars3Icon className="w-4 h-4 xs:w-5 xs:h-5 sm:w-6 sm:h-6 desktop:w-6 desktop:h-6 transition-colors duration-200" />
                 </div>
                 <span className="hidden sm:inline desktop:inline font-medium text-sm desktop:text-base">Menu</span>
               </button>
@@ -249,11 +249,11 @@ const AppContent: React.FC = memo(() => {
               {/* Logo - Always visible */}
               <button
                 onClick={() => switchTab({ id: 'dashboard', name: 'Dashboard' })}
-                className="flex items-center space-x-2 sm:space-x-3 desktop:space-x-4 transition-all duration-300 group"
+                className="flex items-center space-x-1 xs:space-x-2 sm:space-x-3 desktop:space-x-4 transition-all duration-300 group"
                 aria-label="Go to Dashboard"
                 title="Go to Dashboard"
               >
-                <div className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 desktop:w-12 desktop:h-12 desktop-lg:w-14 desktop-lg:h-14 bg-white dark:bg-dark-700 rounded-lg sm:rounded-xl desktop:rounded-xl desktop-lg:rounded-2xl flex items-center justify-center shadow-lg group-hover:shadow-xl desktop:group-hover:shadow-2xl transition-all duration-300 ring-2 ring-blue-100 dark:ring-dark-600 p-0.5">
+                <div className="w-6 h-6 xs:w-8 xs:h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 desktop:w-12 desktop:h-12 desktop-lg:w-14 desktop-lg:h-14 bg-white dark:bg-dark-700 rounded-lg sm:rounded-xl desktop:rounded-xl desktop-lg:rounded-2xl flex items-center justify-center shadow-lg group-hover:shadow-xl desktop:group-hover:shadow-2xl transition-all duration-300 ring-2 ring-blue-100 dark:ring-dark-600 p-0.5">
                   <img src="/logo.png" alt={DEFAULT_CHURCH.NAME} className="w-full h-full object-contain" />
                 </div>
                 <div className="hidden sm:block desktop:block">
@@ -267,34 +267,40 @@ const AppContent: React.FC = memo(() => {
               </button>
             </div>
 
-            {/* Center Section - Current Tab Indicator (All Screens) */}
-            <div className="absolute left-1/2 transform -translate-x-1/2 flex items-center px-3 py-2 desktop:px-4 desktop:py-3 bg-white/40 dark:bg-dark-700/60 desktop:bg-white/60 desktop:dark:bg-dark-700/80 rounded-lg desktop:rounded-xl border border-gray-300/50 dark:border-dark-500/50 desktop:border-gray-300/70 shadow-sm desktop:shadow-md">
-              <span className="text-gray-800 dark:text-dark-100 font-medium text-sm desktop:text-base truncate max-w-[100px] sm:max-w-[150px] desktop:max-w-[200px] desktop-lg:max-w-[250px]">
+            {/* Center Section - Current Tab Indicator (Hidden on very small screens) */}
+            <div className="hidden xs:flex absolute left-1/2 transform -translate-x-1/2 items-center px-2 xs:px-3 py-1.5 xs:py-2 desktop:px-4 desktop:py-3 bg-white/40 dark:bg-dark-700/60 desktop:bg-white/60 desktop:dark:bg-dark-700/80 rounded-lg desktop:rounded-xl border border-gray-300/50 dark:border-dark-500/50 desktop:border-gray-300/70 shadow-sm desktop:shadow-md">
+              <span className="text-gray-800 dark:text-dark-100 font-medium text-xs xs:text-sm desktop:text-base truncate max-w-[60px] xs:max-w-[80px] sm:max-w-[120px] md:max-w-[150px] desktop:max-w-[200px] desktop-lg:max-w-[250px]">
                 {currentTab.name}
               </span>
             </div>
 
             {/* Right Section - Notifications and Profile */}
-            <div className="flex items-center space-x-2 sm:space-x-3 desktop:space-x-4">
+            <div className="flex items-center space-x-1 xs:space-x-2 sm:space-x-3 desktop:space-x-4 flex-shrink-0">
               {/* Admin Notification Badge */}
-              <NotificationBadge />
-              
+              <div className="flex-shrink-0">
+                <NotificationBadge />
+              </div>
+
               {/* Deletion Request Notification Badge */}
-              <DeletionRequestNotificationBadge />
+              <div className="flex-shrink-0">
+                <DeletionRequestNotificationBadge />
+              </div>
 
               {/* Enhanced Profile Dropdown */}
-              <EnhancedProfileDropdown
-                user={user}
-                onOpenBulkMemberModal={() => setIsBulkMemberModalOpen(true)}
-                onOpenDataManagement={() => setIsDataManagementOpen(true)}
-              />
+              <div className="flex-shrink-0">
+                <EnhancedProfileDropdown
+                  user={user}
+                  onOpenBulkMemberModal={() => setIsBulkMemberModalOpen(true)}
+                  onOpenDataManagement={() => setIsDataManagementOpen(true)}
+                />
+              </div>
             </div>
           </div>
         </div>
       </header>
 
       {/* Scrollable Main Content */}
-      <main className="flex-1 overflow-y-auto pt-16 sm:pt-18 desktop:pt-20 desktop-lg:pt-24 pb-4 sm:pb-6 desktop:pb-8 relative z-10">
+      <main className="flex-1 overflow-y-auto pt-12 xs:pt-14 sm:pt-16 md:pt-18 desktop:pt-20 desktop-lg:pt-24 pb-4 sm:pb-6 desktop:pb-8 relative z-10">
         <GestureWrapper className="h-full">
           <div className="container mx-auto px-2 sm:px-4 desktop:px-8 desktop-lg:px-12 py-2 sm:py-3 md:py-4 desktop:py-6 desktop-lg:py-8 compact-layout desktop:desktop-dense-layout">
             <div className="animate-fade-in">

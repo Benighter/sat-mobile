@@ -76,26 +76,28 @@ const NotificationBadge: React.FC = () => {
     <>
       <button
         onClick={handleBadgeClick}
-        className="relative p-2.5 text-gray-600 hover:text-gray-900 hover:bg-gradient-to-br hover:from-blue-50 hover:to-purple-50 rounded-xl transition-all duration-300 hover:scale-110 group"
+        className="relative p-1.5 xs:p-2 sm:p-2.5 text-gray-600 hover:text-gray-900 hover:bg-gradient-to-br hover:from-blue-50 hover:to-purple-50 rounded-lg xs:rounded-xl transition-all duration-300 hover:scale-110 group touch-manipulation"
         aria-label="Notifications"
       >
-        <Bell className="w-5 h-5 group-hover:animate-pulse" />
+        <Bell className="w-4 h-4 xs:w-5 xs:h-5 group-hover:animate-pulse" />
 
         {/* Unread count badge */}
         {unreadCount > 0 && (
-          <span className="absolute -top-1 -right-1 bg-gradient-to-r from-red-500 to-pink-500 text-white text-xs rounded-full min-w-[20px] h-[20px] flex items-center justify-center font-bold shadow-lg animate-bounce">
-            {unreadCount > 99 ? '99+' : unreadCount}
+          <span className="absolute -top-0.5 -right-0.5 xs:-top-1 xs:-right-1 bg-gradient-to-r from-red-500 to-pink-500 text-white text-xs rounded-full min-w-[16px] h-[16px] xs:min-w-[18px] xs:h-[18px] sm:min-w-[20px] sm:h-[20px] flex items-center justify-center font-bold shadow-lg animate-bounce">
+            <span className="text-[10px] xs:text-xs">
+              {unreadCount > 99 ? '99+' : unreadCount}
+            </span>
           </span>
         )}
 
         {/* Loading indicator */}
         {loading && (
-          <span className="absolute -top-1 -right-1 w-4 h-4 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full animate-pulse shadow-lg"></span>
+          <span className="absolute -top-0.5 -right-0.5 xs:-top-1 xs:-right-1 w-3 h-3 xs:w-4 xs:h-4 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full animate-pulse shadow-lg"></span>
         )}
 
         {/* Subtle glow effect when there are notifications */}
         {unreadCount > 0 && (
-          <div className="absolute inset-0 bg-gradient-to-r from-blue-400 to-purple-400 rounded-xl opacity-20 animate-pulse"></div>
+          <div className="absolute inset-0 bg-gradient-to-r from-blue-400 to-purple-400 rounded-lg xs:rounded-xl opacity-20 animate-pulse"></div>
         )}
       </button>
 

@@ -1,6 +1,24 @@
 /* Enhanced Church Connect Mobile Styles */
 /* Tailwind CSS temporarily disabled to focus on Firebase testing */
 
+/* Touch-friendly mobile interactions */
+.touch-manipulation {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Improved mobile navbar spacing */
+@media (max-width: 474px) {
+  .mobile-navbar-compact {
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+  }
+
+  .mobile-navbar-compact .navbar-item {
+    padding: 0.375rem;
+  }
+}
+
 /* Global Animations */
 @keyframes slideInFromLeft {
   0% {

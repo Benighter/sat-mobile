@@ -61,18 +61,20 @@ const DeletionRequestNotificationBadge: React.FC = () => {
       {/* Notification Badge Button */}
       <button
         onClick={handleClick}
-        className="relative flex items-center justify-center w-10 h-10 bg-red-100 hover:bg-red-200 rounded-full transition-all duration-300 group shadow-lg hover:shadow-xl"
+        className="relative flex items-center justify-center w-8 h-8 xs:w-9 xs:h-9 sm:w-10 sm:h-10 bg-red-100 hover:bg-red-200 rounded-full transition-all duration-300 group shadow-lg hover:shadow-xl touch-manipulation"
         title={`${pendingRequests.length} pending deletion request${pendingRequests.length !== 1 ? 's' : ''}`}
         aria-label={`${pendingRequests.length} pending deletion requests`}
       >
         {/* Icon */}
-        <ExclamationTriangleIcon className="w-5 h-5 text-red-600 group-hover:text-red-700 transition-colors" />
-        
+        <ExclamationTriangleIcon className="w-4 h-4 xs:w-4 xs:h-4 sm:w-5 sm:h-5 text-red-600 group-hover:text-red-700 transition-colors" />
+
         {/* Badge Count */}
-        <div className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full min-w-[20px] h-5 flex items-center justify-center px-1 shadow-lg animate-pulse">
-          {pendingRequests.length > 99 ? '99+' : pendingRequests.length}
+        <div className="absolute -top-0.5 -right-0.5 xs:-top-1 xs:-right-1 bg-red-500 text-white text-xs font-bold rounded-full min-w-[16px] h-4 xs:min-w-[18px] xs:h-4 sm:min-w-[20px] sm:h-5 flex items-center justify-center px-0.5 xs:px-1 shadow-lg animate-pulse">
+          <span className="text-[10px] xs:text-xs">
+            {pendingRequests.length > 99 ? '99+' : pendingRequests.length}
+          </span>
         </div>
-        
+
         {/* Pulse Animation Ring */}
         <div className="absolute inset-0 rounded-full bg-red-400 opacity-20 animate-ping"></div>
       </button>
