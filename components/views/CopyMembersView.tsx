@@ -9,7 +9,7 @@ interface CopyOptions {
   includeSurnames: boolean;
   includePhones: boolean;
   includeBacentaName: boolean;
-  includeNumbering: boolean;
+  groupByBacenta: boolean;
   memberType: 'all' | 'includeLeaders' | 'excludeLeaders';
 }
 
@@ -27,7 +27,7 @@ const CopyMembersView: React.FC = () => {
     includeSurnames: false,
     includePhones: false,
     includeBacentaName: false,
-    includeNumbering: false,
+    groupByBacenta: false,
     memberType: 'all'
   });
   const [isCopying, setIsCopying] = useState(false);
@@ -169,40 +169,99 @@ const CopyMembersView: React.FC = () => {
   const generateCopyText = () => {
     const membersToProcess = getFilteredMembersByType();
     const lines: string[] = [];
-    
-    // Add bacenta name if requested
-    if (options.includeBacentaName && currentBacentaName) {
-      lines.push(`${currentBacentaName} Bacenta`);
-      lines.push(''); // Empty line for spacing
-    }
-    
-    // Process each member
-    membersToProcess.forEach((member, index) => {
-      const parts: string[] = [];
-      
-      // Add numbering if requested
-      if (options.includeNumbering) {
+
+    if (options.groupByBacenta) {
+      // Group members by bacenta
+      const membersByBacenta = membersToProcess.reduce((acc, member) => {
+        const bacentaId = member.bacentaId || 'unassigned';
+        if (!acc[bacentaId]) {
+          acc[bacentaId] = [];
+        }
+        acc[bacentaId].push(member);
+        return acc;
+      }, {} as Record<string, Member[]>);
+
+      // Sort bacentas alphabetically
+      const sortedBacentaIds = Object.keys(membersByBacenta).sort((a, b) => {
+        const nameA = a === 'unassigned' ? 'Unassigned Members' : (getBacentaName(a) || 'Unknown Bacenta');
+        const nameB = b === 'unassigned' ? 'Unassigned Members' : (getBacentaName(b) || 'Unknown Bacenta');
+        return nameA.localeCompare(nameB);
+      });
+
+      let globalCounter = 1;
+
+      sortedBacentaIds.forEach((bacentaId, bacentaIndex) => {
+        const bacentaMembers = membersByBacenta[bacentaId];
+        const bacentaName = bacentaId === 'unassigned' ? 'Unassigned Members' : (getBacentaName(bacentaId) || 'Unknown Bacenta');
+
+        // Add bacenta header
+        lines.push(`${bacentaName} Bacenta`);
+
+        // Process members in this bacenta
+        bacentaMembers.forEach((member) => {
+          const parts: string[] = [];
+
+          // Always add numbering (default behavior)
+          parts.push(`${globalCounter}.`);
+
+          if (options.includeNames && member.firstName) {
+            parts.push(member.firstName.trim());
+          }
+
+          if (options.includeSurnames && member.lastName && member.lastName.trim()) {
+            parts.push(member.lastName.trim());
+          }
+
+          if (options.includePhones && member.phoneNumber && member.phoneNumber !== '-' && member.phoneNumber.trim()) {
+            parts.push(member.phoneNumber.trim());
+          }
+
+          const line = parts.join(' ');
+          if (line.trim()) {
+            lines.push(line);
+            globalCounter++;
+          }
+        });
+
+        // Add empty line between bacentas (except for the last one)
+        if (bacentaIndex < sortedBacentaIds.length - 1) {
+          lines.push('');
+        }
+      });
+    } else {
+      // Single list format
+      // Add bacenta name if requested and we're filtering by a specific bacenta
+      if (options.includeBacentaName && currentBacentaName) {
+        lines.push(`${currentBacentaName} Bacenta`);
+        lines.push(''); // Empty line for spacing
+      }
+
+      // Process each member
+      membersToProcess.forEach((member, index) => {
+        const parts: string[] = [];
+
+        // Always add numbering (default behavior)
         parts.push(`${index + 1}.`);
-      }
-      
-      if (options.includeNames && member.firstName) {
-        parts.push(member.firstName.trim());
-      }
-      
-      if (options.includeSurnames && member.lastName && member.lastName.trim()) {
-        parts.push(member.lastName.trim());
-      }
-      
-      if (options.includePhones && member.phoneNumber && member.phoneNumber !== '-' && member.phoneNumber.trim()) {
-        parts.push(member.phoneNumber.trim());
-      }
-      
-      const line = parts.join(' ');
-      if (line.trim()) {
-        lines.push(line);
-      }
-    });
-    
+
+        if (options.includeNames && member.firstName) {
+          parts.push(member.firstName.trim());
+        }
+
+        if (options.includeSurnames && member.lastName && member.lastName.trim()) {
+          parts.push(member.lastName.trim());
+        }
+
+        if (options.includePhones && member.phoneNumber && member.phoneNumber !== '-' && member.phoneNumber.trim()) {
+          parts.push(member.phoneNumber.trim());
+        }
+
+        const line = parts.join(' ');
+        if (line.trim()) {
+          lines.push(line);
+        }
+      });
+    }
+
     return lines.join('\n');
   };
 
@@ -302,18 +361,26 @@ const CopyMembersView: React.FC = () => {
           {/* Format Options Section */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Format Options</h3>
+            <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <p className="text-xs text-blue-700">
+                <strong>Note:</strong> Numbering (1. 2. 3.) is automatically included in all outputs.
+              </p>
+            </div>
             <div className="space-y-4">
               <label className="flex items-center space-x-3 cursor-pointer">
                 <input
                   type="checkbox"
-                  checked={options.includeNumbering}
-                  onChange={(e) => setOptions(prev => ({ ...prev, includeNumbering: e.target.checked }))}
+                  checked={options.groupByBacenta}
+                  onChange={(e) => setOptions(prev => ({ ...prev, groupByBacenta: e.target.checked }))}
                   className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                 />
-                <span className="text-sm font-medium text-gray-700">Add numbering (1. 2. 3.)</span>
+                <div>
+                  <span className="text-sm font-medium text-gray-700">Group by Bacenta</span>
+                  <p className="text-xs text-gray-500">Organize members under their respective bacentas</p>
+                </div>
               </label>
-              
-              {currentBacentaName && (
+
+              {currentBacentaName && !options.groupByBacenta && (
                 <label className="flex items-center space-x-3 cursor-pointer">
                   <input
                     type="checkbox"
