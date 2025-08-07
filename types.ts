@@ -117,6 +117,16 @@ export interface UserPreferences {
   allowEditPreviousSundays: boolean;
 }
 
+export interface NotificationPreferences {
+  birthdayNotifications: {
+    enabled: boolean;
+    daysBeforeNotification: number[]; // e.g., [7, 3, 1] for 7, 3, and 1 day notifications
+    emailTime: string; // Time in HH:MM format (24-hour), e.g., "09:00"
+  };
+  emailNotifications: boolean;
+  pushNotifications: boolean;
+}
+
 export interface User {
   id: string;
   uid: string;
@@ -130,6 +140,7 @@ export interface User {
   churchName?: string;
   role: 'admin' | 'leader' | 'member';
   preferences?: UserPreferences;
+  notificationPreferences?: NotificationPreferences;
   createdAt: string;
   lastLoginAt: string;
   lastUpdated?: string;
@@ -149,9 +160,70 @@ export interface Church {
   settings?: {
     timezone?: string;
     defaultMinistries?: string[];
+    notificationSettings?: {
+      birthdayNotificationsEnabled: boolean;
+      defaultNotificationDays: number[];
+      defaultNotificationTime: string;
+    };
   };
   createdAt: string;
   lastUpdated: string;
+}
+
+// Birthday Notification System Types
+export interface BirthdayNotification {
+  id: string;
+  memberId: string;
+  memberName: string;
+  memberBirthday: string; // YYYY-MM-DD format
+  bacentaId: string;
+  bacentaName: string;
+  notificationDate: string; // YYYY-MM-DD format - when notification was sent
+  daysBeforeBirthday: number; // 7, 3, or 1
+  sentTo: string[]; // Array of user IDs who received the notification
+  status: 'sent' | 'failed' | 'pending';
+  emailDetails?: {
+    subject: string;
+    sentAt: string; // ISO timestamp
+    failureReason?: string;
+  };
+  createdAt: string; // ISO timestamp
+  lastUpdated: string; // ISO timestamp
+}
+
+export interface NotificationRecipient {
+  userId: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  role: 'admin' | 'leader' | 'member';
+  relationshipToMember: 'admin' | 'bacenta_leader' | 'fellowship_leader';
+  bacentaId?: string; // For leaders, the bacenta they oversee
+}
+
+export interface BirthdayEmailTemplate {
+  subject: string;
+  htmlContent: string;
+  textContent: string;
+  memberData: {
+    firstName: string;
+    lastName?: string;
+    birthday: string;
+    age: number;
+    profilePicture?: string;
+    phoneNumber: string;
+    buildingAddress: string;
+    roomNumber?: string;
+    role: MemberRole;
+    bornAgainStatus: boolean;
+    bacentaName: string;
+  };
+  recipientData: {
+    firstName: string;
+    lastName: string;
+    role: string;
+  };
+  daysUntilBirthday: number;
 }
 
 export interface AdminInvite {

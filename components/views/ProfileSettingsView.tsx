@@ -3,6 +3,8 @@ import { useAppContext } from '../../contexts/FirebaseAppContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { userService } from '../../services/userService';
 import { inviteService } from '../../services/inviteService';
+import { getDefaultNotificationPreferences } from '../../utils/notificationUtils';
+import { NotificationPreferences } from '../../types';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
 import Badge from '../ui/Badge';
@@ -22,7 +24,9 @@ import {
   ShieldCheckIcon,
   KeyIcon,
   UserGroupIcon,
-  RefreshIcon
+  RefreshIcon,
+  BellIcon,
+  CakeIcon
 } from '../icons';
 
 interface UserPreferences {
@@ -46,6 +50,10 @@ const ProfileSettingsView: React.FC = () => {
     allowEditPreviousSundays: userProfile?.preferences?.allowEditPreviousSundays ?? true
   });
 
+  const [notificationPreferences, setNotificationPreferences] = useState<NotificationPreferences>(
+    userProfile?.notificationPreferences || getDefaultNotificationPreferences()
+  );
+
   const [profileData, setProfileData] = useState<ProfileFormData>({
     firstName: userProfile?.firstName || '',
     lastName: userProfile?.lastName || '',
@@ -67,6 +75,10 @@ const ProfileSettingsView: React.FC = () => {
         allowEditPreviousSundays: userProfile.preferences?.allowEditPreviousSundays ?? true
       });
 
+      setNotificationPreferences(
+        userProfile.notificationPreferences || getDefaultNotificationPreferences()
+      );
+
       setProfileData({
         firstName: userProfile.firstName || '',
         lastName: userProfile.lastName || '',
@@ -85,6 +97,33 @@ const ProfileSettingsView: React.FC = () => {
     if (key === 'theme') {
       setTheme(value);
     }
+  };
+
+  const handleNotificationPreferenceChange = (key: keyof NotificationPreferences, value: any) => {
+    setNotificationPreferences(prev => ({ ...prev, [key]: value }));
+  };
+
+  const handleBirthdayNotificationChange = (key: keyof NotificationPreferences['birthdayNotifications'], value: any) => {
+    setNotificationPreferences(prev => ({
+      ...prev,
+      birthdayNotifications: {
+        ...prev.birthdayNotifications,
+        [key]: value
+      }
+    }));
+  };
+
+  const handleNotificationDaysChange = (days: number, enabled: boolean) => {
+    const currentDays = notificationPreferences.birthdayNotifications.daysBeforeNotification;
+    let newDays: number[];
+
+    if (enabled) {
+      newDays = [...currentDays, days].sort((a, b) => b - a);
+    } else {
+      newDays = currentDays.filter(d => d !== days);
+    }
+
+    handleBirthdayNotificationChange('daysBeforeNotification', newDays);
   };
 
   const handleProfileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -120,7 +159,8 @@ const ProfileSettingsView: React.FC = () => {
         displayName: `${profileData.firstName.trim()} ${profileData.lastName.trim()}`,
         phoneNumber: profileData.phoneNumber.trim(),
         profilePicture: profileData.profilePicture,
-        preferences: preferences
+        preferences: preferences,
+        notificationPreferences: notificationPreferences
       };
 
       await userService.updateUserProfile(user.uid, updates);
@@ -362,6 +402,130 @@ const ProfileSettingsView: React.FC = () => {
             </div>
           </div>
         )}
+
+        {/* Notification Preferences */}
+        <div className="bg-white rounded-3xl shadow-xl border border-gray-100 p-6 sm:p-8 mb-8">
+          <div className="flex items-center mb-8">
+            <div className="w-12 h-12 bg-gradient-to-br from-pink-500 to-purple-600 rounded-2xl flex items-center justify-center mr-4">
+              <BellIcon className="w-6 h-6 text-white" />
+            </div>
+            <h2 className="text-2xl font-bold text-gray-900">Notification Preferences</h2>
+          </div>
+
+          <div className="space-y-6">
+            {/* General Email Settings */}
+            <div className="bg-gray-50 rounded-2xl p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                <EnvelopeIcon className="w-5 h-5 mr-2 text-blue-600" />
+                General Email Settings
+              </h3>
+
+              <div className="space-y-4">
+                <label className="flex items-center space-x-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={notificationPreferences.emailNotifications}
+                    onChange={(e) => handleNotificationPreferenceChange('emailNotifications', e.target.checked)}
+                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                  />
+                  <div>
+                    <span className="text-sm font-medium text-gray-700">Enable Email Notifications</span>
+                    <p className="text-xs text-gray-500">Receive all email notifications from the church management system</p>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            {/* Birthday Notification Settings */}
+            <div className="bg-gradient-to-r from-pink-50 to-purple-50 rounded-2xl p-6 border border-pink-200">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                <CakeIcon className="w-5 h-5 mr-2 text-pink-600" />
+                Birthday Notification Settings
+              </h3>
+
+              <div className="space-y-6">
+                {/* Enable Birthday Notifications */}
+                <label className="flex items-center space-x-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={notificationPreferences.birthdayNotifications.enabled}
+                    onChange={(e) => handleBirthdayNotificationChange('enabled', e.target.checked)}
+                    className="w-4 h-4 text-pink-600 border-gray-300 rounded focus:ring-pink-500"
+                  />
+                  <div>
+                    <span className="text-sm font-medium text-gray-700">Enable Birthday Notifications</span>
+                    <p className="text-xs text-gray-500">Receive email notifications for upcoming member birthdays</p>
+                  </div>
+                </label>
+
+                {notificationPreferences.birthdayNotifications.enabled && (
+                  <>
+                    {/* Notification Timing */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-3">
+                        When to send notifications:
+                      </label>
+                      <div className="grid grid-cols-2 gap-3">
+                        {[
+                          { days: 7, label: '7 days before' },
+                          { days: 3, label: '3 days before' },
+                          { days: 1, label: '1 day before' },
+                          { days: 0, label: 'On the day' }
+                        ].map(option => (
+                          <label key={option.days} className="flex items-center space-x-2 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={notificationPreferences.birthdayNotifications.daysBeforeNotification.includes(option.days)}
+                              onChange={(e) => handleNotificationDaysChange(option.days, e.target.checked)}
+                              className="w-4 h-4 text-pink-600 border-gray-300 rounded focus:ring-pink-500"
+                            />
+                            <span className="text-sm text-gray-700">{option.label}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Email Time */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Preferred notification time:
+                      </label>
+                      <select
+                        value={notificationPreferences.birthdayNotifications.emailTime}
+                        onChange={(e) => handleBirthdayNotificationChange('emailTime', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+                      >
+                        {[
+                          { value: '08:00', label: '8:00 AM' },
+                          { value: '09:00', label: '9:00 AM' },
+                          { value: '10:00', label: '10:00 AM' },
+                          { value: '11:00', label: '11:00 AM' },
+                          { value: '12:00', label: '12:00 PM' }
+                        ].map(option => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Notifications will be sent around this time each day
+                      </p>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Privacy Notice */}
+            <div className="bg-blue-50 rounded-2xl p-4 border border-blue-200">
+              <h4 className="text-sm font-semibold text-blue-900 mb-2">Privacy Notice</h4>
+              <p className="text-xs text-blue-800">
+                You will only receive birthday notifications for members within your organizational responsibility.
+                This includes members in bacentas you lead or oversee. We respect data privacy and organizational boundaries.
+              </p>
+            </div>
+          </div>
+        </div>
 
         {/* Leader Features - Show for both admin and leader roles */}
         {hasLeaderPrivileges(userProfile) && (
