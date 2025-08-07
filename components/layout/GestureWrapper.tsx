@@ -57,14 +57,22 @@ const GestureWrapper: React.FC<GestureWrapperProps> = ({ children, className = '
   const handlePan = (event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
     const { offset } = info;
 
-    // Don't handle gestures if the target is an input element
+    // Don't handle gestures if the target is an input element or scrollable content
     const target = event.target as Element;
-    if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.closest('input, textarea, select'))) {
+    if (target && (
+      target.tagName === 'INPUT' ||
+      target.tagName === 'TEXTAREA' ||
+      target.tagName === 'SELECT' ||
+      target.closest('input, textarea, select') ||
+      target.closest('[data-scrollable]') ||
+      target.closest('.overflow-y-auto') ||
+      target.closest('.overflow-auto')
+    )) {
       return;
     }
 
-    // Only allow right swipe for back navigation
-    if (offset.x > 0 && canNavigateBack() && Math.abs(offset.y) < Math.abs(offset.x)) {
+    // Only allow right swipe for back navigation and ensure it's primarily horizontal
+    if (offset.x > 50 && canNavigateBack() && Math.abs(offset.y) < Math.abs(offset.x) * 0.5) {
       // Limit the drag distance and add resistance
       const maxDrag = window.innerWidth * 0.3;
       const dragDistance = Math.min(offset.x, maxDrag);
@@ -79,13 +87,13 @@ const GestureWrapper: React.FC<GestureWrapperProps> = ({ children, className = '
 
   return (
     <motion.div
-      className={`${className} touch-pan-y`}
+      className={`${className}`}
       animate={controls}
       onPan={handlePan}
       onPanEnd={handlePanEnd}
       drag={false} // Disable automatic drag, we handle it manually
       style={{
-        touchAction: 'pan-y', // Allow vertical scrolling but handle horizontal gestures
+        touchAction: 'auto', // Allow natural scrolling behavior
       }}
     >
       {children}

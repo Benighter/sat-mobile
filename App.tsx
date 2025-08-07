@@ -300,7 +300,15 @@ const AppContent: React.FC = memo(() => {
       </header>
 
       {/* Scrollable Main Content */}
-      <main className="flex-1 overflow-y-auto pt-12 xs:pt-14 sm:pt-16 md:pt-18 desktop:pt-20 desktop-lg:pt-24 pb-4 sm:pb-6 desktop:pb-8 relative z-10">
+      <main
+        className="flex-1 overflow-y-auto pt-12 xs:pt-14 sm:pt-16 md:pt-18 desktop:pt-20 desktop-lg:pt-24 pb-4 sm:pb-6 desktop:pb-8 relative z-10 smooth-scroll"
+        data-scrollable="true"
+        style={{
+          scrollBehavior: 'smooth',
+          overscrollBehavior: 'contain',
+          WebkitOverflowScrolling: 'touch'
+        }}
+      >
         <GestureWrapper className="h-full">
           <div className="container mx-auto px-2 sm:px-4 desktop:px-8 desktop-lg:px-12 py-2 sm:py-3 md:py-4 desktop:py-6 desktop-lg:py-8 compact-layout desktop:desktop-dense-layout">
             <div className="animate-fade-in">

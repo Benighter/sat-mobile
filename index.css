@@ -7,6 +7,24 @@
   -webkit-tap-highlight-color: transparent;
 }
 
+/* Smooth scrolling enhancements */
+.smooth-scroll {
+  scroll-behavior: smooth;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  /* Enable hardware acceleration for smooth scrolling */
+  -webkit-transform: translate3d(0, 0, 0);
+  transform: translate3d(0, 0, 0);
+  /* Improve scroll performance */
+  will-change: scroll-position;
+  /* Ensure momentum scrolling on iOS */
+  -webkit-overflow-scrolling: touch;
+  /* Prevent scroll chaining */
+  overscroll-behavior-y: contain;
+  /* Optimize for touch devices */
+  touch-action: auto;
+}
+
 /* Improved mobile navbar spacing */
 @media (max-width: 474px) {
   .mobile-navbar-compact {
@@ -17,6 +35,20 @@
   .mobile-navbar-compact .navbar-item {
     padding: 0.375rem;
   }
+}
+
+/* Main content scroll optimization */
+main[data-scrollable="true"] {
+  /* Ensure smooth, natural scrolling */
+  scroll-behavior: smooth;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  /* Remove any scroll snap that might interfere */
+  scroll-snap-type: none;
+  /* Optimize scroll performance */
+  contain: layout style paint;
+  /* Ensure proper touch handling */
+  touch-action: auto;
 }
 
 /* Global Animations */
@@ -243,9 +275,9 @@
   }
 }
 
-/* Mobile Touch Enhancements */
+/* Mobile Touch Enhancements - Updated for better scrolling */
 .touch-pan-y {
-  touch-action: pan-y;
+  touch-action: auto; /* Allow natural scrolling */
   -webkit-touch-callout: none;
   -webkit-user-select: none;
   -khtml-user-select: none;
