@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useAppContext } from '../../contexts/FirebaseAppContext';
 import { Bacenta, TabKeys } from '../../types';
 import { hasAdminPrivileges } from '../../utils/permissionUtils';
+import { getUpcomingBirthdays } from '../../utils/birthdayUtils';
 import {
   XMarkIcon,
   SearchIcon,
@@ -15,7 +16,8 @@ import {
   WarningIcon,
   UserIcon,
   CheckIcon,
-  ExclamationTriangleIcon
+  ExclamationTriangleIcon,
+  CakeIcon
 } from '../icons';
 
 interface BacentaDrawerProps {
@@ -74,6 +76,11 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
   const getMemberCount = (bacentaId: string) => {
     return members.filter(m => m.bacentaId === bacentaId).length;
   };
+
+  // Get upcoming birthdays count
+  const upcomingBirthdaysCount = useMemo(() => {
+    return getUpcomingBirthdays(members).length;
+  }, [members]);
 
   // Filter bacentas based on search query
   const filteredBacentas = useMemo(() => {
@@ -225,6 +232,17 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
                 isActive={currentTab.id === TabKeys.NEW_BELIEVERS}
                 onClick={() => {
                   switchTab({ id: TabKeys.NEW_BELIEVERS, name: 'New Believers' });
+                  onClose();
+                }}
+              />
+
+              <NavigationItem
+                icon={<CakeIcon className="w-4 h-4" />}
+                label="Birthdays"
+                isActive={currentTab.id === TabKeys.BIRTHDAYS}
+                badge={upcomingBirthdaysCount > 0 ? upcomingBirthdaysCount : undefined}
+                onClick={() => {
+                  switchTab({ id: TabKeys.BIRTHDAYS, name: 'Birthdays' });
                   onClose();
                 }}
               />

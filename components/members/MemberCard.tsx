@@ -8,7 +8,8 @@ import { formatDisplayDate, formatFullDate, formatDateToYYYYMMDD, getUpcomingSun
 import { isDateEditable } from '../../utils/attendanceUtils';
 import { canDeleteMemberWithRole } from '../../utils/permissionUtils';
 import { SmartTextParser } from '../../utils/smartTextParser';
-import { UserIcon, EditIcon, TrashIcon, WarningIcon, PhoneIcon, HomeIcon, CalendarIcon } from '../icons';
+import { calculateAge, formatBirthdayDisplay, isBirthdayToday } from '../../utils/birthdayUtils';
+import { UserIcon, EditIcon, TrashIcon, WarningIcon, PhoneIcon, HomeIcon, CalendarIcon, CakeIcon } from '../icons';
 import Button from '../ui/Button';
 import Badge from '../ui/Badge';
 
@@ -135,6 +136,16 @@ const MemberCard: React.FC<MemberCardProps> = ({ member }) => {
                 {memberBacenta?.name || <span className="italic text-gray-400 dark:text-dark-500">Unassigned</span>}
               </p>
             </div>
+
+            {/* Birthday Information */}
+            {member.birthday && (
+              <div className="flex items-center space-x-2 mb-2">
+                <CakeIcon className={`w-4 h-4 ${isBirthdayToday(member.birthday) ? 'text-yellow-500' : 'text-gray-500 dark:text-dark-400'}`} />
+                <p className={`text-sm font-medium ${isBirthdayToday(member.birthday) ? 'text-yellow-600 dark:text-yellow-400 font-semibold' : 'text-gray-600 dark:text-dark-300'}`}>
+                  {formatBirthdayDisplay(member.birthday)} {isBirthdayToday(member.birthday) && '🎉'} (Age {calculateAge(member.birthday)})
+                </p>
+              </div>
+            )}
 
             {member.bornAgainStatus && (
               <div className="inline-flex items-center space-x-1 bg-gradient-to-r from-blue-100 to-blue-200 dark:from-blue-900/30 dark:to-blue-800/30 text-blue-700 dark:text-blue-200 px-3 py-1 rounded-full text-sm font-semibold shadow-sm">

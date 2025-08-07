@@ -2,12 +2,14 @@ import React, { useState, useMemo } from 'react';
 import { useAppContext } from '../../contexts/FirebaseAppContext';
 import { Member } from '../../types';
 import { ArrowLeftIcon, ClipboardIcon, CheckIcon } from '../icons';
+import { formatBirthdayDisplay } from '../../utils/birthdayUtils';
 import Button from '../ui/Button';
 
 interface CopyOptions {
   includeNames: boolean;
   includeSurnames: boolean;
   includePhones: boolean;
+  includeBirthdays: boolean;
   includeBacentaName: boolean;
   groupByBacenta: boolean;
   memberType: 'all' | 'includeLeaders' | 'excludeLeaders';
@@ -26,6 +28,7 @@ const CopyMembersView: React.FC = () => {
     includeNames: true,
     includeSurnames: false,
     includePhones: false,
+    includeBirthdays: false,
     includeBacentaName: false,
     groupByBacenta: false,
     memberType: 'all'
@@ -216,6 +219,10 @@ const CopyMembersView: React.FC = () => {
             parts.push(member.phoneNumber.trim());
           }
 
+          if (options.includeBirthdays && member.birthday) {
+            parts.push(`(${formatBirthdayDisplay(member.birthday)})`);
+          }
+
           const line = parts.join(' ');
           if (line.trim()) {
             lines.push(line);
@@ -253,6 +260,10 @@ const CopyMembersView: React.FC = () => {
 
         if (options.includePhones && member.phoneNumber && member.phoneNumber !== '-' && member.phoneNumber.trim()) {
           parts.push(member.phoneNumber.trim());
+        }
+
+        if (options.includeBirthdays && member.birthday) {
+          parts.push(`(${formatBirthdayDisplay(member.birthday)})`);
         }
 
         const line = parts.join(' ');
@@ -354,6 +365,16 @@ const CopyMembersView: React.FC = () => {
                   className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                 />
                 <span className="text-sm font-medium text-gray-700">Phone Numbers/Contacts</span>
+              </label>
+
+              <label className="flex items-center space-x-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={options.includeBirthdays}
+                  onChange={(e) => setOptions(prev => ({ ...prev, includeBirthdays: e.target.checked }))}
+                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                />
+                <span className="text-sm font-medium text-gray-700">Birthdays</span>
               </label>
             </div>
           </div>

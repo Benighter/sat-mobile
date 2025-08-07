@@ -39,6 +39,7 @@ const MemberFormModal: React.FC<MemberFormModalProps> = ({ isOpen, onClose, memb
     bornAgainStatus: false,
     bacentaId: currentBacentaId || (bacentas.length > 0 ? bacentas[0].id : ''),
     role: 'Member' as MemberRole, // Default role is Member
+    birthday: '', // Optional birthday field
   };
   const [formData, setFormData] = useState(initialFormData);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -55,6 +56,7 @@ const MemberFormModal: React.FC<MemberFormModalProps> = ({ isOpen, onClose, memb
         bornAgainStatus: member.bornAgainStatus,
         bacentaId: member.bacentaId,
         role: member.role || 'Member', // Default to Member if role is not set (for backward compatibility)
+        birthday: member.birthday || '', // Include birthday field
       });
     } else {
       // For new members, default to current bacenta if we're in one
@@ -204,6 +206,21 @@ const MemberFormModal: React.FC<MemberFormModalProps> = ({ isOpen, onClose, memb
                   className="h-12"
                 />
               </div>
+            </div>
+
+            {/* Birthday Field */}
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-gray-700">
+                Birthday (Optional)
+              </label>
+              <input
+                type="date"
+                name="birthday"
+                value={formData.birthday}
+                onChange={handleChange}
+                className={`w-full px-4 py-3 border ${errors.birthday ? 'border-red-500' : 'border-gray-300'} rounded-lg shadow-sm focus:outline-none focus:ring-2 ${errors.birthday ? 'focus:ring-red-500' : 'focus:ring-blue-500'} focus:border-transparent transition-colors h-12`}
+              />
+              {errors.birthday && <p className="mt-1 text-xs text-red-600">{errors.birthday}</p>}
             </div>
           </div>
           {/* Contact Information */}

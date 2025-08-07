@@ -1,7 +1,7 @@
 
 import React, { memo } from 'react';
 import { useAppContext } from '../../contexts/FirebaseAppContext';
-import { ChartBarIcon, UsersIcon, GroupIcon, Bars3Icon, UserIcon, CheckIcon } from '../icons';
+import { ChartBarIcon, UsersIcon, GroupIcon, Bars3Icon, UserIcon, CheckIcon, CakeIcon } from '../icons';
 
 const Navbar: React.FC = memo(() => {
   const { currentTab, openBacentaDrawer } = useAppContext();
@@ -16,6 +16,7 @@ const Navbar: React.FC = memo(() => {
       case 'weekly_attendance': return <UsersIcon className="w-full h-full mr-1 sm:mr-2" />;
       case 'sunday_confirmations': return <CheckIcon className="w-full h-full mr-1 sm:mr-2" />;
       case 'new_believers': return <UsersIcon className="w-full h-full mr-1 sm:mr-2" />;
+      case 'birthdays': return <CakeIcon className="w-full h-full mr-1 sm:mr-2" />;
       case 'profile_settings': return <UserIcon className="w-full h-full mr-1 sm:mr-2" />;
       default: return <GroupIcon className="w-full h-full mr-1 sm:mr-2" />;
     }

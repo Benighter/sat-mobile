@@ -20,6 +20,7 @@ import {
 import ProfileSettingsView from './components/views/ProfileSettingsView';
 import CopyMembersView from './components/views/CopyMembersView';
 import CopyAbsenteesView from './components/views/CopyAbsenteesView';
+import BirthdaysView from './components/views/BirthdaysView';
 import GestureWrapper from './components/layout/GestureWrapper';
 import SwipeIndicator from './components/layout/SwipeIndicator';
 import {
@@ -192,6 +193,8 @@ const AppContent: React.FC = memo(() => {
             <LazyNewBelieversView />
           </LazyWrapper>
         );
+      case TabKeys.BIRTHDAYS:
+        return <BirthdaysView />;
       case TabKeys.PROFILE_SETTINGS:
         return <ProfileSettingsView />;
       case TabKeys.MY_DELETION_REQUESTS:

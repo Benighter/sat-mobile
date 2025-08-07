@@ -13,6 +13,7 @@ export interface Member {
   bacentaId: string; // Renamed from congregationGroup, stores Bacenta.id, empty if unassigned
   bacentaLeaderId?: string; // For Fellowship Leaders: ID of the Bacenta Leader they report to
   role: MemberRole; // Role assignment: Member (default), Fellowship Leader, or Bacenta Leader
+  birthday?: string; // Optional birthday field in YYYY-MM-DD format
   createdDate: string; // ISO string
   lastUpdated: string; // ISO string
 }
@@ -91,6 +92,7 @@ export enum TabKeys {
   WEEKLY_ATTENDANCE = 'weekly_attendance',
   SUNDAY_CONFIRMATIONS = 'sunday_confirmations',
   NEW_BELIEVERS = 'new_believers',
+  BIRTHDAYS = 'birthdays',
   PROFILE_SETTINGS = 'profile_settings',
   MY_DELETION_REQUESTS = 'my_deletion_requests',
   ADMIN_DELETION_REQUESTS = 'admin_deletion_requests',
