@@ -18,6 +18,7 @@ import {
   LazyMemberDeletionRequestsView
 } from './components/common/LazyWrapper';
 import ProfileSettingsView from './components/views/ProfileSettingsView';
+import CopyMembersView from './components/views/CopyMembersView';
 import GestureWrapper from './components/layout/GestureWrapper';
 import SwipeIndicator from './components/layout/SwipeIndicator';
 import {
@@ -209,6 +210,8 @@ const AppContent: React.FC = memo(() => {
             <LazyMemberDeletionRequestsView />
           </LazyWrapper>
         );
+      case TabKeys.COPY_MEMBERS:
+        return <CopyMembersView />;
       default:
         return (
           <LazyWrapper>

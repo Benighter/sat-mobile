@@ -78,8 +78,9 @@ export interface Bacenta { // Renamed from CongregationGroup
 }
 
 export interface TabOption {
-  id: string; 
+  id: string;
   name: string;
+  data?: any; // For storing additional context like bacenta filters, search terms, etc.
 }
 
 export enum TabKeys {
@@ -93,6 +94,7 @@ export enum TabKeys {
   PROFILE_SETTINGS = 'profile_settings',
   MY_DELETION_REQUESTS = 'my_deletion_requests',
   ADMIN_DELETION_REQUESTS = 'admin_deletion_requests',
+  COPY_MEMBERS = 'copy_members',
 }
 
 export interface NavigationHistoryItem {

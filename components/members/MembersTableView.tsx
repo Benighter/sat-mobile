@@ -6,7 +6,7 @@ import { isDateEditable } from '../../utils/attendanceUtils';
 import { canDeleteMemberWithRole, hasAdminPrivileges } from '../../utils/permissionUtils';
 import { SmartTextParser } from '../../utils/smartTextParser';
 import { memberDeletionRequestService } from '../../services/firebaseService';
-import { UserIcon, TrashIcon, PhoneIcon, CalendarIcon, ChevronLeftIcon, ChevronRightIcon, EllipsisVerticalIcon, CheckIcon, ClockIcon } from '../icons';
+import { UserIcon, TrashIcon, PhoneIcon, CalendarIcon, ChevronLeftIcon, ChevronRightIcon, EllipsisVerticalIcon, CheckIcon, ClockIcon, ClipboardIcon } from '../icons';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
 import ConfirmationMarker from '../common/ConfirmationMarker';
@@ -29,7 +29,8 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
     isLoading,
     userProfile,
     showConfirmation,
-    showToast
+    showToast,
+    switchTab
   } = useAppContext();
 
   // Get user preference for editing previous Sundays
@@ -435,7 +436,7 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
             </button>
           </div>
 
-          {/* Search and Filter */}
+          {/* Search, Filter, and Copy */}
           <div className="flex flex-col space-y-3 sm:flex-row sm:space-y-0 sm:space-x-3 sm:items-end justify-center">
             <div className="w-full sm:w-64">
               <input
@@ -457,6 +458,28 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
                 <option value="Fellowship Leader">❤️ Fellowship Leaders</option>
                 <option value="Member">👤 Members</option>
               </select>
+            </div>
+            <div className="w-full sm:w-auto">
+              <button
+                onClick={() => {
+                  // Navigate to Copy Members page with current context
+                  switchTab({
+                    id: 'copy_members',
+                    name: 'Copy Members',
+                    data: {
+                      bacentaFilter,
+                      searchTerm,
+                      roleFilter
+                    }
+                  });
+                }}
+                disabled={filteredMembers.length === 0}
+                className="w-full sm:w-auto flex items-center justify-center space-x-2 px-4 py-3 sm:py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg shadow-sm transition-colors text-base sm:text-sm font-medium"
+                title={`Copy ${filteredMembers.length} member${filteredMembers.length !== 1 ? 's' : ''} information to clipboard`}
+              >
+                <ClipboardIcon className="w-4 h-4" />
+                <span>Copy Members ({filteredMembers.length})</span>
+              </button>
             </div>
           </div>
         </div>
