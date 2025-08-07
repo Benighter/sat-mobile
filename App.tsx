@@ -19,6 +19,7 @@ import {
 } from './components/common/LazyWrapper';
 import ProfileSettingsView from './components/views/ProfileSettingsView';
 import CopyMembersView from './components/views/CopyMembersView';
+import CopyAbsenteesView from './components/views/CopyAbsenteesView';
 import GestureWrapper from './components/layout/GestureWrapper';
 import SwipeIndicator from './components/layout/SwipeIndicator';
 import {
@@ -212,6 +213,8 @@ const AppContent: React.FC = memo(() => {
         );
       case TabKeys.COPY_MEMBERS:
         return <CopyMembersView />;
+      case TabKeys.COPY_ABSENTEES:
+        return <CopyAbsenteesView />;
       default:
         return (
           <LazyWrapper>
@@ -222,7 +225,7 @@ const AppContent: React.FC = memo(() => {
   };
 
   return (
-    <div className="h-screen flex flex-col relative overflow-hidden">
+    <div className="min-h-screen flex flex-col relative">
       {/* Offline Indicator */}
       <OfflineIndicator />
 
@@ -304,15 +307,12 @@ const AppContent: React.FC = memo(() => {
 
       {/* Scrollable Main Content */}
       <main
-        className="flex-1 overflow-y-auto pt-12 xs:pt-14 sm:pt-16 md:pt-18 desktop:pt-20 desktop-lg:pt-24 pb-4 sm:pb-6 desktop:pb-8 relative z-10 smooth-scroll"
-        data-scrollable="true"
+        className="flex-1 pt-12 xs:pt-14 sm:pt-16 md:pt-18 desktop:pt-20 desktop-lg:pt-24 pb-4 sm:pb-6 desktop:pb-8 relative z-10"
         style={{
-          scrollBehavior: 'smooth',
-          overscrollBehavior: 'contain',
-          WebkitOverflowScrolling: 'touch'
+          minHeight: 'calc(100vh - 3rem)', // Ensure minimum height for proper scrolling
         }}
       >
-        <GestureWrapper className="h-full">
+        <GestureWrapper>
           <div className="container mx-auto px-2 sm:px-4 desktop:px-8 desktop-lg:px-12 py-2 sm:py-3 md:py-4 desktop:py-6 desktop-lg:py-8 compact-layout desktop:desktop-dense-layout">
             <div className="animate-fade-in">
               {renderView()}

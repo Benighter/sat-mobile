@@ -287,7 +287,7 @@ const DashboardView: React.FC = memo(() => {
   const year = displayedDate.getFullYear();
 
   return (
-    <div className="space-y-4 sm:space-y-5 md:space-y-6 desktop:space-y-4 desktop-lg:space-y-6">
+    <div className="dashboard-container space-y-4 sm:space-y-5 md:space-y-6 desktop:space-y-4 desktop-lg:space-y-6">
       {/* Clean, Professional Header with subtle accent */}
       <div className="text-center mb-3 sm:mb-4 md:mb-5 desktop:mb-4 desktop-lg:mb-6">
         <h2 className="text-2xl sm:text-3xl md:text-4xl desktop:text-3xl desktop-lg:text-4xl font-bold text-gray-900 dark:text-dark-100 mb-2">

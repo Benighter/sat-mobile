@@ -95,6 +95,7 @@ export enum TabKeys {
   MY_DELETION_REQUESTS = 'my_deletion_requests',
   ADMIN_DELETION_REQUESTS = 'admin_deletion_requests',
   COPY_MEMBERS = 'copy_members',
+  COPY_ABSENTEES = 'copy_absentees',
 }
 
 export interface NavigationHistoryItem {

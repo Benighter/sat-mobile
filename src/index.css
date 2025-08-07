@@ -101,11 +101,39 @@ html, body {
   width: 100%;
   max-width: 100vw;
   scroll-behavior: smooth;
+  /* Ensure proper mobile scrolling */
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
 }
 
 /* Ensure smooth scrolling for all scrollable elements */
 * {
   scroll-behavior: smooth;
+}
+
+/* Mobile scrolling optimizations */
+@media (max-width: 768px) {
+  /* Ensure body allows natural scrolling on mobile */
+  body {
+    height: auto;
+    min-height: 100vh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
+  }
+
+  /* Optimize main content scrolling on mobile */
+  main {
+    overflow: visible;
+    height: auto;
+    min-height: calc(100vh - 3rem);
+  }
+
+  /* Ensure dashboard cards are fully scrollable */
+  .dashboard-container {
+    overflow: visible;
+    height: auto;
+  }
 }
 
 /* Ensure proper box sizing */

@@ -459,7 +459,7 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
                 <option value="Member">👤 Members</option>
               </select>
             </div>
-            <div className="w-full sm:w-auto">
+            <div className="w-full sm:w-auto flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
               <button
                 onClick={() => {
                   // Navigate to Copy Members page with current context
@@ -479,6 +479,27 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
               >
                 <ClipboardIcon className="w-4 h-4" />
                 <span>Copy Members ({filteredMembers.length})</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  // Navigate to Copy Absentees page with current context
+                  switchTab({
+                    id: 'copy_absentees',
+                    name: 'Copy Absentees',
+                    data: {
+                      bacentaFilter,
+                      searchTerm,
+                      roleFilter
+                    }
+                  });
+                }}
+                disabled={filteredMembers.length === 0}
+                className="w-full sm:w-auto flex items-center justify-center space-x-2 px-4 py-3 sm:py-2 bg-orange-600 hover:bg-orange-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg shadow-sm transition-colors text-base sm:text-sm font-medium"
+                title="Copy absentee information for selected dates"
+              >
+                <ClipboardIcon className="w-4 h-4" />
+                <span>Copy Absentees</span>
               </button>
             </div>
           </div>
