@@ -2,7 +2,7 @@
 import React, { memo, useState, useEffect } from 'react';
 import { useAppContext } from '../../contexts/FirebaseAppContext';
 import { hasAdminPrivileges } from '../../utils/permissionUtils';
-import { PeopleIcon, AttendanceIcon, CalendarIcon, ChartBarIcon, ChevronRightIcon, CheckIcon } from '../icons';
+import { PeopleIcon, AttendanceIcon, CalendarIcon, ChartBarIcon, CheckIcon } from '../icons';
 import { getMonthName, getCurrentOrMostRecentSunday, formatFullDate, getUpcomingSunday } from '../../utils/dateUtils';
 import { db } from '../../firebase.config';
 import { doc, getDoc } from 'firebase/firestore';

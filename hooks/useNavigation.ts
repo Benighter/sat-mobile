@@ -1,11 +1,9 @@
-import { useEffect, useCallback } from 'react';
+import { useEffect } from 'react';
 import { useAppContext } from '../contexts/FirebaseAppContext';
-import { TabKeys } from '../types';
 
 export const useNavigation = () => {
   const {
     currentTab,
-    switchTab,
     navigationHistory,
     navigateBack,
     canNavigateBack,

@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { useNavigation } from '../hooks/useNavigation';
-import { ArrowLeftIcon } from './icons';
+import { useNavigation } from '../../hooks/useNavigation';
+import { ArrowLeftIcon } from '../icons';
 
 interface BackButtonProps {
   className?: string;

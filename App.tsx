@@ -52,7 +52,6 @@ const AppContent: React.FC = memo(() => {
     fetchInitialData,
     isMemberFormOpen,
     editingMember,
-    openMemberForm,
     closeMemberForm,
     displayedSundays,
     isBacentaFormOpen,
@@ -69,19 +68,15 @@ const AppContent: React.FC = memo(() => {
     closeHierarchyModal,
     bacentas,
     members,
-    newBelievers,
     confirmationModal,
     closeConfirmation,
-    attendanceRecords,
     toasts,
     user,
     switchTab,
-    showToast,
     removeToast,
 
   } = useAppContext();
 
-  // const { canNavigateBack } = useNavigation();
   const [isDataManagementOpen, setIsDataManagementOpen] = useState(false);
   const [isBulkMemberModalOpen, setIsBulkMemberModalOpen] = useState(false);
 
