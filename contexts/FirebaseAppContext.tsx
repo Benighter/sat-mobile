@@ -139,7 +139,7 @@ interface AppContextType {
   switchTab: (tab: TabOption) => void;
   navigateToPreviousMonth: () => void;
   navigateToNextMonth: () => void;
-  navigateBack: () => void;
+  navigateBack: () => boolean;
   canNavigateBack: () => boolean;
   addToNavigationHistory: (tabId: string, data?: any) => void;
   
@@ -1251,8 +1251,10 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
         isNavigatingBack.current = true;
         setCurrentTab(targetTab);
         setNavigationHistory(prev => prev.slice(0, -1));
+        return true; // Successfully navigated back
       }
     }
+    return false; // Could not navigate back
   }, [navigationHistory]);
 
   const canNavigateBack = useCallback(() => {
