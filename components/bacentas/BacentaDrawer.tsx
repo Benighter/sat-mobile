@@ -17,7 +17,8 @@ import {
   UserIcon,
   CheckIcon,
   ExclamationTriangleIcon,
-  CakeIcon
+  CakeIcon,
+  BuildingOfficeIcon
 } from '../icons';
 
 interface BacentaDrawerProps {
@@ -217,7 +218,7 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
             </h3>
             <div className="space-y-1.5 sm:space-y-2">
               <NavigationItem
-                icon={<GroupIcon className="w-4 h-4" />}
+                icon={<BuildingOfficeIcon className="w-4 h-4" />}
                 label="All Bacenta Leaders"
                 isActive={currentTab.id === TabKeys.ALL_BACENTAS}
                 onClick={() => {
@@ -288,7 +289,7 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
           <div className="flex-1 flex flex-col min-h-0">
             <div className="flex items-center justify-between mb-2 sm:mb-3 flex-shrink-0 min-w-0">
               <h3 className="text-xs sm:text-sm font-semibold text-gray-600 dark:text-dark-400 flex items-center min-w-0">
-                <GroupIcon className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-1.5 flex-shrink-0" />
+                <BuildingOfficeIcon className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-1.5 flex-shrink-0" />
                 <span className="truncate">
                   {searchQuery ? `Search Results (${filteredBacentas.length})` : `All Bacentas (${bacentas.length})`}
                 </span>
@@ -313,7 +314,7 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
                   </>
                 ) : (
                   <>
-                    <GroupIcon className="w-12 h-12 mx-auto mb-3 text-gray-300 dark:text-dark-500" />
+                    <BuildingOfficeIcon className="w-12 h-12 mx-auto mb-3 text-gray-300 dark:text-dark-500" />
                     <p className="font-medium">No bacentas created yet</p>
                     <p className="text-sm mt-1">Create your first bacenta to get started!</p>
                   </>
