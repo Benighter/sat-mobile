@@ -90,10 +90,10 @@ interface AppContextType {
   deleteMemberHandler: (memberId: string) => Promise<void>;
   
   // Bacenta Operations
-  addBacentaHandler: (bacentaData: Omit<Bacenta, 'id'>) => Promise<void>;
+  addBacentaHandler: (bacentaData: Omit<Bacenta, 'id'>) => Promise<string>;
   updateBacentaHandler: (bacentaData: Bacenta) => Promise<void>;
   deleteBacentaHandler: (bacentaId: string) => Promise<void>;
-  
+
   // New Believer Operations
   addNewBelieverHandler: (newBelieverData: Omit<NewBeliever, 'id' | 'createdDate' | 'lastUpdated'>) => Promise<void>;
   addMultipleNewBelieversHandler: (newBelieversData: Omit<NewBeliever, 'id' | 'createdDate' | 'lastUpdated'>[]) => Promise<{ successful: NewBeliever[], failed: { data: Omit<NewBeliever, 'id' | 'createdDate' | 'lastUpdated'>, error: string }[] }>;
@@ -527,8 +527,9 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
   const addBacentaHandler = useCallback(async (bacentaData: Omit<Bacenta, 'id'>) => {
     try {
       setIsLoading(true);
-      await bacentasFirebaseService.add(bacentaData);
+      const newId = await bacentasFirebaseService.add(bacentaData);
       showToast('success', 'Bacenta added successfully');
+      return newId;
     } catch (error: any) {
       setError(error.message);
       showToast('error', 'Failed to add bacenta', error.message);

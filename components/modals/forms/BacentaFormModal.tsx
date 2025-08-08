@@ -1,10 +1,11 @@
 
 import React, { useState, useEffect } from 'react';
-import { Bacenta } from '../types';
+import { Bacenta } from '../../../types';
 import { useAppContext } from '../../../contexts/FirebaseAppContext';
 import Modal from '../../ui/Modal';
 import Input from '../../ui/Input';
 import Button from '../../ui/Button';
+
 
 interface BacentaFormModalProps {
   isOpen: boolean;
@@ -13,9 +14,10 @@ interface BacentaFormModalProps {
 }
 
 const BacentaFormModal: React.FC<BacentaFormModalProps> = ({ isOpen, onClose, bacenta }) => {
-  const { addBacentaHandler, updateBacentaHandler } = useAppContext();
+  const { addBacentaHandler, updateBacentaHandler, switchTab, closeBacentaDrawer } = useAppContext();
   const [name, setName] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     if (bacenta) {
@@ -39,12 +41,28 @@ const BacentaFormModal: React.FC<BacentaFormModalProps> = ({ isOpen, onClose, ba
     e.preventDefault();
     if (!validate()) return;
 
-    if (bacenta) { // Editing existing Bacenta
-      await updateBacentaHandler({ ...bacenta, name });
-    } else { // Adding new Bacenta
-      await addBacentaHandler({ name }); // Pass object with name property
+    try {
+      setIsSubmitting(true);
+      if (bacenta) {
+        await updateBacentaHandler({ ...bacenta, name });
+        onClose();
+      } else {
+        // Create and navigate into the new Bacenta
+        const newId: string = await addBacentaHandler({ name });
+        // Mark that we should show the bulk-add tip once
+        try { localStorage.setItem('church_connect_show_bulk_tip_once', 'true'); } catch {}
+        // Switch into the newly created bacenta and ensure drawer is closed
+        switchTab({ id: newId, name });
+        if (typeof closeBacentaDrawer === 'function') {
+          closeBacentaDrawer();
+        }
+        onClose();
+      }
+    } catch (err) {
+      // Errors already toasted by handlers
+    } finally {
+      setIsSubmitting(false);
     }
-    onClose();
   };
 
   return (
@@ -80,9 +98,9 @@ const BacentaFormModal: React.FC<BacentaFormModalProps> = ({ isOpen, onClose, ba
         />
 
         <div className="flex justify-end space-x-3 pt-4">
-          <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
-          <Button type="submit" variant="primary">
-            {bacenta ? 'Save Changes' : 'Create & Enter Bacenta'}
+          <Button type="button" variant="secondary" onClick={onClose} disabled={isSubmitting}>Cancel</Button>
+          <Button type="submit" variant="primary" disabled={isSubmitting}>
+            {isSubmitting ? (bacenta ? 'Saving...' : 'Creating...') : (bacenta ? 'Save Changes' : 'Create & Enter Bacenta')}
           </Button>
         </div>
       </form>
