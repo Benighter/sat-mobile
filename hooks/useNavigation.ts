@@ -4,36 +4,41 @@ import { useAppContext } from '../contexts/FirebaseAppContext';
 export const useNavigation = () => {
   const {
     currentTab,
-    navigationHistory,
     navigateBack,
     canNavigateBack,
-    addToNavigationHistory
+    applyHistoryNavigation,
+    resetToDashboard
   } = useAppContext();
 
-  // Handle browser/hardware back button
+  // Handle browser back/forward: interpret history state and apply to our stack
   useEffect(() => {
     const handlePopState = (event: PopStateEvent) => {
       event.preventDefault();
-      const didNavigate = navigateBack();
-
-      // If we couldn't navigate back (e.g., on dashboard), push state again to prevent app closure
-      if (!didNavigate) {
-        window.history.pushState({ page: currentTab.id }, '', window.location.href);
+      const state = (event.state as any) || {};
+      const target = state.tab as any;
+      if (target && target.id) {
+        applyHistoryNavigation(target);
+      } else {
+        // No state: if can go back internally, do it; otherwise ensure we're at dashboard
+        if (!navigateBack()) {
+          resetToDashboard();
+        }
       }
     };
 
-    // Add popstate listener for browser back button
     window.addEventListener('popstate', handlePopState);
 
-    // Push initial state to enable back button handling
-    if (window.history.state === null) {
-      window.history.pushState({ page: currentTab.id }, '', window.location.href);
+    // Ensure there is an initial state representing the current tab
+    if (!window.history.state || !window.history.state.tab) {
+      try {
+        window.history.replaceState({ tab: currentTab }, '', window.location.href);
+      } catch {}
     }
 
     return () => {
       window.removeEventListener('popstate', handlePopState);
     };
-  }, [navigateBack, currentTab.id]);
+  }, [applyHistoryNavigation, navigateBack, resetToDashboard, currentTab]);
 
   // Handle hardware back button on Android and other mobile devices
   useEffect(() => {
@@ -69,25 +74,15 @@ export const useNavigation = () => {
 
     // Listen for mobile back button events
     document.addEventListener('backbutton', handleBackButton, false);
-    window.addEventListener('beforeunload', (e) => {
-      // Only prevent unload if we can navigate back
-      if (canNavigateBack()) {
-        e.preventDefault();
-        navigateBack();
-        return '';
-      }
-    });
 
     return () => {
       document.removeEventListener('keydown', handleKeyDown, true);
       document.removeEventListener('backbutton', handleBackButton, false);
     };
-  }, [navigateBack, canNavigateBack]);
+  }, [navigateBack]);
 
   return {
     navigateBack,
     canNavigateBack,
-    addToNavigationHistory,
-    navigationHistory
   };
 };

@@ -1,7 +1,7 @@
-// Local Storage Utility for SAT Mobile
+// Local + Session Storage Utility for SAT Mobile
 import { Member, Bacenta, AttendanceRecord, TabOption, NewBeliever } from '../types';
 
-// Storage keys
+// Storage keys (persistent)
 const STORAGE_KEYS = {
   MEMBERS: 'church_connect_members',
   BACENTAS: 'church_connect_bacentas',
@@ -12,6 +12,12 @@ const STORAGE_KEYS = {
   APP_VERSION: 'church_connect_version',
   LAST_BACKUP: 'church_connect_last_backup',
   THEME_PREFERENCE: 'church_connect_theme_preference',
+} as const;
+
+// Session storage keys (cleared when session ends)
+const SESSION_KEYS = {
+  NAV_STACK: 'church_connect_nav_stack',
+  CURRENT_TAB: 'church_connect_session_current_tab',
 } as const;
 
 // Current app version for migration purposes
@@ -43,6 +49,34 @@ const removeItem = (key: string): void => {
     localStorage.removeItem(key);
   } catch (error) {
     console.error(`Error removing from localStorage (${key}):`, error);
+  }
+};
+
+// Session storage helpers
+const setSessionItem = <T>(key: string, value: T): void => {
+  try {
+    const serializedValue = JSON.stringify(value);
+    sessionStorage.setItem(key, serializedValue);
+  } catch (error) {
+    // Ignore session storage errors
+  }
+};
+
+const getSessionItem = <T>(key: string, defaultValue: T): T => {
+  try {
+    const item = sessionStorage.getItem(key);
+    if (item === null) return defaultValue;
+    return JSON.parse(item) as T;
+  } catch (error) {
+    return defaultValue;
+  }
+};
+
+const removeSessionItem = (key: string): void => {
+  try {
+    sessionStorage.removeItem(key);
+  } catch (error) {
+    // Ignore
   }
 };
 
@@ -224,7 +258,7 @@ export const newBelieversStorage = {
   }
 };
 
-// App state storage
+// App state storage (persistent across sessions)
 export const appStateStorage = {
   saveCurrentTab: (tab: TabOption): void => {
     setItem(STORAGE_KEYS.CURRENT_TAB, tab);
@@ -246,6 +280,26 @@ export const appStateStorage = {
   clear: (): void => {
     removeItem(STORAGE_KEYS.CURRENT_TAB);
     removeItem(STORAGE_KEYS.DISPLAYED_DATE);
+  }
+};
+
+// Session state storage (cleared on browser/app close)
+export const sessionStateStorage = {
+  saveNavStack: (stack: TabOption[]): void => {
+    setSessionItem(SESSION_KEYS.NAV_STACK, stack);
+  },
+  loadNavStack: (): TabOption[] => {
+    return getSessionItem<TabOption[]>(SESSION_KEYS.NAV_STACK, []);
+  },
+  saveCurrentTab: (tab: TabOption): void => {
+    setSessionItem(SESSION_KEYS.CURRENT_TAB, tab);
+  },
+  loadCurrentTab: (): TabOption | null => {
+    return getSessionItem<TabOption | null>(SESSION_KEYS.CURRENT_TAB, null);
+  },
+  clear: (): void => {
+    removeSessionItem(SESSION_KEYS.NAV_STACK);
+    removeSessionItem(SESSION_KEYS.CURRENT_TAB);
   }
 };
 

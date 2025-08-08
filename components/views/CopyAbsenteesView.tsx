@@ -3,6 +3,7 @@ import { useAppContext } from '../../contexts/FirebaseAppContext';
 import { Member } from '../../types';
 import { ArrowLeftIcon, ClipboardIcon, ChevronLeftIcon, ChevronRightIcon, CalendarIcon } from '../icons';
 import Button from '../ui/Button';
+import { useNavigation } from '../../hooks/useNavigation';
 import { formatDisplayDate, getSundaysOfMonth, getMonthName, formatDateToYYYYMMDD, getCurrentOrMostRecentSunday } from '../../utils/dateUtils';
 
 interface CopyOptions {
@@ -27,6 +28,7 @@ const CopyAbsenteesView: React.FC = () => {
     includePhones: false
   });
   const [isCopying, setIsCopying] = useState(false);
+  const { navigateBack } = useNavigation();
   const [selectedDate, setSelectedDate] = useState<string>(getCurrentOrMostRecentSunday());
   const [displayedDate, setDisplayedDate] = useState(new Date());
 
@@ -44,22 +46,8 @@ const CopyAbsenteesView: React.FC = () => {
 
   const currentBacentaName = bacentaFilter ? getBacentaName(bacentaFilter) : null;
 
-  // Handle back navigation
-  const handleBack = () => {
-    // Navigate back to the members view with the same context
-    if (bacentaFilter) {
-      // If we came from a specific bacenta, go back to that bacenta view
-      const bacenta = bacentas.find(b => b.id === bacentaFilter);
-      if (bacenta) {
-        switchTab({ id: bacentaFilter, name: bacenta.name });
-      } else {
-        switchTab({ id: 'all_members', name: 'All Members' });
-      }
-    } else {
-      // Go back to all members view
-      switchTab({ id: 'all_members', name: 'All Members' });
-    }
-  };
+  // Unified back handled by global header BackButton and gestures
+  const handleBack = () => navigateBack();
 
   // Get displayed month's Sundays (only past and current Sundays)
   const currentMonthSundays = useMemo(() => {

@@ -4,6 +4,7 @@ import { Member } from '../../types';
 import { ArrowLeftIcon, ClipboardIcon, CheckIcon } from '../icons';
 import { formatBirthdayDisplay } from '../../utils/birthdayUtils';
 import Button from '../ui/Button';
+import { useNavigation } from '../../hooks/useNavigation';
 
 interface CopyOptions {
   includeNames: boolean;
@@ -35,6 +36,8 @@ const CopyMembersView: React.FC = () => {
   });
   const [isCopying, setIsCopying] = useState(false);
 
+  const { navigateBack } = useNavigation();
+
   // Get the current bacenta filter from navigation context
   // This will be passed when navigating from a filtered members view
   const bacentaFilter = currentTab.data?.bacentaFilter || null;
@@ -50,22 +53,8 @@ const CopyMembersView: React.FC = () => {
 
   const currentBacentaName = bacentaFilter ? getBacentaName(bacentaFilter) : null;
 
-  // Handle back navigation
-  const handleBack = () => {
-    // Navigate back to the members view with the same context
-    if (bacentaFilter) {
-      // If we came from a specific bacenta, go back to that bacenta view
-      const bacenta = bacentas.find(b => b.id === bacentaFilter);
-      if (bacenta) {
-        switchTab({ id: bacentaFilter, name: bacenta.name });
-      } else {
-        switchTab({ id: 'all_members', name: 'All Members' });
-      }
-    } else {
-      // Go back to all members view
-      switchTab({ id: 'all_members', name: 'All Members' });
-    }
-  };
+  // Unified back handled by global header BackButton and gestures
+  const handleBack = () => navigateBack();
 
   // If no members available, show a message
   if (members.length === 0) {

@@ -2,6 +2,7 @@
 import React, { createContext, useState, useEffect, useCallback, ReactNode, useMemo } from 'react';
 import { Member, AttendanceRecord, Bacenta, TabOption, AttendanceStatus, TabKeys, NavigationHistoryItem, NewBeliever, SundayConfirmation, ConfirmationStatus, Guest, MemberDeletionRequest, OutreachBacenta, OutreachMember } from '../types';
 import { FIXED_TABS, DEFAULT_TAB_ID } from '../constants';
+import { sessionStateStorage } from '../utils/localStorage';
 import { getSundaysOfMonth, formatDateToYYYYMMDD } from '../utils/dateUtils';
 import {
   membersFirebaseService,
@@ -160,6 +161,10 @@ interface AppContextType {
   navigateToNextMonth: () => void;
   navigateBack: () => boolean;
   canNavigateBack: () => boolean;
+  resetToDashboard: () => void;
+  navigationStack: TabOption[];
+  applyHistoryNavigation: (target: TabOption) => void;
+  // Deprecated: kept for compatibility
   addToNavigationHistory: (tabId: string, data?: any) => void;
 
   // Utility
@@ -189,7 +194,6 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
   const [memberDeletionRequests, setMemberDeletionRequests] = useState<MemberDeletionRequest[]>([]);
 
   // UI state
-  const [currentTab, setCurrentTab] = useState<TabOption>(FIXED_TABS.find(t => t.id === DEFAULT_TAB_ID) || FIXED_TABS[0]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [displayedDate, setDisplayedDate] = useState<Date>(new Date());
@@ -241,9 +245,11 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
   const [isOnline, setIsOnline] = useState<boolean>(true);
   const [needsMigration, setNeedsMigration] = useState<boolean>(false);
 
-  // Navigation state
-  const [navigationHistory, setNavigationHistory] = useState<NavigationHistoryItem[]>([]);
+  // Navigation state (stack of previously visited tabs)
+  const [navigationStack, setNavigationStack] = useState<TabOption[]>(() => sessionStateStorage.loadNavStack());
+  const [currentTab, setCurrentTab] = useState<TabOption>(() => sessionStateStorage.loadCurrentTab() || (FIXED_TABS.find(t => t.id === DEFAULT_TAB_ID) || FIXED_TABS[0]));
   const isNavigatingBack = React.useRef(false);
+  const prevTabRef = React.useRef<TabOption | null>(null);
 
   // Memoized computed values
   const displayedSundays = useMemo(() => {
@@ -1610,13 +1616,27 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     setIsHierarchyModalOpen(false);
   }, []);
 
+  // Persist navigation state to sessionStorage whenever it changes
+  useEffect(() => {
+    sessionStateStorage.saveNavStack(navigationStack);
+    sessionStateStorage.saveCurrentTab(currentTab);
+  }, [navigationStack, currentTab]);
+
   // Navigation handlers
   const switchTab = useCallback((tab: TabOption) => {
-    if (!isNavigatingBack.current) {
-      addToNavigationHistory(currentTab.id);
+    // Avoid pushing if navigating to the same tab with same data
+    const isSame = currentTab.id === tab.id && JSON.stringify(currentTab.data || null) === JSON.stringify(tab.data || null);
+    if (!isSame) {
+      // Push current tab onto stack
+      setNavigationStack(prev => [...prev, currentTab]);
+      prevTabRef.current = currentTab;
     }
     isNavigatingBack.current = false;
     setCurrentTab(tab);
+    // Push state to browser history for back/forward integration
+    try {
+      window.history.pushState({ tab }, '', window.location.href);
+    } catch {}
   }, [currentTab]);
 
   const navigateToPreviousMonth = useCallback(() => {
@@ -1635,31 +1655,68 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     });
   }, []);
 
+  // Deprecated helper kept for compatibility
   const addToNavigationHistory = useCallback((tabId: string, data?: any) => {
-    setNavigationHistory(prev => [
-      ...prev.slice(-9), // Keep last 10 items
-      { tabId, timestamp: Date.now(), data }
-    ]);
+    // Push a synthetic tab onto the stack (best-effort)
+    setNavigationStack(prev => [...prev, { id: tabId, name: tabId, data }]);
   }, []);
 
   const navigateBack = useCallback(() => {
-    if (navigationHistory.length > 0) {
-      const lastItem = navigationHistory[navigationHistory.length - 1];
-      const targetTab = FIXED_TABS.find(tab => tab.id === lastItem.tabId);
-
-      if (targetTab) {
-        isNavigatingBack.current = true;
-        setCurrentTab(targetTab);
-        setNavigationHistory(prev => prev.slice(0, -1));
-        return true; // Successfully navigated back
-      }
+    if (navigationStack.length > 0) {
+      const next = navigationStack[navigationStack.length - 1];
+      isNavigatingBack.current = true;
+      setNavigationStack(prev => prev.slice(0, -1));
+      prevTabRef.current = currentTab;
+      setCurrentTab(next);
+      return true;
     }
-    return false; // Could not navigate back
-  }, [navigationHistory]);
+    // If no stack but not on dashboard, go to dashboard
+    if (currentTab.id !== DEFAULT_TAB_ID) {
+      isNavigatingBack.current = true;
+      prevTabRef.current = currentTab;
+      setCurrentTab(FIXED_TABS.find(t => t.id === DEFAULT_TAB_ID) || currentTab);
+      return true;
+    }
+    return false;
+  }, [navigationStack, currentTab]);
+
+  const resetToDashboard = useCallback(() => {
+    setNavigationStack([]);
+    setCurrentTab(FIXED_TABS.find(t => t.id === DEFAULT_TAB_ID) || currentTab);
+  }, [currentTab]);
 
   const canNavigateBack = useCallback(() => {
-    return navigationHistory.length > 0;
-  }, [navigationHistory]);
+    // Show back button on all non-dashboard screens
+    return currentTab.id !== DEFAULT_TAB_ID;
+  }, [currentTab.id]);
+
+  // Apply browser history navigation (back/forward) to our in-app stack
+  const applyHistoryNavigation = useCallback((target: TabOption) => {
+    const top = navigationStack[navigationStack.length - 1] || null;
+    const isBackToTop = top && top.id === target.id && JSON.stringify(top.data || null) === JSON.stringify(target.data || null);
+
+    if (isBackToTop) {
+      // Standard back: pop one
+      setNavigationStack(prev => prev.slice(0, -1));
+      prevTabRef.current = currentTab;
+      setCurrentTab(top);
+      return;
+    }
+
+    // If target exists somewhere in stack, pop until it is on top
+    const idx = navigationStack.findIndex(t => t.id === target.id && JSON.stringify(t.data || null) === JSON.stringify(target.data || null));
+    if (idx !== -1) {
+      setNavigationStack(prev => prev.slice(0, idx));
+      prevTabRef.current = currentTab;
+      setCurrentTab(target);
+      return;
+    }
+
+    // Likely a forward navigation: push previous current onto stack and go to target
+    prevTabRef.current = currentTab;
+    setNavigationStack(prev => [...prev, currentTab]);
+    setCurrentTab(target);
+  }, [navigationStack, currentTab]);
 
   // Firebase-specific operations
   const triggerMigration = useCallback(async () => {
@@ -1900,6 +1957,9 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     navigateToNextMonth,
     navigateBack,
     canNavigateBack,
+    resetToDashboard,
+    navigationStack,
+    applyHistoryNavigation,
     addToNavigationHistory,
 
     // Utility
