@@ -6,6 +6,8 @@ import Input from '../ui/Input';
 import Select from '../ui/Select';
 import Badge from '../ui/Badge';
 import { CalendarIcon, UsersIcon, PlusIcon, CheckIcon, ExclamationTriangleIcon, ChevronLeftIcon, ChevronRightIcon, PeopleIcon, GroupIcon, ChartBarIcon, TrashIcon } from '../icons';
+import AllBacentasView from '../bacentas/AllBacentasView';
+
 
 const MonthPicker: React.FC<{ value: string; onChange: (v: string) => void }> = ({ value, onChange }) => {
   const [year, month] = value.split('-');
@@ -98,58 +100,192 @@ const BacentaDetail: React.FC<{
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-3">
-        <button className="px-2 py-1 rounded-lg hover:bg-gray-100 dark:hover:bg-dark-700" onClick={onBack}>
-          <ChevronLeftIcon className="w-5 h-5" />
-        </button>
-        <h3 className="text-xl font-bold">{bacenta.name}</h3>
-      {/* Weekly filter hint */}
-      <div className="text-xs text-gray-500">Showing outreach for the week starting {new Date(weekStart).toLocaleDateString()}</div>
-      </div>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-rose-50/30 dark:from-dark-950 dark:via-dark-900 dark:to-dark-800">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="space-y-8">
+          {/* Header with Back Button */}
+          <div className="flex items-center gap-4">
+            <button
+              className="group p-3 rounded-xl glass border border-white/20 dark:border-dark-600/50 hover:shadow-lg transition-all duration-200 hover:scale-105"
+              onClick={onBack}
+            >
+              <ChevronLeftIcon className="w-6 h-6 text-gray-600 dark:text-dark-300 group-hover:text-rose-600 dark:group-hover:text-rose-400 transition-colors duration-200" />
+            </button>
+            <div className="flex-1">
+              <h1 className="text-3xl sm:text-4xl font-black text-gray-900 dark:text-white">
+                <span className="bg-gradient-to-r from-rose-600 to-amber-500 bg-clip-text text-transparent">
+                  {bacenta.name}
+                </span>
+              </h1>
+              <p className="text-gray-600 dark:text-dark-300 mt-1">
+                Showing outreach for the week starting {new Date(weekStart).toLocaleDateString(undefined, {
+                  weekday: 'long',
+                  year: 'numeric',
+                  month: 'long',
+                  day: 'numeric'
+                })}
+              </p>
+            </div>
+          </div>
 
-      {/* Add member form */}
-      <div className="glass p-4 rounded-2xl grid grid-cols-1 sm:grid-cols-12 gap-3 border border-slate-200 dark:border-dark-600">
-        <Input label="Name" placeholder="Full name" value={name} onChange={setName} className="sm:col-span-4" />
-        <Input label="Phone" placeholder="e.g. 024XXXXXXX" value={phone} onChange={setPhone} className="sm:col-span-3" />
-        <Input label="Room" placeholder="Room or area" value={room} onChange={setRoom} className="sm:col-span-3" />
-        <Select label="Coming?" value={coming ? 'yes' : 'no'} onChange={(v) => setComing(v === 'yes')} className="sm:col-span-2">
-          <option value="no">No</option>
-          <option value="yes">Yes</option>
-        </Select>
-        {!coming && (
-          <Input label="Reason (optional)" placeholder="Why not coming?" value={reason} onChange={setReason} className="sm:col-span-6" />
-        )}
-        <div className="sm:col-span-12 flex justify-end pt-1">
-          <Button onClick={handleAdd} leftIcon={<PlusIcon className="w-4 h-4" />}>Add Outreach Member</Button>
-        </div>
-      </div>
+          {/* Add Member Form - Enhanced */}
+          <div className="relative">
+            <div className="absolute -inset-1 bg-gradient-to-r from-green-500 to-blue-600 rounded-3xl blur opacity-20"></div>
+            <div className="relative glass p-8 rounded-2xl border border-white/20 dark:border-dark-600/50 backdrop-blur-xl shadow-xl">
+              <div className="space-y-6">
+                <div className="text-center">
+                  <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Add Outreach Member</h2>
+                  <p className="text-gray-600 dark:text-dark-300 mt-1">Record new community outreach contact</p>
+                </div>
 
-      {/* Members list */}
-      <div className="rounded-2xl border border-slate-200 dark:border-dark-600 overflow-hidden">
-        <div className="divide-y">
-          {members.map(m => (
-            <div key={m.id} className="p-3 flex items-center justify-between">
-              <div className="min-w-0">
-                <div className="font-medium truncate">{m.name}</div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                  <Input
+                    label="Full Name"
+                    placeholder="Enter full name"
+                    value={name}
+                    onChange={setName}
+                    className="bg-white/80 dark:bg-dark-700/80 border-gray-200 dark:border-dark-600 focus:ring-green-500 dark:focus:ring-green-400"
+                  />
+                  <Input
+                    label="Phone Number"
+                    placeholder="e.g. 024XXXXXXX"
+                    value={phone}
+                    onChange={setPhone}
+                    className="bg-white/80 dark:bg-dark-700/80 border-gray-200 dark:border-dark-600 focus:ring-blue-500 dark:focus:ring-blue-400"
+                  />
+                  <Input
+                    label="Room/Area"
+                    placeholder="Room or area"
+                    value={room}
+                    onChange={setRoom}
+                    className="bg-white/80 dark:bg-dark-700/80 border-gray-200 dark:border-dark-600 focus:ring-purple-500 dark:focus:ring-purple-400"
+                  />
+                  <Select
+                    label="Coming to Church?"
+                    value={coming ? 'yes' : 'no'}
+                    onChange={(v) => setComing(v === 'yes')}
+                    className="bg-white/80 dark:bg-dark-700/80 border-gray-200 dark:border-dark-600 focus:ring-amber-500 dark:focus:ring-amber-400"
+                  >
+                    <option value="no">No</option>
+                    <option value="yes">Yes</option>
+                  </Select>
+                </div>
 
-                <div className="text-xs text-gray-500">Room {m.roomNumber || '—'} · {m.phoneNumbers?.[0] || 'No phone'}</div>
-              </div>
-              <div className="flex items-center gap-3">
-                {m.comingStatus ? (
-                  <Badge color="green" size="sm"><span className="inline-flex items-center"><CheckIcon className="w-3 h-3 mr-1" /> Coming</span></Badge>
-                ) : (
-                  <Badge color="yellow" size="sm"><span className="inline-flex items-center"><ExclamationTriangleIcon className="w-3 h-3 mr-1" /> Not Coming</span></Badge>
+                {!coming && (
+                  <div className="animate-in slide-in-from-top-2 duration-300">
+                    <Input
+                      label="Reason for Not Coming"
+                      placeholder="Why are they not coming to church?"
+                      value={reason}
+                      onChange={setReason}
+                      className="bg-white/80 dark:bg-dark-700/80 border-gray-200 dark:border-dark-600 focus:ring-orange-500 dark:focus:ring-orange-400"
+                    />
+                  </div>
                 )}
-                {!m.convertedMemberId && (
-                  <Button size="sm" variant="secondary" onClick={() => convertOutreachMemberToPermanentHandler(m.id)}>Convert</Button>
-                )}
+
+                <div className="flex justify-end gap-4 pt-4 border-t border-gray-200 dark:border-dark-600">
+                  <Button
+                    onClick={handleAdd}
+                    leftIcon={<PlusIcon className="w-5 h-5" />}
+                    className="px-8 py-3 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-semibold shadow-lg hover:shadow-xl transition-all duration-200"
+                  >
+                    Add Outreach Member
+                  </Button>
+                </div>
               </div>
             </div>
-          ))}
-          {members.length === 0 && (
-            <div className="p-4 text-sm text-gray-500">No outreach members yet</div>
-          )}
+          </div>
+
+          {/* Members List - Enhanced */}
+          <div className="space-y-6">
+            <div className="text-center">
+              <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Outreach Members</h2>
+              <p className="text-gray-600 dark:text-dark-300 mt-1">
+                {members.length > 0 ? `${members.length} member${members.length === 1 ? '' : 's'} contacted this week` : 'No members contacted yet'}
+              </p>
+            </div>
+
+            {members.length > 0 ? (
+              <div className="grid gap-4">
+                {members.map(m => (
+                  <div key={m.id} className="group relative">
+                    <div className="absolute -inset-0.5 bg-gradient-to-r from-gray-200 to-gray-300 dark:from-dark-600 dark:to-dark-500 rounded-2xl opacity-0 group-hover:opacity-100 transition duration-300 blur-sm"></div>
+                    <div className="relative glass p-6 rounded-2xl border border-white/20 dark:border-dark-600/50 backdrop-blur-xl">
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1 space-y-2">
+                          <div className="flex items-center gap-3">
+                            <h3 className="font-bold text-lg text-gray-900 dark:text-white">{m.name}</h3>
+                            {m.comingStatus ? (
+                              <Badge color="green" className="font-medium">
+                                <CheckIcon className="w-3 h-3 mr-1" />
+                                Coming
+                              </Badge>
+                            ) : (
+                              <Badge color="yellow" className="font-medium">
+                                <ExclamationTriangleIcon className="w-3 h-3 mr-1" />
+                                Not Coming
+                              </Badge>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-dark-300">
+                            <div className="flex items-center gap-1">
+                              <span className="font-medium">Room:</span>
+                              <span>{m.roomNumber || 'Not specified'}</span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <span className="font-medium">Phone:</span>
+                              <span>{m.phoneNumbers?.[0] || 'Not provided'}</span>
+                            </div>
+                          </div>
+
+                          {!m.comingStatus && m.reasonNotComing && (
+                            <div className="text-sm text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 px-3 py-2 rounded-lg">
+                              <span className="font-medium">Reason:</span> {m.reasonNotComing}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-3 ml-4">
+                          {!m.convertedMemberId && (
+                            <Button
+                              size="sm"
+                              onClick={() => convertOutreachMemberToPermanentHandler(m.id)}
+                              className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-medium shadow-md hover:shadow-lg transition-all duration-200"
+                            >
+                              Convert to Member
+                            </Button>
+                          )}
+
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => deleteOutreachMemberHandler(m.id)}
+                            className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400"
+                            title="Delete member"
+                          >
+                            <TrashIcon className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-16 space-y-4">
+                <div className="w-24 h-24 mx-auto rounded-full bg-gradient-to-br from-gray-100 to-gray-200 dark:from-dark-700 dark:to-dark-600 flex items-center justify-center">
+                  <UsersIcon className="w-12 h-12 text-gray-400 dark:text-dark-500" />
+                </div>
+                <div className="space-y-2">
+                  <h3 className="text-xl font-semibold text-gray-900 dark:text-white">No Outreach Members Yet</h3>
+                  <p className="text-gray-600 dark:text-dark-300">
+                    Start by adding your first outreach contact using the form above.
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
@@ -238,111 +374,144 @@ const OutreachView: React.FC = () => {
 
 
   return (
-    <div className="space-y-6">
-      {/* If a bacenta is selected, show its detail view instead of the dashboard */}
-      {selectedBacentaId && outreachBacentas.find(b => b.id === selectedBacentaId) ? (
-        <BacentaDetail
-          bacenta={outreachBacentas.find(b => b.id === selectedBacentaId)!}
-          members={(weeklyMembersByBacenta[selectedBacentaId] || [])}
-          weekStart={weekStart}
-          onBack={() => setSelectedBacentaId('')}
-        />
-      ) : (
-        <>
-
-      {/* Header */}
-      <div className="flex flex-col items-center text-center gap-4">
-        <div>
-          <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight bg-gradient-to-r from-rose-500 to-amber-500 bg-clip-text text-transparent">Outreach</h2>
-          <p className="text-sm text-gray-500 dark:text-dark-300 mt-1">Capture community outreach and track conversions</p>
-        </div>
-        <WeekPicker value={weekStart} onChange={setWeekStart} />
-      </div>
-
-
-
-      {/* Stats Dashboard Section */}
-      <div className="max-w-6xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Total outreach */}
-        <div className="rounded-2xl p-4 border border-gray-200 dark:border-dark-600 bg-gradient-to-br from-rose-50 to-rose-100/60 dark:from-rose-900/20 dark:to-rose-800/10 shadow-sm">
-          <div className="flex items-center justify-between">
-            <p className="text-xs font-semibold uppercase text-rose-600">Total Outreach</p>
-            <PeopleIcon className="w-5 h-5 text-rose-600/80" />
-          </div>
-          <div className="mt-2 text-3xl font-extrabold tracking-tight">{totals.overall}</div>
-          <p className="mt-1 text-xs text-rose-700/70">Members contacted this month</p>
-        </div>
-
-        {/* Coming rate */}
-        <div className="rounded-2xl p-4 border border-gray-200 dark:border-dark-600 bg-gradient-to-br from-emerald-50 to-emerald-100/60 dark:from-emerald-900/20 dark:to-emerald-800/10 shadow-sm">
-          <div className="flex items-center justify-between">
-            <p className="text-xs font-semibold uppercase text-emerald-700">Coming Rate</p>
-            <ChartBarIcon className="w-5 h-5 text-emerald-600/80" />
-          </div>
-          <div className="mt-2 text-3xl font-extrabold tracking-tight">{totals.overallComingRate}%</div>
-          <p className="mt-1 text-xs text-emerald-700/70">{totals.overallComing} of {totals.overall} confirmed</p>
-        </div>
-
-        {/* Conversion rate */}
-        <div className="rounded-2xl p-4 border border-gray-200 dark:border-dark-600 bg-gradient-to-br from-indigo-50 to-indigo-100/60 dark:from-indigo-900/20 dark:to-indigo-800/10 shadow-sm">
-          <div className="flex items-center justify-between">
-            <p className="text-xs font-semibold uppercase text-indigo-700">Conversion Rate</p>
-            <ChartBarIcon className="w-5 h-5 text-indigo-600/80" />
-          </div>
-          <div className="mt-2 text-3xl font-extrabold tracking-tight">{totals.overallConversionRate}%</div>
-          <p className="mt-1 text-xs text-indigo-700/70">{totals.overallConverted} became members</p>
-        </div>
-
-        {/* Active bacentas */}
-        <div className="rounded-2xl p-4 border border-gray-200 dark:border-dark-600 bg-gradient-to-br from-amber-50 to-amber-100/60 dark:from-amber-900/20 dark:to-amber-800/10 shadow-sm">
-          <div className="flex items-center justify-between">
-            <p className="text-xs font-semibold uppercase text-amber-700">Active Bacentas</p>
-            <GroupIcon className="w-5 h-5 text-amber-600/80" />
-          </div>
-          <div className="mt-2 text-3xl font-extrabold tracking-tight">{totals.perBacenta.filter(x => x.total > 0).length}</div>
-          <p className="mt-1 text-xs text-amber-700/70">Outreach groups with activity</p>
-        </div>
-      </div>
-
-      {/* Bacentas Grid Section */}
-      <div className="max-w-6xl mx-auto mt-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-        {/* Open All Bacentas card */}
-        <button
-          className="group rounded-2xl border border-gray-200 dark:border-dark-600 bg-white dark:bg-dark-800 p-4 shadow-sm hover:shadow-md transition-all text-left"
-          onClick={() => switchTab({ id: TabKeys.ALL_BACENTAS, name: 'All Bacenta Leaders' })}
-        >
-          <div className="flex items-center justify-between">
-            <div className="font-semibold truncate">All Bacentas</div>
-            <GroupIcon className="w-4 h-4 text-gray-500 group-hover:text-rose-500" />
-          </div>
-          <p className="mt-3 text-sm text-gray-600 dark:text-dark-300">Open the complete bacenta list</p>
-        </button>
-
-        {outreachBacentas.map(b => {
-          const stats = totals.perBacenta.find(x => x.bacenta.id === b.id);
-          const total = stats?.total || 0;
-          const comingRate = stats?.comingRate || 0;
-          const conversionRate = stats?.conversionRate || 0;
-          return (
-            <div key={b.id} className="group rounded-2xl border border-gray-200 dark:border-dark-600 bg-white dark:bg-dark-800 p-4 shadow-sm transition-all text-left">
-              <div className="flex items-start justify-between">
-                <button className="font-semibold truncate text-left" onClick={() => setSelectedBacentaId(b.id)}>{b.name}</button>
-                {/* Delete: only for custom-added bacentas (no heuristic available, so showing for all outreach bacentas) */}
-                <Button size="sm" variant="ghost" onClick={() => deleteOutreachBacentaHandler(b.id)} title="Delete bacenta">
-                  <TrashIcon className="w-4 h-4" />
-                </Button>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-rose-50/30 dark:from-dark-950 dark:via-dark-900 dark:to-dark-800">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* If a bacenta is selected, show its detail view instead of the dashboard */}
+        {selectedBacentaId && outreachBacentas.find(b => b.id === selectedBacentaId) ? (
+          <BacentaDetail
+            bacenta={outreachBacentas.find(b => b.id === selectedBacentaId)!}
+            members={(weeklyMembersByBacenta[selectedBacentaId] || [])}
+            weekStart={weekStart}
+            onBack={() => setSelectedBacentaId('')}
+          />
+        ) : (
+          <div className="space-y-12">
+            {/* Header Section */}
+            <div className="text-center space-y-6">
+              <div className="space-y-4">
+                <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight">
+                  <span className="bg-gradient-to-r from-rose-600 via-pink-600 to-amber-500 bg-clip-text text-transparent">
+                    Outreach
+                  </span>
+                </h1>
+                <p className="text-lg sm:text-xl text-gray-600 dark:text-dark-300 max-w-2xl mx-auto leading-relaxed">
+                  Capture community outreach and track conversions with precision and care
+                </p>
               </div>
-              <div className="mt-3 flex items-center gap-2 text-sm">
-                <Badge color="blue">{total} members</Badge>
-                <Badge color="green">{comingRate}% coming</Badge>
-                <Badge color="purple">{conversionRate}% converted</Badge>
+
+              {/* Week Picker with Enhanced Styling */}
+              <div className="flex justify-center">
+                <div className="bg-white/95 dark:bg-dark-800/95 p-4 rounded-2xl shadow-lg border border-gray-200 dark:border-dark-600 backdrop-blur-sm">
+                  <WeekPicker value={weekStart} onChange={setWeekStart} />
+                </div>
               </div>
             </div>
-          );
-        })}
+
+            {/* Stats Dashboard */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              {/* Total Outreach Card - Enhanced */}
+              <div className="lg:col-span-1">
+                <div className="relative group">
+                  <div className="absolute -inset-1 z-0 bg-gradient-to-r from-rose-500 to-amber-500 rounded-3xl blur opacity-25 group-hover:opacity-40 transition duration-300 pointer-events-none"></div>
+                  <div className="relative z-10 bg-white dark:bg-white p-8 rounded-2xl border border-gray-200 dark:border-gray-300 shadow-lg">
+                    <div className="text-center space-y-4">
+                      <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-rose-500 to-amber-500 shadow-lg">
+                        <PeopleIcon className="w-8 h-8 text-white" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold uppercase tracking-wider text-rose-600">
+                          Total Outreach
+                        </p>
+                        <div className="text-5xl font-extrabold text-slate-900 mt-2 leading-none">
+                          {totals.overall}
+                        </div>
+                        <p className="text-sm text-gray-600 mt-1">
+                          Members contacted this month
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* All Bacentas Section - Enhanced */}
+              <div className="lg:col-span-2">
+                <AllBacentasView />
+              </div>
+            </div>
+
+            {/* Individual Bacentas Management */}
+            {outreachBacentas.length > 0 && (
+              <div className="space-y-8">
+                <div className="text-center">
+                  <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 dark:text-white">
+                    Individual Bacenta Management
+                  </h2>
+                  <p className="text-gray-600 dark:text-dark-300 mt-2 text-lg">
+                    Manage outreach activities for each building
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                  {outreachBacentas.map(b => {
+                    const stats = totals.perBacenta.find(x => x.bacenta.id === b.id);
+                    const total = stats?.total || 0;
+                    const comingRate = stats?.comingRate || 0;
+                    const conversionRate = stats?.conversionRate || 0;
+
+                    return (
+                      <div key={b.id} className="group relative">
+                        <div className="absolute -inset-0.5 z-0 bg-gradient-to-r from-gray-200 to-gray-300 dark:from-dark-600 dark:to-dark-500 rounded-2xl opacity-0 group-hover:opacity-100 transition duration-300 blur-sm pointer-events-none"></div>
+                        <div className="relative bg-white/95 dark:bg-dark-800/95 p-6 rounded-2xl border border-gray-200 dark:border-dark-600 shadow-md hover:shadow-xl transition-all duration-300 backdrop-blur-sm">
+                          <div className="space-y-4">
+                            {/* Header */}
+                            <div className="flex items-start justify-between">
+                              <button
+                                className="text-left flex-1 group-hover:text-rose-600 dark:group-hover:text-rose-400 transition-colors duration-200"
+                                onClick={() => setSelectedBacentaId(b.id)}
+                              >
+                                <h3 className="font-bold text-lg text-slate-800 dark:text-white truncate">
+                                  {b.name}
+                                </h3>
+                                <p className="text-sm text-gray-500 dark:text-dark-400 mt-1">
+                                  Click to manage outreach
+                                </p>
+                              </button>
+
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => deleteOutreachBacentaHandler(b.id)}
+                                title="Delete bacenta"
+                                className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400"
+                              >
+                                <TrashIcon className="w-4 h-4" />
+                              </Button>
+                            </div>
+
+                            {/* Stats */}
+                            <div className="flex flex-wrap gap-2">
+                              <Badge color="blue" className="font-medium">
+                                {total} members
+                              </Badge>
+                              <Badge color="green" className="font-medium">
+                                {comingRate}% coming
+                              </Badge>
+                              <Badge color="purple" className="font-medium">
+                                {conversionRate}% converted
+                              </Badge>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
-      </>
-      )}
     </div>
   );
 };
