@@ -173,49 +173,49 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
       />
       
       {/* Drawer */}
-      <div className={`fixed top-0 left-0 h-full w-80 max-w-[85vw] bg-white dark:bg-dark-800 shadow-xl z-50 transform transition-all duration-300 ease-out ${
+      <div className={`fixed top-0 left-0 h-full w-80 max-w-[90vw] sm:max-w-[85vw] md:max-w-[75vw] lg:w-80 bg-white dark:bg-dark-800 shadow-xl z-50 transform transition-all duration-300 ease-out ${
         isOpen ? 'translate-x-0 shadow-xl' : '-translate-x-full shadow-none'
       } border-r border-gray-200 dark:border-dark-600 flex flex-col`}>
 
         {/* Header */}
-        <div className="bg-white dark:bg-dark-800 border-b border-gray-200 dark:border-dark-600 p-4 flex-shrink-0">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-bold text-gray-900 dark:text-dark-100 flex items-center">
-              <ChartBarIcon className="w-6 h-6 mr-3 text-slate-500 dark:text-slate-400" />
-              Navigation
+        <div className="bg-white dark:bg-dark-800 border-b border-gray-200 dark:border-dark-600 p-3 sm:p-4 flex-shrink-0">
+          <div className="flex items-center justify-between mb-3 sm:mb-4">
+            <h2 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-dark-100 flex items-center min-w-0">
+              <ChartBarIcon className="w-5 h-5 sm:w-6 sm:h-6 mr-2 sm:mr-3 text-slate-500 dark:text-slate-400 flex-shrink-0" />
+              <span className="truncate">Navigation</span>
             </h2>
             <button
               onClick={onClose}
-              className="p-2 hover:bg-gray-100 dark:hover:bg-dark-700 rounded-lg transition-colors duration-200"
+              className="p-1.5 sm:p-2 hover:bg-gray-100 dark:hover:bg-dark-700 rounded-lg transition-colors duration-200 flex-shrink-0"
               aria-label="Close drawer"
             >
-              <XMarkIcon className="w-5 h-5 text-gray-500 dark:text-dark-400" />
+              <XMarkIcon className="w-4 h-4 sm:w-5 sm:h-5 text-gray-500 dark:text-dark-400" />
             </button>
           </div>
-          
+
           {/* Search Input */}
           <div className="relative">
-            <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-dark-500" />
+            <SearchIcon className="absolute left-2.5 sm:left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-dark-500" />
             <input
               type="text"
               placeholder="Search bacentas..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 border border-gray-300 dark:border-dark-600 bg-white dark:bg-dark-700 text-gray-900 dark:text-dark-100 rounded-lg focus:ring-2 focus:ring-slate-400 dark:focus:ring-slate-500 focus:border-transparent transition-all duration-200 placeholder-gray-500 dark:placeholder-dark-400"
+              className="w-full pl-9 sm:pl-10 pr-3 sm:pr-4 py-2 sm:py-2.5 border border-gray-300 dark:border-dark-600 bg-white dark:bg-dark-700 text-gray-900 dark:text-dark-100 rounded-lg focus:ring-2 focus:ring-slate-400 dark:focus:ring-slate-500 focus:border-transparent transition-all duration-200 placeholder-gray-500 dark:placeholder-dark-400 text-sm sm:text-base"
             />
           </div>
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto sidebar-scroll p-4 space-y-6 min-h-0">
+        <div className="flex-1 overflow-y-auto sidebar-scroll p-3 sm:p-4 space-y-4 sm:space-y-6 min-h-0">
 
           {/* Main Navigation */}
           <div>
-            <h3 className="text-sm font-semibold text-gray-500 dark:text-dark-400 mb-3 flex items-center">
-              <ChartBarIcon className="w-4 h-4 mr-2 text-slate-500 dark:text-slate-400" />
-              Navigation
+            <h3 className="text-xs sm:text-sm font-semibold text-gray-500 dark:text-dark-400 mb-2 sm:mb-3 flex items-center">
+              <ChartBarIcon className="w-3 h-3 sm:w-4 sm:h-4 mr-1.5 sm:mr-2 text-slate-500 dark:text-slate-400 flex-shrink-0" />
+              <span className="truncate">Navigation</span>
             </h3>
-            <div className="space-y-2">
+            <div className="space-y-1.5 sm:space-y-2">
               <NavigationItem
                 icon={<GroupIcon className="w-4 h-4" />}
                 label="All Bacenta Leaders"
@@ -250,25 +250,25 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
           </div>
 
           {/* Divider */}
-          <div className="border-t border-gray-200"></div>
+          <div className="border-t border-gray-200 dark:border-dark-600"></div>
 
           {/* Add New Bacenta Button */}
           <button
             onClick={handleAddBacenta}
-            className="w-full flex items-center justify-center space-x-2 p-4 bg-slate-600 dark:bg-slate-700 hover:bg-slate-700 dark:hover:bg-slate-600 text-white rounded-lg transition-all duration-200 shadow-sm hover:shadow-md border border-slate-500 dark:border-slate-600"
+            className="w-full flex items-center justify-center space-x-1.5 sm:space-x-2 p-3 sm:p-4 bg-slate-600 dark:bg-slate-700 hover:bg-slate-700 dark:hover:bg-slate-600 text-white rounded-lg transition-all duration-200 shadow-sm hover:shadow-md border border-slate-500 dark:border-slate-600"
           >
-            <PlusCircleIcon className="w-5 h-5" />
-            <span className="font-medium">Create New Bacenta</span>
+            <PlusCircleIcon className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" />
+            <span className="font-medium text-sm sm:text-base truncate">Create New Bacenta</span>
           </button>
 
           {/* Recent Bacentas */}
           {!searchQuery && validRecentBacentas.length > 0 && (
             <div>
-              <h3 className="text-sm font-semibold text-gray-500 dark:text-dark-400 mb-3 flex items-center">
-                <ClockIcon className="w-4 h-4 mr-2 text-slate-500 dark:text-slate-400" />
-                Recent
+              <h3 className="text-xs sm:text-sm font-semibold text-gray-500 dark:text-dark-400 mb-2 sm:mb-3 flex items-center">
+                <ClockIcon className="w-3 h-3 sm:w-4 sm:h-4 mr-1.5 sm:mr-2 text-slate-500 dark:text-slate-400 flex-shrink-0" />
+                <span className="truncate">Recent</span>
               </h3>
-              <div className="space-y-2">
+              <div className="space-y-1.5 sm:space-y-2">
                 {validRecentBacentas.map((bacenta) => (
                   <BacentaItem
                     key={`recent-${bacenta.id}`}
@@ -286,14 +286,17 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
 
           {/* All Bacentas */}
           <div className="flex-1 flex flex-col min-h-0">
-            <div className="flex items-center justify-between mb-3 flex-shrink-0">
-              <h3 className="text-sm font-semibold text-gray-600 flex items-center">
-                <GroupIcon className="w-4 h-4 mr-1" />
-                {searchQuery ? `Search Results (${filteredBacentas.length})` : `All Bacentas (${bacentas.length})`}
+            <div className="flex items-center justify-between mb-2 sm:mb-3 flex-shrink-0 min-w-0">
+              <h3 className="text-xs sm:text-sm font-semibold text-gray-600 dark:text-dark-400 flex items-center min-w-0">
+                <GroupIcon className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-1.5 flex-shrink-0" />
+                <span className="truncate">
+                  {searchQuery ? `Search Results (${filteredBacentas.length})` : `All Bacentas (${bacentas.length})`}
+                </span>
               </h3>
               {filteredBacentas.length > 5 && (
-                <div className="text-xs text-gray-400 flex items-center">
-                  <span>Scroll for more</span>
+                <div className="text-xs text-gray-400 dark:text-dark-500 flex items-center flex-shrink-0 ml-2">
+                  <span className="hidden sm:inline">Scroll for more</span>
+                  <span className="sm:hidden">More</span>
                   <svg className="w-3 h-3 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
                   </svg>
@@ -323,7 +326,7 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
                   <div className="scroll-fade-top absolute top-0 left-0 right-0 z-10" />
                 )}
 
-                <div className="space-y-2 pb-4">
+                <div className="space-y-1.5 sm:space-y-2 pb-3 sm:pb-4">
                   {filteredBacentas.map((bacenta) => (
                     <BacentaItem
                       key={bacenta.id}
@@ -482,26 +485,26 @@ const BacentaItem: React.FC<BacentaItemProps> = ({
         onMouseDown={handleMouseDown}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
-        className={`group relative p-3 rounded-lg cursor-pointer transition-all duration-200 select-none ${
+        className={`group relative p-2.5 sm:p-3 rounded-lg cursor-pointer transition-all duration-200 select-none ${
           isActive
             ? 'bg-amber-100 dark:bg-amber-900/40 border border-amber-300 dark:border-amber-600 border-l-4 border-l-amber-600 dark:border-l-amber-400 shadow-sm'
-            : 'bg-white dark:bg-dark-700 hover:bg-gray-50 dark:hover:bg-dark-600 border border-gray-300 dark:border-dark-600 border-l-4 border-l-transparent hover:border-l-amber-500 dark:hover:border-l-amber-500'
+            : 'bg-gray-50 dark:bg-dark-700 hover:bg-gray-100 dark:hover:bg-dark-600 border border-gray-200 dark:border-dark-600 border-l-4 border-l-transparent hover:border-l-amber-500 dark:hover:border-l-amber-500 shadow-sm'
         } ${showContextMenu ? 'bg-amber-100 dark:bg-amber-900/40 border-amber-400 dark:border-amber-500' : ''}`}
       >
-      <div className="flex items-center justify-between">
-        <div className="flex-1 min-w-0">
-          <h4 className={`font-medium truncate ${isActive ? 'text-amber-900 dark:text-amber-100' : 'text-gray-800 dark:text-dark-100'} transition-colors duration-200`}>
+      <div className="flex items-center justify-between min-w-0">
+        <div className="flex-1 min-w-0 pr-2">
+          <h4 className={`font-medium truncate text-sm sm:text-base ${isActive ? 'text-amber-900 dark:text-amber-100' : 'text-gray-800 dark:text-dark-100'} transition-colors duration-200`}>
             {bacenta.name}
           </h4>
-          <div className={`flex items-center mt-1 text-sm ${isActive ? 'text-amber-700 dark:text-amber-200' : 'text-gray-600 dark:text-dark-300'} transition-colors duration-200`}>
-            <UsersIcon className="w-3 h-3 mr-1" />
-            <span>{memberCount} member{memberCount !== 1 ? 's' : ''}</span>
+          <div className={`flex items-center mt-0.5 sm:mt-1 text-xs sm:text-sm ${isActive ? 'text-amber-700 dark:text-amber-200' : 'text-gray-600 dark:text-dark-300'} transition-colors duration-200`}>
+            <UsersIcon className="w-3 h-3 mr-1 flex-shrink-0" />
+            <span className="truncate">{memberCount} member{memberCount !== 1 ? 's' : ''}</span>
           </div>
         </div>
 
         {/* Long Press Indicator */}
         {showContextMenu && (
-          <div className="w-2 h-2 bg-amber-600 dark:bg-amber-400 rounded-full animate-pulse" />
+          <div className="w-2 h-2 bg-amber-600 dark:bg-amber-400 rounded-full animate-pulse flex-shrink-0" />
         )}
       </div>
     </div>
@@ -592,23 +595,23 @@ const NavigationItem: React.FC<NavigationItemProps> = ({
   return (
     <button
       onClick={onClick}
-      className={`relative w-full flex items-center justify-between p-3 rounded-lg cursor-pointer transition-all duration-200 ${
+      className={`relative w-full flex items-center justify-between p-2.5 sm:p-3 rounded-lg cursor-pointer transition-all duration-200 ${
         isActive
           ? `${colors.active}`
-          : `bg-white dark:bg-dark-700 hover:bg-gray-50 dark:hover:bg-dark-600 border border-gray-300 dark:border-dark-600 border-l-4 border-l-transparent ${colors.hover}`
+          : `bg-gray-50 dark:bg-dark-700 hover:bg-gray-100 dark:hover:bg-dark-600 border border-gray-200 dark:border-dark-600 border-l-4 border-l-transparent ${colors.hover} shadow-sm`
       }`}
     >
-      <div className="flex items-center space-x-3">
-        <div className={`${isActive ? colors.icon : 'text-gray-600 dark:text-dark-300'} transition-colors duration-200`}>
+      <div className="flex items-center space-x-2 sm:space-x-3 min-w-0 flex-1">
+        <div className={`${isActive ? colors.icon : 'text-gray-600 dark:text-dark-300'} transition-colors duration-200 flex-shrink-0`}>
           {icon}
         </div>
-        <span className={`font-medium ${isActive ? colors.text : 'text-gray-800 dark:text-dark-100'} transition-colors duration-200`}>
+        <span className={`font-medium text-sm sm:text-base truncate ${isActive ? colors.text : 'text-gray-800 dark:text-dark-100'} transition-colors duration-200`}>
           {label}
         </span>
       </div>
 
       {badge && (
-        <span className="bg-rose-500 dark:bg-rose-600 text-white text-xs px-2 py-1 rounded-full font-bold shadow-sm">
+        <span className="bg-rose-500 dark:bg-rose-600 text-white text-xs px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full font-bold shadow-sm flex-shrink-0 ml-2">
           {badge}
         </span>
       )}
