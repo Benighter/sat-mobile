@@ -15,7 +15,10 @@ import {
   LazySundayConfirmationsView,
   LazyNewBelieversView,
   LazyMyDeletionRequestsView,
-  LazyMemberDeletionRequestsView
+  LazyMemberDeletionRequestsView,
+  LazyOutreachView,
+  LazyAllBacentasView,
+  LazyBacentaOutreachView
 } from './components/common/LazyWrapper';
 import ProfileSettingsView from './components/views/ProfileSettingsView';
 import CopyMembersView from './components/views/CopyMembersView';
@@ -23,6 +26,7 @@ import CopyAbsenteesView from './components/views/CopyAbsenteesView';
 import BirthdaysView from './components/views/BirthdaysView';
 import GestureWrapper from './components/layout/GestureWrapper';
 import SwipeIndicator from './components/layout/SwipeIndicator';
+import BackButton from './components/layout/BackButton';
 import {
   LoadingSpinnerIcon,
   Bars3Icon
@@ -166,7 +170,7 @@ const AppContent: React.FC = memo(() => {
       case TabKeys.ALL_BACENTAS:
         return (
           <LazyWrapper>
-            <LazyBacentaLeadersView />
+            <LazyAllBacentasView />
           </LazyWrapper>
         );
       case TabKeys.ATTENDANCE_ANALYTICS:
@@ -191,6 +195,19 @@ const AppContent: React.FC = memo(() => {
         return (
           <LazyWrapper>
             <LazyNewBelieversView />
+          </LazyWrapper>
+        );
+      case TabKeys.OUTREACH:
+        return (
+          <LazyWrapper>
+            <LazyOutreachView />
+          </LazyWrapper>
+        );
+
+      case TabKeys.BACENTA_OUTREACH:
+        return (
+          <LazyWrapper>
+            <LazyBacentaOutreachView bacentaId={(currentTab as any)?.data?.bacentaId || ''} />
           </LazyWrapper>
         );
       case TabKeys.BIRTHDAYS:
@@ -249,6 +266,9 @@ const AppContent: React.FC = memo(() => {
                 </div>
                 <span className="hidden sm:inline desktop:inline font-medium text-sm desktop:text-base">Menu</span>
               </button>
+
+              {/* Contextual Back Button */}
+              <BackButton className="ml-1 xs:ml-2" />
 
               {/* Logo - Always visible */}
               <button

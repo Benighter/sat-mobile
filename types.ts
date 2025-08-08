@@ -78,6 +78,27 @@ export interface Bacenta { // Renamed from CongregationGroup
   name: string;
 }
 
+
+export interface OutreachBacenta {
+  id: string;
+  name: string;
+}
+
+export interface OutreachMember {
+  id: string;
+  name: string; // Full name
+  phoneNumbers?: string[];
+  roomNumber?: string;
+  bacentaId: string; // OutreachBacenta.id
+  comingStatus: boolean; // Coming (Yes/No)
+  notComingReason?: string; // Optional reason when not coming
+  outreachDate: string; // YYYY-MM-DD
+  createdDate: string; // ISO
+  lastUpdated: string; // ISO
+  convertedMemberId?: string; // If converted to permanent member
+  guestId?: string; // Linked guest (for confirmations/migration)
+}
+
 export interface TabOption {
   id: string;
   name: string;
@@ -92,12 +113,14 @@ export enum TabKeys {
   WEEKLY_ATTENDANCE = 'weekly_attendance',
   SUNDAY_CONFIRMATIONS = 'sunday_confirmations',
   NEW_BELIEVERS = 'new_believers',
+  OUTREACH = 'outreach',
   BIRTHDAYS = 'birthdays',
   PROFILE_SETTINGS = 'profile_settings',
   MY_DELETION_REQUESTS = 'my_deletion_requests',
   ADMIN_DELETION_REQUESTS = 'admin_deletion_requests',
   COPY_MEMBERS = 'copy_members',
   COPY_ABSENTEES = 'copy_absentees',
+  BACENTA_OUTREACH = 'bacenta_outreach',
 }
 
 export interface NavigationHistoryItem {
@@ -266,11 +289,11 @@ export interface MemberDeletionRequest {
 }
 
 // Admin Notification System Types
-export type NotificationActivityType = 
-  | 'member_added' 
-  | 'member_updated' 
+export type NotificationActivityType =
+  | 'member_added'
+  | 'member_updated'
   | 'member_deleted'
-  | 'attendance_confirmed' 
+  | 'attendance_confirmed'
   | 'attendance_updated'
   | 'new_believer_added'
   | 'new_believer_updated'
@@ -286,7 +309,7 @@ export interface AdminNotification {
   timestamp: string; // ISO timestamp of the activity
   isRead: boolean; // Whether the admin has read this notification
   churchId: string; // Church context for the notification
-  
+
   // Activity-specific details
   details: {
     memberName?: string; // For member-related activities
@@ -297,7 +320,7 @@ export interface AdminNotification {
     guestName?: string; // For guest activities
     description: string; // Human-readable description of the activity
   };
-  
+
   // Optional metadata
   metadata?: {
     previousValue?: string; // For update activities

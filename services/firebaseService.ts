@@ -34,7 +34,7 @@ import {
   User
 } from 'firebase/auth';
 import { db, auth } from '../firebase.config';
-import { Member, Bacenta, AttendanceRecord, NewBeliever, SundayConfirmation, Guest, MemberDeletionRequest, DeletionRequestStatus } from '../types';
+import { Member, Bacenta, AttendanceRecord, NewBeliever, SundayConfirmation, Guest, MemberDeletionRequest, DeletionRequestStatus, OutreachBacenta, OutreachMember } from '../types';
 
 // Types for Firebase operations
 export interface FirebaseUser {
@@ -371,7 +371,7 @@ export const membersFirebaseService = {
         createdDate: new Date().toISOString(),
         lastUpdated: new Date().toISOString()
       });
-      
+
       return docRef.id;
     } catch (error: any) {
       throw new Error(`Failed to add member: ${error.message}`);
@@ -494,6 +494,111 @@ export const bacentasFirebaseService = {
     });
   }
 };
+
+// Outreach Bacentas Service (separate collection to avoid mixing datasets)
+export const outreachBacentasFirebaseService = {
+  getAll: async (): Promise<OutreachBacenta[]> => {
+    try {
+      const ref = collection(db, getChurchCollectionPath('outreachBacentas'));
+      const snapshot = await getDocs(query(ref, orderBy('name')));
+      return snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as OutreachBacenta[];
+    } catch (error: any) {
+      throw new Error(`Failed to fetch outreach bacentas: ${error.message}`);
+    }
+  },
+  add: async (bacenta: Omit<OutreachBacenta, 'id'>): Promise<string> => {
+    try {
+      const ref = collection(db, getChurchCollectionPath('outreachBacentas'));
+      const docRef = await addDoc(ref, { ...bacenta, createdAt: Timestamp.now(), lastUpdated: Timestamp.now() });
+      return docRef.id;
+    } catch (error: any) {
+      throw new Error(`Failed to add outreach bacenta: ${error.message}`);
+    }
+  },
+  update: async (id: string, updates: Partial<OutreachBacenta>): Promise<void> => {
+    try {
+      const docRef = doc(db, getChurchCollectionPath('outreachBacentas'), id);
+      await updateDoc(docRef, { ...updates, lastUpdated: Timestamp.now() });
+    } catch (error: any) {
+      throw new Error(`Failed to update outreach bacenta: ${error.message}`);
+    }
+  },
+  delete: async (id: string): Promise<void> => {
+    try {
+      const docRef = doc(db, getChurchCollectionPath('outreachBacentas'), id);
+      await deleteDoc(docRef);
+    } catch (error: any) {
+      throw new Error(`Failed to delete outreach bacenta: ${error.message}`);
+    }
+  },
+  onSnapshot: (callback: (bacentas: OutreachBacenta[]) => void): Unsubscribe => {
+    const ref = collection(db, getChurchCollectionPath('outreachBacentas'));
+    const q = query(ref, orderBy('name'));
+    return onSnapshot(q, (snap) => {
+      const items = snap.docs.map(doc => ({ ...doc.data(), id: doc.id })) as OutreachBacenta[];
+      callback(items);
+    });
+  }
+};
+
+// Outreach Members Service (separate collection)
+// Helper: remove undefined fields so Firestore doesn't reject payloads
+const stripUndefined = <T extends Record<string, any>>(obj: T): T => {
+  return Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined)) as T;
+};
+export const outreachMembersFirebaseService = {
+  getAllByMonth: async (yyyymm: string): Promise<OutreachMember[]> => {
+    try {
+      const ref = collection(db, getChurchCollectionPath('outreachMembers'));
+      const snapshot = await getDocs(query(ref, where('outreachDatePrefix', '==', yyyymm)));
+      const items = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as OutreachMember[];
+      // Sort client-side by outreachDate desc to avoid composite index requirement
+      items.sort((a, b) => (b.outreachDate || '').localeCompare(a.outreachDate || ''));
+      return items;
+    } catch (error: any) {
+      throw new Error(`Failed to fetch outreach members: ${error.message}`);
+    }
+  },
+  add: async (member: Omit<OutreachMember, 'id' | 'createdDate' | 'lastUpdated'>): Promise<string> => {
+    try {
+      const ref = collection(db, getChurchCollectionPath('outreachMembers'));
+      const datePrefix = (member.outreachDate || '').slice(0, 7); // YYYY-MM
+      const payload = stripUndefined({ ...member, outreachDatePrefix: datePrefix, createdDate: new Date().toISOString(), lastUpdated: new Date().toISOString() });
+      const docRef = await addDoc(ref, payload);
+      return docRef.id;
+    } catch (error: any) {
+      throw new Error(`Failed to add outreach member: ${error.message}`);
+    }
+  },
+  update: async (id: string, updates: Partial<OutreachMember>): Promise<void> => {
+    try {
+      const docRef = doc(db, getChurchCollectionPath('outreachMembers'), id);
+      const datePrefix = updates.outreachDate ? updates.outreachDate.slice(0, 7) : undefined;
+      const payload = stripUndefined({ ...updates, ...(datePrefix ? { outreachDatePrefix: datePrefix } : {}), lastUpdated: new Date().toISOString() });
+      await updateDoc(docRef, payload);
+    } catch (error: any) {
+      throw new Error(`Failed to update outreach member: ${error.message}`);
+    }
+  },
+  delete: async (id: string): Promise<void> => {
+    try {
+      const docRef = doc(db, getChurchCollectionPath('outreachMembers'), id);
+      await deleteDoc(docRef);
+    } catch (error: any) {
+      throw new Error(`Failed to delete outreach member: ${error.message}`);
+    }
+  },
+  onSnapshotByMonth: (yyyymm: string, callback: (members: OutreachMember[]) => void): Unsubscribe => {
+    const ref = collection(db, getChurchCollectionPath('outreachMembers'));
+    const q = query(ref, where('outreachDatePrefix', '==', yyyymm));
+    return onSnapshot(q, (snap) => {
+      const items = snap.docs.map(doc => ({ ...doc.data(), id: doc.id })) as OutreachMember[];
+      items.sort((a, b) => (b.outreachDate || '').localeCompare(a.outreachDate || ''));
+      callback(items);
+    });
+  }
+};
+
 
 // New Believers Service
 export const newBelieversFirebaseService = {
@@ -810,12 +915,13 @@ export const guestFirebaseService = {
   add: async (guest: Omit<Guest, 'id'>): Promise<string> => {
     try {
       const guestsRef = collection(db, getChurchCollectionPath('guests'));
-      const docRef = await addDoc(guestsRef, {
+      const payload = stripUndefined({
         ...guest,
         createdDate: new Date().toISOString(),
         lastUpdated: new Date().toISOString(),
         createdBy: currentUser?.uid || 'unknown'
       });
+      const docRef = await addDoc(guestsRef, payload);
       return docRef.id;
     } catch (error: any) {
       throw new Error(`Failed to add guest: ${error.message}`);
@@ -826,10 +932,11 @@ export const guestFirebaseService = {
   update: async (id: string, updates: Partial<Guest>): Promise<void> => {
     try {
       const guestRef = doc(db, getChurchCollectionPath('guests'), id);
-      await updateDoc(guestRef, {
+      const payload = stripUndefined({
         ...updates,
         lastUpdated: new Date().toISOString()
       });
+      await updateDoc(guestRef, payload);
     } catch (error: any) {
       throw new Error(`Failed to update guest: ${error.message}`);
     }

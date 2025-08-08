@@ -7,6 +7,7 @@ import { getMonthName, getCurrentOrMostRecentSunday, formatFullDate, getUpcoming
 import { db } from '../../firebase.config';
 import { doc, getDoc } from 'firebase/firestore';
 import { firebaseUtils } from '../../services/firebaseService';
+import { TabKeys } from '../../types';
 
 interface StatCardProps {
   title: string;
@@ -192,7 +193,7 @@ const DashboardView: React.FC = memo(() => {
       loadTarget();
     }
   }, [user, totalMembers, currentChurchId]); // Added totalMembers and currentChurchId as dependencies
-  
+
   const currentMonthAttendancePercentage = () => {
     if (!displayedSundays.length || !members.length) return 0;
 
@@ -336,11 +337,11 @@ const DashboardView: React.FC = memo(() => {
         />
         <StatCard
           title="Outreach"
-          value="Coming Soon"
+          value={"Open"}
           icon={<ChartBarIcon className="w-full h-full" />}
           accentColor="rose"
           description="Community outreach programs"
-          onClick={() => {}}
+          onClick={() => switchTab({ id: TabKeys.OUTREACH, name: 'Outreach' })}
         />
       </div>
 
