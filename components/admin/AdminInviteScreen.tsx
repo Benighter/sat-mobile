@@ -33,6 +33,61 @@ const AdminInviteScreen: React.FC<AdminInviteScreenProps> = ({ isOpen, onClose }
   const [isSendingInvite, setIsSendingInvite] = useState(false);
   const [activeTab, setActiveTab] = useState<'search' | 'invites'>('search');
 
+  // Detect navbar height for proper positioning
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const detectNavbarHeight = (): number => {
+      const selectors = [
+        'nav',
+        '.navbar',
+        '[role="navigation"]',
+        '.nav-header',
+        '.app-header',
+        '.top-nav',
+        'header nav',
+        'header'
+      ];
+
+      for (const selector of selectors) {
+        const element = document.querySelector(selector) as HTMLElement;
+        if (element && element.offsetHeight > 0) {
+          return element.offsetHeight;
+        }
+      }
+
+      const fixedElements = Array.from(document.querySelectorAll('*')).filter(el => {
+        const style = window.getComputedStyle(el as Element);
+        return style.position === 'fixed' &&
+               (style.top === '0px' || style.top === '0') &&
+               (el as HTMLElement).offsetHeight > 0 &&
+               (el as HTMLElement).offsetHeight < 200;
+      });
+
+      return fixedElements.length > 0 ? (fixedElements[0] as HTMLElement).offsetHeight : 0;
+    };
+
+    const updateNavbarHeight = () => {
+      const navbarHeight = detectNavbarHeight();
+      document.documentElement.style.setProperty('--navbar-height', `${navbarHeight}px`);
+    };
+
+    updateNavbarHeight();
+    setTimeout(updateNavbarHeight, 100);
+
+    const handleResize = () => {
+      setTimeout(updateNavbarHeight, 150);
+    };
+
+    window.addEventListener('resize', handleResize);
+    window.addEventListener('orientationchange', handleResize);
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('orientationchange', handleResize);
+    };
+  }, [isOpen]);
+
   // Load invites when screen opens
   useEffect(() => {
     if (isOpen && canManageAdminInvites(userProfile)) {
@@ -169,9 +224,19 @@ const AdminInviteScreen: React.FC<AdminInviteScreenProps> = ({ isOpen, onClose }
   }
 
   return (
-    <div className="fixed inset-0 bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 z-50 overflow-hidden">
+    <div 
+      className="fixed bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 z-50 overflow-hidden"
+      style={{
+        top: 'calc(var(--navbar-height, 0px) + env(safe-area-inset-top, 0px))',
+        left: 'env(safe-area-inset-left, 0px)',
+        right: 'env(safe-area-inset-right, 0px)',
+        bottom: 'env(safe-area-inset-bottom, 0px)',
+        height: 'calc(100vh - var(--navbar-height, 0px) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px))',
+        minHeight: 'calc(100dvh - var(--navbar-height, 0px) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px))'
+      }}
+    >
       {/* Header */}
-      <div className="bg-white/80 backdrop-blur-md border-b border-gray-200/50 px-4 py-3 flex items-center justify-between shadow-sm">
+      <div className="bg-white/80 backdrop-blur-md border-b border-gray-200/50 px-4 py-4 flex items-center justify-between shadow-sm">
         <div className="flex items-center space-x-3">
           <button
             onClick={onClose}
@@ -190,7 +255,7 @@ const AdminInviteScreen: React.FC<AdminInviteScreenProps> = ({ isOpen, onClose }
       </div>
 
       {/* Tab Navigation */}
-      <div className="bg-white/60 backdrop-blur-sm px-4 py-2 border-b border-gray-200/30">
+      <div className="bg-white/60 backdrop-blur-sm px-4 py-3 border-b border-gray-200/30">
         <div className="flex space-x-1 bg-gray-100/80 rounded-2xl p-1">
           <button
             onClick={() => setActiveTab('search')}
@@ -223,7 +288,13 @@ const AdminInviteScreen: React.FC<AdminInviteScreenProps> = ({ isOpen, onClose }
       </div>
 
       {/* Content Area */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 pb-20 scroll-smooth scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent" style={{ height: 'calc(100vh - 140px)' }}>
+      <div 
+        className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-6 scroll-smooth scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent touch-pan-y" 
+        style={{ 
+          height: 'calc(100% - 140px)',
+          paddingBottom: 'calc(1.5rem + env(safe-area-inset-bottom, 0px))'
+        }}
+      >
         {activeTab === 'search' ? (
           <div className="max-w-2xl mx-auto space-y-6">
             {/* Search Section */}
@@ -243,7 +314,7 @@ const AdminInviteScreen: React.FC<AdminInviteScreenProps> = ({ isOpen, onClose }
                   <Input
                     type="email"
                     value={searchEmail}
-                    onChange={(e) => setSearchEmail(e.target.value)}
+                    onChange={(value) => setSearchEmail(value)}
                     placeholder="Enter admin email address..."
                     onKeyPress={(e) => e.key === 'Enter' && handleSearchUser()}
                     className="w-full h-14 pl-12 pr-4 text-base border-2 border-gray-200 focus:border-blue-400 rounded-2xl bg-white shadow-sm focus:shadow-lg transition-all duration-300"
@@ -336,7 +407,7 @@ const AdminInviteScreen: React.FC<AdminInviteScreenProps> = ({ isOpen, onClose }
           </div>
         ) : (
           /* Invites Tab */
-          <div className="max-w-4xl mx-auto">
+          <div className="max-w-4xl mx-auto space-y-6">
             {isLoading ? (
               <div className="flex items-center justify-center py-20">
                 <div className="text-center space-y-4">
@@ -365,14 +436,14 @@ const AdminInviteScreen: React.FC<AdminInviteScreenProps> = ({ isOpen, onClose }
                 </Button>
               </div>
             ) : (
-              <div className="space-y-3 overflow-y-auto max-h-full scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">
-                <div className="space-y-3">
-                <div className="bg-white/60 backdrop-blur-sm rounded-2xl p-4 mb-6">
+              <div className="space-y-6">
+                <div className="bg-white/60 backdrop-blur-sm rounded-2xl p-6">
                   <h2 className="text-xl font-bold text-gray-900 mb-2">Sent Leadership Invites</h2>
                   <p className="text-gray-600">Track and manage your invitation history</p>
                 </div>
 
-                {invites.map((invite) => (
+                <div className="space-y-4">
+                  {invites.map((invite) => (
                   <div
                     key={invite.id}
                     className="bg-white/90 backdrop-blur-sm rounded-2xl p-4 shadow-sm border border-white/60 hover:shadow-md transition-all duration-200 w-full"
