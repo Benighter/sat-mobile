@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { useAppContext } from '../../contexts/FirebaseAppContext';
-import { getUpcomingBirthdays, getBirthdayStats, calculateAge } from '../../utils/birthdayUtils';
-import { CakeIcon, GiftIcon, CalendarIcon, UserIcon } from '../icons';
+import { getUpcomingBirthdays, getBirthdayStats, calculateAge, getBirthdaysForMonth } from '../../utils/birthdayUtils';
+import { CakeIcon, GiftIcon, CalendarIcon, UserIcon, ChevronLeftIcon, ChevronRightIcon } from '../icons';
 
 // Minimal stat item to keep layout clean
 const StatItem = ({ icon, label, value, bg }: { icon: React.ReactNode; label: string; value: React.ReactNode; bg?: string }) => (
@@ -16,14 +16,21 @@ const StatItem = ({ icon, label, value, bg }: { icon: React.ReactNode; label: st
 
 
 const BirthdaysView: React.FC = () => {
-  const { members, bacentas } = useAppContext();
+  const { members, bacentas, displayedDate, navigateToPreviousMonth, navigateToNextMonth } = useAppContext();
 
   const upcomingBirthdays = useMemo(() => getUpcomingBirthdays(members), [members]);
+  const selectedMonthBirthdays = useMemo(() => getBirthdaysForMonth(members, displayedDate), [members, displayedDate]);
 
   const birthdayStats = useMemo(() => getBirthdayStats(members), [members]);
 
   const todaysBirthdays = useMemo(() => upcomingBirthdays.filter(b => b.isToday), [upcomingBirthdays]);
   const futureBirthdays = useMemo(() => upcomingBirthdays.filter(b => !b.isToday), [upcomingBirthdays]);
+
+  const isCurrentMonth = useMemo(() => {
+    const now = new Date();
+    return now.getFullYear() === displayedDate.getFullYear() && now.getMonth() === displayedDate.getMonth();
+  }, [displayedDate]);
+  const monthLabel = useMemo(() => displayedDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }), [displayedDate]);
 
   const getBacentaName = (bacentaId: string) => {
     const bacenta = bacentas.find(b => b.id === bacentaId);
@@ -51,6 +58,8 @@ const BirthdaysView: React.FC = () => {
 
   const BirthdayCard = ({ birthday }: { birthday: any }) => {
     const { member, age, daysUntil, isToday, displayDate } = birthday;
+    const ageToday = useMemo(() => calculateAge(member.birthday, new Date()), [member.birthday]);
+    const ageLabel = isToday ? `Turns ${ageToday}` : `Turning ${age}`;
 
     return (
       <div
@@ -85,7 +94,7 @@ const BirthdaysView: React.FC = () => {
             <div className="mt-1 flex items-center text-xs sm:text-sm text-gray-600 dark:text-dark-300 gap-4 min-w-0">
               <span className="inline-flex items-center whitespace-nowrap">
                 <GiftIcon className="w-4 h-4 mr-1" />
-                Turning {age}
+                {ageLabel}
               </span>
               <span className="inline-flex items-center min-w-0">
                 <UserIcon className="w-4 h-4 mr-1" />
@@ -123,19 +132,44 @@ const BirthdaysView: React.FC = () => {
 
   return (
     <div className="space-y-5 sm:space-y-6">
-      {/* Header - cleaner, minimal */}
+      {/* Header - cleaner, single-line, aligned, responsive sizing */}
       <div className="text-center">
-        <div className="inline-flex items-center space-x-3 rounded-full bg-white dark:bg-dark-800 border border-gray-200 dark:border-dark-600 px-4 py-2 shadow-sm">
-          <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-br from-pink-500 to-purple-600 rounded-full flex items-center justify-center text-white">
-            <CakeIcon className="w-4 h-4 sm:w-5 sm:h-5" />
-          </div>
-          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-gray-900 dark:text-dark-100">
+  <div className="inline-flex max-w-full min-w-0 items-center rounded-full bg-white dark:bg-dark-800 border border-gray-200 dark:border-dark-600 px-3 py-2 sm:px-5 sm:py-2 shadow-sm">
+          <h1
+            className="leading-none font-bold text-gray-900 dark:text-dark-100 text-[clamp(0.8rem,4.2vw,1.4rem)]"
+          >
             Upcoming Birthdays
           </h1>
         </div>
-        <p className="mt-3 text-sm sm:text-base text-gray-600 dark:text-dark-300 max-w-2xl mx-auto">
+        <p className="mt-3 text-xs sm:text-sm md:text-base text-gray-600 dark:text-dark-300 max-w-2xl mx-auto">
           Celebrate with your church family. This month and the next 7 days.
         </p>
+      </div>
+
+      {/* Month navigator */}
+      <div className="flex items-center justify-center gap-3">
+        <button
+          type="button"
+          className="p-2 rounded-full border border-gray-200 dark:border-dark-600 hover:bg-gray-50 dark:hover:bg-dark-700"
+          onClick={navigateToPreviousMonth}
+          aria-label="Previous month"
+        >
+          <ChevronLeftIcon className="w-5 h-5" />
+        </button>
+        <div className="text-sm sm:text-base font-medium text-gray-900 dark:text-dark-100">
+          {monthLabel}
+          {!isCurrentMonth && (
+            <span className="ml-2 text-xs text-gray-500 dark:text-dark-400">(Viewing)</span>
+          )}
+        </div>
+        <button
+          type="button"
+          className="p-2 rounded-full border border-gray-200 dark:border-dark-600 hover:bg-gray-50 dark:hover:bg-dark-700"
+          onClick={navigateToNextMonth}
+          aria-label="Next month"
+        >
+          <ChevronRightIcon className="w-5 h-5" />
+        </button>
       </div>
 
       {/* Compact stats - reduced visual noise */}
@@ -150,33 +184,45 @@ const BirthdaysView: React.FC = () => {
       <div className="bg-white dark:bg-dark-800 rounded-xl border border-gray-200 dark:border-dark-600 shadow-sm">
         <div className="p-4 sm:p-5 border-b border-gray-200 dark:border-dark-600">
           <h2 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-dark-100">
-            {upcomingBirthdays.length > 0 ? `${upcomingBirthdays.length} Upcoming Birthday${upcomingBirthdays.length !== 1 ? 's' : ''}` : 'No Upcoming Birthdays'}
+            {isCurrentMonth
+              ? (upcomingBirthdays.length > 0 ? `${upcomingBirthdays.length} Upcoming Birthday${upcomingBirthdays.length !== 1 ? 's' : ''}` : 'No Upcoming Birthdays')
+              : `${selectedMonthBirthdays.length} Birthday${selectedMonthBirthdays.length !== 1 ? 's' : ''} in ${monthLabel}`}
           </h2>
         </div>
 
         <div className="p-4 sm:p-5">
-          {upcomingBirthdays.length > 0 ? (
-            <div className="space-y-4">
-              {todaysBirthdays.length > 0 && (
-                <div className="space-y-3">
-                  <h3 className="text-xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">Today</h3>
-                  {todaysBirthdays.map((b) => (
-                    <BirthdayCard key={`${b.member.id}-${b.birthday}`} birthday={b} />
-                  ))}
-                </div>
-              )}
-
-              {futureBirthdays.length > 0 && (
-                <div className="space-y-3">
-                  <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-dark-400">Upcoming</h3>
-                  {futureBirthdays.map((b) => (
-                    <BirthdayCard key={`${b.member.id}-${b.birthday}`} birthday={b} />
-                  ))}
-                </div>
+          {isCurrentMonth ? (
+            upcomingBirthdays.length > 0 ? (
+              <div className="space-y-4">
+                {todaysBirthdays.length > 0 && (
+                  <div className="space-y-3">
+                    <h3 className="text-xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">Today</h3>
+                    {todaysBirthdays.map((b) => (
+                      <BirthdayCard key={`${b.member.id}-${b.birthday}`} birthday={b} />
+                    ))}
+                  </div>
+                )}
+                {futureBirthdays.length > 0 && (
+                  <div className="space-y-3">
+                    <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-dark-400">Upcoming</h3>
+                    {futureBirthdays.map((b) => (
+                      <BirthdayCard key={`${b.member.id}-${b.birthday}`} birthday={b} />
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <EmptyState />
+            )
+          ) : (
+            <div className="space-y-3">
+              {selectedMonthBirthdays.map((b) => (
+                <BirthdayCard key={`${b.member.id}-${b.birthday}`} birthday={b} />
+              ))}
+              {selectedMonthBirthdays.length === 0 && (
+                <p className="text-sm text-gray-500">No birthdays found in {monthLabel}.</p>
               )}
             </div>
-          ) : (
-            <EmptyState />
           )}
         </div>
       </div>

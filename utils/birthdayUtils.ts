@@ -7,6 +7,13 @@ export interface UpcomingBirthday {
   daysUntil: number; // Days until birthday (0 for today)
   isToday: boolean;
   displayDate: string; // Formatted display date
+  // True when this year's occurrence of the birthday has already passed
+  // Optional to preserve compatibility with existing uses
+  hasPassedThisYear?: boolean;
+  // Days since this year's occurrence (only when hasPassedThisYear is true)
+  daysSince?: number;
+  // ISO string for next occurrence date (YYYY-MM-DD)
+  nextOccurrenceDate?: string;
 }
 
 /**
@@ -32,19 +39,33 @@ export const calculateAge = (birthday: string, targetDate: Date = new Date()): n
 export const calculateDaysUntilBirthday = (birthday: string, fromDate: Date = new Date()): number => {
   const birthDate = new Date(birthday);
   const today = new Date(fromDate);
-  
-  // Create this year's birthday
-  const thisYearBirthday = new Date(today.getFullYear(), birthDate.getMonth(), birthDate.getDate());
-  
-  // If this year's birthday has passed, calculate for next year
-  if (thisYearBirthday < today) {
-    const nextYearBirthday = new Date(today.getFullYear() + 1, birthDate.getMonth(), birthDate.getDate());
-    const diffTime = nextYearBirthday.getTime() - today.getTime();
+  // Normalize to midnight to avoid off-by-one due to time of day
+  const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+
+  // Handle Feb 29 logic for non-leap years using helper
+  const targetYear = todayMidnight.getFullYear();
+  const month = birthDate.getMonth();
+  const day = birthDate.getDate();
+  let thisYearMonth = month;
+  let thisYearDay = day;
+  if (month === 1 && day === 29) {
+    const leapHandled = getLeapYearBirthdayDate(birthday, targetYear);
+    const d2 = new Date(leapHandled);
+    thisYearMonth = d2.getMonth();
+    thisYearDay = d2.getDate();
+  }
+
+  const thisYearBirthday = new Date(targetYear, thisYearMonth, thisYearDay);
+  if (thisYearBirthday < todayMidnight) {
+    // Next year's occurrence (also handle leap-year mapping)
+    const nextYear = targetYear + 1;
+    const nextDateStr = getLeapYearBirthdayDate(birthday, nextYear);
+    const nextYearBirthday = new Date(nextDateStr);
+    const diffTime = nextYearBirthday.getTime() - todayMidnight.getTime();
     return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   }
-  
-  // Calculate days until this year's birthday
-  const diffTime = thisYearBirthday.getTime() - today.getTime();
+
+  const diffTime = thisYearBirthday.getTime() - todayMidnight.getTime();
   return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 };
 
@@ -115,17 +136,33 @@ export const getUpcomingBirthdays = (members: Member[], referenceDate: Date = ne
     
     if (isCurrentMonth || isNextMonthWithin7Days) {
       const daysUntil = calculateDaysUntilBirthday(member.birthday, today);
-      const age = calculateAge(member.birthday, today) + 1; // Age they will be turning
       const isToday = isBirthdayToday(member.birthday, today);
       const displayDate = formatBirthdayDisplay(member.birthday);
+
+      // Determine this year's occurrence and whether it's passed
+      const thisYearOccurrence = new Date(currentYear, birthMonth, birthDay);
+      const todayMidnight = new Date(currentYear, today.getMonth(), today.getDate());
+      const hasPassedThisYear = thisYearOccurrence < todayMidnight;
+      const daysSince = hasPassedThisYear
+        ? Math.ceil((todayMidnight.getTime() - thisYearOccurrence.getTime()) / (1000 * 60 * 60 * 24))
+        : undefined;
+
+      // Compute age they will be turning on the next occurrence date
+      const nextYear = hasPassedThisYear ? currentYear + 1 : currentYear;
+      const nextOccurrenceStr = getLeapYearBirthdayDate(member.birthday, nextYear);
+      const nextOccurrenceDate = new Date(nextOccurrenceStr);
+      const ageOnNextBirthday = calculateAge(member.birthday, nextOccurrenceDate);
       
       upcomingBirthdays.push({
         member,
         birthday: member.birthday,
-        age,
+        age: ageOnNextBirthday,
         daysUntil,
         isToday,
-        displayDate
+        displayDate,
+        hasPassedThisYear,
+        daysSince,
+        nextOccurrenceDate: nextOccurrenceStr
       });
     }
   });
@@ -136,6 +173,56 @@ export const getUpcomingBirthdays = (members: Member[], referenceDate: Date = ne
     if (!a.isToday && b.isToday) return 1;
     return a.daysUntil - b.daysUntil;
   });
+};
+
+/**
+ * Get birthdays for a specific month (based on provided referenceDate's month)
+ * - Shows all birthdays in the selected month (no next-7-days spillover)
+ * - Computes daysUntil relative to the provided referenceDate
+ */
+export const getBirthdaysForMonth = (members: Member[], referenceDate: Date = new Date()): UpcomingBirthday[] => {
+  // We always compute relative to "today" to show accurate remaining days
+  const today = new Date();
+  const targetMonth = new Date(referenceDate).getMonth();
+  const currentYear = today.getFullYear();
+
+  const monthBirthdays: UpcomingBirthday[] = [];
+
+  members.forEach(member => {
+    if (!member.birthday) return;
+
+    const birthDate = new Date(member.birthday);
+    const birthMonth = birthDate.getMonth();
+    const birthDay = birthDate.getDate();
+
+    if (birthMonth !== targetMonth) return;
+
+    // Has this month's birthday already occurred this calendar year?
+    const thisYearOccurrence = new Date(currentYear, birthMonth, birthDay);
+    const hasPassedThisYear = thisYearOccurrence < new Date(currentYear, today.getMonth(), today.getDate());
+
+    // Determine next occurrence year for accurate age and daysUntil
+    const nextOccurrenceYear = hasPassedThisYear ? currentYear + 1 : currentYear;
+    const nextOccurrenceDate = new Date(nextOccurrenceYear, birthMonth, birthDay);
+
+    const daysUntil = Math.ceil((nextOccurrenceDate.getTime() - new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime()) / (1000 * 60 * 60 * 24));
+    const isToday = isBirthdayToday(member.birthday, today);
+    const ageOnNextBirthday = calculateAge(member.birthday, nextOccurrenceDate);
+    const displayDate = formatBirthdayDisplay(member.birthday);
+
+    monthBirthdays.push({
+      member,
+      birthday: member.birthday,
+      age: ageOnNextBirthday,
+      daysUntil,
+      isToday,
+      displayDate,
+      hasPassedThisYear
+    });
+  });
+
+  // Sort chronologically by the next occurrence date
+  return monthBirthdays.sort((a, b) => a.daysUntil - b.daysUntil);
 };
 
 /**
