@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Info, Mail, Github, Linkedin, Globe, User, Heart } from 'lucide-react';
+import { X, Info, Mail, Github, Linkedin, Globe, Heart } from 'lucide-react';
 import Modal from '../../ui/Modal';
 
 interface AboutModalProps {
@@ -11,17 +11,24 @@ const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose }) => {
   return (
     <Modal isOpen={isOpen} onClose={onClose} size="lg">
       <div className="relative overflow-hidden">
+        {/* Sticky Close Button - Fixed position that doesn't scroll with content */}
+        <div className="fixed top-4 right-4 z-[9999]" style={{ position: 'fixed' }}>
+          <button
+            onClick={onClose}
+            className="p-3 bg-white bg-opacity-95 hover:bg-opacity-100 text-gray-700 hover:text-gray-900 rounded-full shadow-lg hover:shadow-xl transition-all duration-200 min-h-[48px] min-w-[48px] flex items-center justify-center border border-gray-200 hover:border-gray-300"
+            aria-label="Close about modal"
+            title="Close"
+            style={{ 
+              backdropFilter: 'blur(12px)',
+              WebkitBackdropFilter: 'blur(12px)'
+            }}
+          >
+            <X className="w-6 h-6" />
+          </button>
+        </div>
+
         {/* Header with gradient background */}
         <div className="bg-gradient-to-r from-blue-600 to-indigo-700 p-6 text-white relative">
-          <div className="absolute top-4 right-4">
-            <button
-              onClick={onClose}
-              className="p-2 hover:bg-white hover:bg-opacity-20 rounded-full transition-colors"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-          
           <div className="flex items-center space-x-3 mb-4">
             <div className="p-3 bg-white bg-opacity-20 rounded-2xl">
               <Info className="w-6 h-6" />

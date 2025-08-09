@@ -49,6 +49,7 @@ interface AppContextType {
   // Outreach Data
   outreachBacentas: OutreachBacenta[];
   outreachMembers: OutreachMember[]; // filtered by selected outreachMonth
+  allOutreachMembers: OutreachMember[]; // all outreach members across all time periods
   outreachMonth: string; // YYYY-MM
 
   // Outreach Operations
@@ -211,6 +212,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
   // Outreach state
   const [outreachBacentas, setOutreachBacentas] = useState<OutreachBacenta[]>([]);
   const [outreachMembers, setOutreachMembers] = useState<OutreachMember[]>([]);
+  const [allOutreachMembers, setAllOutreachMembers] = useState<OutreachMember[]>([]);
   const [outreachMonth, setOutreachMonthState] = useState<string>(() => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
@@ -354,6 +356,12 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
         setOutreachBacentas(items);
       });
       unsubscribers.push(unsubscribeOutreachBacentas);
+
+      // Listen to ALL outreach members (for overall totals)
+      const unsubscribeAllOutreachMembers = outreachMembersFirebaseService.onSnapshot((items) => {
+        setAllOutreachMembers(items);
+      });
+      unsubscribers.push(unsubscribeAllOutreachMembers);
 
       // Listen to attendance
       const unsubscribeAttendance = attendanceFirebaseService.onSnapshot((records) => {
@@ -1976,6 +1984,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     // Outreach
     outreachBacentas,
     outreachMembers,
+    allOutreachMembers,
     outreachMonth,
     addOutreachBacentaHandler,
     updateOutreachBacentaHandler,

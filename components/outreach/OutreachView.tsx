@@ -297,6 +297,7 @@ const OutreachView: React.FC = () => {
   const {
     outreachBacentas,
     outreachMembers,
+    allOutreachMembers, // All outreach members across all time periods
     outreachMonth,
     setOutreachMonth,
     addOutreachBacentaHandler,
@@ -336,14 +337,25 @@ const OutreachView: React.FC = () => {
     return map;
   }, [outreachMembers]);
 
+  // Overall totals using ALL outreach members (across all time periods)
+  const allMembersByBacenta = useMemo(() => {
+    const map: Record<string, OutreachMember[]> = {};
+    for (const m of allOutreachMembers) {
+      (map[m.bacentaId] ||= []).push(m);
+    }
+    return map;
+  }, [allOutreachMembers]);
+
   const totals = useMemo(() => {
+    // Use ALL outreach members for overall totals
     const perBacenta = outreachBacentas.map(b => {
-      const list = membersByBacenta[b.id] || [];
+      const list = allMembersByBacenta[b.id] || []; // Use ALL members for totals
       const total = list.length;
       const coming = list.filter(m => m.comingStatus).length;
       const converted = list.filter(m => !!m.convertedMemberId).length;
       const comingRate = total ? Math.round((coming / total) * 100) : 0;
       const conversionRate = total ? Math.round((converted / total) * 100) : 0;
+      
       return { bacenta: b, total, coming, converted, comingRate, conversionRate };
     });
     const overall = perBacenta.reduce((acc, x) => acc + x.total, 0);
@@ -351,18 +363,28 @@ const OutreachView: React.FC = () => {
     const overallConverted = perBacenta.reduce((acc, x) => acc + x.converted, 0);
     const overallComingRate = overall ? Math.round((overallComing / overall) * 100) : 0;
     const overallConversionRate = overall ? Math.round((overallConverted / overall) * 100) : 0;
+    
     return { perBacenta, overall, overallComing, overallConverted, overallComingRate, overallConversionRate };
-  }, [outreachBacentas, membersByBacenta]);
+  }, [outreachBacentas, allMembersByBacenta]);
 
-  // Weekly members map for stats/cards (Mon..Sun)
+  // Weekly members map for stats/cards (Mon..Sun) - use allOutreachMembers
   const weeklyMembersByBacenta = useMemo(() => {
     const monday = new Date(weekStart);
     const sunday = new Date(monday); sunday.setDate(monday.getDate()+6);
     const inWeek = (d?: string) => d ? (new Date(d) >= monday && new Date(d) <= sunday) : false;
     const map: Record<string, OutreachMember[]> = {};
-    for (const m of outreachMembers) if (inWeek(m.outreachDate)) (map[m.bacentaId] ||= []).push(m);
+    for (const m of allOutreachMembers) if (inWeek(m.outreachDate)) (map[m.bacentaId] ||= []).push(m);
     return map;
-  }, [outreachMembers, weekStart]);
+  }, [allOutreachMembers, weekStart]);
+
+  // Calculate weekly totals
+  const weeklyTotals = useMemo(() => {
+    const weeklyMembers = Object.values(weeklyMembersByBacenta).flat();
+    const weeklyTotal = weeklyMembers.length;
+    const weeklyComing = weeklyMembers.filter(m => m.comingStatus).length;
+    const weeklyConverted = weeklyMembers.filter(m => !!m.convertedMemberId).length;
+    return { weeklyTotal, weeklyComing, weeklyConverted };
+  }, [weeklyMembersByBacenta]);
 
   const handleAddBacenta = async () => {
     const name = newBacentaName.trim();
@@ -420,14 +442,62 @@ const OutreachView: React.FC = () => {
                       </div>
                       <div>
                         <p className="text-sm font-semibold uppercase tracking-wider text-rose-600">
-                          Total Outreach
+                          Overall Total Outreach
                         </p>
                         <div className="text-5xl font-extrabold text-slate-900 mt-2 leading-none">
                           {totals.overall}
                         </div>
                         <p className="text-sm text-gray-600 mt-1">
-                          Members contacted this month
+                          Total people outreached across all bacentas
                         </p>
+                      </div>
+                      
+                      {/* Additional stats */}
+                      <div className="pt-4 border-t border-gray-200 space-y-2">
+                        <div className="text-xs text-gray-500 mb-3 font-medium uppercase tracking-wider">
+                          All-Time Statistics
+                        </div>
+                        <div className="flex justify-between items-center text-sm">
+                          <span className="text-gray-600">Coming to church:</span>
+                          <span className="font-semibold text-green-600">
+                            {totals.overallComing} ({totals.overallComingRate}%)
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center text-sm">
+                          <span className="text-gray-600">Converted members:</span>
+                          <span className="font-semibold text-purple-600">
+                            {totals.overallConverted} ({totals.overallConversionRate}%)
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center text-sm">
+                          <span className="text-gray-600">Active bacentas:</span>
+                          <span className="font-semibold text-blue-600">
+                            {outreachBacentas.length}
+                          </span>
+                        </div>
+                        
+                        {/* Current week stats */}
+                        {weeklyTotals.weeklyTotal > 0 && (
+                          <>
+                            <div className="pt-3 mt-3 border-t border-gray-100">
+                              <div className="text-xs text-gray-500 mb-2 font-medium uppercase tracking-wider">
+                                This Week
+                              </div>
+                              <div className="flex justify-between items-center text-sm">
+                                <span className="text-gray-600">People contacted:</span>
+                                <span className="font-semibold text-rose-600">
+                                  {weeklyTotals.weeklyTotal}
+                                </span>
+                              </div>
+                              <div className="flex justify-between items-center text-sm">
+                                <span className="text-gray-600">Coming this week:</span>
+                                <span className="font-semibold text-green-600">
+                                  {weeklyTotals.weeklyComing}
+                                </span>
+                              </div>
+                            </div>
+                          </>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -464,17 +534,30 @@ const OutreachView: React.FC = () => {
                         <div className="absolute -inset-0.5 z-0 bg-gradient-to-r from-gray-200 to-gray-300 dark:from-dark-600 dark:to-dark-500 rounded-2xl opacity-0 group-hover:opacity-100 transition duration-300 blur-sm pointer-events-none"></div>
                         <div className="relative bg-white/95 dark:bg-dark-800/95 p-6 rounded-2xl border border-gray-200 dark:border-dark-600 shadow-md hover:shadow-xl transition-all duration-300 backdrop-blur-sm">
                           <div className="space-y-4">
-                            {/* Header */}
+                            {/* Header with Total Count */}
                             <div className="flex items-start justify-between">
                               <button
                                 className="text-left flex-1 group-hover:text-rose-600 dark:group-hover:text-rose-400 transition-colors duration-200"
                                 onClick={() => setSelectedBacentaId(b.id)}
                               >
+                                <div className="flex items-center gap-3 mb-2">
+                                  <div className="bg-gradient-to-r from-rose-500 to-amber-500 p-2 rounded-lg">
+                                    <PeopleIcon className="w-5 h-5 text-white" />
+                                  </div>
+                                  <div className="text-left">
+                                    <div className="text-3xl font-bold text-slate-800 dark:text-white">
+                                      {total}
+                                    </div>
+                                    <div className="text-xs text-gray-500 dark:text-dark-400 uppercase tracking-wide">
+                                      Total Members
+                                    </div>
+                                  </div>
+                                </div>
                                 <h3 className="font-bold text-lg text-slate-800 dark:text-white truncate">
                                   {b.name}
                                 </h3>
                                 <p className="text-sm text-gray-500 dark:text-dark-400 mt-1">
-                                  Click to manage outreach
+                                  Open outreach management for this building
                                 </p>
                               </button>
 
@@ -491,9 +574,6 @@ const OutreachView: React.FC = () => {
 
                             {/* Stats */}
                             <div className="flex flex-wrap gap-2">
-                              <Badge color="blue" className="font-medium">
-                                {total} members
-                              </Badge>
                               <Badge color="green" className="font-medium">
                                 {comingRate}% coming
                               </Badge>

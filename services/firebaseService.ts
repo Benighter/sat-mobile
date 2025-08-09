@@ -596,6 +596,14 @@ export const outreachMembersFirebaseService = {
       items.sort((a, b) => (b.outreachDate || '').localeCompare(a.outreachDate || ''));
       callback(items);
     });
+  },
+  onSnapshot: (callback: (members: OutreachMember[]) => void): Unsubscribe => {
+    const ref = collection(db, getChurchCollectionPath('outreachMembers'));
+    return onSnapshot(ref, (snap) => {
+      const items = snap.docs.map(doc => ({ ...doc.data(), id: doc.id })) as OutreachMember[];
+      items.sort((a, b) => (b.outreachDate || '').localeCompare(a.outreachDate || ''));
+      callback(items);
+    });
   }
 };
 

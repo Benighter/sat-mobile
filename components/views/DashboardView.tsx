@@ -110,9 +110,10 @@ const StatCard: React.FC<StatCardProps> = memo(({ title, value, icon, descriptio
 
 
 const DashboardView: React.FC = memo(() => {
-  const { members, attendanceRecords, newBelievers, displayedSundays, displayedDate, sundayConfirmations, guests, switchTab, user, userProfile, currentChurchId } = useAppContext(); // Use displayedSundays
+  const { members, attendanceRecords, newBelievers, displayedSundays, displayedDate, sundayConfirmations, guests, switchTab, user, userProfile, currentChurchId, allOutreachMembers } = useAppContext(); // Use displayedSundays
 
   const totalMembers = members.length;
+  const totalOutreachMembers = allOutreachMembers.length;
   const [confirmationTarget, setConfirmationTarget] = useState<number>(0);
   const [isLoadingTarget, setIsLoadingTarget] = useState<boolean>(true);
 
@@ -337,7 +338,7 @@ const DashboardView: React.FC = memo(() => {
         />
         <StatCard
           title="Outreach"
-          value={"Open"}
+          value={totalOutreachMembers}
           icon={<ChartBarIcon className="w-full h-full" />}
           accentColor="rose"
           description="Community outreach programs"
