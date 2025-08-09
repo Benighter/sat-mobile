@@ -26,6 +26,11 @@ const BirthdaysView: React.FC = () => {
   const todaysBirthdays = useMemo(() => upcomingBirthdays.filter(b => b.isToday), [upcomingBirthdays]);
   const futureBirthdays = useMemo(() => upcomingBirthdays.filter(b => !b.isToday), [upcomingBirthdays]);
 
+  // For month view, separate passed and future birthdays
+  const passedBirthdays = useMemo(() => selectedMonthBirthdays.filter(b => b.hasPassedThisYear && !b.isToday), [selectedMonthBirthdays]);
+  const monthFutureBirthdays = useMemo(() => selectedMonthBirthdays.filter(b => !b.hasPassedThisYear && !b.isToday), [selectedMonthBirthdays]);
+  const monthTodaysBirthdays = useMemo(() => selectedMonthBirthdays.filter(b => b.isToday), [selectedMonthBirthdays]);
+
   const isCurrentMonth = useMemo(() => {
     const now = new Date();
     return now.getFullYear() === displayedDate.getFullYear() && now.getMonth() === displayedDate.getMonth();
@@ -57,15 +62,26 @@ const BirthdaysView: React.FC = () => {
   };
 
   const BirthdayCard = ({ birthday }: { birthday: any }) => {
-    const { member, age, daysUntil, isToday, displayDate } = birthday;
+    const { member, age, daysUntil, isToday, displayDate, hasPassedThisYear, currentAge } = birthday;
     const ageToday = useMemo(() => calculateAge(member.birthday, new Date()), [member.birthday]);
-    const ageLabel = isToday ? `Turns ${ageToday}` : `Turning ${age}`;
+    
+    // Determine age label based on whether birthday has passed
+    let ageLabel: string;
+    if (isToday) {
+      ageLabel = `Turns ${ageToday}`;
+    } else if (hasPassedThisYear) {
+      ageLabel = `Turned ${currentAge}`;
+    } else {
+      ageLabel = `Turning ${age}`;
+    }
 
     return (
       <div
         className={`group p-3 sm:p-4 rounded-xl border transition-all duration-200 ${
           isToday
             ? 'border-amber-300 bg-amber-50 dark:bg-amber-900/20'
+            : hasPassedThisYear
+            ? 'border-gray-300 bg-gray-50 dark:bg-gray-700/30 opacity-75'
             : 'border-gray-200 dark:border-dark-600 bg-white dark:bg-dark-800 hover:border-slate-300 dark:hover:border-dark-500 hover:shadow-md'
         }`}
       >
@@ -83,6 +99,8 @@ const BirthdaysView: React.FC = () => {
                 className={`ml-3 inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${
                   isToday
                     ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200'
+                    : hasPassedThisYear
+                    ? 'bg-gray-200 text-gray-600 dark:bg-gray-600 dark:text-gray-300'
                     : 'bg-gray-100 text-gray-700 dark:bg-dark-700 dark:text-dark-200'
                 }`}
               >
@@ -184,14 +202,14 @@ const BirthdaysView: React.FC = () => {
       <div className="bg-white dark:bg-dark-800 rounded-xl border border-gray-200 dark:border-dark-600 shadow-sm">
         <div className="p-4 sm:p-5 border-b border-gray-200 dark:border-dark-600">
           <h2 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-dark-100">
-            {isCurrentMonth
+            {isCurrentMonth && selectedMonthBirthdays.length === 0
               ? (upcomingBirthdays.length > 0 ? `${upcomingBirthdays.length} Upcoming Birthday${upcomingBirthdays.length !== 1 ? 's' : ''}` : 'No Upcoming Birthdays')
               : `${selectedMonthBirthdays.length} Birthday${selectedMonthBirthdays.length !== 1 ? 's' : ''} in ${monthLabel}`}
           </h2>
         </div>
 
         <div className="p-4 sm:p-5">
-          {isCurrentMonth ? (
+          {isCurrentMonth && selectedMonthBirthdays.length === 0 ? (
             upcomingBirthdays.length > 0 ? (
               <div className="space-y-4">
                 {todaysBirthdays.length > 0 && (
@@ -215,10 +233,37 @@ const BirthdaysView: React.FC = () => {
               <EmptyState />
             )
           ) : (
-            <div className="space-y-3">
-              {selectedMonthBirthdays.map((b) => (
-                <BirthdayCard key={`${b.member.id}-${b.birthday}`} birthday={b} />
-              ))}
+            <div className="space-y-4">
+              {/* Today's birthdays in month view */}
+              {monthTodaysBirthdays.length > 0 && (
+                <div className="space-y-3">
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">Today</h3>
+                  {monthTodaysBirthdays.map((b) => (
+                    <BirthdayCard key={`${b.member.id}-${b.birthday}`} birthday={b} />
+                  ))}
+                </div>
+              )}
+              
+              {/* Future birthdays in month view */}
+              {monthFutureBirthdays.length > 0 && (
+                <div className="space-y-3">
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-dark-400">Upcoming This Month</h3>
+                  {monthFutureBirthdays.map((b) => (
+                    <BirthdayCard key={`${b.member.id}-${b.birthday}`} birthday={b} />
+                  ))}
+                </div>
+              )}
+              
+              {/* Passed birthdays in month view */}
+              {passedBirthdays.length > 0 && (
+                <div className="space-y-3">
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Already Celebrated</h3>
+                  {passedBirthdays.map((b) => (
+                    <BirthdayCard key={`${b.member.id}-${b.birthday}`} birthday={b} />
+                  ))}
+                </div>
+              )}
+              
               {selectedMonthBirthdays.length === 0 && (
                 <p className="text-sm text-gray-500">No birthdays found in {monthLabel}.</p>
               )}

@@ -4,7 +4,7 @@ import { Member, Bacenta } from '../../types';
 import Modal from '../ui/Modal';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
-import { SearchIcon, PlusIcon, UserIcon, MapPinIcon } from '../icons';
+import { PlusIcon, UserIcon, MapPinIcon } from '../icons';
 import { canAssignBacentaLeaders } from '../../utils/permissionUtils';
 
 // Define MinusIcon since it's not in the icons module
@@ -176,12 +176,11 @@ const BacentaAssignmentModal: React.FC<BacentaAssignmentModalProps> = ({ isOpen,
 
           {/* Search */}
           <div className="relative mb-4">
-            <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
             <Input
               placeholder="Search bacentas..."
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10"
+              onChange={(value) => setSearchTerm(value)}
+              className="px-4"
             />
           </div>
 

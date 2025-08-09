@@ -1,5 +1,5 @@
 import { Member, User, Bacenta, NotificationRecipient, BirthdayNotification } from '../types';
-import { calculateDaysUntilBirthday, getUpcomingBirthdays } from './birthdayUtils';
+import { calculateDaysUntilBirthday } from './birthdayUtils';
 
 /**
  * Determine who should receive birthday notifications for a specific member
@@ -78,7 +78,7 @@ export const determineNotificationRecipients = (
 /**
  * Helper function to find a user as a member in the members collection
  */
-const findUserAsMember = (userId: string, currentMember: Member, users: User[]): Member | null => {
+const findUserAsMember = (_userId: string, _currentMember: Member, _users: User[]): Member | null => {
   // This would need to be implemented based on how users are linked to members
   // For now, we'll assume the user ID matches the member ID or there's a mapping
   return null; // Placeholder - implement based on your user-member relationship
@@ -118,8 +118,9 @@ export const getMembersNeedingNotifications = (
 
     const daysUntil = calculateDaysUntilBirthday(member.birthday, referenceDate);
     
-    // Check if this member needs a notification today
-    if (notificationDays.includes(daysUntil)) {
+    // Only send notifications for upcoming birthdays (0 or positive days)
+    // Don't send for passed birthdays (negative days)
+    if (daysUntil >= 0 && notificationDays.includes(daysUntil)) {
       membersNeedingNotifications.push({
         member,
         daysUntilBirthday: daysUntil

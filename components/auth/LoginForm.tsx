@@ -1,6 +1,6 @@
 // Clean Modern Login Form Component
 import React, { useState } from 'react';
-import { Eye, EyeOff, Mail, Lock, Church } from 'lucide-react';
+import { Eye, EyeOff } from 'lucide-react';
 import ForgotPasswordModal from './ForgotPasswordModal';
 
 interface LoginFormProps {
@@ -224,14 +224,13 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSignIn, error, loading, 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <div className="relative">
-              <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
               <input
                 id="email"
                 type="email"
                 value={email}
                 onChange={handleEmailChange}
                 onBlur={handleEmailBlur}
-                className={`w-full pl-10 pr-4 py-3.5 bg-gray-50/50 border rounded-xl focus:outline-none focus:ring-2 focus:bg-white transition-all duration-200 placeholder-gray-400 ${
+                className={`w-full px-4 py-3.5 bg-gray-50/50 border rounded-xl focus:outline-none focus:ring-2 focus:bg-white transition-all duration-200 placeholder-gray-400 ${
                   validationErrors.email
                     ? 'border-red-300 focus:ring-red-500 focus:border-red-500'
                     : 'border-gray-200 focus:ring-blue-500 focus:border-blue-500'
@@ -249,14 +248,13 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSignIn, error, loading, 
 
           <div>
             <div className="relative">
-              <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
               <input
                 id="password"
                 type={showPassword ? 'text' : 'password'}
                 value={password}
                 onChange={handlePasswordChange}
                 onBlur={handlePasswordBlur}
-                className={`w-full pl-10 pr-12 py-3.5 bg-gray-50/50 border rounded-xl focus:outline-none focus:ring-2 focus:bg-white transition-all duration-200 placeholder-gray-400 ${
+                className={`w-full px-4 pr-12 py-3.5 bg-gray-50/50 border rounded-xl focus:outline-none focus:ring-2 focus:bg-white transition-all duration-200 placeholder-gray-400 ${
                   validationErrors.password
                     ? 'border-red-300 focus:ring-red-500 focus:border-red-500'
                     : 'border-gray-200 focus:ring-blue-500 focus:border-blue-500'

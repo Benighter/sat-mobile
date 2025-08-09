@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { authService } from '../../services/firebaseService';
-import { UserIcon, EyeIcon, EyeSlashIcon, PhoneIcon, EnvelopeIcon } from '../icons/index';
+import { EyeIcon, EyeSlashIcon } from '../icons/index';
 
 // Utility function to convert Firebase errors to user-friendly messages
 const getErrorMessage = (error: string): string => {
@@ -413,14 +413,13 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, onSwitchToLogin,
         <div className="grid grid-cols-2 gap-3">
           <div>
             <div className="relative">
-              <UserIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
               <input
                 type="text"
                 name="firstName"
                 value={formData.firstName}
                 onChange={handleInputChange}
                 onBlur={() => handleFieldBlur('firstName')}
-                className={`w-full pl-10 pr-4 py-3.5 bg-gray-50/50 border rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 focus:bg-white transition-all duration-200 placeholder-gray-400 ${
+                className={`w-full px-4 py-3.5 bg-gray-50/50 border rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 focus:bg-white transition-all duration-200 placeholder-gray-400 ${
                   errors.firstName ? 'border-red-300 bg-red-50' : 'border-gray-200'
                 }`}
                 placeholder="First Name"
@@ -436,14 +435,13 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, onSwitchToLogin,
 
           <div>
             <div className="relative">
-              <UserIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
               <input
                 type="text"
                 name="lastName"
                 value={formData.lastName}
                 onChange={handleInputChange}
                 onBlur={() => handleFieldBlur('lastName')}
-                className={`w-full pl-10 pr-4 py-3.5 bg-gray-50/50 border rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 focus:bg-white transition-all duration-200 placeholder-gray-400 ${
+                className={`w-full px-4 py-3.5 bg-gray-50/50 border rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 focus:bg-white transition-all duration-200 placeholder-gray-400 ${
                   errors.lastName ? 'border-red-300 bg-red-50' : 'border-gray-200'
                 }`}
                 placeholder="Last Name (optional)"
@@ -460,14 +458,13 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, onSwitchToLogin,
         {/* Email */}
         <div>
           <div className="relative">
-            <EnvelopeIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
             <input
               type="email"
               name="email"
               value={formData.email}
               onChange={handleInputChange}
               onBlur={() => handleFieldBlur('email')}
-              className={`w-full pl-10 pr-12 py-3.5 bg-gray-50/50 border rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 focus:bg-white transition-all duration-200 placeholder-gray-400 ${
+              className={`w-full px-4 py-3.5 bg-gray-50/50 border rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 focus:bg-white transition-all duration-200 placeholder-gray-400 ${
                 errors.email ? 'border-red-300 bg-red-50' : 'border-gray-200'
               }`}
               placeholder="Email address"
@@ -494,14 +491,13 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, onSwitchToLogin,
         {/* Phone Number */}
         <div>
           <div className="relative">
-            <PhoneIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
             <input
               type="tel"
               name="phoneNumber"
               value={formData.phoneNumber}
               onChange={handleInputChange}
               onBlur={() => handleFieldBlur('phoneNumber')}
-              className={`w-full pl-10 pr-4 py-3.5 bg-gray-50/50 border rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 focus:bg-white transition-all duration-200 placeholder-gray-400 ${
+              className={`w-full px-4 py-3.5 bg-gray-50/50 border rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 focus:bg-white transition-all duration-200 placeholder-gray-400 ${
                 errors.phoneNumber ? 'border-red-300 bg-red-50' : 'border-gray-200'
               }`}
               placeholder="Phone number (optional)"
@@ -525,7 +521,7 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, onSwitchToLogin,
               className={`w-full pl-4 pr-12 py-3.5 bg-gray-50/50 border rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 focus:bg-white transition-all duration-200 placeholder-gray-400 ${
                 errors.password ? 'border-red-300 bg-red-50' : 'border-gray-200'
               }`}
-              placeholder="Password (8+ chars, uppercase, lowercase, number)"
+              placeholder="Password"
               required
               autoComplete="new-password"
             />

@@ -196,13 +196,12 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
 
           {/* Search Input */}
           <div className="relative">
-            <SearchIcon className="absolute left-2.5 sm:left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-dark-500" />
             <input
               type="text"
               placeholder="Search bacentas..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 sm:pl-10 pr-3 sm:pr-4 py-2 sm:py-2.5 border border-gray-300 dark:border-dark-600 bg-white dark:bg-dark-700 text-gray-900 dark:text-dark-100 rounded-lg focus:ring-2 focus:ring-slate-400 dark:focus:ring-slate-500 focus:border-transparent transition-all duration-200 placeholder-gray-500 dark:placeholder-dark-400 text-sm sm:text-base"
+              className="w-full px-4 py-2 sm:py-2.5 border border-gray-300 dark:border-dark-600 bg-white dark:bg-dark-700 text-gray-900 dark:text-dark-100 rounded-lg focus:ring-2 focus:ring-slate-400 dark:focus:ring-slate-500 focus:border-transparent transition-all duration-200 placeholder-gray-500 dark:placeholder-dark-400 text-sm sm:text-base"
             />
           </div>
         </div>

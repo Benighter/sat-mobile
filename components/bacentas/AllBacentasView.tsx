@@ -2,7 +2,7 @@
 import React, { useMemo, useState } from 'react';
 import { useAppContext } from '../../contexts/FirebaseAppContext';
 import Input from '../ui/Input';
-import { GroupIcon, SearchIcon, BuildingOfficeIcon, PlusIcon, ChevronRightIcon } from '../icons';
+import { SearchIcon, PlusIcon, ChevronRightIcon } from '../icons';
 import { TabKeys } from '../../types';
 
 const AllBacentasView: React.FC = () => {
@@ -39,14 +39,13 @@ const AllBacentasView: React.FC = () => {
                 {/* Search Input */}
                 <div className="lg:col-span-2">
                   <div className="relative">
-                    <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
                     <Input
                       id="bacenta-search"
                       placeholder="Search bacentas..."
                       value={query}
                       onChange={(v) => setQuery(v)}
                       wrapperClassName="mb-0"
-                      className="pl-12 bg-white border-gray-300 focus:ring-blue-600 text-base py-3"
+                      className="px-4 bg-white border-gray-300 focus:ring-blue-600 text-base py-3"
                     />
                   </div>
                 </div>

@@ -3,14 +3,12 @@ import { useAppContext } from '../../contexts/FirebaseAppContext';
 import { inviteService } from '../../services/inviteService';
 import { AdminInvite, User } from '../../types';
 import Button from '../ui/Button';
-import Input from '../ui/Input';
 import { canManageAdminInvites } from '../../utils/permissionUtils';
 import {
   CheckIcon,
   XMarkIcon,
   ClockIcon,
   UserGroupIcon,
-  TrashIcon,
   UserIcon,
   EnvelopeIcon,
   ArrowLeftIcon,
@@ -301,7 +299,7 @@ const AdminInviteScreen: React.FC<AdminInviteScreenProps> = ({ isOpen, onClose }
             <div className="bg-white/80 backdrop-blur-sm rounded-3xl p-6 shadow-xl border border-white/50">
               <div className="flex items-center space-x-3 mb-6">
                 <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center shadow-lg">
-                  <EnvelopeIcon className="w-6 h-6 text-white" />
+                  <UserIcon className="w-6 h-6 text-white" />
                 </div>
                 <div>
                   <h2 className="text-xl font-bold text-gray-900">Find Administrator</h2>
@@ -311,15 +309,16 @@ const AdminInviteScreen: React.FC<AdminInviteScreenProps> = ({ isOpen, onClose }
 
               <div className="space-y-4">
                 <div className="relative">
-                  <Input
-                    type="email"
-                    value={searchEmail}
-                    onChange={(value) => setSearchEmail(value)}
-                    placeholder="Enter admin email address..."
-                    onKeyPress={(e) => e.key === 'Enter' && handleSearchUser()}
-                    className="w-full h-14 pl-12 pr-4 text-base border-2 border-gray-200 focus:border-blue-400 rounded-2xl bg-white shadow-sm focus:shadow-lg transition-all duration-300"
-                  />
-                  <EnvelopeIcon className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                  <div className="relative flex items-center">
+                    <input
+                      type="email"
+                      value={searchEmail}
+                      onChange={(e) => setSearchEmail(e.target.value)}
+                      placeholder="Enter admin email address..."
+                      onKeyPress={(e) => e.key === 'Enter' && handleSearchUser()}
+                      className="w-full h-14 px-4 text-base border-2 border-gray-200 focus:border-blue-400 rounded-2xl bg-white shadow-sm focus:shadow-lg transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-blue-400/20 text-gray-900 placeholder-gray-500"
+                    />
+                  </div>
                 </div>
 
                 <Button
@@ -364,7 +363,6 @@ const AdminInviteScreen: React.FC<AdminInviteScreenProps> = ({ isOpen, onClose }
                     <div className="flex-1">
                       <h4 className="text-lg font-bold text-gray-900">{searchedUser.displayName}</h4>
                       <p className="text-gray-600 flex items-center space-x-2">
-                        <EnvelopeIcon className="w-4 h-4" />
                         <span>{searchedUser.email}</span>
                       </p>
                       <p className="text-sm text-green-600 font-medium mt-1">Administrator Role</p>
@@ -446,8 +444,19 @@ const AdminInviteScreen: React.FC<AdminInviteScreenProps> = ({ isOpen, onClose }
                   {invites.map((invite) => (
                   <div
                     key={invite.id}
-                    className="bg-white/90 backdrop-blur-sm rounded-2xl p-4 shadow-sm border border-white/60 hover:shadow-md transition-all duration-200 w-full"
+                    className="bg-white/90 backdrop-blur-sm rounded-2xl p-4 shadow-sm border border-white/60 hover:shadow-md transition-all duration-200 w-full relative group"
                   >
+                    {/* Clean X button for rejected invites only - shows on hover */}
+                    {invite.status === 'rejected' && (
+                      <button
+                        onClick={() => handleDeleteInvite(invite)}
+                        className="absolute top-3 right-3 w-6 h-6 bg-gray-100 hover:bg-red-100 border border-gray-200 hover:border-red-200 rounded-full flex items-center justify-center transition-all duration-200 opacity-0 group-hover:opacity-100"
+                        title="Remove rejected invite"
+                      >
+                        <XMarkIcon className="w-3 h-3 text-gray-400 hover:text-red-500" />
+                      </button>
+                    )}
+
                     <div className="flex items-start space-x-3">
                       {/* Avatar */}
                       <div className={`w-12 h-12 rounded-xl flex items-center justify-center shadow-sm flex-shrink-0 ${
@@ -527,17 +536,6 @@ const AdminInviteScreen: React.FC<AdminInviteScreenProps> = ({ isOpen, onClose }
                             >
                               <XMarkIcon className="w-3 h-3 mr-1" />
                               Remove Leader
-                            </Button>
-                          )}
-                          {invite.status === 'revoked' && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleDeleteInvite(invite)}
-                              className="h-7 px-3 bg-gray-50 hover:bg-red-100 text-gray-600 hover:text-red-700 border border-gray-200 hover:border-red-200 rounded-lg text-xs font-medium transition-all duration-200 flex items-center"
-                            >
-                              <TrashIcon className="w-3 h-3 mr-1" />
-                              Delete
                             </Button>
                           )}
                         </div>
