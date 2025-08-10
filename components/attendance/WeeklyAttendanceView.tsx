@@ -77,20 +77,20 @@ const WeeklyAttendanceView: React.FC = () => {
       presentByBacenta.get(key)!.push(m);
     });
 
-    // Identify present bacenta leaders
-    const presentBacentaLeaders = presentMembers.filter(m => m.role === 'Bacenta Leader');
+    // All bacenta leaders (regardless of presence)
+    const allBacentaLeaders = members.filter(m => m.role === 'Bacenta Leader');
 
-    const groups: BacentaLeaderGroup[] = presentBacentaLeaders.map(leader => {
+    const groups: BacentaLeaderGroup[] = allBacentaLeaders.map(leader => {
       const leaderBacenta = leader.bacentaId ? bacentaMap.get(leader.bacentaId) || { id: leader.bacentaId, name: 'Unknown Bacenta' } : { id: 'unassigned', name: 'Unassigned' };
       const allInLeaderBacenta = presentByBacenta.get(leader.bacentaId) || [];
       // Exclude fellowship leaders (they get their own section) from main list
       const mainMembers = allInLeaderBacenta.filter(m => m.role !== 'Fellowship Leader');
 
       // Fellowship leaders under this bacenta leader
-      const fellowshipLeaders = presentMembers.filter(m => m.role === 'Fellowship Leader' && m.bacentaLeaderId === leader.id);
+      const fellowshipLeaders = members.filter(m => m.role === 'Fellowship Leader' && m.bacentaLeaderId === leader.id);
       const fellowshipGroups: FellowshipGroup[] = fellowshipLeaders.map(fl => {
         const flBacenta = fl.bacentaId ? bacentaMap.get(fl.bacentaId) || { id: fl.bacentaId, name: 'Unknown Bacenta' } : { id: 'unassigned', name: 'Unassigned' };
-        const membersInFellowship = (presentByBacenta.get(fl.bacentaId) || []); // all present in that bacenta incl fellowship leader
+        const membersInFellowship = (presentByBacenta.get(fl.bacentaId) || []); // all present in that bacenta incl fellowship leader (if present)
         // Linked bacentas for fellowship leader
         const linkedGroups: LinkedBacentaGroup[] = (fl.linkedBacentaIds || [])
           .filter(id => id && id !== fl.bacentaId)
@@ -138,7 +138,8 @@ const WeeklyAttendanceView: React.FC = () => {
         newBelievers: nbForLeader, // Could refine distribution later
         total
       };
-    }).sort((a, b) => a.bacenta.name.localeCompare(b.bacenta.name));
+    }).filter(g => g.total > 0) // only keep groups with present attendees somewhere
+      .sort((a, b) => a.bacenta.name.localeCompare(b.bacenta.name));
 
     // Fallback group for present members without a bacenta leader (unassigned or leader absent)
     const accountedMemberIds = new Set<string>();
