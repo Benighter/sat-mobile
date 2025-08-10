@@ -422,7 +422,29 @@ class PushNotificationService {
 
     // Fallback: some very old browsers / iOS webviews may expose webkitNotifications
     // (We don't attempt to fully polyfill – just return false explicitly here.)
+    // Heuristic: allow mobile browsers (Android/iOS) to try anyway even if Notification not detected yet
+    const ua = (typeof navigator !== 'undefined' ? navigator.userAgent : '').toLowerCase();
+    const isMobileHeuristic = /android|iphone|ipad|ipod/.test(ua);
+    if (isMobileHeuristic) return true;
+
+    // Developer override for testing
+    if (typeof localStorage !== 'undefined' && localStorage.getItem('forcePushSupport') === 'true') return true;
+
     return false;
+  }
+
+  // Expose diagnostics for UI / debugging
+  getSupportDiagnostics() {
+    const ua = (typeof navigator !== 'undefined' ? navigator.userAgent : '');
+    return {
+      native: Capacitor.isNativePlatform(),
+      pluginAvailable: Capacitor.isNativePlatform() ? Capacitor.isPluginAvailable('PushNotifications') : false,
+      hasNotification: typeof window !== 'undefined' && 'Notification' in window,
+      hasServiceWorker: typeof navigator !== 'undefined' && 'serviceWorker' in navigator,
+      hasPushManager: typeof window !== 'undefined' && 'PushManager' in window,
+      userAgent: ua,
+      forceFlag: typeof localStorage !== 'undefined' ? localStorage.getItem('forcePushSupport') === 'true' : false
+    };
   }
 
   // Get current notification permission status

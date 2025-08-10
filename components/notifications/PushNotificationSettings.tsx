@@ -10,13 +10,14 @@ interface PushNotificationSettingsProps {
 
 const PushNotificationSettings: React.FC<PushNotificationSettingsProps> = ({ className = '' }) => {
   const [isSupported, setIsSupported] = useState(false);
+  const [diagnostics, setDiagnostics] = useState<any | null>(null);
   const [permissionStatus, setPermissionStatus] = useState<'granted' | 'denied' | 'default'>('default');
   const [isInitialized, setIsInitialized] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isTesting, setIsTesting] = useState(false);
   const [testResult, setTestResult] = useState<'success' | 'error' | null>(null);
 
-  const { userProfile, showToast } = useAppContext();
+  const { showToast } = useAppContext();
 
   useEffect(() => {
     checkPushNotificationStatus();
@@ -29,6 +30,11 @@ const PushNotificationSettings: React.FC<PushNotificationSettingsProps> = ({ cla
       // Check if push notifications are supported
       const supported = await pushNotificationHelpers.isSupported();
       setIsSupported(supported);
+      try {
+        // Direct access to diagnostics (optional chain if service not yet exported)
+        const d: any = (pushNotificationService as any).getSupportDiagnostics?.();
+        if (d) setDiagnostics(d);
+      } catch {}
 
       if (supported) {
         // Check current permission status
@@ -191,8 +197,35 @@ const PushNotificationSettings: React.FC<PushNotificationSettingsProps> = ({ cla
             </div>
             <h4 className="text-lg font-medium text-gray-900 mb-2">Push notifications not supported</h4>
             <p className="text-gray-500 max-w-sm mx-auto">
-              Your current browser or device doesn't support push notifications. Try using a modern browser or update your device.
+              We couldn't verify full push support. You can still attempt to enable notifications below.
             </p>
+            <div className="mt-4 space-y-2 text-xs text-left inline-block bg-gray-50 rounded-lg p-3 max-w-sm">
+              <div className="font-medium text-gray-700">Diagnostics</div>
+              <pre className="whitespace-pre-wrap text-[10px] leading-tight text-gray-600">{JSON.stringify(diagnostics, null, 2)}</pre>
+            </div>
+            <div className="mt-6 flex flex-col items-center space-y-3">
+              <button
+                onClick={handleEnablePushNotifications}
+                disabled={isLoading}
+                className="inline-flex items-center space-x-2 px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+              >
+                {isLoading ? (
+                  <>
+                    <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
+                    <span>Trying...</span>
+                  </>
+                ) : (
+                  <>
+                    <Bell className="w-4 h-4" />
+                    <span>Try Enable Anyway</span>
+                  </>
+                )}
+              </button>
+              <button
+                onClick={() => { localStorage.setItem('forcePushSupport','true'); checkPushNotificationStatus(); }}
+                className="text-xs text-blue-600 hover:underline"
+              >Force support & recheck</button>
+            </div>
           </div>
         ) : permissionStatus === 'denied' ? (
           // Permission denied
