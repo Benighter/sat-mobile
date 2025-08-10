@@ -1,5 +1,5 @@
 
-import React, { memo, useState, useEffect } from 'react';
+import React, { memo, useState, useEffect, useMemo } from 'react';
 import { useAppContext } from '../../contexts/FirebaseAppContext';
 import { hasAdminPrivileges } from '../../utils/permissionUtils';
 import { PeopleIcon, AttendanceIcon, CalendarIcon, ChartBarIcon, CheckIcon } from '../icons';
@@ -110,10 +110,17 @@ const StatCard: React.FC<StatCardProps> = memo(({ title, value, icon, descriptio
 
 
 const DashboardView: React.FC = memo(() => {
-  const { members, attendanceRecords, newBelievers, displayedSundays, displayedDate, sundayConfirmations, guests, switchTab, user, userProfile, currentChurchId, allOutreachMembers } = useAppContext(); // Use displayedSundays
+  const { members, attendanceRecords, newBelievers, displayedSundays, displayedDate, sundayConfirmations, guests, switchTab, user, userProfile, currentChurchId, allOutreachMembers, bacentas } = useAppContext(); // Use displayedSundays
 
   const totalMembers = members.length;
-  const totalOutreachMembers = allOutreachMembers.length;
+  
+  // Filter out orphaned outreach members whose bacentaId doesn't exist anymore
+  const validOutreachMembers = useMemo(() => {
+    const validBacentaIds = new Set(bacentas.map(b => b.id));
+    return allOutreachMembers.filter(m => validBacentaIds.has(m.bacentaId));
+  }, [allOutreachMembers, bacentas]);
+  
+  const totalOutreachMembers = validOutreachMembers.length;
   const [confirmationTarget, setConfirmationTarget] = useState<number>(0);
   const [isLoadingTarget, setIsLoadingTarget] = useState<boolean>(true);
 

@@ -298,6 +298,7 @@ const OutreachView: React.FC = () => {
     outreachBacentas,
     outreachMembers,
     allOutreachMembers, // All outreach members across all time periods
+    bacentas, // Regular bacentas for validation
     outreachMonth,
     setOutreachMonth,
     addOutreachBacentaHandler,
@@ -338,18 +339,49 @@ const OutreachView: React.FC = () => {
   }, [outreachMembers]);
 
   // Overall totals using ALL outreach members (across all time periods)
+  // Fallback to current monthly data if allOutreachMembers is empty
+  // Filter out orphaned members whose bacentaId doesn't exist in current bacentas
+  const effectiveAllMembers = useMemo(() => {
+    const baseMembers = allOutreachMembers.length > 0 ? allOutreachMembers : outreachMembers;
+    const validBacentaIds = new Set(bacentas.map(b => b.id));
+    
+    // Filter out members whose bacentaId doesn't exist anymore
+    const validMembers = baseMembers.filter(m => validBacentaIds.has(m.bacentaId));
+    
+    console.log('=== FILTERING ORPHANED MEMBERS ===');
+    console.log('Base members count:', baseMembers.length);
+    console.log('Valid bacenta IDs:', Array.from(validBacentaIds));
+    console.log('Filtered out orphaned members:', baseMembers.filter(m => !validBacentaIds.has(m.bacentaId)).map(m => ({
+      id: m.id,
+      name: m.name,
+      bacentaId: m.bacentaId
+    })));
+    console.log('Valid members count after filtering:', validMembers.length);
+    console.log('=== END FILTERING ===');
+    
+    return validMembers;
+  }, [allOutreachMembers, outreachMembers, bacentas]);
+  
+  // Group members by bacenta ID for consistent calculation
   const allMembersByBacenta = useMemo(() => {
     const map: Record<string, OutreachMember[]> = {};
-    for (const m of allOutreachMembers) {
+    for (const m of effectiveAllMembers) {
       (map[m.bacentaId] ||= []).push(m);
     }
     return map;
-  }, [allOutreachMembers]);
+  }, [effectiveAllMembers]);
 
   const totals = useMemo(() => {
-    // Use ALL outreach members for overall totals
+    // Calculate totals consistently using only valid outreach members
+    const overall = effectiveAllMembers.length;
+    const overallComing = effectiveAllMembers.filter(m => m.comingStatus).length;
+    const overallConverted = effectiveAllMembers.filter(m => !!m.convertedMemberId).length;
+    const overallComingRate = overall ? Math.round((overallComing / overall) * 100) : 0;
+    const overallConversionRate = overall ? Math.round((overallConverted / overall) * 100) : 0;
+    
+    // Calculate per-outreach-bacenta stats for the individual cards in this view
     const perBacenta = outreachBacentas.map(b => {
-      const list = allMembersByBacenta[b.id] || []; // Use ALL members for totals
+      const list = allMembersByBacenta[b.id] || [];
       const total = list.length;
       const coming = list.filter(m => m.comingStatus).length;
       const converted = list.filter(m => !!m.convertedMemberId).length;
@@ -358,24 +390,27 @@ const OutreachView: React.FC = () => {
       
       return { bacenta: b, total, coming, converted, comingRate, conversionRate };
     });
-    const overall = perBacenta.reduce((acc, x) => acc + x.total, 0);
-    const overallComing = perBacenta.reduce((acc, x) => acc + x.coming, 0);
-    const overallConverted = perBacenta.reduce((acc, x) => acc + x.converted, 0);
-    const overallComingRate = overall ? Math.round((overallComing / overall) * 100) : 0;
-    const overallConversionRate = overall ? Math.round((overallConverted / overall) * 100) : 0;
     
     return { perBacenta, overall, overallComing, overallConverted, overallComingRate, overallConversionRate };
-  }, [outreachBacentas, allMembersByBacenta]);
+  }, [outreachBacentas, allMembersByBacenta, effectiveAllMembers]);
 
-  // Weekly members map for stats/cards (Mon..Sun) - use allOutreachMembers
+  // Weekly members map for stats/cards (Mon..Sun) - use effective data source
   const weeklyMembersByBacenta = useMemo(() => {
     const monday = new Date(weekStart);
     const sunday = new Date(monday); sunday.setDate(monday.getDate()+6);
     const inWeek = (d?: string) => d ? (new Date(d) >= monday && new Date(d) <= sunday) : false;
     const map: Record<string, OutreachMember[]> = {};
-    for (const m of allOutreachMembers) if (inWeek(m.outreachDate)) (map[m.bacentaId] ||= []).push(m);
+    
+    // Use effective data source - prefer allOutreachMembers if available, fallback to current monthly data
+    const dataSource = effectiveAllMembers.length > 0 ? effectiveAllMembers : outreachMembers;
+    
+    for (const m of dataSource) {
+      if (inWeek(m.outreachDate)) {
+        (map[m.bacentaId] ||= []).push(m);
+      }
+    }
     return map;
-  }, [allOutreachMembers, weekStart]);
+  }, [effectiveAllMembers, outreachMembers, weekStart]);
 
   // Calculate weekly totals
   const weeklyTotals = useMemo(() => {
@@ -528,6 +563,8 @@ const OutreachView: React.FC = () => {
                     const total = stats?.total || 0;
                     const comingRate = stats?.comingRate || 0;
                     const conversionRate = stats?.conversionRate || 0;
+                    const coming = stats?.coming || 0;
+                    const converted = stats?.converted || 0;
 
                     return (
                       <div key={b.id} className="group relative">
@@ -549,7 +586,7 @@ const OutreachView: React.FC = () => {
                                       {total}
                                     </div>
                                     <div className="text-xs text-gray-500 dark:text-dark-400 uppercase tracking-wide">
-                                      Total Members
+                                      {total === 1 ? 'Total Member' : 'Total Members'}
                                     </div>
                                   </div>
                                 </div>
@@ -557,7 +594,10 @@ const OutreachView: React.FC = () => {
                                   {b.name}
                                 </h3>
                                 <p className="text-sm text-gray-500 dark:text-dark-400 mt-1">
-                                  Open outreach management for this building
+                                  {total > 0 
+                                    ? `${coming} coming • ${converted} converted`
+                                    : 'No outreach members yet - click to add some'
+                                  }
                                 </p>
                               </button>
 
@@ -574,12 +614,20 @@ const OutreachView: React.FC = () => {
 
                             {/* Stats */}
                             <div className="flex flex-wrap gap-2">
-                              <Badge color="green" className="font-medium">
-                                {comingRate}% coming
-                              </Badge>
-                              <Badge color="purple" className="font-medium">
-                                {conversionRate}% converted
-                              </Badge>
+                              {total > 0 ? (
+                                <>
+                                  <Badge color="green" className="font-medium">
+                                    {comingRate}% coming
+                                  </Badge>
+                                  <Badge color="purple" className="font-medium">
+                                    {conversionRate}% converted
+                                  </Badge>
+                                </>
+                              ) : (
+                                <Badge color="gray" className="font-medium">
+                                  No data yet
+                                </Badge>
+                              )}
                             </div>
                           </div>
                         </div>

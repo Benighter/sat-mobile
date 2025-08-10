@@ -15,12 +15,27 @@ const MemberListView: React.FC<MemberListViewProps> = ({ bacentaFilter }) => {
   const {
     members,
     isLoading,
-
     bacentas,
     openMemberForm,
   } = useAppContext();
 
   const [roleFilter, setRoleFilter] = useState<'all' | 'Bacenta Leader' | 'Fellowship Leader' | 'Member'>('all');
+  
+  // Welcome UI state - moved before any conditional returns
+  const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
+  const [showBulkTip, setShowBulkTip] = useState(false);
+
+  useEffect(() => {
+    if (bacentaFilter) {
+      try {
+        const shouldShow = localStorage.getItem('church_connect_show_bulk_tip_once') === 'true';
+        if (shouldShow) {
+          setShowBulkTip(true);
+          localStorage.removeItem('church_connect_show_bulk_tip_once');
+        }
+      } catch {}
+    }
+  }, [bacentaFilter]);
 
   const filteredMembers = useMemo(() => {
     // Define role priority for sorting (lower number = higher priority)
@@ -61,6 +76,8 @@ const MemberListView: React.FC<MemberListViewProps> = ({ bacentaFilter }) => {
       });
   }, [members, bacentaFilter, bacentas, roleFilter]);
 
+  const currentBacenta = bacentaFilter ? bacentas.find(b => b.id === bacentaFilter) : null;
+
   if (isLoading && !members.length) {
     return (
       <div className="flex flex-col items-center justify-center py-10">
@@ -69,25 +86,6 @@ const MemberListView: React.FC<MemberListViewProps> = ({ bacentaFilter }) => {
       </div>
     );
   }
-
-
-  // Welcome UI state
-  const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
-  const [showBulkTip, setShowBulkTip] = useState(false);
-
-  useEffect(() => {
-    if (bacentaFilter) {
-      try {
-        const shouldShow = localStorage.getItem('church_connect_show_bulk_tip_once') === 'true';
-        if (shouldShow) {
-          setShowBulkTip(true);
-          localStorage.removeItem('church_connect_show_bulk_tip_once');
-        }
-      } catch {}
-    }
-  }, [bacentaFilter]);
-
-  const currentBacenta = bacentaFilter ? bacentas.find(b => b.id === bacentaFilter) : null;
 
   return (
     <div className="animate-fade-in">
