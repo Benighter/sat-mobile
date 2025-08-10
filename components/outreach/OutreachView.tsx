@@ -348,17 +348,6 @@ const OutreachView: React.FC = () => {
     // Filter out members whose bacentaId doesn't exist anymore
     const validMembers = baseMembers.filter(m => validBacentaIds.has(m.bacentaId));
     
-    console.log('=== FILTERING ORPHANED MEMBERS ===');
-    console.log('Base members count:', baseMembers.length);
-    console.log('Valid bacenta IDs:', Array.from(validBacentaIds));
-    console.log('Filtered out orphaned members:', baseMembers.filter(m => !validBacentaIds.has(m.bacentaId)).map(m => ({
-      id: m.id,
-      name: m.name,
-      bacentaId: m.bacentaId
-    })));
-    console.log('Valid members count after filtering:', validMembers.length);
-    console.log('=== END FILTERING ===');
-    
     return validMembers;
   }, [allOutreachMembers, outreachMembers, bacentas]);
   

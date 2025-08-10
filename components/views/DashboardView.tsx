@@ -154,8 +154,6 @@ const DashboardView: React.FC = memo(() => {
           return;
         }
 
-        console.log('Dashboard loading target for:', { churchId, upcomingSunday });
-
         // Use proper church-scoped path
         const targetDocRef = doc(db, `churches/${churchId}/sundayTargets`, upcomingSunday);
         const targetDoc = await getDoc(targetDocRef);
@@ -183,10 +181,6 @@ const DashboardView: React.FC = memo(() => {
                          error?.message?.includes('offline') ||
                          error?.message?.includes('network') ||
                          error?.message?.includes('backend');
-
-        if (isOffline) {
-          console.log('Dashboard operating in offline mode - using cached data');
-        }
 
         // Fallback to member count, but only if we have members loaded
         const defaultTarget = totalMembers > 0 ? totalMembers : 0;

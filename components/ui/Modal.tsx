@@ -69,8 +69,6 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, size = 
 
       document.documentElement.style.setProperty('--available-height', availableHeight);
       document.documentElement.style.setProperty('--available-height-dvh', availableHeightDvh);
-
-      console.log(`Modal: Detected navbar height: ${navbarHeight}px`);
     };
 
     // Set navbar height immediately and on resize

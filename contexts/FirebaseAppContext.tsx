@@ -291,7 +291,6 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
               if (firebaseUtils.isReady()) {
                 setupDataListeners();
               } else {
-                console.log('⏳ User authenticated but no church context yet. Waiting for church assignment...');
                 // Clear data until church context is available
                 setMembers([]);
                 setBacentas([]);
