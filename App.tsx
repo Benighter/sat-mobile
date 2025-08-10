@@ -17,7 +17,6 @@ import {
   LazyMyDeletionRequestsView,
   LazyMemberDeletionRequestsView,
   LazyOutreachView,
-  LazyAllBacentasView,
   LazyBacentaOutreachView
 } from './components/common/LazyWrapper';
 import ProfileSettingsView from './components/views/ProfileSettingsView';
@@ -170,7 +169,8 @@ const AppContent: React.FC = memo(() => {
       case TabKeys.ALL_BACENTAS:
         return (
           <LazyWrapper>
-            <LazyAllBacentasView />
+            {/* Changed to BacentaLeadersView: 'All Bacenta Leaders' tab should list leaders (with hierarchy linking) not buildings */}
+            <LazyBacentaLeadersView />
           </LazyWrapper>
         );
       case TabKeys.ATTENDANCE_ANALYTICS:

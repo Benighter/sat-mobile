@@ -11,15 +11,11 @@ import Badge from '../ui/Badge';
 import ImageUpload from '../ui/ImageUpload';
 import ChangePasswordModal from '../auth/ChangePasswordModal';
 import AdminInviteManager from '../admin/AdminInviteManager';
-import PushNotificationSettings from '../notifications/PushNotificationSettings';
+// import PushNotificationSettings from '../notifications/PushNotificationSettings';
 import { hasAdminPrivileges, hasLeaderPrivileges } from '../../utils/permissionUtils';
 import {
-  MoonIcon,
   SunIcon,
   UserIcon,
-  CameraIcon,
-  CheckIcon,
-  XMarkIcon,
   EnvelopeIcon,
   BuildingOfficeIcon,
   ShieldCheckIcon,
@@ -127,10 +123,7 @@ const ProfileSettingsView: React.FC = () => {
     handleBirthdayNotificationChange('daysBeforeNotification', newDays);
   };
 
-  const handleProfileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setProfileData(prev => ({ ...prev, [name]: value }));
-  };
+  // Removed old handleProfileChange (inputs now use inline setters)
 
   const handleImageChange = (base64: string | null) => {
     const imageData = base64 || '';
@@ -175,18 +168,7 @@ const ProfileSettingsView: React.FC = () => {
     }
   };
 
-  const getInitials = (user: any) => {
-    if (user?.firstName && user?.lastName) {
-      return `${user.firstName[0]}${user.lastName[0]}`.toUpperCase();
-    }
-    if (user?.displayName) {
-      const names = user.displayName.split(' ');
-      return names.length > 1
-        ? `${names[0][0]}${names[names.length - 1][0]}`.toUpperCase()
-        : names[0][0].toUpperCase();
-    }
-    return 'U';
-  };
+  // getInitials helper removed (unused after UI adjustments)
 
   const handleFixAccess = async () => {
     if (!user) return;
@@ -282,7 +264,7 @@ const ProfileSettingsView: React.FC = () => {
                 type="text"
                 name="firstName"
                 value={profileData.firstName}
-                onChange={handleProfileChange}
+                onChange={(val) => setProfileData(p => ({ ...p, firstName: val }))}
                 placeholder="Enter first name"
                 required
                 className="h-14 text-base border-2 border-gray-200 dark:border-dark-600 focus:border-blue-500 dark:focus:border-blue-400 rounded-2xl px-4 transition-all duration-200 bg-white dark:bg-dark-700 text-gray-900 dark:text-dark-100"
@@ -297,7 +279,7 @@ const ProfileSettingsView: React.FC = () => {
                 type="text"
                 name="lastName"
                 value={profileData.lastName}
-                onChange={handleProfileChange}
+                onChange={(val) => setProfileData(p => ({ ...p, lastName: val }))}
                 placeholder="Enter last name"
                 className="h-14 text-base border-2 border-gray-200 dark:border-dark-600 focus:border-blue-500 dark:focus:border-blue-400 rounded-2xl px-4 transition-all duration-200 bg-white dark:bg-dark-700 text-gray-900 dark:text-dark-100"
               />
@@ -311,7 +293,7 @@ const ProfileSettingsView: React.FC = () => {
                 type="tel"
                 name="phoneNumber"
                 value={profileData.phoneNumber}
-                onChange={handleProfileChange}
+                onChange={(val) => setProfileData(p => ({ ...p, phoneNumber: val }))}
                 placeholder="Enter phone number"
                 className="h-14 text-base border-2 border-gray-200 dark:border-dark-600 focus:border-blue-500 dark:focus:border-blue-400 rounded-2xl px-4 transition-all duration-200 bg-white dark:bg-dark-700 text-gray-900 dark:text-dark-100"
               />
@@ -528,10 +510,12 @@ const ProfileSettingsView: React.FC = () => {
           </div>
         </div>
 
-        {/* Push Notification Settings - Show for admin users */}
-        {hasAdminPrivileges(userProfile) && (
-          <PushNotificationSettings className="mb-8" />
-        )}
+        {/* Push Notification Settings (temporarily disabled)
+            Original (restore when re‑enabling push):
+            {hasAdminPrivileges(userProfile) && (
+              <PushNotificationSettings className="mb-8" />
+            )}
+        */}
 
         {/* Leader Features - Show for both admin and leader roles */}
         {hasLeaderPrivileges(userProfile) && (

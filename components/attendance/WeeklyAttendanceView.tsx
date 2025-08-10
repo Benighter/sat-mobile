@@ -17,11 +17,21 @@ import {
 } from '../icons';
 import { Member, NewBeliever, Bacenta } from '../../types';
 
-interface BacentaAttendance {
-  bacenta: Bacenta;
-  presentMembers: Member[];
-  presentNewBelievers: NewBeliever[];
-  total: number;
+// New grouped structure types
+interface FellowshipGroup {
+  fellowshipLeader: Member; // role: Fellowship Leader
+  bacenta: Bacenta | { id: string; name: string };
+  members: Member[]; // includes fellowshipLeader + present members in that fellowship leader's bacenta
+  total: number; // members length
+}
+
+interface BacentaLeaderGroup {
+  bacentaLeader: Member; // role: Bacenta Leader
+  bacenta: Bacenta | { id: string; name: string };
+  mainMembers: Member[]; // Present members in leader's own bacenta (including leader) excluding fellowship leaders
+  fellowshipGroups: FellowshipGroup[]; // Nested fellowship leader groups linked via bacentaLeaderId
+  newBelievers: NewBeliever[]; // Present new believers (unassigned or could be associated later)
+  total: number; // mainMembers + sum fellowshipGroups totals + newBelievers
 }
 
 const WeeklyAttendanceView: React.FC = () => {
@@ -35,74 +45,82 @@ const WeeklyAttendanceView: React.FC = () => {
 
   const [selectedSunday, setSelectedSunday] = useState<string>(getCurrentOrMostRecentSunday());
 
-  // Calculate attendance data for the selected Sunday
-  const attendanceData = useMemo(() => {
-    // Get all attendance records for the selected Sunday
-    const sundayRecords = attendanceRecords.filter(
-      record => record.date === selectedSunday && record.status === 'Present'
+  // Calculate new grouped attendance data for the selected Sunday
+  const groupedAttendance = useMemo(() => {
+    const sundayRecords = attendanceRecords.filter(r => r.date === selectedSunday && r.status === 'Present');
+    const presentMemberIds = new Set(
+      sundayRecords.filter(r => r.memberId).map(r => r.memberId as string)
+    );
+    const presentNewBelieverIds = new Set(
+      sundayRecords.filter(r => r.newBelieverId).map(r => r.newBelieverId as string)
     );
 
-    // Get present member IDs and new believer IDs
-    const presentMemberIds = sundayRecords
-      .filter(record => record.memberId)
-      .map(record => record.memberId!);
-    
-    const presentNewBelieverIds = sundayRecords
-      .filter(record => record.newBelieverId)
-      .map(record => record.newBelieverId!);
+    const presentMembers = members.filter(m => presentMemberIds.has(m.id));
+    const presentNewBelievers = newBelievers.filter(nb => presentNewBelieverIds.has(nb.id));
 
-    // Get present members and new believers
-    const presentMembers = members.filter(member => presentMemberIds.includes(member.id));
-    const presentNewBelievers = newBelievers.filter(nb => presentNewBelieverIds.includes(nb.id));
+    // Helper lookups
+    const bacentaMap = new Map<string, Bacenta>();
+    bacentas.forEach(b => bacentaMap.set(b.id, b));
 
-    // Group by bacenta
-    const bacentaAttendanceMap = new Map<string, BacentaAttendance>();
-
-    // Initialize all bacentas
-    bacentas.forEach(bacenta => {
-      bacentaAttendanceMap.set(bacenta.id, {
-        bacenta,
-        presentMembers: [],
-        presentNewBelievers: [],
-        total: 0
-      });
+    const presentByBacenta = new Map<string, Member[]>();
+    presentMembers.forEach(m => {
+      const key = m.bacentaId || 'unassigned';
+      if (!presentByBacenta.has(key)) presentByBacenta.set(key, []);
+      presentByBacenta.get(key)!.push(m);
     });
 
-    // Add a special entry for unassigned members
-    bacentaAttendanceMap.set('unassigned', {
-      bacenta: { id: 'unassigned', name: 'Unassigned Members' },
-      presentMembers: [],
-      presentNewBelievers: [],
-      total: 0
+    // Identify present bacenta leaders
+    const presentBacentaLeaders = presentMembers.filter(m => m.role === 'Bacenta Leader');
+
+    const groups: BacentaLeaderGroup[] = presentBacentaLeaders.map(leader => {
+      const leaderBacenta = leader.bacentaId ? bacentaMap.get(leader.bacentaId) || { id: leader.bacentaId, name: 'Unknown Bacenta' } : { id: 'unassigned', name: 'Unassigned' };
+      const allInLeaderBacenta = presentByBacenta.get(leader.bacentaId) || [];
+      // Exclude fellowship leaders (they get their own section) from main list
+      const mainMembers = allInLeaderBacenta.filter(m => m.role !== 'Fellowship Leader');
+
+      // Fellowship leaders under this bacenta leader
+      const fellowshipLeaders = presentMembers.filter(m => m.role === 'Fellowship Leader' && m.bacentaLeaderId === leader.id);
+      const fellowshipGroups: FellowshipGroup[] = fellowshipLeaders.map(fl => {
+        const flBacenta = fl.bacentaId ? bacentaMap.get(fl.bacentaId) || { id: fl.bacentaId, name: 'Unknown Bacenta' } : { id: 'unassigned', name: 'Unassigned' };
+  const membersInFellowship = (presentByBacenta.get(fl.bacentaId) || []); // all present in that bacenta incl fellowship leader
+        return {
+          fellowshipLeader: fl,
+          bacenta: flBacenta,
+          members: membersInFellowship,
+          total: membersInFellowship.length
+        };
+      }).sort((a, b) => a.bacenta.name.localeCompare(b.bacenta.name));
+
+      const nbForLeader: NewBeliever[] = presentNewBelievers; // Currently no direct linkage; include globally later
+
+      const total = mainMembers.length + fellowshipGroups.reduce((s, g) => s + g.total, 0) + nbForLeader.length;
+
+      return {
+        bacentaLeader: leader,
+        bacenta: leaderBacenta,
+        mainMembers: mainMembers.sort((a, b) => (a.lastName || '').localeCompare(b.lastName || '') || a.firstName.localeCompare(b.firstName)),
+        fellowshipGroups,
+        newBelievers: nbForLeader, // Could refine distribution later
+        total
+      };
+    }).sort((a, b) => a.bacenta.name.localeCompare(b.bacenta.name));
+
+    // Fallback group for present members without a bacenta leader (unassigned or leader absent)
+    const accountedMemberIds = new Set<string>();
+    groups.forEach(g => {
+      g.mainMembers.forEach(m => accountedMemberIds.add(m.id));
+      g.fellowshipGroups.forEach(fg => fg.members.forEach(m => accountedMemberIds.add(m.id)));
     });
 
-    // Group present members by bacenta
-    presentMembers.forEach(member => {
-      const bacentaId = member.bacentaId || 'unassigned';
-      const attendance = bacentaAttendanceMap.get(bacentaId);
-      if (attendance) {
-        attendance.presentMembers.push(member);
-        attendance.total++;
-      }
-    });
+    const leftovers = presentMembers.filter(m => !accountedMemberIds.has(m.id));
+    let leftoverGroup: { members: Member[] } | null = null;
+    if (leftovers.length) {
+      leftoverGroup = { members: leftovers.sort((a, b) => (a.lastName || '').localeCompare(b.lastName || '') || a.firstName.localeCompare(b.firstName)) };
+    }
 
-    // Add present new believers (they don't have bacenta assignments, so add to unassigned)
-    presentNewBelievers.forEach(newBeliever => {
-      const attendance = bacentaAttendanceMap.get('unassigned');
-      if (attendance) {
-        attendance.presentNewBelievers.push(newBeliever);
-        attendance.total++;
-      }
-    });
+    const grandTotal = presentMembers.length + presentNewBelievers.length; // unique counts
 
-    // Convert to array and filter out bacentas with no attendance
-    const attendanceList = Array.from(bacentaAttendanceMap.values())
-      .filter(attendance => attendance.total > 0)
-      .sort((a, b) => a.bacenta.name.localeCompare(b.bacenta.name));
-
-    const grandTotal = attendanceList.reduce((sum, attendance) => sum + attendance.total, 0);
-
-    return { attendanceList, grandTotal };
+    return { groups, leftoverGroup, grandTotal };
   }, [selectedSunday, attendanceRecords, members, newBelievers, bacentas]);
 
   // Copy attendance data as formatted text
@@ -111,59 +129,37 @@ const WeeklyAttendanceView: React.FC = () => {
       const dateText = formatFullDate(selectedSunday);
       let text = `Weekly Attendance - ${dateText}\n\n`;
 
-      if (attendanceData.attendanceList.length === 0) {
+      if (groupedAttendance.groups.length === 0 && !groupedAttendance.leftoverGroup) {
         text += 'No attendance records for this Sunday.';
       } else {
-        attendanceData.attendanceList.forEach((attendance, index) => {
-          text += `${attendance.bacenta.name}\n`;
-
-          // Sort members by role hierarchy for text output
-          const getRolePriority = (role: string | undefined) => {
-            switch (role) {
-              case 'Bacenta Leader': return 1;
-              case 'Fellowship Leader': return 2;
-              case 'Member': return 3;
-              default: return 4;
-            }
-          };
-
-          const sortedMembers = [...attendance.presentMembers].sort((a, b) => {
-            const rolePriorityA = getRolePriority(a.role);
-            const rolePriorityB = getRolePriority(b.role);
-
-            if (rolePriorityA !== rolePriorityB) {
-              return rolePriorityA - rolePriorityB;
-            }
-
-            return (a.lastName || '').localeCompare(b.lastName || '') || a.firstName.localeCompare(b.firstName);
+        groupedAttendance.groups.forEach((group, i) => {
+          text += `💚 Bacenta leader: ${group.bacentaLeader.firstName} ${group.bacentaLeader.lastName || ''} (${group.bacenta.name})\n`;
+          group.mainMembers.forEach((m, idx) => {
+            text += `${idx + 1}. ${m.firstName} ${m.lastName || ''}\n`;
           });
-
-          // Add regular members with role indicators
-          sortedMembers.forEach((member, memberIndex) => {
-            let roleIndicator = '';
-            if (member.role === 'Bacenta Leader') {
-              roleIndicator = ' 💚';
-            } else if (member.role === 'Fellowship Leader') {
-              roleIndicator = ' ❤️';
-            }
-            text += `${memberIndex + 1}. ${member.firstName} ${member.lastName || ''}${roleIndicator}\n`;
+          group.fellowshipGroups.forEach(fg => {
+            text += `\n❤️ Fellowship leader: ${fg.fellowshipLeader.firstName} ${fg.fellowshipLeader.lastName || ''} (${fg.bacenta.name})\n`;
+            fg.members.forEach((m, idx) => {
+              text += `${idx + 1}. ${m.firstName} ${m.lastName || ''}\n`;
+            });
           });
-
-          // Add new believers
-          attendance.presentNewBelievers.forEach((newBeliever, nbIndex) => {
-            const number = attendance.presentMembers.length + nbIndex + 1;
-            text += `${number}. ${newBeliever.name} ${newBeliever.surname} (New Believer)\n`;
-          });
-
-          text += `Total: ${attendance.total}\n`;
-
-          // Add spacing between bacentas (except for the last one)
-          if (index < attendanceData.attendanceList.length - 1) {
-            text += '\n';
+          if (group.newBelievers.length) {
+            text += `\nNew Believers:\n`;
+            group.newBelievers.forEach((nb, nbIdx) => {
+              text += `${nbIdx + 1}. ${nb.name} ${nb.surname} (New Believer)\n`;
+            });
           }
+          text += `\nTotal: ${group.total}\n`;
+          if (i < groupedAttendance.groups.length - 1 || groupedAttendance.leftoverGroup) text += '\n';
         });
-
-        text += `\nGrand Total: ${attendanceData.grandTotal}`;
+        if (groupedAttendance.leftoverGroup) {
+          text += `Unassigned / No Leader Group\n`;
+            groupedAttendance.leftoverGroup.members.forEach((m, idx) => {
+              text += `${idx + 1}. ${m.firstName} ${m.lastName || ''}\n`;
+            });
+          text += `Total: ${groupedAttendance.leftoverGroup.members.length}\n`;
+        }
+        text += `\nGrand Total: ${groupedAttendance.grandTotal}`;
       }
 
       await navigator.clipboard.writeText(text);
@@ -247,7 +243,7 @@ const WeeklyAttendanceView: React.FC = () => {
 
           {/* Professional Attendance Content */}
           <div className="p-6">
-            {attendanceData.attendanceList.length === 0 ? (
+            {groupedAttendance.groups.length === 0 && !groupedAttendance.leftoverGroup ? (
               <div className="text-center py-12">
                 <UsersIcon className="w-12 h-12 text-gray-300 mx-auto mb-4" />
                 <h3 className="text-lg font-medium text-gray-600 mb-1">No Attendance Records</h3>
@@ -255,106 +251,68 @@ const WeeklyAttendanceView: React.FC = () => {
               </div>
             ) : (
               <>
-                {/* Professional Attendance List */}
-                <div className="divide-y divide-gray-100">
-                  {attendanceData.attendanceList.map((attendance, bacentaIndex) => {
-                    // Sort members by role priority
-                    const getRolePriority = (role: string | undefined) => {
-                      switch (role) {
-                        case 'Bacenta Leader': return 1;
-                        case 'Fellowship Leader': return 2;
-                        case 'Member': return 3;
-                        default: return 4;
-                      }
-                    };
-
-                    const sortedMembers = [...attendance.presentMembers].sort((a, b) => {
-                      const rolePriorityA = getRolePriority(a.role);
-                      const rolePriorityB = getRolePriority(b.role);
-
-                      if (rolePriorityA !== rolePriorityB) {
-                        return rolePriorityA - rolePriorityB;
-                      }
-
-                      return a.lastName.localeCompare(b.lastName) || a.firstName.localeCompare(b.firstName);
-                    });
-
-                    return (
-                      <div key={attendance.bacenta.id} className={`py-4 ${bacentaIndex > 0 ? 'pt-6' : ''}`}>
-                        {/* Professional Bacenta Header */}
-                        <div className="flex items-center justify-between mb-4">
-                          <div className="flex items-center space-x-3">
-                            <div className="w-10 h-10 bg-indigo-500 rounded-lg flex items-center justify-center">
-                              <span className="text-white font-bold">
-                                {attendance.bacenta.name.charAt(0)}
-                              </span>
-                            </div>
-                            <div>
-                              <h3 className="text-lg font-semibold text-gray-900">{attendance.bacenta.name}</h3>
-                              <p className="text-sm text-gray-500">Bacenta Community</p>
-                            </div>
-                          </div>
-                          <div className="bg-indigo-100 text-indigo-800 px-3 py-1 rounded-lg border border-indigo-200">
-                            <span className="text-lg font-bold">{attendance.total}</span>
-                            <span className="text-sm ml-1">present</span>
-                          </div>
-                        </div>
-
-                        {/* Professional Members List */}
-                        <div className="space-y-2">
-                          {sortedMembers.map((member, index) => (
-                            <div key={member.id} className="flex items-start">
-                              <span className="text-gray-500 text-sm font-medium w-6 pt-0.5">
-                                {index + 1}.
-                              </span>
-                              <div className="flex flex-wrap items-center gap-2">
-                                <span className="text-gray-900">
-                                  {member.firstName} {member.lastName}
-                                </span>
-                                {/* Role Indicator */}
-                                {member.role === 'Bacenta Leader' && (
-                                  <span className="inline-flex items-center px-2 py-1 text-xs bg-emerald-100 text-emerald-700 rounded-md border border-emerald-200">
-                                    <span className="mr-1">💚</span>
-                                    <span className="hidden sm:inline">Bacenta Leader</span>
-                                  </span>
-                                )}
-                                {member.role === 'Fellowship Leader' && (
-                                  <span className="inline-flex items-center px-2 py-1 text-xs bg-rose-100 text-rose-700 rounded-md border border-rose-200">
-                                    <span className="mr-1">❤️</span>
-                                    <span className="hidden sm:inline">Fellowship Leader</span>
-                                  </span>
-                                )}
-                              </div>
-                            </div>
+                {/* Grouped Attendance List */}
+                <div className="space-y-10">
+                  {groupedAttendance.groups.map(group => (
+                    <div key={group.bacentaLeader.id} className="border border-gray-200 rounded-xl p-4 shadow-sm">
+                      {/* Bacenta Leader Section */}
+                      <div className="mb-4">
+                        <h3 className="text-lg font-semibold text-gray-900 flex items-center">
+                          <span className="mr-2 text-xl">💚</span>
+                          Bacenta leader: {group.bacentaLeader.firstName} {group.bacentaLeader.lastName || ''} ({group.bacenta.name})
+                        </h3>
+                        <ol className="mt-2 space-y-1 list-decimal list-inside">
+                          {group.mainMembers.map(m => (
+                            <li key={m.id} className="text-gray-800">{m.firstName} {m.lastName}</li>
                           ))}
-
-                          {/* New Believers */}
-                          {attendance.presentNewBelievers.map((newBeliever, index) => (
-                            <div key={newBeliever.id} className="flex items-start">
-                              <span className="text-gray-500 text-sm font-medium w-6 pt-0.5">
-                                {attendance.presentMembers.length + index + 1}.
-                              </span>
-                              <div className="flex flex-wrap items-center gap-2">
-                                <span className="text-gray-900">
-                                  {newBeliever.name} {newBeliever.surname}
-                                </span>
-                                <span className="inline-flex items-center px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded-md border border-blue-200">
-                                  New Believer
-                                </span>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
+                        </ol>
                       </div>
-                    );
-                  })}
+                      {/* Fellowship Leader Groups */}
+                      {group.fellowshipGroups.map(fg => (
+                        <div key={fg.fellowshipLeader.id} className="mb-4 last:mb-0">
+                          <h4 className="font-medium text-gray-900 flex items-center">
+                            <span className="mr-2 text-lg">❤️</span>
+                            Fellowship leader: {fg.fellowshipLeader.firstName} {fg.fellowshipLeader.lastName || ''} ({fg.bacenta.name})
+                          </h4>
+                          <ol className="mt-2 space-y-1 list-decimal list-inside">
+                            {fg.members.map(m => (
+                              <li key={m.id} className="text-gray-800">{m.firstName} {m.lastName}</li>
+                            ))}
+                          </ol>
+                        </div>
+                      ))}
+                      {/* New Believers */}
+                      {group.newBelievers.length > 0 && (
+                        <div className="mt-2">
+                          <h5 className="text-sm font-semibold text-blue-600">New Believers</h5>
+                          <ol className="mt-1 space-y-1 list-decimal list-inside">
+                            {group.newBelievers.map(nb => (
+                              <li key={nb.id} className="text-gray-800">{nb.name} {nb.surname} <span className="text-xs text-blue-500">(New Believer)</span></li>
+                            ))}
+                          </ol>
+                        </div>
+                      )}
+                      <div className="mt-4 text-sm font-semibold text-gray-700">Total: {group.total}</div>
+                    </div>
+                  ))}
+                  {groupedAttendance.leftoverGroup && (
+                    <div className="border border-gray-200 rounded-xl p-4 shadow-sm">
+                      <h3 className="text-lg font-semibold text-gray-900 mb-2">Unassigned / No Leader</h3>
+                      <ol className="space-y-1 list-decimal list-inside">
+                        {groupedAttendance.leftoverGroup.members.map(m => (
+                          <li key={m.id} className="text-gray-800">{m.firstName} {m.lastName}</li>
+                        ))}
+                      </ol>
+                      <div className="mt-4 text-sm font-semibold text-gray-700">Total: {groupedAttendance.leftoverGroup.members.length}</div>
+                    </div>
+                  )}
                 </div>
 
-                {/* Professional Grand Total */}
+                {/* Grand Total */}
                 <div className="mt-8 pt-6 border-t border-gray-200">
                   <div className="flex items-center justify-between">
                     <h3 className="text-lg font-semibold text-gray-900">Grand Total</h3>
-                    <span className="text-2xl font-bold text-slate-600">{attendanceData.grandTotal}</span>
+                    <span className="text-2xl font-bold text-slate-600">{groupedAttendance.grandTotal}</span>
                   </div>
                   <p className="text-sm text-gray-500 mt-1">
                     Total attendance across all bacentas for {formatFullDate(selectedSunday)}
