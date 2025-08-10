@@ -1,16 +1,15 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Member, MemberRole } from '../../../types';
 import { useAppContext } from '../../../contexts/FirebaseAppContext';
 import Modal from '../../ui/Modal';
 import Input from '../../ui/Input';
-import Select from '../../ui/Select';
-import Checkbox from '../../ui/Checkbox';
+// Removed unused Select & Checkbox imports
 import Button from '../../ui/Button';
 import ImageUpload from '../../ui/ImageUpload';
-import { formatDateToYYYYMMDD } from '../../../utils/dateUtils';
+// Removed unused formatDateToYYYYMMDD import
 import { canAssignMemberRoles } from '../../../utils/permissionUtils';
-import { User, MapPin, Phone, Home, Users, Shield } from 'lucide-react';
+import { User, Phone, Home, Users, Shield } from 'lucide-react';
 
 interface MemberFormModalProps {
   isOpen: boolean;
@@ -19,7 +18,7 @@ interface MemberFormModalProps {
 }
 
 const MemberFormModal: React.FC<MemberFormModalProps> = ({ isOpen, onClose, member }) => {
-  const { addMemberHandler, updateMemberHandler, bacentas, currentTab, userProfile } = useAppContext();
+  const { addMemberHandler, updateMemberHandler, bacentas, currentTab, userProfile, members } = useAppContext();
 
   // Check if user can assign roles
   const canAssignRoles = canAssignMemberRoles(userProfile);
@@ -37,7 +36,8 @@ const MemberFormModal: React.FC<MemberFormModalProps> = ({ isOpen, onClose, memb
     roomNumber: '',
     profilePicture: '',
     bornAgainStatus: false,
-    bacentaId: currentBacentaId || (bacentas.length > 0 ? bacentas[0].id : ''),
+  bacentaId: currentBacentaId || (bacentas.length > 0 ? bacentas[0].id : ''),
+  linkedBacentaIds: [],
     role: 'Member' as MemberRole, // Default role is Member
     birthday: '', // Optional birthday field
   };
@@ -55,6 +55,7 @@ const MemberFormModal: React.FC<MemberFormModalProps> = ({ isOpen, onClose, memb
         profilePicture: member.profilePicture || '',
         bornAgainStatus: member.bornAgainStatus,
         bacentaId: member.bacentaId,
+        linkedBacentaIds: member.linkedBacentaIds || [],
         role: member.role || 'Member', // Default to Member if role is not set (for backward compatibility)
         birthday: member.birthday || '', // Include birthday field
       });
@@ -64,13 +65,53 @@ const MemberFormModal: React.FC<MemberFormModalProps> = ({ isOpen, onClose, memb
       setFormData({
         ...initialFormData,
         bacentaId: defaultBacentaId,
+        linkedBacentaIds: [],
       });
     }
     setErrors({});
   }, [isOpen, member, bacentas, currentBacentaId]); // Added currentBacentaId dependency
 
+  // Set of bacenta IDs that already have a primary leader (a leader whose main bacentaId matches)
+  const primaryLedBacentaIds = useMemo(() => {
+    const set = new Set<string>();
+    members.forEach(m => {
+      if ((m.role === 'Bacenta Leader' || m.role === 'Fellowship Leader') && m.bacentaId) {
+        set.add(m.bacentaId);
+      }
+    });
+    return set;
+  }, [members]);
+
+  // Candidate bacentas for linking: not primary-led & not already linked to another leader OR already linked by this member
+  const candidateLinkedBacentas = useMemo(() => {
+    const takenLinked = new Set<string>();
+    members.forEach(m => {
+      if ((m.role === 'Bacenta Leader' || m.role === 'Fellowship Leader') && m.id !== (member?.id || '')) {
+        (m.linkedBacentaIds || []).forEach(id => takenLinked.add(id));
+      }
+    });
+    return bacentas.filter(b => {
+      if (b.id === formData.bacentaId) return false; // exclude primary
+      const alreadyLinked = (formData.linkedBacentaIds || []).includes(b.id);
+      const hasPrimaryLeader = primaryLedBacentaIds.has(b.id);
+      const takenByAnotherLink = takenLinked.has(b.id);
+      return ((!hasPrimaryLeader && !takenByAnotherLink) || alreadyLinked);
+    });
+  }, [bacentas, formData.bacentaId, formData.linkedBacentaIds, primaryLedBacentaIds, members, member]);
+
+  const toggleLinkedBacenta = (bacentaId: string) => {
+    setFormData(prev => {
+      const current = prev.linkedBacentaIds || [];
+      return current.includes(bacentaId)
+        ? { ...prev, linkedBacentaIds: current.filter(id => id !== bacentaId) }
+        : { ...prev, linkedBacentaIds: [...current, bacentaId] };
+    });
+  };
+
+  const clearLinkedBacentas = () => setFormData(prev => ({ ...prev, linkedBacentaIds: [] }));
+
   // Handler for regular HTML elements (checkbox, select, etc.)
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value, type } = e.target;
 
     if (type === 'checkbox') {
@@ -316,6 +357,56 @@ const MemberFormModal: React.FC<MemberFormModalProps> = ({ isOpen, onClose, memb
                 )}
                 {errors.bacentaId && <p className="mt-1 text-xs text-red-600">{errors.bacentaId}</p>}
               </div>
+
+              {/* Linked Bacentas Selector (leaders only) */}
+              {(formData.role === 'Bacenta Leader' || formData.role === 'Fellowship Leader') && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-sm font-medium text-gray-700">Linked Bacentas (Optional)</label>
+                    {(formData.linkedBacentaIds?.length || 0) > 0 && (
+                      <button
+                        type="button"
+                        onClick={clearLinkedBacentas}
+                        className="text-xs text-blue-600 hover:underline"
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
+                  <div className="border border-gray-200 rounded-lg divide-y max-h-48 overflow-auto bg-white">
+                    {candidateLinkedBacentas.length === 0 && (
+                      <div className="p-3 text-xs text-gray-500">No available bacentas to link.</div>
+                    )}
+                    {candidateLinkedBacentas.map(b => {
+                      const checked = (formData.linkedBacentaIds || []).includes(b.id);
+                      const hasPrimaryLeader = primaryLedBacentaIds.has(b.id);
+                      return (
+                        <label
+                          key={b.id}
+                          className={`flex items-center gap-2 p-2 text-sm cursor-pointer hover:bg-gray-50 ${hasPrimaryLeader && !checked ? 'opacity-60' : ''}`}
+                        >
+                          <input
+                            type="checkbox"
+                            className="rounded text-blue-600 focus:ring-blue-500"
+                            checked={checked}
+                            onChange={() => toggleLinkedBacenta(b.id)}
+                          />
+                          <span className="flex-1">{b.name}</span>
+                          {hasPrimaryLeader && checked && (
+                            <span className="text-[10px] px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded-full">linked</span>
+                          )}
+                          {hasPrimaryLeader && !checked && (
+                            <span className="text-[10px] px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded-full">has leader</span>
+                          )}
+                        </label>
+                      );
+                    })}
+                  </div>
+                  <p className="text-xs text-gray-500 leading-relaxed">
+                    Only bacentas without a primary leader are shown. Already linked ones remain visible. The leader won't be duplicated in counts.
+                  </p>
+                </div>
+              )}
 
               {canAssignRoles && (
                 <div className="space-y-2">

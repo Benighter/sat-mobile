@@ -11,6 +11,12 @@ export interface Member {
   profilePicture?: string; // Base64 encoded image string
   bornAgainStatus: boolean;
   bacentaId: string; // Renamed from congregationGroup, stores Bacenta.id, empty if unassigned
+  /**
+   * Additional bacentas this leader is linked to. The member officially belongs
+   * to `bacentaId` only (for counting), but can be linked to others for weekly
+   * structure display. Leader should not be duplicated in those linked bacentas' member lists.
+   */
+  linkedBacentaIds?: string[]; // Secondary/linked bacentas (leaders only)
   bacentaLeaderId?: string; // For Fellowship Leaders: ID of the Bacenta Leader they report to
   role: MemberRole; // Role assignment: Member (default), Fellowship Leader, or Bacenta Leader
   birthday?: string; // Optional birthday field in YYYY-MM-DD format

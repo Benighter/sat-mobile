@@ -952,6 +952,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
         roomNumber: om.roomNumber || '',
         bornAgainStatus: false,
         bacentaId: om.bacentaId,
+  linkedBacentaIds: [],
         bacentaLeaderId: '',
         role: 'Member'
       };

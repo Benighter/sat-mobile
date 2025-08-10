@@ -163,67 +163,68 @@ const CopyMembersView: React.FC = () => {
     const lines: string[] = [];
 
     if (options.groupByBacenta) {
-      // Group members by bacenta
-      const membersByBacenta = membersToProcess.reduce((acc, member) => {
-        const bacentaId = member.bacentaId || 'unassigned';
-        if (!acc[bacentaId]) {
-          acc[bacentaId] = [];
-        }
-        acc[bacentaId].push(member);
-        return acc;
-      }, {} as Record<string, Member[]>);
+      // Build leader linkage map
+      const leaders = members.filter(m => m.role === 'Bacenta Leader' || m.role === 'Fellowship Leader');
+      const primaryLeaderByBacenta: Record<string, Member | undefined> = {};
+      leaders.forEach(l => { if (l.bacentaId) primaryLeaderByBacenta[l.bacentaId] = l; });
 
-      // Sort bacentas alphabetically
-      const sortedBacentaIds = Object.keys(membersByBacenta).sort((a, b) => {
-        const nameA = a === 'unassigned' ? 'Unassigned Members' : (getBacentaName(a) || 'Unknown Bacenta');
-        const nameB = b === 'unassigned' ? 'Unassigned Members' : (getBacentaName(b) || 'Unknown Bacenta');
-        return nameA.localeCompare(nameB);
-      });
+      // Collect set of bacentas including linked ones
+      const bacentaSet = new Set<string>();
+      membersToProcess.forEach(m => { if (m.bacentaId) bacentaSet.add(m.bacentaId); });
+      leaders.forEach(l => (l.linkedBacentaIds || []).forEach(id => bacentaSet.add(id)));
+
+      const sortedBacentaIds = Array.from(bacentaSet).sort((a,b) => (getBacentaName(a)||'').localeCompare(getBacentaName(b)||''));
 
       let globalCounter = 1;
+      const countedMemberIds = new Set<string>();
 
-      sortedBacentaIds.forEach((bacentaId, bacentaIndex) => {
-        const bacentaMembers = membersByBacenta[bacentaId];
-        const bacentaName = bacentaId === 'unassigned' ? 'Unassigned Members' : (getBacentaName(bacentaId) || 'Unknown Bacenta');
+      sortedBacentaIds.forEach((bacentaId, idx) => {
+        const bacentaName = getBacentaName(bacentaId) || 'Unknown Bacenta';
+        const primaryLeader = primaryLeaderByBacenta[bacentaId];
+        // Find if this bacenta is only linked to a leader (no primary leader here)
+        const linkedLeader = !primaryLeader ? leaders.find(l => (l.linkedBacentaIds || []).includes(bacentaId)) : undefined;
 
-        // Add bacenta header
-        lines.push(`${bacentaName} Bacenta`);
+        // Header logic
+        if (primaryLeader) {
+          const heart = primaryLeader.role === 'Bacenta Leader' ? '💚' : '❤️';
+            lines.push(`${heart} ${primaryLeader.role === 'Bacenta Leader' ? 'Bacenta leader:' : 'Fellowship leader:'} ${primaryLeader.firstName} ${primaryLeader.lastName || ''} ${bacentaName}`.trim());
+          countedMemberIds.add(primaryLeader.id);
+        } else if (linkedLeader) {
+          // Linked bacenta header without repeating leader name
+          lines.push(`❤ ${bacentaName}`);
+        } else {
+          // Fallback standard header
+            lines.push(`${bacentaName} Bacenta`);
+        }
 
-        // Process members in this bacenta
-        bacentaMembers.forEach((member) => {
+        // Members belonging directly to this bacenta
+        const bacentaMembers = membersToProcess.filter(m => m.bacentaId === bacentaId);
+
+        bacentaMembers.forEach(member => {
+          // Skip leader if already counted (primary) or if this is a linked bacenta and member is the linked leader
+          if (countedMemberIds.has(member.id)) return;
           const parts: string[] = [];
-
-          // Always add numbering (default behavior)
           parts.push(`${globalCounter}.`);
-
-          if (options.includeNames && member.firstName) {
-            parts.push(member.firstName.trim());
-          }
-
-          if (options.includeSurnames && member.lastName && member.lastName.trim()) {
-            parts.push(member.lastName.trim());
-          }
-
-          if (options.includePhones && member.phoneNumber && member.phoneNumber !== '-' && member.phoneNumber.trim()) {
-            parts.push(member.phoneNumber.trim());
-          }
-
-          if (options.includeBirthdays && member.birthday) {
-            parts.push(`(${formatBirthdayDisplay(member.birthday)})`);
-          }
-
+          if (options.includeNames && member.firstName) parts.push(member.firstName.trim());
+          if (options.includeSurnames && member.lastName && member.lastName.trim()) parts.push(member.lastName.trim());
+          if (options.includePhones && member.phoneNumber && member.phoneNumber !== '-' && member.phoneNumber.trim()) parts.push(member.phoneNumber.trim());
+          if (options.includeBirthdays && member.birthday) parts.push(`(${formatBirthdayDisplay(member.birthday)})`);
           const line = parts.join(' ');
           if (line.trim()) {
             lines.push(line);
+            countedMemberIds.add(member.id);
             globalCounter++;
           }
         });
 
-        // Add empty line between bacentas (except for the last one)
-        if (bacentaIndex < sortedBacentaIds.length - 1) {
-          lines.push('');
-        }
+        if (idx < sortedBacentaIds.length - 1) lines.push('');
       });
+
+      // Add Total line (unique count)
+      if (sortedBacentaIds.length > 0) {
+        lines.push('');
+        lines.push(`Total: ${Array.from(new Set(membersToProcess.map(m => m.id))).length}`);
+      }
     } else {
       // Single list format
       // Add bacenta name if requested and we're filtering by a specific bacenta
@@ -262,7 +263,7 @@ const CopyMembersView: React.FC = () => {
       });
     }
 
-    return lines.join('\n');
+  return lines.join('\n');
   };
 
   // Handle copy to clipboard
