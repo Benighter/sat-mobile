@@ -8,6 +8,9 @@ const config: CapacitorConfig = {
     Filesystem: {
       iosScheme: 'file',
       androidScheme: 'content'
+    },
+    PushNotifications: {
+      presentationOptions: ['badge', 'sound', 'alert']
     }
   }
 };

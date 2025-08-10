@@ -2,6 +2,7 @@
 import { initializeApp } from 'firebase/app';
 import { getFirestore, connectFirestoreEmulator, enableIndexedDbPersistence } from 'firebase/firestore';
 import { getAuth, connectAuthEmulator } from 'firebase/auth';
+import { getMessaging, isSupported } from 'firebase/messaging';
 
 // Firebase configuration object
 // Using your actual Firebase project configuration
@@ -33,6 +34,28 @@ export const db = getFirestore(app);
 
 // Initialize Firebase Authentication
 export const auth = getAuth(app);
+
+// Initialize Firebase Messaging (only if supported)
+let messaging: any = null;
+const initializeMessaging = async () => {
+  try {
+    const supported = await isSupported();
+    if (supported) {
+      messaging = getMessaging(app);
+      console.log('✅ Firebase Messaging initialized');
+    } else {
+      console.log('❌ Firebase Messaging not supported in this environment');
+    }
+  } catch (error) {
+    console.log('❌ Failed to initialize Firebase Messaging:', error);
+  }
+};
+
+// Initialize messaging
+initializeMessaging();
+
+// Export messaging instance
+export { messaging };
 
 // Modern offline persistence setup
 let offlinePersistenceEnabled = false;

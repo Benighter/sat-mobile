@@ -11,6 +11,7 @@ import Badge from '../ui/Badge';
 import ImageUpload from '../ui/ImageUpload';
 import ChangePasswordModal from '../auth/ChangePasswordModal';
 import AdminInviteManager from '../admin/AdminInviteManager';
+import PushNotificationSettings from '../notifications/PushNotificationSettings';
 import { hasAdminPrivileges, hasLeaderPrivileges } from '../../utils/permissionUtils';
 import {
   MoonIcon,
@@ -526,6 +527,11 @@ const ProfileSettingsView: React.FC = () => {
             </div>
           </div>
         </div>
+
+        {/* Push Notification Settings - Show for admin users */}
+        {hasAdminPrivileges(userProfile) && (
+          <PushNotificationSettings className="mb-8" />
+        )}
 
         {/* Leader Features - Show for both admin and leader roles */}
         {hasLeaderPrivileges(userProfile) && (

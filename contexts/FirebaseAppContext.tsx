@@ -30,6 +30,7 @@ import {
   attendanceOperationsWithNotifications,
   setNotificationIntegrationContext
 } from '../services/notificationIntegration';
+import { setEnhancedNotificationContext } from '../services/enhancedNotificationIntegration';
 
 interface AppContextType {
   // Data
@@ -285,6 +286,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
               if (profile && churchId) {
                 setNotificationContext(profile, churchId);
                 setNotificationIntegrationContext(profile, churchId);
+                setEnhancedNotificationContext(profile, churchId);
               }
 
               // Check if Firebase is ready (has church context) and set up data listeners
@@ -309,6 +311,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
             setCurrentChurchId(null);
             setNotificationContext(null, null);
             setNotificationIntegrationContext(null, null);
+            setEnhancedNotificationContext(null, null);
             setMembers([]);
             setBacentas([]);
             setAttendanceRecords([]);
