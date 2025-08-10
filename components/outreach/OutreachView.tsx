@@ -5,7 +5,7 @@ import Button from '../ui/Button';
 import Input from '../ui/Input';
 import Select from '../ui/Select';
 import Badge from '../ui/Badge';
-import { CalendarIcon, UsersIcon, PlusIcon, CheckIcon, ExclamationTriangleIcon, ChevronLeftIcon, ChevronRightIcon, PeopleIcon, GroupIcon, ChartBarIcon, TrashIcon } from '../icons';
+import { CalendarIcon, UsersIcon, PlusIcon, CheckIcon, ExclamationTriangleIcon, ChevronLeftIcon, ChevronRightIcon, PeopleIcon, TrashIcon } from '../icons';
 import AllBacentasView from '../bacentas/AllBacentasView';
 
 
@@ -39,30 +39,6 @@ const MonthPicker: React.FC<{ value: string; onChange: (v: string) => void }> = 
   );
 };
 
-// Week picker (Monday-based)
-const WeekPicker: React.FC<{ value: string; onChange: (v: string) => void }> = ({ value, onChange }) => {
-  const parse = (s: string) => new Date(s + 'T00:00:00');
-  const addDays = (d: Date, days: number) => { const nd = new Date(d); nd.setDate(nd.getDate() + days); nd.setHours(0,0,0,0); return nd; };
-  const format = (d: Date) => d.toISOString().slice(0,10);
-  const monday = parse(value); // already Monday
-  const sunday = addDays(monday, 6);
-  const label = `${monday.toLocaleDateString(undefined,{ month:'short', day:'numeric' })} - ${sunday.toLocaleDateString(undefined,{ month:'short', day:'numeric' })}`;
-
-  return (
-    <div className="inline-flex items-center gap-2 bg-white/70 dark:bg-dark-700/60 rounded-full px-2 py-1.5 border border-gray-200 dark:border-dark-600 shadow-sm">
-      <button type="button" className="p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-dark-600 text-gray-600" onClick={() => onChange(format(addDays(monday, -7)))} aria-label="Previous week">
-        <ChevronLeftIcon className="w-4 h-4" />
-      </button>
-      <div className="flex items-center gap-2 px-2">
-        <CalendarIcon className="w-4 h-4 text-gray-600" />
-        <span className="font-semibold tracking-wide">Week of {monday.toLocaleDateString(undefined,{ weekday:'long' })} · {label}</span>
-      </div>
-      <button type="button" className="p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-dark-600 text-gray-600" onClick={() => onChange(format(addDays(monday, 7)))} aria-label="Next week">
-        <ChevronRightIcon className="w-4 h-4" />
-      </button>
-    </div>
-  );
-};
 // Detail view for a single outreach bacenta (moves form here)
 const BacentaDetail: React.FC<{
   bacenta: OutreachBacenta;
@@ -312,8 +288,8 @@ const OutreachView: React.FC = () => {
   const [newBacentaName, setNewBacentaName] = useState('');
   const [selectedBacentaId, setSelectedBacentaId] = useState<string>('');
 
-  // Monday-based week state (YYYY-MM-DD for Monday)
-  const [weekStart, setWeekStart] = useState<string>(() => {
+  // Monday-based week state (YYYY-MM-DD for Monday) - fixed to current week
+  const weekStart = useMemo(() => {
     const now = new Date();
     const day = now.getDay();
     const diff = (day === 0 ? -6 : 1 - day);
@@ -321,7 +297,7 @@ const OutreachView: React.FC = () => {
     monday.setDate(now.getDate() + diff);
     monday.setHours(0,0,0,0);
     return monday.toISOString().slice(0,10);
-  });
+  }, []);
 
   // Preselect bacenta when arriving from All Bacentas
   useEffect(() => {
@@ -443,13 +419,6 @@ const OutreachView: React.FC = () => {
                 <p className="text-lg sm:text-xl text-gray-600 dark:text-dark-300 max-w-2xl mx-auto leading-relaxed">
                   Capture community outreach and track conversions with precision and care
                 </p>
-              </div>
-
-              {/* Week Picker with Enhanced Styling */}
-              <div className="flex justify-center">
-                <div className="bg-white/95 dark:bg-dark-800/95 p-4 rounded-2xl shadow-lg border border-gray-200 dark:border-dark-600 backdrop-blur-sm">
-                  <WeekPicker value={weekStart} onChange={setWeekStart} />
-                </div>
               </div>
             </div>
 
