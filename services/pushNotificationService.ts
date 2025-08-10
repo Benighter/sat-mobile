@@ -1,10 +1,10 @@
 // Push Notification Service for SAT Mobile
 // Handles Firebase Cloud Messaging and device token management
 
-import { getMessaging, getToken, onMessage, MessagePayload } from 'firebase/messaging';
+import { getMessaging, getToken, onMessage } from 'firebase/messaging';
 import { PushNotifications } from '@capacitor/push-notifications';
 import { Capacitor } from '@capacitor/core';
-import { doc, setDoc, deleteDoc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { doc, setDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../firebase.config';
 import { User, AdminNotification } from '../types';
 
@@ -56,8 +56,24 @@ class PushNotificationService {
     try {
       // Initialize Firebase Messaging for web
       if (!Capacitor.isNativePlatform()) {
-        const { initializeApp } = await import('firebase/app');
-        this.messaging = getMessaging();
+        // Ensure service worker is registered early (idempotent)
+        try {
+          if ('serviceWorker' in navigator) {
+            const registrations = await navigator.serviceWorker.getRegistrations();
+            const hasExisting = registrations.some(r => r.active && r.active.scriptURL.includes('firebase-messaging-sw'));
+            if (!hasExisting) {
+              await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+              console.log('✅ Firebase messaging service worker registered');
+            }
+          } else {
+            console.warn('Service workers not available – web push may be limited');
+          }
+        } catch (swErr) {
+          console.warn('Failed to register messaging service worker (will continue):', swErr);
+        }
+  // dynamic import kept previously for side-effects (ensure Firebase app initialized upstream)
+  // Just obtain messaging instance; assume firebase.config.ts already initialized the app.
+  this.messaging = getMessaging();
       }
 
       // Initialize Capacitor Push Notifications for mobile
@@ -206,7 +222,7 @@ class PushNotificationService {
       );
 
       const snapshot = await getDocs(tokensQuery);
-      const batch = [];
+  const batch: Promise<any>[] = [];
 
       snapshot.forEach((doc) => {
         batch.push(setDoc(doc.ref, { isActive: false, lastUsed: new Date().toISOString() }, { merge: true }));
@@ -391,17 +407,31 @@ class PushNotificationService {
 
   // Check if push notifications are supported
   isSupported(): boolean {
-    return (
-      'Notification' in window ||
-      (Capacitor.isNativePlatform() && Capacitor.isPluginAvailable('PushNotifications'))
-    );
+    // Native (Capacitor) – rely on plugin availability
+    if (Capacitor.isNativePlatform()) {
+      return true; // If the app is running natively we assume push can work; plugin guards runtime calls
+    }
+
+    // Web environment feature detection
+    const hasNotification = typeof window !== 'undefined' && 'Notification' in window;
+  // (Optional diagnostics) We purposefully do not require service worker or PushManager to return true here
+  // because some embedded browsers grant Notification but lack full push – we still allow UI path.
+
+    // We consider minimal support if Notification exists; enhanced support if all are present
+    if (hasNotification) return true;
+
+    // Fallback: some very old browsers / iOS webviews may expose webkitNotifications
+    // (We don't attempt to fully polyfill – just return false explicitly here.)
+    return false;
   }
 
   // Get current notification permission status
   async getPermissionStatus(): Promise<'granted' | 'denied' | 'default'> {
     if (Capacitor.isNativePlatform()) {
-      const status = await PushNotifications.checkPermissions();
-      return status.receive;
+  const status = await PushNotifications.checkPermissions();
+  // Some environments may return 'prompt' – treat as default
+  const mapped = (status.receive === 'prompt' ? 'default' : status.receive) as 'granted' | 'denied' | 'default';
+  return mapped;
     } else {
       return Notification.permission;
     }
@@ -414,7 +444,24 @@ class PushNotificationService {
         const result = await PushNotifications.requestPermissions();
         return result.receive === 'granted';
       } else {
+        if (!('Notification' in window)) {
+          console.warn('Notification API not present in this browser');
+          return false;
+        }
         const permission = await Notification.requestPermission();
+        // Attempt late service worker registration if it failed earlier
+        if (permission === 'granted' && 'serviceWorker' in navigator) {
+          try {
+            const regs = await navigator.serviceWorker.getRegistrations();
+            const hasMessaging = regs.some(r => r.active && r.active.scriptURL.includes('firebase-messaging-sw'));
+            if (!hasMessaging) {
+              await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+              console.log('✅ (Late) service worker registered after permission grant');
+            }
+          } catch (e) {
+            console.warn('Service worker registration (late) failed:', e);
+          }
+        }
         return permission === 'granted';
       }
     } catch (error) {
