@@ -153,16 +153,38 @@ class PushNotificationService {
       } else {
         // Web platform - use Firebase Messaging
         if (this.messaging) {
-          const permission = await Notification.requestPermission();
-          if (permission === 'granted') {
-            token = await getToken(this.messaging, { vapidKey: this.vapidKey });
-            if (token) {
-              await this.saveDeviceToken(token, 'web');
-              console.log('✅ Web FCM token registered:', token.substring(0, 20) + '...');
-            }
-          } else {
-            console.warn('❌ Notification permission denied');
+          if (!window.isSecureContext) {
+            console.warn('⚠️ Page is not a secure context (HTTPS) – browser may auto-deny notifications');
           }
+
+          let permission: NotificationPermission = Notification.permission;
+          // Only actively request if still default (to ensure it happens on a user gesture upstream)
+          if (permission === 'default') {
+            try {
+              permission = await Notification.requestPermission();
+            } catch (e) {
+              console.warn('Failed to invoke Notification.requestPermission():', e);
+            }
+          }
+
+            if (permission === 'granted') {
+              try {
+                token = await getToken(this.messaging, { vapidKey: this.vapidKey });
+                if (token) {
+                  await this.saveDeviceToken(token, 'web');
+                  console.log('✅ Web FCM token registered:', token.substring(0, 20) + '...');
+                } else {
+                  console.warn('⚠️ getToken returned null/empty');
+                }
+              } catch (gtErr) {
+                console.error('Failed to obtain FCM token:', gtErr);
+              }
+            } else if (permission === 'denied') {
+              console.warn('❌ Notifications are blocked by the user/browser settings');
+              console.warn('ℹ️ In most browsers you must manually re-enable them in site settings.');
+            } else {
+              console.log('Notification permission unresolved (default) – user has not decided yet.');
+            }
         }
       }
 
