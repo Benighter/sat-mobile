@@ -285,24 +285,24 @@ class PushNotificationService {
         return false;
       }
 
-      // Send via Firebase Functions (you'll need to create this)
-      const response = await fetch('/api/send-push-notification', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          tokens,
-          payload,
-          churchId: this.currentChurchId
-        })
-      });
-
-      if (response.ok) {
-        console.log('✅ Push notification sent successfully');
-        return true;
-      } else {
-        console.error('Failed to send push notification:', await response.text());
+      // Use callable Cloud Function
+      try {
+        const { getFunctions, httpsCallable } = await import('firebase/functions');
+        const functions = getFunctions();
+        const fn = httpsCallable(functions, 'sendPushNotification');
+        const result: any = await fn({ tokens, payload, churchId: this.currentChurchId });
+        if (result?.data?.success) {
+          console.log(`✅ Push notification sent: success=${result.data.successCount}, failed=${result.data.failureCount}`);
+          if (result.data.failureCount > 0) {
+            console.warn('Some tokens failed:', result.data.failed);
+          }
+          return true;
+        } else {
+          console.error('Failed to send push notification (callable returned error):', result?.data?.error);
+          return false;
+        }
+      } catch (fnErr) {
+        console.error('Callable sendPushNotification failed:', fnErr);
         return false;
       }
     } catch (error) {

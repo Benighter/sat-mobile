@@ -16,6 +16,7 @@ const PushNotificationSettings: React.FC<PushNotificationSettingsProps> = ({ cla
   const [isLoading, setIsLoading] = useState(true);
   const [isTesting, setIsTesting] = useState(false);
   const [testResult, setTestResult] = useState<'success' | 'error' | null>(null);
+  const [showDeniedHelp, setShowDeniedHelp] = useState(false);
 
   const { showToast } = useAppContext();
 
@@ -235,15 +236,42 @@ const PushNotificationSettings: React.FC<PushNotificationSettingsProps> = ({ cla
             </div>
             <h4 className="text-lg font-medium text-gray-900 mb-2">Notifications blocked</h4>
             <p className="text-gray-500 max-w-sm mx-auto mb-4">
-              You've blocked notifications for this site. To enable them, click the lock icon in your browser's address bar and allow notifications.
+              You've previously blocked notifications. Browsers won't show the prompt again until you re-enable permissions manually.
             </p>
-            <button
-              onClick={checkPushNotificationStatus}
-              className="inline-flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              <Settings className="w-4 h-4" />
-              <span>Check Again</span>
-            </button>
+            <div className="space-y-4">
+              <div>
+                <button
+                  onClick={() => setShowDeniedHelp(s => !s)}
+                  className="inline-flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  <Settings className="w-4 h-4" />
+                  <span>{showDeniedHelp ? 'Hide Fix Steps' : 'How To Re‑Enable'}</span>
+                </button>
+              </div>
+              {showDeniedHelp && (
+                <div className="text-left mx-auto max-w-md bg-red-50 border border-red-200 rounded-lg p-4 space-y-3 text-sm leading-relaxed">
+                  <p className="font-medium text-red-700">Steps to re-enable:</p>
+                  <ol className="list-decimal list-inside space-y-1 text-red-800">
+                    <li><span className="font-semibold">Chrome / Edge (Desktop):</span> Click the lock icon → Site Settings → Notifications → Allow → Reload.</li>
+                    <li><span className="font-semibold">Chrome (Android):</span> Tap lock icon in address bar → Permissions → Notifications → Allow → Reload.</li>
+                    <li><span className="font-semibold">Safari (iOS 16.4+):</span> Add site to Home Screen first, open the installed app, then in iOS Settings → Notifications → find app name → Allow.</li>
+                    <li><span className="font-semibold">Safari (macOS):</span> Safari → Settings → Websites → Notifications → Allow for this site.</li>
+                    <li><span className="font-semibold">Firefox:</span> Click shield/lock icon → Permissions → Re-enable notifications.</li>
+                  </ol>
+                  <p className="text-xs text-red-600">After changing the setting, come back and press "Recheck" below.</p>
+                  <div className="flex flex-wrap gap-2 pt-2">
+                    <button
+                      onClick={() => { localStorage.setItem('forcePushSupport','true'); checkPushNotificationStatus(); }}
+                      className="px-3 py-1.5 text-xs rounded-md bg-white border border-red-300 text-red-700 hover:bg-red-100"
+                    >Force Recheck</button>
+                    <button
+                      onClick={checkPushNotificationStatus}
+                      className="px-3 py-1.5 text-xs rounded-md bg-red-600 text-white hover:bg-red-700"
+                    >Recheck</button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         ) : !isInitialized ? (
           // Not enabled - show enable option
