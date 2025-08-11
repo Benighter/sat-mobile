@@ -4,14 +4,15 @@ import {
   ChartBarIcon,
   CalendarIcon,
   UsersIcon,
-  TrendingUpIcon,
-  TrendingDownIcon,
   ChevronLeftIcon,
-  ChevronRightIcon
+  ChevronRightIcon,
+  TrendingUpIcon,
+  TrendingDownIcon
 } from '../icons';
 import { getMonthName, getSundaysOfMonth, formatDateToYYYYMMDD } from '../../utils/dateUtils';
 
-type ViewType = 'overview' | 'trends' | 'members' | 'bacentas' | 'insights' | 'comparison';
+// Reduced view types after feature removals
+type ViewType = 'overview' | 'members' | 'bacentas';
 type ChartType = 'bar' | 'line' | 'doughnut' | 'radar' | 'polar';
 type TimePeriod = 'current' | 'last3months' | 'last6months' | 'lastyear' | 'all';
 type FilterType = 'all' | 'high' | 'medium' | 'low' | 'critical';
@@ -41,7 +42,7 @@ interface AnalyticsData {
   memberStats: Array<{
     id: string;
     firstName: string;
-    lastName: string;
+    lastName: string | undefined; // allow optional lastName from member model
     attendanceCount: number;
     attendanceRate: number;
     streak: number;
@@ -339,8 +340,10 @@ const InteractiveLineChart: React.FC<{
     return 90 - ((value - chartMin) / chartRange) * 80; // 90% to 10% of container
   };
 
+  // Spread points across full width for perfect alignment with labels (add slight side padding)
   const getPointX = (index: number) => {
-    return 10 + (index / Math.max(data.length - 1, 1)) * 80; // 10% to 90% of container
+    const count = Math.max(data.length - 1, 1);
+    return 5 + (index / count) * 90; // 5% to 95%
   };
 
   // Generate SVG path for the line
@@ -354,34 +357,7 @@ const InteractiveLineChart: React.FC<{
   const areaPath = data.length > 0 ?
     `${linePath} L ${getPointX(data.length - 1)} 90 L ${getPointX(0)} 90 Z` : '';
 
-  // Get point color based on index
-  const getPointColor = (index: number) => {
-    const colors = [
-      'bg-blue-500',      // Blue
-      'bg-emerald-500',   // Emerald
-      'bg-purple-500',    // Purple
-      'bg-rose-500',      // Rose
-      'bg-amber-500',     // Amber
-      'bg-teal-500',      // Teal
-      'bg-indigo-500',    // Indigo
-      'bg-cyan-500',      // Cyan
-    ];
-    return colors[index % colors.length];
-  };
-
-  const getPointHoverColor = (index: number) => {
-    const colors = [
-      'bg-blue-600',      // Blue
-      'bg-emerald-600',   // Emerald
-      'bg-purple-600',    // Purple
-      'bg-rose-600',      // Rose
-      'bg-amber-600',     // Amber
-      'bg-teal-600',      // Teal
-      'bg-indigo-600',    // Indigo
-      'bg-cyan-600',      // Cyan
-    ];
-    return colors[index % colors.length];
-  };
+  // Point color helpers removed (single color scheme now for consistency with bar chart)
 
   return (
     <div className={`${height} relative`}>
@@ -423,56 +399,58 @@ const InteractiveLineChart: React.FC<{
               d={linePath}
               fill="none"
               stroke="rgb(59, 130, 246)"
-              strokeWidth="0.5"
+              strokeWidth="1"
               strokeLinecap="round"
               strokeLinejoin="round"
               className="transition-all duration-1000 ease-out"
               style={{
                 strokeDasharray: animated ? '200' : 'none',
                 strokeDashoffset: animated ? '0' : 'none',
-                animation: animated ? 'drawLine 2s ease-out' : 'none'
+                animation: animated ? 'drawLine 1.2s ease-out' : 'none'
               }}
             />
           )}
-        </svg>
 
-        {/* Data Points */}
-        <div className="absolute inset-0">
-          {data.map((item, index) => (
-            <div
+          {/* Points */}
+          {animationComplete && data.map((item, index) => (
+            <circle
               key={index}
-              className="absolute transform -translate-x-1/2 -translate-y-1/2 cursor-pointer group"
-              style={{
-                left: `${getPointX(index)}%`,
-                top: `${getPointY(item.value)}%`,
-              }}
+              cx={getPointX(index)}
+              cy={getPointY(item.value)}
+              r={hoveredIndex === index ? 1.8 : 1.3}
+              fill="rgb(59,130,246)"
+              stroke="#ffffff"
+              strokeWidth={0.6}
               onMouseEnter={() => setHoveredIndex(index)}
               onMouseLeave={() => setHoveredIndex(null)}
-            >
-              {/* Point */}
-              <div className={`w-3 h-3 rounded-full border-2 border-white shadow-lg transition-all duration-200 ${
-                hoveredIndex === index ? `${getPointHoverColor(index)} scale-150` : `${getPointColor(index)} scale-100`
-              }`}></div>
-
-              {/* Tooltip */}
-              {hoveredIndex === index && (
-                <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded shadow-lg whitespace-nowrap z-10">
-                  <div className="font-bold">{item.value}</div>
-                  <div className="text-gray-300">{item.label}</div>
-                  <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-2 border-r-2 border-t-2 border-transparent border-t-gray-800"></div>
-                </div>
-              )}
-            </div>
+              style={{ transition: 'all 200ms ease' }}
+            />
           ))}
-        </div>
+        </svg>
       </div>
 
-      {/* X-axis labels */}
-      <div className="absolute bottom-0 left-12 right-4 flex justify-between items-end pb-3">
+      {/* Tooltip (single, follows hovered point) */}
+      {hoveredIndex !== null && data[hoveredIndex] && (
+        <div className="absolute text-xs px-2 py-1 rounded shadow-lg bg-gray-800 text-white pointer-events-none" style={{
+          left: `calc(${getPointX(hoveredIndex)}% + 3rem)`,
+          top: `${getPointY(data[hoveredIndex].value)}%`,
+          transform: 'translate(-50%, -120%)'
+        }}>
+          <div className="font-bold">{data[hoveredIndex].value}</div>
+          <div className="text-gray-300">{data[hoveredIndex].label}</div>
+        </div>
+      )}
+
+      {/* X-axis labels - absolute positioned to match point X exactly */}
+  <div className="absolute bottom-0 left-12 right-4 pb-3 pointer-events-none">
         {data.map((item, index) => (
-          <div key={index} className={`text-xs text-gray-600 text-center font-medium transition-all duration-200 px-1 ${
-            hoveredIndex === index ? 'text-gray-800 font-bold' : ''
-          }`}>
+          <div
+            key={index}
+            className={`absolute transform -translate-x-1/2 text-xs text-gray-600 text-center font-medium transition-all duration-200 px-1 ${
+              hoveredIndex === index ? 'text-gray-800 font-bold scale-105' : ''
+            }`}
+    style={{ left: `${getPointX(index)}%` }}
+          >
             {formatDateLabel(item.label)}
           </div>
         ))}
@@ -558,7 +536,8 @@ const AttendanceAnalyticsView: React.FC = () => {
   } = useAppContext();
   const [currentView, setCurrentView] = useState<ViewType>('overview');
   const [chartType, setChartType] = useState<ChartType>('bar');
-  const [timePeriod, setTimePeriod] = useState<TimePeriod>('current');
+  // Fixed time period (previous selectable periods removed)
+  const timePeriod: TimePeriod = 'current';
   const [filterType, setFilterType] = useState<FilterType>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedBacenta, setSelectedBacenta] = useState<string>('all');
@@ -769,13 +748,8 @@ const AttendanceAnalyticsView: React.FC = () => {
       improving: memberStats.filter(m => m.trend === 'improving').length,
       declining: memberStats.filter(m => m.trend === 'declining').length,
       perfectAttendance: memberStats.filter(m => m.attendanceRate === 100).length,
-      newMemberRetention: members.filter(m => {
-        const joinedDate = new Date(m.joinedDate);
-        const monthsAgo = new Date();
-        monthsAgo.setMonth(monthsAgo.getMonth() - 3);
-        const memberStat = memberStats.find(ms => ms.id === m.id);
-        return joinedDate >= monthsAgo && memberStat && memberStat.attendanceRate >= 70;
-      }).length
+  // newMemberRetention removed (joinedDate not available / feature deprecated)
+  newMemberRetention: 0
     };
 
     // Calculate trends
@@ -844,37 +818,13 @@ const AttendanceAnalyticsView: React.FC = () => {
         <div className="w-24 h-1 bg-gradient-to-r from-blue-400 to-blue-600 rounded-full mx-auto mt-3"></div>
       </div>
 
-      {/* Key Statistics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatCard
-          title="Overall Rate"
-          value={`${analyticsData.overallRate}%`}
-          icon={<ChartBarIcon className="w-8 h-8" />}
-          colorClass="border-blue-500"
-          trend={analyticsData.overallRate >= 70 ? 'up' : analyticsData.overallRate >= 50 ? 'neutral' : 'down'}
-          trendValue={analyticsData.overallRate >= 70 ? 'Excellent' : analyticsData.overallRate >= 50 ? 'Good' : 'Needs Attention'}
-        />
+      {/* Key Statistics (trimmed per requirements) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
         <StatCard
           title="Total Services"
           value={analyticsData.totalServices}
           icon={<CalendarIcon className="w-8 h-8" />}
           colorClass="border-green-500"
-        />
-        <StatCard
-          title="High Performers"
-          value={analyticsData.insights.highPerformers}
-          icon={<TrendingUpIcon className="w-8 h-8" />}
-          colorClass="border-emerald-500"
-          trendValue="≥80% attendance"
-          subtitle={`${analyticsData.insights.perfectAttendance} perfect attendance`}
-        />
-        <StatCard
-          title="Need Follow-up"
-          value={analyticsData.insights.needsAttention}
-          icon={<TrendingDownIcon className="w-8 h-8" />}
-          colorClass="border-red-500"
-          trendValue="<50% attendance"
-          subtitle={`${analyticsData.insights.declining} declining trend`}
         />
       </div>
 
@@ -884,11 +834,8 @@ const AttendanceAnalyticsView: React.FC = () => {
           <div className="flex flex-wrap gap-2">
             {[
               { key: 'overview', label: 'Overview', icon: '📊' },
-              { key: 'trends', label: 'Trends & Growth', icon: '📈' },
               { key: 'members', label: 'Member Analysis', icon: '👥' },
               { key: 'bacentas', label: 'Bacenta Comparison', icon: '🏛️' },
-              { key: 'insights', label: 'Smart Insights', icon: '🧠' },
-              { key: 'comparison', label: 'Period Comparison', icon: '⚖️' },
             ].map((view) => (
               <button
                 key={view.key}
@@ -905,7 +852,7 @@ const AttendanceAnalyticsView: React.FC = () => {
             ))}
           </div>
 
-          {(currentView === 'overview' || currentView === 'trends') && (
+          {currentView === 'overview' && (
             <div className="flex gap-2">
               {[
                 { key: 'bar', label: 'Bar', icon: '📊' },
@@ -1193,158 +1140,7 @@ const AttendanceAnalyticsView: React.FC = () => {
         </div>
       )}
 
-      {currentView === 'trends' && (
-        <div className="space-y-8">
-          <div className="glass p-10 shadow-lg rounded-2xl chart-container">
-            <h3 className="text-2xl font-bold gradient-text mb-10 flex items-center justify-center">
-              <TrendingUpIcon className="w-8 h-8 mr-3 text-gray-600" />
-              Attendance Trends & Growth
-            </h3>
-            <div className="px-4 py-2">
-              {chartType === 'bar' ? (
-                <InteractiveBarChart
-                  data={analyticsData.weeklyData.map(d => ({
-                    label: d.label,
-                    value: d.attendance
-                  }))}
-                  height="h-[28rem]"
-                  showGrid={true}
-                  animated={true}
-                />
-              ) : (
-                <InteractiveLineChart
-                  data={analyticsData.weeklyData.map(d => ({
-                    label: d.label,
-                    value: d.attendance
-                  }))}
-                  height="h-[28rem]"
-                  showGrid={true}
-                  animated={true}
-                />
-              )}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="glass p-6 rounded-2xl text-center">
-              <h4 className="text-lg font-semibold text-gray-700 mb-2">Monthly Growth</h4>
-              <p className={`text-3xl font-bold mb-2 ${
-                analyticsData.trends.monthlyGrowth >= 0 ? 'text-green-600' : 'text-red-600'
-              }`}>
-                {analyticsData.trends.monthlyGrowth >= 0 ? '+' : ''}{analyticsData.trends.monthlyGrowth}%
-              </p>
-              <p className="text-sm text-gray-500">vs previous period</p>
-            </div>
-
-            <div className="glass p-6 rounded-2xl text-center">
-              <h4 className="text-lg font-semibold text-gray-700 mb-2">Consistency Score</h4>
-              <p className="text-3xl font-bold text-blue-600 mb-2">
-                {analyticsData.trends.consistencyScore}%
-              </p>
-              <p className="text-sm text-gray-500">attendance stability</p>
-            </div>
-
-            <div className="glass p-6 rounded-2xl text-center">
-              <h4 className="text-lg font-semibold text-gray-700 mb-2">Engagement Level</h4>
-              <p className={`text-3xl font-bold mb-2 ${
-                analyticsData.trends.engagementLevel === 'high' ? 'text-green-600' :
-                analyticsData.trends.engagementLevel === 'medium' ? 'text-yellow-600' : 'text-red-600'
-              }`}>
-                {analyticsData.trends.engagementLevel.toUpperCase()}
-              </p>
-              <p className="text-sm text-gray-500">overall participation</p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {currentView === 'insights' && (
-        <div className="space-y-8">
-          <div className="glass p-8 shadow-lg rounded-2xl">
-            <h3 className="text-2xl font-bold gradient-text mb-6">🧠 Smart Insights & Recommendations</h3>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-              <div className="bg-gradient-to-br from-green-50 to-emerald-50 p-6 rounded-xl border border-green-200">
-                <h4 className="text-lg font-semibold text-green-800 mb-2">High Performers</h4>
-                <p className="text-3xl font-bold text-green-600 mb-2">{analyticsData.insights.highPerformers}</p>
-                <p className="text-sm text-green-700">Members with ≥80% attendance</p>
-              </div>
-
-              <div className="bg-gradient-to-br from-blue-50 to-cyan-50 p-6 rounded-xl border border-blue-200">
-                <h4 className="text-lg font-semibold text-blue-800 mb-2">Improving Trend</h4>
-                <p className="text-3xl font-bold text-blue-600 mb-2">{analyticsData.insights.improving}</p>
-                <p className="text-sm text-blue-700">Members showing improvement</p>
-              </div>
-
-              <div className="bg-gradient-to-br from-red-50 to-pink-50 p-6 rounded-xl border border-red-200">
-                <h4 className="text-lg font-semibold text-red-800 mb-2">Need Attention</h4>
-                <p className="text-3xl font-bold text-red-600 mb-2">{analyticsData.insights.needsAttention}</p>
-                <p className="text-sm text-red-700">Members requiring follow-up</p>
-              </div>
-            </div>
-
-            <div className="bg-gradient-to-r from-purple-50 to-indigo-50 p-6 rounded-xl border border-purple-200">
-              <h4 className="text-lg font-semibold text-purple-800 mb-4">📊 Key Insights</h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <p className="text-sm text-purple-700 mb-1">Perfect Attendance</p>
-                  <p className="text-2xl font-bold text-purple-600">{analyticsData.insights.perfectAttendance} members</p>
-                </div>
-                <div>
-                  <p className="text-sm text-purple-700 mb-1">New Member Retention</p>
-                  <p className="text-2xl font-bold text-purple-600">{analyticsData.insights.newMemberRetention} members</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {currentView === 'comparison' && (
-        <div className="space-y-8">
-          <div className="glass p-8 shadow-lg rounded-2xl">
-            <h3 className="text-2xl font-bold gradient-text mb-6">⚖️ Period Comparison</h3>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              <div className="space-y-4">
-                <h4 className="text-lg font-semibold text-gray-700">Current Period vs Previous</h4>
-                <div className="space-y-3">
-                  <div className="flex justify-between items-center p-4 bg-white/50 rounded-xl">
-                    <span className="text-gray-600">Overall Attendance Rate</span>
-                    <span className="font-bold text-blue-600">{analyticsData.overallRate}%</span>
-                  </div>
-                  <div className="flex justify-between items-center p-4 bg-white/50 rounded-xl">
-                    <span className="text-gray-600">Total Services</span>
-                    <span className="font-bold text-gray-700">{analyticsData.totalServices}</span>
-                  </div>
-                  <div className="flex justify-between items-center p-4 bg-white/50 rounded-xl">
-                    <span className="text-gray-600">Active Members</span>
-                    <span className="font-bold text-gray-700">{analyticsData.totalMembers}</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                <h4 className="text-lg font-semibold text-gray-700">Performance Metrics</h4>
-                <div className="space-y-3">
-                  <div className="flex justify-between items-center p-4 bg-white/50 rounded-xl">
-                    <span className="text-gray-600">High Performers</span>
-                    <span className="font-bold text-green-600">{analyticsData.insights.highPerformers}</span>
-                  </div>
-                  <div className="flex justify-between items-center p-4 bg-white/50 rounded-xl">
-                    <span className="text-gray-600">Improving Members</span>
-                    <span className="font-bold text-blue-600">{analyticsData.insights.improving}</span>
-                  </div>
-                  <div className="flex justify-between items-center p-4 bg-white/50 rounded-xl">
-                    <span className="text-gray-600">Need Follow-up</span>
-                    <span className="font-bold text-red-600">{analyticsData.insights.needsAttention}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+  {/* Removed views (Trends, Insights, Comparison) as per requirements */}
     </div>
   );
 };
