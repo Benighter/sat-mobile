@@ -1,5 +1,7 @@
-import React, { useEffect, useState, useCallback } from 'react';
-import { collection, getDocs, query, where, limit, updateDoc, doc, Timestamp } from 'firebase/firestore';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
+import { collection, getDocs, getDoc, query, where, limit, updateDoc, doc, Timestamp, onSnapshot } from 'firebase/firestore';
+// NOTE: Removed getFunctions/httpsCallable usage for member counts due to CORS issues on callable function.
+// import { getFunctions, httpsCallable } from 'firebase/functions';
 import { db } from '../../firebase.config';
 
 interface AdminUserRecord {
@@ -15,6 +17,7 @@ interface AdminUserRecord {
   createdAt?: any;
   lastLoginAt?: any;
   isActive?: boolean;
+  memberCount?: number; // computed client-side
 }
 
 interface SuperAdminDashboardProps {
@@ -33,6 +36,9 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [stats, setStats] = useState<{ total: number; active: number; inactive: number } | null>(null);
+  const [totalMembers, setTotalMembers] = useState<number | null>(null);
+  const [memberCountsLoading, setMemberCountsLoading] = useState(false);
+  // Manual recount state removed (automatic live listeners will keep counts fresh)
   // Constituency editing state
   const [editingConstituencyId, setEditingConstituencyId] = useState<string | null>(null);
   const [constituencyInput, setConstituencyInput] = useState('');
@@ -49,7 +55,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
         limit(500)
       );
       const snapshot = await getDocs(adminsQuery);
-      const data: AdminUserRecord[] = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as AdminUserRecord));
+  const data: AdminUserRecord[] = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as any)).map(a => ({ ...a, memberCount: (a as any).membersCount }));
       // Client-side sort by createdAt desc to avoid composite index requirement
       const getTime = (val: any): number => {
         if (!val) return 0;
@@ -69,6 +75,8 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
         active: filtered.filter(a => a.isActive !== false).length,
         inactive: filtered.filter(a => a.isActive === false).length
       });
+      // Kick off member counts after admins are loaded
+      computeMemberCounts(filtered);
     } catch (e: any) {
       console.error('Failed to load admins', e);
       setError(e.message || 'Failed to load admins');
@@ -77,9 +85,150 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
     }
   }, []);
 
+  const computeMemberCounts = useCallback(async (adminsList: AdminUserRecord[], forceFullRecount: boolean = false) => {
+    setMemberCountsLoading(true);
+    try {
+      const uniqueChurchIds = Array.from(new Set(adminsList.map(a => a.churchId).filter((v): v is string => !!v)));
+      if (uniqueChurchIds.length === 0) {
+        setTotalMembers(0);
+        return;
+      }
+      const countsMap: Record<string, number> = {};
+      const reconciliationWrites: Promise<any>[] = [];
+
+      for (const cid of uniqueChurchIds) {
+        try {
+          const churchRef = doc(db, 'churches', cid);
+            const churchSnap = await getDoc(churchRef);
+            const data = churchSnap.data();
+            let churchCount: number | null = (data && typeof data.membersCount === 'number') ? data.membersCount : null;
+
+            // If forcing or missing churchCount, recount by reading active members collection
+            if (forceFullRecount || churchCount == null) {
+              const membersCol = collection(db, 'churches', cid, 'members');
+              const snap = await getDocs(membersCol);
+              // Count only active members (isActive !== false)
+              churchCount = snap.docs.filter(d => (d.data() as any).isActive !== false).length;
+              // Write back to church doc if different
+              if (!data || data.membersCount !== churchCount) {
+                reconciliationWrites.push(updateDoc(churchRef, { membersCount: churchCount, lastUpdated: Timestamp.now() }));
+              }
+            }
+            countsMap[cid] = churchCount ?? 0;
+
+            // Reconcile admin docs for this church if stale
+            adminsList.filter(a => a.churchId === cid).forEach(a => {
+              if (a.memberCount !== churchCount) {
+                reconciliationWrites.push(updateDoc(doc(db, 'users', a.id), { membersCount: churchCount, lastUpdated: Timestamp.now() }));
+              }
+            });
+        } catch (err) {
+          console.warn('Failed deriving count for church', cid, err);
+          countsMap[cid] = -1;
+        }
+      }
+
+      if (reconciliationWrites.length) {
+        // Fire and forget; we don't want UI blocked. Await with catch to surface issues quietly.
+        Promise.allSettled(reconciliationWrites).then(results => {
+          const failures = results.filter(r => r.status === 'rejected');
+          if (failures.length) console.warn('Some member count reconciliation writes failed');
+        });
+      }
+
+      const total = Object.values(countsMap).filter(v => v >= 0).reduce((s, v) => s + v, 0);
+      setTotalMembers(total);
+      setAdmins(prev => prev.map(a => (!a.churchId ? a : (countsMap[a.churchId] != null ? { ...a, memberCount: countsMap[a.churchId] } : a))));
+    } finally {
+      setMemberCountsLoading(false);
+    }
+  }, []);
+
+  // Per-church live member listeners (track active members directly) -----------------
+  const memberListenersRef = useRef<Record<string, () => void>>({});
+  const liveCountsRef = useRef<Record<string, number>>({});
+
   useEffect(() => {
     fetchAdmins();
   }, [fetchAdmins]);
+
+  // Real-time listener so new member additions reflected automatically via trigger-updated membersCount
+  useEffect(() => {
+    // Listen to admin user docs (role == 'admin')
+    const q = query(
+      collection(db, 'users'),
+      where('role', '==', 'admin'),
+      limit(500)
+    );
+    const unsub = onSnapshot(q, snap => {
+      try {
+        const raw: AdminUserRecord[] = snap.docs.map(d => ({ id: d.id, ...d.data() } as any)).map(a => ({ ...a, memberCount: (a as any).membersCount }));
+        const filtered = raw.filter(a => !(a as any).isDeleted);
+        // Sort same as initial fetch
+        const getTime = (val: any): number => {
+          if (!val) return 0; if (typeof val.toMillis === 'function') return val.toMillis(); if (typeof val.toDate === 'function') return val.toDate().getTime(); if (typeof val === 'string') { const t = Date.parse(val); return isNaN(t) ? 0 : t; } return 0;
+        };
+        filtered.sort((a,b) => getTime(b.createdAt) - getTime(a.createdAt));
+        setAdmins(filtered);
+        setStats({
+          total: filtered.length,
+          active: filtered.filter(a => a.isActive !== false).length,
+          inactive: filtered.filter(a => a.isActive === false).length
+        });
+        // If every admin has a numeric memberCount, aggregate directly; else run computeMemberCounts (which will reconcile)
+        const allHaveCounts = filtered.length > 0 && filtered.every(a => typeof a.memberCount === 'number');
+        if (allHaveCounts) {
+          setTotalMembers(filtered.reduce((s,a) => s + (a.memberCount || 0), 0));
+        } else {
+          computeMemberCounts(filtered, false);
+        }
+      } catch (e) {
+        console.warn('Realtime admin snapshot processing failed', e);
+      }
+    });
+    return () => unsub();
+  }, [computeMemberCounts]);
+
+  // Live per-church member subcollection listeners (ensures immediate updates even if backend trigger delay)
+  useEffect(() => {
+    const churchIds = Array.from(new Set(admins.map(a => a.churchId).filter((v): v is string => !!v)));
+    const current = memberListenersRef.current;
+
+    // Unsubscribe removed churches
+    Object.keys(current).forEach(cid => {
+      if (!churchIds.includes(cid)) {
+        try { current[cid]!(); } catch {}
+        delete current[cid];
+        delete liveCountsRef.current[cid];
+      }
+    });
+
+    // Add listeners for new churches
+    churchIds.forEach(cid => {
+      if (current[cid]) return;
+      try {
+        const membersRef = collection(db, 'churches', cid, 'members');
+        const qMembers = query(membersRef, where('isActive', '==', true));
+        const unsub = onSnapshot(qMembers, snap => {
+          liveCountsRef.current[cid] = snap.size;
+          setAdmins(prev => prev.map(a => a.churchId === cid ? { ...a, memberCount: snap.size } : a));
+          // Recompute total from live counts (fallback to existing memberCount if missing)
+          const liveTotal = Object.values(liveCountsRef.current).reduce((s, v) => s + (typeof v === 'number' ? v : 0), 0);
+          setTotalMembers(liveTotal);
+        });
+        current[cid] = unsub;
+      } catch (e) {
+        console.warn('Failed attaching members listener for church', cid, e);
+      }
+    });
+
+    return () => {
+      // Cleanup all on unmount
+      Object.values(memberListenersRef.current).forEach(u => { try { u(); } catch {} });
+      memberListenersRef.current = {};
+      liveCountsRef.current = {};
+    };
+  }, [admins]);
 
   // Row-level updating state
   const [updatingIds, setUpdatingIds] = useState<Record<string, boolean>>({});
@@ -249,12 +398,16 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
         </div>
 
         {/* Stat Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           <div className="glass rounded-2xl p-5 shadow-lg hover:shadow-xl transition-shadow">
             <div className="flex items-center justify-between">
               <p className="text-[11px] uppercase tracking-wider font-semibold text-gray-500 dark:text-dark-300">Total Constituencies</p>
             </div>
             <p className="mt-2 text-3xl font-bold text-indigo-600 dark:text-indigo-400 tracking-tight drop-shadow-sm">{stats?.total ?? '-'}</p>
+          </div>
+          <div className="glass rounded-2xl p-5 shadow-lg hover:shadow-xl transition-shadow">
+            <p className="text-[11px] uppercase tracking-wider font-semibold text-blue-600 dark:text-blue-400">Total Members</p>
+            <p className="mt-2 text-3xl font-bold text-blue-600 dark:text-blue-400 tracking-tight">{totalMembers != null ? totalMembers : (memberCountsLoading ? '…' : '-')}</p>
           </div>
           <div className="glass rounded-2xl p-5 shadow-lg hover:shadow-xl transition-shadow">
             <p className="text-[11px] uppercase tracking-wider font-semibold text-green-600 dark:text-green-400">Active</p>
@@ -290,6 +443,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
                   <th className="px-5 py-3 font-semibold">Name</th>
                   <th className="px-5 py-3 font-semibold">Email</th>
                   <th className="px-5 py-3 font-semibold">Constituency</th>
+                  <th className="px-5 py-3 font-semibold">Members</th>
                   <th className="px-5 py-3 font-semibold">Status</th>
                   <th className="px-5 py-3 font-semibold">Created</th>
                   <th className="px-5 py-3 font-semibold">Last Login</th>
@@ -349,6 +503,21 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
                           )
                         )}
                       </td>
+                      <td className="px-5 py-3 whitespace-nowrap text-gray-700 dark:text-dark-300">
+                        {a.churchId ? (
+                          a.memberCount != null ? (
+                            a.memberCount >= 0 ? (
+                              <span className="font-semibold" title="Members in this constituency">{a.memberCount}</span>
+                            ) : (
+                              <span className="text-[11px] text-orange-500" title="Member count unavailable (permissions)">!</span>
+                            )
+                          ) : memberCountsLoading ? (
+                            <span className="text-[11px] text-gray-400">…</span>
+                          ) : (
+                            <span className="text-[11px] text-gray-400">—</span>
+                          )
+                        ) : <span className="text-[11px] text-gray-400">—</span>}
+                      </td>
                       <td className="px-5 py-3"><StatusBadge active={a.isActive !== false} /></td>
                       <td className="px-5 py-3 text-gray-500 dark:text-dark-400 whitespace-nowrap">{created ? created.toLocaleDateString() : '—'}</td>
                       <td className="px-5 py-3 text-gray-500 dark:text-dark-400 whitespace-nowrap">{lastLogin ? lastLogin.toLocaleDateString() : '—'}</td>
@@ -380,7 +549,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
                 })}
                 {admins.length === 0 && !loading && (
                   <tr>
-                    <td className="px-5 py-10 text-center text-gray-500 dark:text-dark-300" colSpan={7}>No admin accounts found</td>
+                    <td className="px-5 py-10 text-center text-gray-500 dark:text-dark-300" colSpan={8}>No admin accounts found</td>
                   </tr>
                 )}
               </tbody>

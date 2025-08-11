@@ -391,16 +391,19 @@ export const membersFirebaseService = {
     }
   },
 
-  // Delete member (soft delete)
+  // Delete member (hard delete). If hard delete fails, fall back to soft delete.
   delete: async (memberId: string): Promise<void> => {
     try {
       const memberRef = doc(db, getChurchCollectionPath('members'), memberId);
-      await updateDoc(memberRef, {
-        isActive: false,
-        lastUpdated: new Date().toISOString()
-      });
-    } catch (error: any) {
-      throw new Error(`Failed to delete member: ${error.message}`);
+      await deleteDoc(memberRef);
+    } catch (hardErr: any) {
+      console.warn('Hard delete failed, attempting soft delete fallback', hardErr?.message);
+      try {
+        const memberRef = doc(db, getChurchCollectionPath('members'), memberId);
+        await updateDoc(memberRef, { isActive: false, lastUpdated: new Date().toISOString() });
+      } catch (softErr: any) {
+        throw new Error(`Failed to delete member (hard+soft): ${softErr.message}`);
+      }
     }
   },
 

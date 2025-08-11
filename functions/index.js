@@ -131,6 +131,164 @@ exports.sendPushNotification = functions.https.onCall(async (data, context) => {
   }
 });
 
+// Callable function: get member counts per church (constituency) – counts ONLY active members (isActive != false)
+exports.getMemberCounts = functions.https.onCall(async (data, context) => {
+  try {
+    if (!context.auth) {
+      console.warn('getMemberCounts invoked without auth – prototype allowance.');
+    }
+    const churchIds = Array.isArray(data?.churchIds) ? data.churchIds.slice(0, 300) : null; // limit safeguard
+    if (!churchIds || churchIds.length === 0) {
+      throw new functions.https.HttpsError('invalid-argument', 'churchIds array required');
+    }
+    const db = admin.firestore();
+    const counts = {};
+    let total = 0;
+
+    for (const cid of churchIds) {
+      if (typeof cid !== 'string' || !cid.trim()) continue;
+      try {
+        const membersRef = db.collection('churches').doc(cid).collection('members').where('isActive', '==', true);
+        const snap = await membersRef.select().get();
+        const count = snap.size;
+        counts[cid] = count;
+        total += count;
+      } catch (innerErr) {
+        console.error('Member count failed for church', cid, innerErr);
+        counts[cid] = -1; // error marker
+      }
+    }
+    return { counts, total };
+  } catch (err) {
+    console.error('getMemberCounts failed', err);
+    throw new functions.https.HttpsError('internal', 'Failed to compute member counts');
+  }
+});
+
+// Real-time maintenance of membersCount on church & owning admin user
+exports.onMemberCreated = functions.firestore
+  .document('churches/{churchId}/members/{memberId}')
+  .onCreate(async (snap, context) => {
+    const data = snap.data() || {};
+    if (data.isActive === false) return; // Only count active members
+    const { churchId } = context.params;
+    const db = admin.firestore();
+    const churchRef = db.doc(`churches/${churchId}`);
+    try {
+      await churchRef.set({ membersCount: admin.firestore.FieldValue.increment(1) }, { merge: true });
+    } catch (e) {
+      console.error('Failed incrementing church membersCount', churchId, e);
+    }
+    try {
+      const adminsSnap = await db.collection('users').where('churchId', '==', churchId).where('role', '==', 'admin').get();
+      const batch = db.batch();
+      adminsSnap.forEach(docSnap => batch.set(docSnap.ref, { membersCount: admin.firestore.FieldValue.increment(1) }, { merge: true }));
+      if (!adminsSnap.empty) await batch.commit();
+    } catch (e) {
+      console.error('Failed incrementing admin membersCount', churchId, e);
+    }
+  });
+
+exports.onMemberDeleted = functions.firestore
+  .document('churches/{churchId}/members/{memberId}')
+  .onDelete(async (snap, context) => {
+    const data = snap.data() || {};
+    if (data.isActive === false) return; // Only decrement if previously active
+    const { churchId } = context.params;
+    const db = admin.firestore();
+    const churchRef = db.doc(`churches/${churchId}`);
+    try {
+      await churchRef.set({ membersCount: admin.firestore.FieldValue.increment(-1) }, { merge: true });
+    } catch (e) {
+      console.error('Failed decrementing church membersCount', churchId, e);
+    }
+    try {
+      const adminsSnap = await db.collection('users').where('churchId', '==', churchId).where('role', '==', 'admin').get();
+      const batch = db.batch();
+      adminsSnap.forEach(docSnap => batch.set(docSnap.ref, { membersCount: admin.firestore.FieldValue.increment(-1) }, { merge: true }));
+      if (!adminsSnap.empty) await batch.commit();
+    } catch (e) {
+      console.error('Failed decrementing admin membersCount', churchId, e);
+    }
+  });
+
+// One-off update trigger to adjust counts when a member switches active status (soft delete legacy)
+exports.onMemberUpdated = functions.firestore
+  .document('churches/{churchId}/members/{memberId}')
+  .onUpdate(async (change, context) => {
+    const before = change.before.data() || {};
+    const after = change.after.data() || {};
+    if (before.isActive === after.isActive) return; // Nothing changed regarding activity
+    const { churchId } = context.params;
+    const db = admin.firestore();
+    const delta = (before.isActive !== false && after.isActive === false) ? -1 : (before.isActive === false && after.isActive !== false) ? 1 : 0;
+    if (delta === 0) return;
+    const churchRef = db.doc(`churches/${churchId}`);
+    try {
+      await churchRef.set({ membersCount: admin.firestore.FieldValue.increment(delta) }, { merge: true });
+    } catch (e) {
+      console.error('Failed adjusting church membersCount (update)', churchId, e);
+    }
+    try {
+      const adminsSnap = await db.collection('users').where('churchId', '==', churchId).where('role', '==', 'admin').get();
+      const batch = db.batch();
+      adminsSnap.forEach(docSnap => batch.set(docSnap.ref, { membersCount: admin.firestore.FieldValue.increment(delta) }, { merge: true }));
+      if (!adminsSnap.empty) await batch.commit();
+    } catch (e) {
+      console.error('Failed adjusting admin membersCount (update)', churchId, e);
+    }
+  });
+
+// Callable backfill to recompute membersCount (one-off / admin only)
+exports.recomputeMemberCounts = functions.https.onCall(async (_, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'Auth required');
+  }
+  const db = admin.firestore();
+  const churchesSnap = await db.collection('churches').get();
+  let total = 0;
+  for (const churchDoc of churchesSnap.docs) {
+    const churchId = churchDoc.id;
+    try {
+      const membersSnap = await db.collection('churches').doc(churchId).collection('members').where('isActive', '==', true).select().get();
+      const size = membersSnap.size; // only active members
+      total += size;
+      const batch = db.batch();
+      batch.set(churchDoc.ref, { membersCount: size }, { merge: true });
+      const adminsSnap = await db.collection('users').where('churchId', '==', churchId).where('role', '==', 'admin').get();
+      adminsSnap.forEach(a => batch.set(a.ref, { membersCount: size }, { merge: true }));
+      await batch.commit();
+    } catch (e) {
+      console.error('Failed recomputing for church', churchId, e);
+    }
+  }
+  return { success: true, total };
+});
+
+// Callable: purge inactive member documents (legacy soft-deleted) and recompute counts.
+exports.purgeInactiveMembers = functions.https.onCall(async (_, context) => {
+  if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Auth required');
+  const db = admin.firestore();
+  const churchesSnap = await db.collection('churches').get();
+  let removed = 0;
+  for (const churchDoc of churchesSnap.docs) {
+    const churchId = churchDoc.id;
+    try {
+      const inactiveSnap = await db.collection('churches').doc(churchId).collection('members').where('isActive', '==', false).select().get();
+      if (inactiveSnap.empty) continue;
+      const batch = db.batch();
+      inactiveSnap.docs.forEach(d => { batch.delete(d.ref); removed++; });
+      await batch.commit();
+      console.log(`Purged ${inactiveSnap.size} inactive members from church ${churchId}`);
+    } catch (e) {
+      console.error('Failed purging inactive members for church', churchId, e);
+    }
+  }
+  // After purge, recompute
+  await exports.recomputeMemberCounts.run?.(); // best effort if available
+  return { success: true, removed };
+});
+
 // Helper function to clean up invalid tokens
 async function cleanupInvalidTokens(failedTokens, churchId) {
   try {
