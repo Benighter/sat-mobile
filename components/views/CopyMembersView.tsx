@@ -1,33 +1,28 @@
 import React, { useState, useMemo } from 'react';
 import { useAppContext } from '../../contexts/FirebaseAppContext';
 import { Member } from '../../types';
-import { ArrowLeftIcon, ClipboardIcon, CheckIcon } from '../icons';
+import { ArrowLeftIcon, ClipboardIcon } from '../icons';
 import { formatBirthdayDisplay } from '../../utils/birthdayUtils';
 import Button from '../ui/Button';
 import { useNavigation } from '../../hooks/useNavigation';
 
 interface CopyOptions {
-  includeNames: boolean;
-  includeSurnames: boolean;
   includePhones: boolean;
   includeBirthdays: boolean;
   includeBacentaName: boolean;
   groupByBacenta: boolean;
-  memberType: 'all' | 'includeLeaders' | 'excludeLeaders';
+  memberType: 'all' | 'leadersOnly' | 'excludeLeaders';
 }
 
 const CopyMembersView: React.FC = () => {
   const { 
     members, 
     bacentas, 
-    switchTab, 
     showToast,
     currentTab 
   } = useAppContext();
 
   const [options, setOptions] = useState<CopyOptions>({
-    includeNames: true,
-    includeSurnames: false,
     includePhones: false,
     includeBirthdays: false,
     includeBacentaName: false,
@@ -55,37 +50,7 @@ const CopyMembersView: React.FC = () => {
 
   // Unified back handled by global header BackButton and gestures
   const handleBack = () => navigateBack();
-
-  // If no members available, show a message
-  if (members.length === 0) {
-    return (
-      <div className="space-y-6 max-w-4xl mx-auto">
-        <div className="flex items-center space-x-4 mb-6">
-          <button
-            onClick={handleBack}
-            className="flex items-center justify-center w-10 h-10 bg-white hover:bg-gray-50 border border-gray-300 rounded-lg shadow-sm transition-colors"
-            title="Go back"
-          >
-            <ArrowLeftIcon className="w-5 h-5 text-gray-600" />
-          </button>
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Copy Members</h1>
-            <p className="text-sm text-gray-600">No members available</p>
-          </div>
-        </div>
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center">
-          <p className="text-gray-500">No members found to copy.</p>
-          <Button
-            variant="primary"
-            onClick={handleBack}
-            className="mt-4"
-          >
-            Go Back
-          </Button>
-        </div>
-      </div>
-    );
-  }
+  const noMembers = members.length === 0;
 
   // Filter members based on current context (same logic as MembersTableView)
   const filteredMembers = useMemo(() => {
@@ -142,13 +107,8 @@ const CopyMembersView: React.FC = () => {
   // Filter members based on selected type
   const getFilteredMembersByType = () => {
     switch (options.memberType) {
-      case 'includeLeaders':
-        return filteredMembers.filter(m => 
-          m.role === 'Bacenta Leader' || 
-          m.role === 'Fellowship Leader' || 
-          m.role === 'Member' ||
-          !m.role // Include members without role (default to Member)
-        );
+      case 'leadersOnly':
+        return filteredMembers.filter(m => m.role === 'Bacenta Leader' || m.role === 'Fellowship Leader');
       case 'excludeLeaders':
         return filteredMembers.filter(m => m.role === 'Member' || !m.role);
       case 'all':
@@ -205,8 +165,8 @@ const CopyMembersView: React.FC = () => {
           if (countedMemberIds.has(member.id)) return;
           const parts: string[] = [];
           parts.push(`${globalCounter}.`);
-          if (options.includeNames && member.firstName) parts.push(member.firstName.trim());
-          if (options.includeSurnames && member.lastName && member.lastName.trim()) parts.push(member.lastName.trim());
+          if (member.firstName) parts.push(member.firstName.trim());
+          if (member.lastName && member.lastName.trim()) parts.push(member.lastName.trim());
           if (options.includePhones && member.phoneNumber && member.phoneNumber !== '-' && member.phoneNumber.trim()) parts.push(member.phoneNumber.trim());
           if (options.includeBirthdays && member.birthday) parts.push(`(${formatBirthdayDisplay(member.birthday)})`);
           const line = parts.join(' ');
@@ -240,13 +200,8 @@ const CopyMembersView: React.FC = () => {
         // Always add numbering (default behavior)
         parts.push(`${index + 1}.`);
 
-        if (options.includeNames && member.firstName) {
-          parts.push(member.firstName.trim());
-        }
-
-        if (options.includeSurnames && member.lastName && member.lastName.trim()) {
-          parts.push(member.lastName.trim());
-        }
+  if (member.firstName) parts.push(member.firstName.trim());
+  if (member.lastName && member.lastName.trim()) parts.push(member.lastName.trim());
 
         if (options.includePhones && member.phoneNumber && member.phoneNumber !== '-' && member.phoneNumber.trim()) {
           parts.push(member.phoneNumber.trim());
@@ -314,39 +269,34 @@ const CopyMembersView: React.FC = () => {
           </button>
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Copy Members</h1>
-            <p className="text-sm text-gray-600">
-              {currentBacentaName ? `${currentBacentaName} Bacenta` : 'All Members'} • {memberCount} member{memberCount !== 1 ? 's' : ''}
-            </p>
+            {noMembers ? (
+              <p className="text-sm text-gray-600">No members available</p>
+            ) : (
+              <p className="text-sm text-gray-600">
+                {currentBacentaName ? `${currentBacentaName} Bacenta` : 'All Members'} • {memberCount} member{memberCount !== 1 ? 's' : ''}
+              </p>
+            )}
           </div>
         </div>
-
+      {noMembers ? (
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center">
+          <p className="text-gray-500">No members found to copy.</p>
+          <Button
+            variant="primary"
+            onClick={handleBack}
+            className="mt-4"
+          >
+            Go Back
+          </Button>
+        </div>
+      ) : (
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Options Panel */}
         <div className="space-y-6">
-          {/* Data Fields Section */}
+          {/* Data Fields Section (Names & Surnames always included by default) */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Data Fields</h3>
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Optional Fields</h3>
             <div className="space-y-4">
-              <label className="flex items-center space-x-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={options.includeNames}
-                  onChange={(e) => setOptions(prev => ({ ...prev, includeNames: e.target.checked }))}
-                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                />
-                <span className="text-sm font-medium text-gray-700">Names (First Names)</span>
-              </label>
-              
-              <label className="flex items-center space-x-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={options.includeSurnames}
-                  onChange={(e) => setOptions(prev => ({ ...prev, includeSurnames: e.target.checked }))}
-                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                />
-                <span className="text-sm font-medium text-gray-700">Surnames/Last Names</span>
-              </label>
-              
               <label className="flex items-center space-x-3 cursor-pointer">
                 <input
                   type="checkbox"
@@ -356,7 +306,6 @@ const CopyMembersView: React.FC = () => {
                 />
                 <span className="text-sm font-medium text-gray-700">Phone Numbers/Contacts</span>
               </label>
-
               <label className="flex items-center space-x-3 cursor-pointer">
                 <input
                   type="checkbox"
@@ -367,6 +316,7 @@ const CopyMembersView: React.FC = () => {
                 <span className="text-sm font-medium text-gray-700">Birthdays</span>
               </label>
             </div>
+            <p className="mt-4 text-xs text-gray-500">First and last names are always included.</p>
           </div>
 
           {/* Format Options Section */}
@@ -425,13 +375,13 @@ const CopyMembersView: React.FC = () => {
                 <input
                   type="radio"
                   name="memberType"
-                  value="includeLeaders"
-                  checked={options.memberType === 'includeLeaders'}
+                  value="leadersOnly"
+                  checked={options.memberType === 'leadersOnly'}
                   onChange={(e) => setOptions(prev => ({ ...prev, memberType: e.target.value as any }))}
                   className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
                 />
-                <span className="text-sm font-medium text-gray-700">Include Leaders</span>
-                <span className="text-xs text-gray-500">(Bacenta + Fellowship Leaders + Members)</span>
+                <span className="text-sm font-medium text-gray-700">Leaders Only</span>
+                <span className="text-xs text-gray-500">(Bacenta + Fellowship Leaders)</span>
               </label>
               
               <label className="flex items-center space-x-3 cursor-pointer">
@@ -506,7 +456,8 @@ const CopyMembersView: React.FC = () => {
             </Button>
           </div>
         </div>
-      </div>
+  </div>
+  )}
     </div>
     </div>
   );

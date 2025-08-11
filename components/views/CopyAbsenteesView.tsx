@@ -17,16 +17,16 @@ const CopyAbsenteesView: React.FC = () => {
     members, 
     bacentas, 
     attendanceRecords,
-    switchTab, 
     showToast,
     currentTab 
   } = useAppContext();
 
-  const [options, setOptions] = useState<CopyOptions>({
+  // All data fields are now always included by default (UI selectors removed)
+  const options: CopyOptions = {
     includeNames: true,
-    includeSurnames: false,
-    includePhones: false
-  });
+    includeSurnames: true,
+    includePhones: true
+  };
   const [isCopying, setIsCopying] = useState(false);
   const { navigateBack } = useNavigation();
   const [selectedDate, setSelectedDate] = useState<string>(getCurrentOrMostRecentSunday());
@@ -366,59 +366,8 @@ const CopyAbsenteesView: React.FC = () => {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Options Panel */}
-          <div className="space-y-6">
-            {/* Data Fields Section */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Data Fields</h3>
-              <div className="space-y-4">
-                <label className="flex items-center space-x-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={options.includeNames}
-                    onChange={(e) => setOptions(prev => ({ ...prev, includeNames: e.target.checked }))}
-                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                  />
-                  <span className="text-sm font-medium text-gray-700">Names (First Names)</span>
-                </label>
-
-                <label className="flex items-center space-x-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={options.includeSurnames}
-                    onChange={(e) => setOptions(prev => ({ ...prev, includeSurnames: e.target.checked }))}
-                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                  />
-                  <span className="text-sm font-medium text-gray-700">Surnames/Last Names</span>
-                </label>
-
-                <label className="flex items-center space-x-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={options.includePhones}
-                    onChange={(e) => setOptions(prev => ({ ...prev, includePhones: e.target.checked }))}
-                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                  />
-                  <span className="text-sm font-medium text-gray-700">Phone Numbers/Contacts</span>
-                </label>
-              </div>
-            </div>
-
-            {/* Format Options Section */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Format Options</h3>
-              <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                <p className="text-xs text-blue-700">
-                  <strong>Note:</strong> Numbering (1. 2. 3.) and grouping by bacenta are automatically included in all outputs.
-                </p>
-              </div>
-            </div>
-
-
-          </div>
-
-          {/* Preview Panel */}
+        <div className="space-y-6">
+          {/* Preview Panel (Data fields & format option cards removed) */}
           <div className="space-y-6">
             {/* Preview Section */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
