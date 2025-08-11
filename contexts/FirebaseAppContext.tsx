@@ -62,6 +62,7 @@ interface AppContextType {
   updateOutreachMemberHandler: (id: string, updates: Partial<OutreachMember>) => Promise<void>;
   deleteOutreachMemberHandler: (id: string) => Promise<void>;
   convertOutreachMemberToPermanentHandler: (outreachMemberId: string) => Promise<void>;
+  addMultipleOutreachMembersHandler: (items: Omit<OutreachMember, 'id' | 'createdDate' | 'lastUpdated'>[]) => Promise<{ successful: OutreachMember[]; failed: { data: Omit<OutreachMember, 'id' | 'createdDate' | 'lastUpdated'>; error: string }[] }>;
 
   setOutreachMonth: (yyyymm: string) => void;
 
@@ -584,6 +585,36 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
       setError(error.message);
       showToast('error', 'Failed to add members', error.message);
       throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [showToast]);
+
+  // Add: bulk outreach members handler
+  const addMultipleOutreachMembersHandler = useCallback(async (items: Omit<OutreachMember, 'id' | 'createdDate' | 'lastUpdated'>[]) => {
+    try {
+      setIsLoading(true);
+      const successful: OutreachMember[] = [] as any;
+      const failed: { data: Omit<OutreachMember, 'id' | 'createdDate' | 'lastUpdated'>; error: string }[] = [];
+
+      for (const data of items) {
+        try {
+          await outreachMembersFirebaseService.add(data);
+          successful.push({ ...data, id: 'temp', createdDate: '', lastUpdated: '' } as any);
+        } catch (e: any) {
+          failed.push({ data, error: e?.message || 'Unknown error' });
+        }
+      }
+
+      if (failed.length === 0) {
+        showToast('success', `Added ${successful.length} outreach member${successful.length === 1 ? '' : 's'}`);
+      } else if (successful.length > 0) {
+        showToast('warning', 'Partial success', `${successful.length} added, ${failed.length} failed`);
+      } else {
+        showToast('error', 'Bulk add failed');
+      }
+
+      return { successful, failed };
     } finally {
       setIsLoading(false);
     }
@@ -2168,6 +2199,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     updateOutreachMemberHandler,
     deleteOutreachMemberHandler,
     convertOutreachMemberToPermanentHandler,
+    addMultipleOutreachMembersHandler,
     setOutreachMonth,
   // Impersonation
   isImpersonating,

@@ -1,43 +1,16 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { useAppContext } from '../../contexts/FirebaseAppContext';
-import { OutreachMember, OutreachBacenta, TabKeys } from '../../types';
+import { OutreachMember, OutreachBacenta } from '../../types';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
 import Select from '../ui/Select';
 import Badge from '../ui/Badge';
-import { CalendarIcon, UsersIcon, PlusIcon, CheckIcon, ExclamationTriangleIcon, ChevronLeftIcon, ChevronRightIcon, PeopleIcon, TrashIcon } from '../icons';
+import { UsersIcon, PlusIcon, CheckIcon, ExclamationTriangleIcon, ChevronLeftIcon, PeopleIcon, TrashIcon } from '../icons';
 import AllBacentasView from '../bacentas/AllBacentasView';
+import BulkOutreachAddModal from './BulkOutreachAddModal';
 
 
-const MonthPicker: React.FC<{ value: string; onChange: (v: string) => void }> = ({ value, onChange }) => {
-  const [year, month] = value.split('-');
-  const toYM = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-  const current = new Date(parseInt(year), parseInt(month) - 1, 1);
-  return (
-    <div className="inline-flex items-center gap-2 bg-white/70 dark:bg-dark-700/60 rounded-full px-2 py-1.5 border border-gray-200 dark:border-dark-600 shadow-sm">
-      <button
-        className="p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-dark-600 text-gray-600"
-        onClick={() => onChange(toYM(new Date(current.getFullYear(), current.getMonth() - 1, 1)))}
-        aria-label="Previous month"
-      >
-        <ChevronLeftIcon className="w-4 h-4" />
-      </button>
-      <div className="flex items-center gap-2 px-2">
-        <CalendarIcon className="w-4 h-4 text-gray-600" />
-        <span className="font-semibold tracking-wide">
-          {current.toLocaleString(undefined, { month: 'long', year: 'numeric' })}
-        </span>
-      </div>
-      <button
-        className="p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-dark-600 text-gray-600"
-        onClick={() => onChange(toYM(new Date(current.getFullYear(), current.getMonth() + 1, 1)))}
-        aria-label="Next month"
-      >
-        <ChevronRightIcon className="w-4 h-4" />
-      </button>
-    </div>
-  );
-};
+// MonthPicker not used in this composition; removed to reduce noise
 
 // Detail view for a single outreach bacenta (moves form here)
 const BacentaDetail: React.FC<{
@@ -46,12 +19,13 @@ const BacentaDetail: React.FC<{
   weekStart: string;
   onBack: () => void;
 }> = ({ bacenta, members, weekStart, onBack }) => {
-  const { addOutreachMemberHandler, updateOutreachMemberHandler, deleteOutreachMemberHandler, convertOutreachMemberToPermanentHandler, showToast } = useAppContext();
+  const { addOutreachMemberHandler, deleteOutreachMemberHandler, convertOutreachMemberToPermanentHandler, showToast } = useAppContext();
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [room, setRoom] = useState('');
   const [coming, setComing] = useState<boolean>(false);
   const [reason, setReason] = useState('');
+  const [showBulk, setShowBulk] = useState(false);
 
   const handleAdd = async () => {
     try {
@@ -64,9 +38,7 @@ const BacentaDetail: React.FC<{
         bacentaId: bacenta.id,
         comingStatus: coming,
         notComingReason: !coming && reason ? reason : undefined,
-        outreachDate: weekStart, // Monday date of the selected week
-        createdDate: new Date().toISOString(),
-        lastUpdated: new Date().toISOString()
+        outreachDate: weekStart // Monday date of the selected week
       });
       setName(''); setPhone(''); setRoom(''); setReason(''); setComing(false);
       showToast('success', 'Outreach member added');
@@ -167,10 +139,23 @@ const BacentaDetail: React.FC<{
                   >
                     Add Outreach Member
                   </Button>
+                  <Button
+                    variant="secondary"
+                    onClick={() => setShowBulk(true)}
+                  >
+                    Bulk Add
+                  </Button>
                 </div>
               </div>
             </div>
           </div>
+          <BulkOutreachAddModal
+            isOpen={showBulk}
+            onClose={() => setShowBulk(false)}
+            bacentaId={bacenta.id}
+            bacentaName={bacenta.name}
+            weekStart={weekStart}
+          />
 
           {/* Members List - Enhanced */}
           <div className="space-y-6">
@@ -215,9 +200,9 @@ const BacentaDetail: React.FC<{
                             </div>
                           </div>
 
-                          {!m.comingStatus && m.reasonNotComing && (
+              {!m.comingStatus && m.notComingReason && (
                             <div className="text-sm text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 px-3 py-2 rounded-lg">
-                              <span className="font-medium">Reason:</span> {m.reasonNotComing}
+                <span className="font-medium">Reason:</span> {m.notComingReason}
                             </div>
                           )}
                         </div>
@@ -275,17 +260,11 @@ const OutreachView: React.FC = () => {
     outreachMembers,
     allOutreachMembers, // All outreach members across all time periods
     bacentas, // Regular bacentas for validation
-    outreachMonth,
-    setOutreachMonth,
-    addOutreachBacentaHandler,
     deleteOutreachBacentaHandler,
-    deleteOutreachMemberHandler,
-    switchTab,
     currentTab,
-    showToast
   } = useAppContext();
 
-  const [newBacentaName, setNewBacentaName] = useState('');
+  // const [newBacentaName, setNewBacentaName] = useState('');
   const [selectedBacentaId, setSelectedBacentaId] = useState<string>('');
 
   // Monday-based week state (YYYY-MM-DD for Monday) - fixed to current week
@@ -306,13 +285,13 @@ const OutreachView: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const membersByBacenta = useMemo(() => {
-    const map: Record<string, OutreachMember[]> = {};
-    for (const m of outreachMembers) {
-      (map[m.bacentaId] ||= []).push(m);
-    }
-    return map;
-  }, [outreachMembers]);
+  // const membersByBacenta = useMemo(() => {
+  //   const map: Record<string, OutreachMember[]> = {};
+  //   for (const m of outreachMembers) {
+  //     (map[m.bacentaId] ||= []).push(m);
+  //   }
+  //   return map;
+  // }, [outreachMembers]);
 
   // Overall totals using ALL outreach members (across all time periods)
   // Fallback to current monthly data if allOutreachMembers is empty
@@ -386,12 +365,7 @@ const OutreachView: React.FC = () => {
     return { weeklyTotal, weeklyComing, weeklyConverted };
   }, [weeklyMembersByBacenta]);
 
-  const handleAddBacenta = async () => {
-    const name = newBacentaName.trim();
-    if (!name) return;
-    await addOutreachBacentaHandler({ name });
-    setNewBacentaName('');
-  };
+  // Note: adding outreach bacenta is handled elsewhere; this view only displays
 
 
 

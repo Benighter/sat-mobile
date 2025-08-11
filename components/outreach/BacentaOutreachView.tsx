@@ -1,12 +1,13 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { useAppContext } from '../../contexts/FirebaseAppContext';
-import { OutreachMember, Bacenta } from '../../types';
+import { OutreachMember } from '../../types';
 import { formatDateToYYYYMMDD } from '../../utils/dateUtils';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
 import Select from '../ui/Select';
 import Badge from '../ui/Badge';
 import { CalendarIcon, PlusIcon, CheckIcon, ExclamationTriangleIcon, ChevronLeftIcon, ChevronRightIcon, TrashIcon, UserIcon, PhoneIcon } from '../icons';
+import BulkOutreachAddModal from './BulkOutreachAddModal';
 
 // Week picker (Monday-based)
 const WeekPicker: React.FC<{ value: string; onChange: (v: string) => void }> = ({ value, onChange }) => {
@@ -85,6 +86,7 @@ const BacentaOutreachView: React.FC<BacentaOutreachViewProps> = ({ bacentaId }) 
   }, [weekStart, outreachMonth, setOutreachMonth]);
 
   const [showForm, setShowForm] = useState(false);
+  const [showBulkModal, setShowBulkModal] = useState(false);
 
   const bacenta = bacentas.find(b => b.id === bacentaId);
 
@@ -116,9 +118,7 @@ const BacentaOutreachView: React.FC<BacentaOutreachViewProps> = ({ bacentaId }) 
         bacentaId: bacentaId,
         comingStatus: coming,
         notComingReason: !coming && reason ? reason : undefined,
-        outreachDate: weekStart, // Monday date of the selected week
-        createdDate: new Date().toISOString(),
-        lastUpdated: new Date().toISOString(),
+  outreachDate: weekStart, // Monday date of the selected week
       });
       setName(''); setPhone(''); setRoom(''); setReason(''); setComing(false);
       setShowForm(false); // Close form after adding
@@ -180,13 +180,19 @@ const BacentaOutreachView: React.FC<BacentaOutreachViewProps> = ({ bacentaId }) 
 
       {/* Add member button/form */}
       {!showForm ? (
-        <div className="flex justify-center">
+        <div className="flex justify-center gap-3">
           <Button
             onClick={() => setShowForm(true)}
             leftIcon={<PlusIcon className="w-4 h-4" />}
             className="bg-gradient-to-r from-rose-500 to-amber-500 hover:from-rose-600 hover:to-amber-600 text-white border-0 shadow-lg"
           >
             Add Outreach Member
+          </Button>
+          <Button
+            onClick={() => setShowBulkModal(true)}
+            variant="secondary"
+          >
+            Bulk Add
           </Button>
         </div>
       ) : (
@@ -339,6 +345,13 @@ const BacentaOutreachView: React.FC<BacentaOutreachViewProps> = ({ bacentaId }) 
           </div>
         )}
       </div>
+      <BulkOutreachAddModal
+        isOpen={showBulkModal}
+        onClose={() => setShowBulkModal(false)}
+        bacentaId={bacentaId}
+        bacentaName={bacenta?.name}
+        weekStart={weekStart}
+      />
     </div>
   );
 };
