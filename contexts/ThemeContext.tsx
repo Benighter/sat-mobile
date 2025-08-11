@@ -33,10 +33,13 @@ const resolveTheme = (mode: ThemeMode): ResolvedTheme => {
   return mode;
 };
 
+// Temporary flag to disable dark mode across the app. Toggle back to false to re‑enable.
+const DARK_MODE_DISABLED = true;
+
 export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
   const [theme, setThemeState] = useState<ThemeMode>(() => {
-    // Initialize theme from localStorage or default to 'system'
-    return themeStorage.loadTheme();
+  if (DARK_MODE_DISABLED) return 'light';
+  return themeStorage.loadTheme(); // original behaviour
   });
 
   const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme>(() => {
@@ -45,24 +48,26 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
 
   // Update resolved theme when theme changes
   useEffect(() => {
+    if (DARK_MODE_DISABLED) {
+      setResolvedTheme('light');
+      applyThemeToDocument('light');
+      return;
+    }
     const newResolvedTheme = resolveTheme(theme);
     setResolvedTheme(newResolvedTheme);
-    
-    // Apply theme to document
     applyThemeToDocument(newResolvedTheme);
   }, [theme]);
 
   // Listen for system theme changes when theme is set to 'system'
   useEffect(() => {
+    if (DARK_MODE_DISABLED) return; // skip system listener
     if (theme !== 'system') return;
-
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
     const handleChange = (e: MediaQueryListEvent) => {
       const newResolvedTheme = e.matches ? 'dark' : 'light';
       setResolvedTheme(newResolvedTheme);
       applyThemeToDocument(newResolvedTheme);
     };
-
     mediaQuery.addEventListener('change', handleChange);
     return () => mediaQuery.removeEventListener('change', handleChange);
   }, [theme]);
@@ -85,11 +90,17 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
   };
 
   const setTheme = (newTheme: ThemeMode) => {
+    if (DARK_MODE_DISABLED) {
+      setThemeState('light');
+      themeStorage.saveTheme('light');
+      return;
+    }
     setThemeState(newTheme);
     themeStorage.saveTheme(newTheme);
   };
 
   const toggleTheme = () => {
+    if (DARK_MODE_DISABLED) return; // no-op while disabled
     const newTheme = resolvedTheme === 'light' ? 'dark' : 'light';
     setTheme(newTheme);
   };
