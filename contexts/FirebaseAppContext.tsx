@@ -1,9 +1,9 @@
 // Firebase-enabled App Context
 import React, { createContext, useState, useEffect, useCallback, ReactNode, useMemo } from 'react';
-import { Member, AttendanceRecord, Bacenta, TabOption, AttendanceStatus, TabKeys, NavigationHistoryItem, NewBeliever, SundayConfirmation, ConfirmationStatus, Guest, MemberDeletionRequest, OutreachBacenta, OutreachMember } from '../types';
+import { Member, AttendanceRecord, Bacenta, TabOption, AttendanceStatus, NewBeliever, SundayConfirmation, ConfirmationStatus, Guest, MemberDeletionRequest, OutreachBacenta, OutreachMember } from '../types';
 import { FIXED_TABS, DEFAULT_TAB_ID } from '../constants';
 import { sessionStateStorage } from '../utils/localStorage';
-import { getSundaysOfMonth, formatDateToYYYYMMDD } from '../utils/dateUtils';
+import { getSundaysOfMonth } from '../utils/dateUtils';
 import {
   membersFirebaseService,
   bacentasFirebaseService,
@@ -20,14 +20,12 @@ import {
 } from '../services/firebaseService';
 import { dataMigrationService } from '../utils/dataMigration';
 import { userService } from '../services/userService';
-import { inviteService } from '../services/inviteService';
 import { setNotificationContext } from '../services/notificationService';
 import {
   memberOperationsWithNotifications,
   newBelieverOperationsWithNotifications,
   guestOperationsWithNotifications,
   confirmationOperationsWithNotifications,
-  attendanceOperationsWithNotifications,
   setNotificationIntegrationContext
 } from '../services/notificationIntegration';
 import { setEnhancedNotificationContext } from '../services/enhancedNotificationIntegration';
@@ -1771,7 +1769,18 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
       if (user) {
         // Refresh both the auth context and user profile
         await authService.refreshCurrentUser();
-        const profile = await userService.getUserProfile(user.uid);
+        let profile = await userService.getUserProfile(user.uid);
+        // If profile has churchId but churchName might be outdated, fetch church doc
+        if (profile?.churchId) {
+          try {
+            const churchDoc = await userService.getChurch(profile.churchId);
+            if (churchDoc && churchDoc.name && churchDoc.name !== profile.churchName) {
+              profile = { ...profile, churchName: churchDoc.name } as any;
+            }
+          } catch (e) {
+            console.warn('Unable to sync constituency name from church doc', e);
+          }
+        }
         setUserProfile(profile);
 
         // After refreshing profile, check if we now have church context and can set up data listeners
@@ -1824,6 +1833,21 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
       return () => clearTimeout(timeout);
     }
   }, [members.length, guests.length, sundayConfirmations.length, cleanupOrphanedConfirmations]);
+
+  // Auto-refresh user profile when constituency (churchName) updates via Super Admin dashboard
+  useEffect(() => {
+  const handler = () => {
+      try {
+        if (!user) return;
+        // Always refresh if current user is admin being updated or a leader potentially affected
+        refreshUserProfile();
+      } catch (err) {
+        console.warn('Failed handling constituencyUpdated event', err);
+      }
+    };
+    window.addEventListener('constituencyUpdated', handler as EventListener);
+    return () => window.removeEventListener('constituencyUpdated', handler as EventListener);
+  }, [user, refreshUserProfile]);
 
   // Data export/import (for backup purposes)
   const exportData = useCallback((): string => {

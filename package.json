@@ -8,6 +8,7 @@
   "homepage": ".",
   "scripts": {
     "dev": "vite",
+  "dev:3001": "vite --port 3001",
     "build": "vite build && node scripts/optimize-build.js",
     "build:fast": "vite build",
     "preview": "vite preview",

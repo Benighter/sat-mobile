@@ -278,12 +278,13 @@ main[data-scrollable="true"] {
 /* Mobile Touch Enhancements - Updated for better scrolling */
 .touch-pan-y {
   touch-action: auto; /* Allow natural scrolling */
-  -webkit-touch-callout: none;
-  -webkit-user-select: none;
-  -khtml-user-select: none;
-  -moz-user-select: none;
-  -ms-user-select: none;
-  user-select: none;
+  /* Allow text selection & copy (previously disabled) */
+  -webkit-touch-callout: default;
+  -webkit-user-select: text;
+  -khtml-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+  user-select: text;
 }
 
 /* Modal scroll fixes for mobile */
@@ -954,6 +955,7 @@ select:focus-visible {
 .line-clamp-2 {
   display: -webkit-box;
   -webkit-line-clamp: 2;
+  line-clamp: 2; /* Standard property */
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
@@ -961,6 +963,7 @@ select:focus-visible {
 .line-clamp-3 {
   display: -webkit-box;
   -webkit-line-clamp: 3;
+  line-clamp: 3; /* Standard property */
   -webkit-box-orient: vertical;
   overflow: hidden;
 }

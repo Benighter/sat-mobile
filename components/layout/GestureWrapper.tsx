@@ -50,7 +50,25 @@ const GestureWrapper: React.FC<GestureWrapperProps> = ({ children, className = '
     }
   }, [showExitPrompt]);
 
+  // Track whether current pointer sequence should trigger navigation gestures
+  const allowGestureRef = useRef(false);
+
+  const EDGE_THRESHOLD = 48; // px from left edge to start gesture
+
+  const handlePointerDown = useCallback((e: React.PointerEvent) => {
+    const x = e.clientX;
+    // Only allow gesture if touch/mouse starts near left edge and not on an interactive text input
+    const target = e.target as Element;
+    const onInput = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.closest('input, textarea, select, [contenteditable="true"]'));
+    allowGestureRef.current = x <= EDGE_THRESHOLD && !onInput;
+  }, []);
+
   const handlePanEnd = useCallback(async (event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
+    if (!allowGestureRef.current) {
+      // Always reset position if we were moving but not allowed gesture
+      await resetPosition();
+      return;
+    }
     // Prevent handling if already animating
     if (isAnimating) return;
 
@@ -131,6 +149,7 @@ const GestureWrapper: React.FC<GestureWrapperProps> = ({ children, className = '
   }, [controls]);
 
   const handlePan = useCallback((event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
+    if (!allowGestureRef.current) return; // Not an edge gesture
     // Don't handle pan if already animating
     if (isAnimating) return;
 
@@ -153,6 +172,12 @@ const GestureWrapper: React.FC<GestureWrapperProps> = ({ children, className = '
     // Only allow right swipe and ensure it's primarily horizontal
     const isHorizontalSwipe = Math.abs(offset.y) < Math.abs(offset.x) * 0.5;
     const canShowPreview = canNavigateBack() || currentTab.id === 'dashboard';
+
+    // If user is selecting text (there is an active selection length > 0) abort gesture adjustments
+    const selection = window.getSelection();
+    if (selection && selection.toString().length > 0) {
+      return;
+    }
 
     if (offset.x > 50 && canShowPreview && isHorizontalSwipe) {
       // Limit the drag distance and add resistance
@@ -183,6 +208,7 @@ const GestureWrapper: React.FC<GestureWrapperProps> = ({ children, className = '
         animate={controls}
         onPan={handlePan}
         onPanEnd={handlePanEnd}
+        onPointerDown={handlePointerDown}
         drag={false} // Disable automatic drag, we handle it manually
         style={{
           touchAction: 'auto', // Allow natural scrolling behavior

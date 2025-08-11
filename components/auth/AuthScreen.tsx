@@ -4,6 +4,7 @@ import { authService, FirebaseUser } from '../../services/firebaseService';
 import { LoginForm } from './LoginForm';
 import RegisterForm from './RegisterForm';
 import OptimizedLoader from '../common/OptimizedLoader';
+import SuperAdminDashboard from '../super-admin/SuperAdminDashboard';
 
 // Utility function to convert Firebase errors to user-friendly messages
 const getErrorMessage = (error: string): string => {
@@ -52,6 +53,8 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ children, showToast }) =
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
+  // Super Admin prototype state (bypasses firebase auth when using hardcoded credentials)
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
 
   useEffect(() => {
     // Listen to authentication state changes
@@ -67,6 +70,12 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ children, showToast }) =
     try {
       setError(null);
       setLoading(true);
+      // Hardcoded Super Admin credentials (temporary prototype)
+      if (email.trim().toLowerCase() === 'admin@gmail.com' && password === 'Admin@123') {
+        setIsSuperAdmin(true);
+        showToast('success', 'Super Admin', 'Signed in as Super Admin');
+        return; // Skip firebase auth
+      }
       const user = await authService.signIn(email, password);
       setUser(user);
       showToast('success', 'Welcome Back!', `Signed in as ${user.displayName || user.email}`);
@@ -90,6 +99,12 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ children, showToast }) =
       setError(error.message);
       showToast('error', 'Sign Out Failed', error.message);
     }
+  };
+
+  const handleSuperAdminSignOut = () => {
+    setIsSuperAdmin(false);
+    setAuthMode('login');
+    showToast('success', 'Signed Out', 'Super Admin session ended');
   };
 
   const handleRegisterSuccess = () => {
@@ -122,6 +137,10 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ children, showToast }) =
         </div>
       </div>
     );
+  }
+
+  if (isSuperAdmin) {
+    return <SuperAdminDashboard onSignOut={handleSuperAdminSignOut} />;
   }
 
   if (!user) {

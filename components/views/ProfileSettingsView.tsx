@@ -233,9 +233,9 @@ const ProfileSettingsView: React.FC = () => {
                   <EnvelopeIcon className="w-5 h-5 mr-3 text-blue-500" />
                   <span className="text-sm font-medium truncate">{userProfile.email}</span>
                 </div>
-                <div className="flex items-center justify-center lg:justify-start text-gray-600 dark:text-dark-300 bg-gray-50 dark:bg-dark-700 rounded-2xl p-3">
+                <div className="flex items-center justify-center lg:justify-start text-gray-600 dark:text-dark-300 bg-gray-50 dark:bg-dark-700 rounded-2xl p-3" title={userProfile.churchName ? `Constituency: ${userProfile.churchName}` : 'No constituency set'}>
                   <BuildingOfficeIcon className="w-5 h-5 mr-3 text-green-500" />
-                  <span className="text-sm font-medium truncate">{userProfile.churchName || 'Church Member'}</span>
+                  <span className="text-sm font-medium truncate">{userProfile.churchName || 'No Constituency'}</span>
                 </div>
                 <div className="flex items-center justify-center lg:justify-start text-gray-600 dark:text-dark-300 bg-gray-50 dark:bg-dark-700 rounded-2xl p-3">
                   <ShieldCheckIcon className="w-5 h-5 mr-3 text-purple-500" />
