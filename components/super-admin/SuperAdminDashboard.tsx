@@ -150,102 +150,72 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
     }
     try {
       setSavingConstituencyId(admin.id);
+      const newName = constituencyInput.trim();
+      // Primary (fast) update
       await updateDoc(doc(db, 'users', admin.id), {
-        churchName: constituencyInput.trim(),
+        churchName: newName,
         lastUpdated: Timestamp.now()
       });
-      setAdmins(prev => prev.map(a => a.id === admin.id ? { ...a, churchName: constituencyInput.trim() } : a));
-      // Update church document name too (for any features reading from churches collection)
-      if (admin.churchId) {
-        try {
-          await updateDoc(doc(db, 'churches', admin.churchId), {
-            name: constituencyInput.trim(),
-            lastUpdated: Timestamp.now()
-          });
-        } catch (e) {
-          console.warn('Failed to update church doc name', e);
-        }
-      }
-      // Cascade update to leaders linked to this admin (invitedByAdminId == admin uid)
-      const adminUid = admin.uid || admin.id; // Fallback to doc id if uid missing
-      try {
-        const updatedLeaderIds = new Set<string>();
-        // 1. Leaders explicitly linked by invitedByAdminId
-        const leadersByInviteQuery = query(
-          collection(db, 'users'),
-          where('invitedByAdminId', '==', adminUid),
-          where('role', '==', 'leader')
-        );
-        const leadersByInviteSnap = await getDocs(leadersByInviteQuery);
-        const inviteUpdates: Promise<any>[] = [];
-        leadersByInviteSnap.forEach(l => {
-          updatedLeaderIds.add(l.id);
-          inviteUpdates.push(updateDoc(doc(db, 'users', l.id), {
-            churchName: constituencyInput.trim(),
-            lastUpdated: Timestamp.now()
-          }));
-        });
+      setAdmins(prev => prev.map(a => a.id === admin.id ? { ...a, churchName: newName } : a));
 
-        // 2. Leaders sharing the same churchId (some legacy leaders may not store invitedByAdminId)
-        if (admin.churchId) {
-          const leadersByChurchQuery = query(
-            collection(db, 'users'),
-            where('churchId', '==', admin.churchId),
-            where('role', '==', 'leader')
-          );
+      // Immediately exit edit mode & clear saving state for snappy UX
+      cancelEditConstituency();
+      setSavingConstituencyId(null);
+
+      // Fire global event quickly (listeners can refresh)
+      try { window.dispatchEvent(new CustomEvent('constituencyUpdated', { detail: { adminId: admin.id, newName } })); } catch {}
+
+      // Background cascade (non-blocking)
+      (async () => {
+        const adminUid = admin.uid || admin.id;
+        try {
+          // Update church doc
+            if (admin.churchId) {
+              try {
+                await updateDoc(doc(db, 'churches', admin.churchId), { name: newName, lastUpdated: Timestamp.now() });
+              } catch (e) { console.warn('Failed updating church doc', e); }
+            }
+
+          const updatedLeaderIds = new Set<string>();
+          const leadersByInviteQuery = query(collection(db, 'users'), where('invitedByAdminId', '==', adminUid), where('role', '==', 'leader'));
+          const leadersByInviteSnap = await getDocs(leadersByInviteQuery);
+          const updatePromises: Promise<any>[] = [];
+          leadersByInviteSnap.forEach(l => {
+            updatedLeaderIds.add(l.id);
+            updatePromises.push(updateDoc(doc(db, 'users', l.id), { churchName: newName, lastUpdated: Timestamp.now() }));
+          });
+
+          if (admin.churchId) {
+            const leadersByChurchQuery = query(collection(db, 'users'), where('churchId', '==', admin.churchId), where('role', '==', 'leader'));
             const leadersByChurchSnap = await getDocs(leadersByChurchQuery);
-            const churchUpdates: Promise<any>[] = [];
             leadersByChurchSnap.forEach(l => {
               if (!updatedLeaderIds.has(l.id)) {
                 updatedLeaderIds.add(l.id);
-                churchUpdates.push(updateDoc(doc(db, 'users', l.id), {
-                  churchName: constituencyInput.trim(),
-                  lastUpdated: Timestamp.now()
-                }));
+                updatePromises.push(updateDoc(doc(db, 'users', l.id), { churchName: newName, lastUpdated: Timestamp.now() }));
               }
             });
-            if (churchUpdates.length) inviteUpdates.push(...churchUpdates);
-        }
-
-        if (inviteUpdates.length) {
-          await Promise.allSettled(inviteUpdates);
-        }
-
-        // 3. Force broad propagation: update every user (any role) sharing this churchId (covers edge cases)
-        if (admin.churchId) {
-          try {
-            const allUsersSameChurchQuery = query(
-              collection(db, 'users'),
-              where('churchId', '==', admin.churchId)
-            );
+            // Broader propagation to all users of same church
+            const allUsersSameChurchQuery = query(collection(db, 'users'), where('churchId', '==', admin.churchId));
             const allSnap = await getDocs(allUsersSameChurchQuery);
-            const broadUpdates: Promise<any>[] = [];
             allSnap.forEach(u => {
               if (u.id !== admin.id && !updatedLeaderIds.has(u.id)) {
-                broadUpdates.push(updateDoc(doc(db, 'users', u.id), {
-                  churchName: constituencyInput.trim(),
-                  lastUpdated: Timestamp.now()
-                }));
+                updatePromises.push(updateDoc(doc(db, 'users', u.id), { churchName: newName, lastUpdated: Timestamp.now() }));
               }
             });
-            if (broadUpdates.length) await Promise.allSettled(broadUpdates);
-          } catch (broadErr) {
-            console.warn('Broad constituency propagation failed', broadErr);
           }
+          if (updatePromises.length) await Promise.allSettled(updatePromises);
+          // Fire another event to ensure late subscribers update
+          try { window.dispatchEvent(new CustomEvent('constituencyUpdated', { detail: { adminId: admin.id, newName, cascade: true } })); } catch {}
+        } catch (cascadeErr) {
+          console.warn('Background constituency cascade failed', cascadeErr);
+          setError(prev => prev ? prev : 'Some linked accounts may not have updated.');
         }
-      } catch (cascadeErr: any) {
-        console.warn('Cascade constituency update (leaders) failed', cascadeErr);
-        setError(prev => prev ? prev + ' | Partial cascade failure.' : 'Partial cascade failure updating linked leaders.');
-      }
-      // Notify app globally that constituency names may have changed
-      try {
-        window.dispatchEvent(new CustomEvent('constituencyUpdated', { detail: { adminId: admin.id, adminUid, newName: constituencyInput.trim() } }));
-      } catch {}
-      cancelEditConstituency();
+      })();
     } catch (e: any) {
       setError(e.message || 'Failed to save constituency');
     } finally {
-      setSavingConstituencyId(null);
+      // saving state already cleared earlier for fast UX; keep as safety if error path skipped
+      setSavingConstituencyId(prev => prev === admin.id ? null : prev);
     }
   };
 
