@@ -1,5 +1,7 @@
 // Firebase-enabled App Context
 import React, { createContext, useState, useEffect, useCallback, ReactNode, useMemo } from 'react';
+import { collection, getDocs } from 'firebase/firestore';
+import { db } from '../firebase.config';
 import { Member, AttendanceRecord, Bacenta, TabOption, AttendanceStatus, NewBeliever, SundayConfirmation, ConfirmationStatus, Guest, MemberDeletionRequest, OutreachBacenta, OutreachMember } from '../types';
 import { FIXED_TABS, DEFAULT_TAB_ID } from '../constants';
 import { sessionStateStorage } from '../utils/localStorage';
@@ -179,6 +181,13 @@ interface AppContextType {
   triggerMigration: () => Promise<void>;
   toggleOfflineMode: () => Promise<void>;
   refreshUserProfile: () => Promise<void>;
+  // Impersonation (Super Admin view-as)
+  isImpersonating: boolean;
+  impersonatedAdminId: string | null;
+  startImpersonation: (adminUserId: string, churchId: string) => Promise<void>;
+  stopImpersonation: () => Promise<void>;
+  // Force data reload while impersonating (raw fetch bypassing listeners)
+  forceImpersonatedDataReload?: () => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -251,6 +260,11 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
   const [currentTab, setCurrentTab] = useState<TabOption>(() => sessionStateStorage.loadCurrentTab() || (FIXED_TABS.find(t => t.id === DEFAULT_TAB_ID) || FIXED_TABS[0]));
   const isNavigatingBack = React.useRef(false);
   const prevTabRef = React.useRef<TabOption | null>(null);
+  // Impersonation state
+  const [isImpersonating, setIsImpersonating] = useState(false);
+  const [impersonatedAdminId, setImpersonatedAdminId] = useState<string | null>(null);
+  const originalChurchContextRef = React.useRef<string | null>(null);
+  const originalUserProfileRef = React.useRef<any | null>(null);
 
   // Memoized computed values
   const displayedSundays = useMemo(() => {
@@ -333,8 +347,19 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
   }, []);
 
   // Set up real-time data listeners
+  const listenersCleanupRef = React.useRef<(() => void) | null>(null);
+
   const setupDataListeners = useCallback(() => {
-    if (!firebaseUtils.isReady()) return;
+    // During Super Admin impersonation we intentionally allow listeners even if no signed-in firebase user
+    if (!isImpersonating && !firebaseUtils.isReady()) return;
+    if (!firebaseUtils.getCurrentChurchId()) return;
+    console.log('[Listeners] Setting up data listeners for church', firebaseUtils.getCurrentChurchId(), 'impersonating?', isImpersonating, 'ready?', firebaseUtils.isReady());
+
+    // Clean any previous listeners first
+    if (listenersCleanupRef.current) {
+      try { listenersCleanupRef.current(); } catch {}
+      listenersCleanupRef.current = null;
+    }
 
     const unsubscribers: (() => void)[] = [];
 
@@ -421,15 +446,31 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
       setError(error.message);
     }
 
-    // Return cleanup function
-    return () => {
-      unsubscribers.forEach(unsubscribe => unsubscribe());
+    // Store cleanup
+    listenersCleanupRef.current = () => {
+      unsubscribers.forEach(unsub => {
+        try { unsub(); } catch {}
+      });
+    console.log('[Listeners] Cleaned up listeners for church', firebaseUtils.getCurrentChurchId());
     };
-  }, []);
+  }, [isImpersonating]);
+
+  // Re-establish listeners when church context changes (impersonation or restore)
+  useEffect(() => {
+    if (firebaseUtils.isReady()) {
+      setupDataListeners();
+    }
+    return () => {
+      // only cleanup on unmount; next effect run handles previous cleanup
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentChurchId]);
 
   // Fetch initial data (for manual refresh)
   const fetchInitialData = useCallback(async () => {
-    if (!firebaseUtils.isReady()) return;
+    if (!isImpersonating && !firebaseUtils.isReady()) return;
+    if (!firebaseUtils.getCurrentChurchId()) return;
+    console.log('[fetchInitialData] church=', firebaseUtils.getCurrentChurchId(), 'impersonating?', isImpersonating, 'ready?', firebaseUtils.isReady());
 
     try {
       setIsLoading(true);
@@ -448,6 +489,13 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
       setAttendanceRecords(attendanceData);
       setNewBelievers(newBelieversData);
       setSundayConfirmations(confirmationsData);
+      console.log('[fetchInitialData] loaded counts', {
+        members: membersData.length,
+        bacentas: bacentasData.length,
+        attendance: attendanceData.length,
+        newBelievers: newBelieversData.length,
+        confirmations: confirmationsData.length
+      });
     } catch (error: any) {
       setError(error.message);
       showToast('error', 'Failed to fetch data', error.message);
@@ -1889,6 +1937,106 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     }
   }, [showToast]);
 
+  // Impersonation handlers ---------------------------------------------------
+  const startImpersonation = useCallback(async (adminUserId: string, churchId: string) => {
+    // Ensure church doc exists (avoid queries against non-existent path causing confusion)
+  // (Optional) could create church doc if missing; skipped since helper not available
+    if (isImpersonating && impersonatedAdminId === adminUserId && currentChurchId === churchId) return;
+    originalChurchContextRef.current = currentChurchId; // store original church
+    originalUserProfileRef.current = userProfile; // store original profile
+    setIsImpersonating(true);
+    setImpersonatedAdminId(adminUserId);
+    setCurrentChurchId(churchId);
+    firebaseUtils.setChurchContext(churchId);
+    // Load the impersonated admin profile (for name, churchName, etc.)
+    try {
+      const impersonatedProfile = await userService.getUserProfile(adminUserId);
+      if (impersonatedProfile) {
+        setUserProfile(impersonatedProfile);
+        // Reconfigure notification contexts to mimic that admin (best-effort; they may depend on auth rules)
+        try {
+          setNotificationContext(impersonatedProfile, churchId);
+          setNotificationIntegrationContext(impersonatedProfile, churchId);
+          setEnhancedNotificationContext(impersonatedProfile, churchId);
+        } catch (e) {
+          console.warn('Failed to set notification context for impersonation', e);
+        }
+      }
+    } catch (e) {
+      console.warn('Unable to fetch impersonated admin profile', e);
+    }
+    // Reset nav to dashboard for fresh admin view
+    const dashboardTab = FIXED_TABS.find(t => t.id === 'dashboard') || { id: 'dashboard', name: 'Dashboard' } as TabOption;
+    setCurrentTab(dashboardTab);
+    setNavigationStack([]);
+    // Clear existing data so listeners reload in new context
+    setMembers([]); setBacentas([]); setAttendanceRecords([]); setNewBelievers([]); setSundayConfirmations([]); setGuests([]); setMemberDeletionRequests([]);
+    // Trigger manual fetch (listeners will also attach via effect on currentChurchId)
+    try { await fetchInitialData(); } catch (e) { console.warn('Impersonation data load failed', e); }
+    // Schedule fallback raw fetch if nothing loaded (e.g. due to auth rules) after short delay
+    setTimeout(() => {
+      if (isImpersonating && firebaseUtils.getCurrentChurchId() === churchId && members.length === 0 && bacentas.length === 0) {
+        console.log('[Impersonation] Primary listeners returned no data, invoking raw fallback fetch');
+        (async () => { await forceImpersonatedDataReloadRef.current?.(); })();
+      }
+    }, 1200);
+    showToast('info', 'Impersonation', 'Viewing as selected admin');
+  }, [isImpersonating, impersonatedAdminId, currentChurchId, userProfile, fetchInitialData, showToast, members.length, bacentas.length]);
+
+  const stopImpersonation = useCallback(async () => {
+    if (!isImpersonating) return;
+    const restoreChurch = originalChurchContextRef.current;
+    const restoreProfile = originalUserProfileRef.current;
+    setIsImpersonating(false);
+    setImpersonatedAdminId(null);
+    if (restoreChurch) {
+      setCurrentChurchId(restoreChurch);
+      firebaseUtils.setChurchContext(restoreChurch);
+    } else {
+      firebaseUtils.setChurchContext(null);
+    }
+    if (restoreProfile) {
+      setUserProfile(restoreProfile);
+      try {
+        setNotificationContext(restoreProfile, restoreChurch || null);
+        setNotificationIntegrationContext(restoreProfile, restoreChurch || null);
+        setEnhancedNotificationContext(restoreProfile, restoreChurch || null);
+      } catch (e) { console.warn('Failed to restore notification context after impersonation', e); }
+    }
+    setMembers([]); setBacentas([]); setAttendanceRecords([]); setNewBelievers([]); setSundayConfirmations([]); setGuests([]); setMemberDeletionRequests([]);
+    try { await fetchInitialData(); } catch (e) { console.warn('Restore after impersonation failed', e); }
+    showToast('info', 'Impersonation ended', 'Returned to Super Admin');
+  }, [isImpersonating, fetchInitialData, showToast]);
+
+  // Raw fallback fetch (no service abstractions) for impersonation mode
+  const forceImpersonatedDataReloadRef = React.useRef<(() => Promise<void>) | null>(null);
+  forceImpersonatedDataReloadRef.current = async () => {
+    const cid = firebaseUtils.getCurrentChurchId();
+    if (!cid || !isImpersonating) return;
+    try {
+      setIsLoading(true);
+      console.log('[Impersonation Raw Fetch] Fetching all collections for church', cid);
+      const col = async (name: string) => {
+        try { const snap = await getDocs(collection(db, 'churches', cid, name)); return snap.docs.map(d => ({ id: d.id, ...d.data() })); } catch (e) { console.warn('[Impersonation Raw Fetch] Failed', name, e); return []; }
+      };
+      const [m,b,a,nb,cfg,gu] = await Promise.all([
+        col('members'), col('bacentas'), col('attendance'), col('newBelievers'), col('sundayConfirmations'), col('guests')
+      ]);
+      setMembers(m as any); setBacentas(b as any); setAttendanceRecords(a as any); setNewBelievers(nb as any); setSundayConfirmations(cfg as any); setGuests(gu as any);
+      console.log('[Impersonation Raw Fetch] Counts', { members: m.length, bacentas: b.length, attendance: a.length, newBelievers: nb.length, confirmations: cfg.length, guests: gu.length });
+      if (m.length === 0 && b.length === 0) {
+        showToast('warning', 'No Data Found', 'Target admin church has no records or access is blocked');
+      } else {
+        showToast('success', 'Data Loaded', 'Impersonated data loaded via fallback');
+      }
+    } catch (e:any) {
+      console.warn('[Impersonation Raw Fetch] Error', e);
+      showToast('error', 'Raw fetch failed', e.message || String(e));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // Context value
   const contextValue: AppContextType = {
     // Data
@@ -2021,6 +2169,12 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     deleteOutreachMemberHandler,
     convertOutreachMemberToPermanentHandler,
     setOutreachMonth,
+  // Impersonation
+  isImpersonating,
+  impersonatedAdminId,
+  startImpersonation,
+  stopImpersonation,
+  forceImpersonatedDataReload: () => forceImpersonatedDataReloadRef.current ? forceImpersonatedDataReloadRef.current() : Promise.resolve(),
   };
 
 

@@ -348,6 +348,7 @@ export const membersFirebaseService = {
   getAll: async (): Promise<Member[]> => {
     try {
       return await firebaseUtils.retryOperation(async () => {
+  console.log('[membersFirebaseService.getAll] churchId=', currentChurchId);
         const membersRef = collection(db, getChurchCollectionPath('members'));
         const querySnapshot = await getDocs(query(membersRef, where('isActive', '==', true)));
 
@@ -1280,6 +1281,27 @@ export const firebaseUtils = {
   // Get current church ID
   getCurrentChurchId: (): string | null => {
     return currentChurchId;
+  },
+  // Explicitly set church context (used for impersonation)
+  setChurchContext: (churchId: string | null) => {
+    currentChurchId = churchId;
+  },
+  // Debug helper: fetch raw counts from a church's subcollections (no filters)
+  debugFetchChurchCollections: async (churchId: string) => {
+    const result: any = { churchId };
+    const collNames = ['members', 'bacentas', 'attendance', 'newBelievers', 'sundayConfirmations'];
+    for (const name of collNames) {
+      try {
+        const snap = await getDocs(collection(db, `churches/${churchId}/${name}`));
+        result[name] = {
+          count: snap.size,
+          sample: snap.docs.slice(0, 5).map(d => ({ id: d.id, ...d.data() }))
+        };
+      } catch (e: any) {
+        result[name] = { error: e?.message || String(e) };
+      }
+    }
+    return result;
   },
 
   // Batch delete multiple documents

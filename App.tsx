@@ -32,6 +32,7 @@ import {
 } from './components/icons';
 import { TabKeys } from './types';
 import { DEFAULT_CHURCH } from './constants';
+import { firebaseUtils } from './services/firebaseService';
 import MemberFormModal from './components/modals/forms/MemberFormModal';
 import BulkMemberAddModal from './components/members/BulkMemberAddModal';
 import BacentaFormModal from './components/modals/forms/BacentaFormModal'; // Import BacentaFormModal
@@ -54,6 +55,8 @@ const AppContent: React.FC = memo(() => {
     isLoading,
     error,
     fetchInitialData,
+  isImpersonating,
+  stopImpersonation,
     isMemberFormOpen,
     editingMember,
     closeMemberForm,
@@ -249,6 +252,15 @@ const AppContent: React.FC = memo(() => {
 
       {/* Fixed Header - Clean Single Line Design with Desktop Enhancements */}
       <header className="fixed top-0 left-0 right-0 z-50 bg-gradient-to-r from-blue-50/95 via-white/95 to-indigo-50/95 dark:from-dark-800/95 dark:via-dark-900/95 dark:to-dark-800/95 backdrop-blur-md desktop:backdrop-blur-lg border-b border-gray-200/50 dark:border-dark-600/50 shadow-xl desktop:shadow-lg desktop-nav">
+        {isImpersonating && (
+          <div className="w-full text-center text-[11px] sm:text-xs font-semibold tracking-wide py-1 bg-amber-500/90 text-white flex items-center justify-center gap-3">
+            <span>IMPERSONATION MODE</span>
+            <button
+              onClick={stopImpersonation}
+              className="px-2 py-0.5 rounded-md bg-white/20 hover:bg-white/30 text-white text-[10px] font-bold"
+            >Exit</button>
+          </div>
+        )}
         <div className="container mx-auto px-2 xs:px-3 sm:px-6 desktop:px-8 desktop-lg:px-12 py-2 xs:py-3 sm:py-4 desktop:py-4 desktop-lg:py-5">
           <div className="relative flex items-center justify-between">
 
@@ -300,6 +312,18 @@ const AppContent: React.FC = memo(() => {
 
             {/* Right Section - Notifications and Profile */}
             <div className="flex items-center space-x-1 xs:space-x-2 sm:space-x-3 desktop:space-x-4 flex-shrink-0">
+              {isImpersonating && (
+                <button
+                  onClick={async () => {
+                    const churchId = firebaseUtils.getCurrentChurchId();
+                    if (!churchId) return;
+                    const data = await firebaseUtils.debugFetchChurchCollections(churchId);
+                    console.log('[Impersonation Debug]', data);
+                    alert('Debug fetched. Check console for details.');
+                  }}
+                  className="hidden sm:inline px-3 py-1.5 rounded-md bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold shadow"
+                >Force Debug Fetch</button>
+              )}
               {/* Admin Notification Badge */}
               <div className="flex-shrink-0">
                 <NotificationBadge />

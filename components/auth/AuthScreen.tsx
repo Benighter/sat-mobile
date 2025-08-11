@@ -1,5 +1,6 @@
 // Enhanced Authentication Screen with Login and Register
 import React, { useState, useEffect, ReactNode } from 'react';
+import { useAppContext } from '../../contexts/FirebaseAppContext';
 import { authService, FirebaseUser } from '../../services/firebaseService';
 import { LoginForm } from './LoginForm';
 import RegisterForm from './RegisterForm';
@@ -55,6 +56,8 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ children, showToast }) =
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   // Super Admin prototype state (bypasses firebase auth when using hardcoded credentials)
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  // Must come before any conditional return (Rules of Hooks)
+  const { isImpersonating, stopImpersonation } = useAppContext();
 
   useEffect(() => {
     // Listen to authentication state changes
@@ -139,8 +142,22 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ children, showToast }) =
     );
   }
 
-  if (isSuperAdmin) {
+  if (isSuperAdmin && !isImpersonating) {
     return <SuperAdminDashboard onSignOut={handleSuperAdminSignOut} />;
+  }
+
+  if (isSuperAdmin && isImpersonating) {
+    return (
+      <div className="relative min-h-screen">
+        {/* App (children) runs under impersonated context */}
+        {children}
+        {/* Fallback floating exit (in case header not rendered yet) */}
+        <button
+          onClick={stopImpersonation}
+          className="fixed bottom-4 right-4 z-50 px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold shadow-lg"
+        >Exit Impersonation</button>
+      </div>
+    );
   }
 
   if (!user) {

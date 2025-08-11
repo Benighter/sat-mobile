@@ -1,8 +1,10 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { collection, getDocs, getDoc, query, where, limit, updateDoc, doc, Timestamp, onSnapshot } from 'firebase/firestore';
+import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
+import { collection, getDocs, getDoc, query, where, limit, updateDoc, doc, Timestamp, onSnapshot, addDoc, setDoc } from 'firebase/firestore';
 // NOTE: Removed getFunctions/httpsCallable usage for member counts due to CORS issues on callable function.
 // import { getFunctions, httpsCallable } from 'firebase/functions';
 import { db } from '../../firebase.config';
+import { useAppContext } from '../../contexts/FirebaseAppContext';
+import AdminChurchPreview from './AdminChurchPreview';
 
 interface AdminUserRecord {
   id: string;
@@ -32,17 +34,52 @@ const StatusBadge: React.FC<{ active: boolean }> = ({ active }) => (
 );
 
 export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSignOut }) => {
+  const { /* impersonation removed */ } = useAppContext();
+  const isImpersonating = false; // feature disabled
+  const [previewAdmin, setPreviewAdmin] = useState<AdminUserRecord | null>(null);
   const [admins, setAdmins] = useState<AdminUserRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [stats, setStats] = useState<{ total: number; active: number; inactive: number } | null>(null);
   const [totalMembers, setTotalMembers] = useState<number | null>(null);
   const [memberCountsLoading, setMemberCountsLoading] = useState(false);
-  // Manual recount state removed (automatic live listeners will keep counts fresh)
-  // Constituency editing state
   const [editingConstituencyId, setEditingConstituencyId] = useState<string | null>(null);
   const [constituencyInput, setConstituencyInput] = useState('');
   const [savingConstituencyId, setSavingConstituencyId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  // Campus state
+  interface CampusRecord { id: string; name: string; isActive?: boolean; createdAt?: any; }
+  const [campuses, setCampuses] = useState<CampusRecord[]>([]);
+  const [creatingCampus, setCreatingCampus] = useState(false);
+  const [newCampusName, setNewCampusName] = useState('');
+  const [campusError, setCampusError] = useState<string | null>(null);
+  const [showCampusModal, setShowCampusModal] = useState(false);
+  const [editingCampus, setEditingCampus] = useState<CampusRecord | null>(null);
+  const [editingCampusName, setEditingCampusName] = useState('');
+  const [deletingCampus, setDeletingCampus] = useState(false);
+  const [selectedCampusId, setSelectedCampusId] = useState<string | null>(null);
+
+  const campusAggregates = useMemo(() => {
+    if (!campuses.length) return [] as Array<{ campus: CampusRecord; adminCount: number; constituencyCount: number; members: number }>;
+    const map: Record<string, { adminIds: Set<string>; churchIds: Set<string>; members: number }> = {};
+    admins.forEach(a => {
+      const cid = (a as any).campusId; if (!cid) return;
+      if (!map[cid]) map[cid] = { adminIds: new Set(), churchIds: new Set(), members: 0 };
+      map[cid].adminIds.add(a.id);
+      if (a.churchId) {
+        if (!map[cid].churchIds.has(a.churchId)) {
+          map[cid].churchIds.add(a.churchId);
+          if (typeof a.memberCount === 'number') map[cid].members += (a.memberCount || 0);
+        }
+      }
+    });
+    return campuses.map(c => ({
+      campus: c,
+      adminCount: map[c.id]?.adminIds.size || 0,
+      constituencyCount: map[c.id]?.churchIds.size || 0,
+      members: map[c.id]?.members || 0
+    }));
+  }, [campuses, admins]);
 
   const fetchAdmins = useCallback(async () => {
     setLoading(true);
@@ -86,6 +123,12 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
   }, []);
 
   const computeMemberCounts = useCallback(async (adminsList: AdminUserRecord[], forceFullRecount: boolean = false) => {
+    // Concurrency guard to avoid overlapping recounts which can amplify write attempts
+    if ((computeMemberCounts as any)._inFlight) {
+      // Skip if a recount is already running; next realtime change will trigger again if needed
+      return;
+    }
+    (computeMemberCounts as any)._inFlight = true;
     setMemberCountsLoading(true);
     try {
       const uniqueChurchIds = Array.from(new Set(adminsList.map(a => a.churchId).filter((v): v is string => !!v)));
@@ -99,9 +142,19 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
       for (const cid of uniqueChurchIds) {
         try {
           const churchRef = doc(db, 'churches', cid);
-            const churchSnap = await getDoc(churchRef);
-            const data = churchSnap.data();
-            let churchCount: number | null = (data && typeof data.membersCount === 'number') ? data.membersCount : null;
+          const churchSnap = await getDoc(churchRef);
+          const churchExists = churchSnap.exists();
+          const data = churchExists ? churchSnap.data() : undefined;
+          let churchCount: number | null = (data && typeof (data as any).membersCount === 'number') ? (data as any).membersCount : null;
+
+            // Derive campusId from church doc if present and not already on admin record
+            const campusId = (data as any)?.campusId;
+            if (campusId) {
+              // update corresponding admins locally (avoid extra write for now)
+              adminsList.filter(a => a.churchId === cid && !(a as any).campusId).forEach(a => {
+                (a as any).campusId = campusId;
+              });
+            }
 
             // If forcing or missing churchCount, recount by reading active members collection
             if (forceFullRecount || churchCount == null) {
@@ -110,7 +163,10 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
               // Count only active members (isActive !== false)
               churchCount = snap.docs.filter(d => (d.data() as any).isActive !== false).length;
               // Write back to church doc if different
-              if (!data || data.membersCount !== churchCount) {
+              if (!churchExists) {
+                // Parent church doc missing but subcollection exists (allowed in Firestore) – create/merge safely
+                reconciliationWrites.push(setDoc(churchRef, { membersCount: churchCount, lastUpdated: Timestamp.now() }, { merge: true }));
+              } else if ((data as any).membersCount !== churchCount) {
                 reconciliationWrites.push(updateDoc(churchRef, { membersCount: churchCount, lastUpdated: Timestamp.now() }));
               }
             }
@@ -129,18 +185,33 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
       }
 
       if (reconciliationWrites.length) {
-        // Fire and forget; we don't want UI blocked. Await with catch to surface issues quietly.
         Promise.allSettled(reconciliationWrites).then(results => {
-          const failures = results.filter(r => r.status === 'rejected');
-          if (failures.length) console.warn('Some member count reconciliation writes failed');
+          const failures = results.filter(r => r.status === 'rejected') as PromiseRejectedResult[];
+          if (failures.length) {
+            // Surface richer diagnostics for debugging 400 channel termination issues
+            const sample = failures.slice(0, 3).map((f, i) => `#${i + 1}: ${(f.reason && (f.reason.code || f.reason.message)) || f.reason}`);
+            console.warn('[SuperAdminDashboard] Some member count reconciliation writes failed', {
+              totalWrites: reconciliationWrites.length,
+              failed: failures.length,
+              sampleReasons: sample
+            });
+          }
         });
       }
 
       const total = Object.values(countsMap).filter(v => v >= 0).reduce((s, v) => s + v, 0);
       setTotalMembers(total);
-      setAdmins(prev => prev.map(a => (!a.churchId ? a : (countsMap[a.churchId] != null ? { ...a, memberCount: countsMap[a.churchId] } : a))));
+      setAdmins(prev => prev.map(a => {
+        if (!a.churchId) return a;
+        const updates: any = {};
+        if (countsMap[a.churchId] != null) updates.memberCount = countsMap[a.churchId];
+        const original = adminsList.find(x => x.id === a.id);
+        if (original && (original as any).campusId && !(a as any).campusId) updates.campusId = (original as any).campusId;
+        return Object.keys(updates).length ? { ...a, ...updates } : a;
+      }));
     } finally {
       setMemberCountsLoading(false);
+  (computeMemberCounts as any)._inFlight = false;
     }
   }, []);
 
@@ -151,6 +222,17 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
   useEffect(() => {
     fetchAdmins();
   }, [fetchAdmins]);
+
+  // Load campuses (realtime)
+  useEffect(() => {
+    const qCampuses = query(collection(db, 'campuses'), limit(200));
+    const unsub = onSnapshot(qCampuses, snap => {
+  const list: CampusRecord[] = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) })).filter(c => !(c as any).isDeleted);
+  list.sort((a,b) => (a.name || '').localeCompare(b.name || '', 'en', { sensitivity: 'base' })); // alphabetical by default
+      setCampuses(list);
+    });
+    return () => unsub();
+  }, []);
 
   // Real-time listener so new member additions reflected automatically via trigger-updated membersCount
   useEffect(() => {
@@ -368,81 +450,357 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
     }
   };
 
+  // Campus creation ----------------------------------------------------------
+  const createCampus = async () => {
+    if (!newCampusName.trim()) {
+      setCampusError('Campus name required');
+      return;
+    }
+    try {
+      setCreatingCampus(true);
+      setCampusError(null);
+      await addDoc(collection(db, 'campuses'), {
+        name: newCampusName.trim(),
+        isActive: true,
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now()
+      });
+      setNewCampusName('');
+    } catch (e:any) {
+      setCampusError(e.message || 'Failed to create campus');
+    } finally {
+      setCreatingCampus(false);
+    }
+  };
+
+  const openEditCampus = (c: CampusRecord) => {
+    setEditingCampus(c);
+    setEditingCampusName(c.name);
+    setCampusError(null);
+  };
+
+  const saveCampusEdit = async () => {
+    if (!editingCampus) return;
+    if (!editingCampusName.trim()) { setCampusError('Name required'); return; }
+    try {
+      setCreatingCampus(true);
+      await updateDoc(doc(db, 'campuses', editingCampus.id), { name: editingCampusName.trim(), updatedAt: Timestamp.now() });
+      setEditingCampus(null);
+      setEditingCampusName('');
+    } catch (e:any) {
+      setCampusError(e.message || 'Failed to update campus');
+    } finally { setCreatingCampus(false); }
+  };
+
+  const deleteCampus = async () => {
+    if (!editingCampus) return;
+    if (!window.confirm(`Delete campus "${editingCampus.name}"? Constituencies will become unassigned.`)) return;
+    try {
+      setDeletingCampus(true);
+      // Soft delete campus
+      await updateDoc(doc(db, 'campuses', editingCampus.id), { isDeleted: true, deletedAt: Timestamp.now() });
+      // Detach campusId from related users (admins & members) and churches
+      (async () => {
+        try {
+          const usersQ = query(collection(db, 'users'), where('campusId', '==', editingCampus.id));
+          const usersSnap = await getDocs(usersQ);
+            const updates: Promise<any>[] = [];
+            usersSnap.forEach(u => updates.push(updateDoc(doc(db, 'users', u.id), { campusId: null, lastUpdated: Timestamp.now() })));
+            const churchesQ = query(collection(db, 'churches'), where('campusId', '==', editingCampus.id));
+            const churchesSnap = await getDocs(churchesQ);
+            churchesSnap.forEach(ch => updates.push(updateDoc(doc(db, 'churches', ch.id), { campusId: null, lastUpdated: Timestamp.now() })));
+            if (updates.length) await Promise.allSettled(updates);
+        } catch (e) { console.warn('Campus delete detach failed', e); }
+      })();
+      // Close modal & selection
+      if (selectedCampusId === editingCampus.id) setSelectedCampusId(null);
+      setEditingCampus(null);
+    } catch (e:any) {
+      setCampusError(e.message || 'Failed to delete campus');
+    } finally { setDeletingCampus(false); }
+  };
+
+  // Assign / move constituency (church) to campus
+  const assigningRef = useRef<Record<string, boolean>>({});
+  const [, forceRender] = useState(0); // for local transient state display
+
+  const assignCampus = async (admin: AdminUserRecord, campusId: string | null) => {
+    if (assigningRef.current[admin.id]) return;
+    assigningRef.current[admin.id] = true; forceRender(v => v + 1);
+    try {
+      const updates: any = { lastUpdated: Timestamp.now(), campusId: campusId || null };
+      await updateDoc(doc(db, 'users', admin.id), updates);
+      if (admin.churchId) {
+        try { await updateDoc(doc(db, 'churches', admin.churchId), { campusId: campusId || null, lastUpdated: Timestamp.now() }); } catch (e) { console.warn('Failed updating church campusId', e); }
+        // Background cascade for all users in same church
+        (async () => {
+          try {
+            const qUsers = query(collection(db, 'users'), where('churchId', '==', admin.churchId));
+            const snap = await getDocs(qUsers);
+            const writePromises: Promise<any>[] = [];
+            snap.forEach(u => {
+              if (u.id === admin.id) return; // already updated
+              writePromises.push(updateDoc(doc(db, 'users', u.id), { campusId: campusId || null, lastUpdated: Timestamp.now() }));
+            });
+            await Promise.allSettled(writePromises);
+          } catch (err) { console.warn('Campus cascade failed', err); }
+        })();
+      }
+      setAdmins(prev => prev.map(a => a.id === admin.id ? { ...a, campusId: campusId || undefined } : a));
+    } catch (e:any) {
+      setError(e.message || 'Failed to assign campus');
+    } finally {
+      delete assigningRef.current[admin.id];
+      forceRender(v => v + 1);
+    }
+  };
+
+  // Filtered admins for search ------------------------------------------------
+  const filteredAdmins = useMemo(() => {
+    // Show only unassigned constituencies (no campus) in main table
+    const base = admins.filter(a => !(a as any).campusId);
+    if (!searchQuery.trim()) return base;
+    const q = searchQuery.trim().toLowerCase();
+    return base.filter(a => [a.churchName, a.displayName, a.email, a.firstName, a.lastName].some(v => v && v.toLowerCase().includes(q)));
+  }, [admins, searchQuery]);
+
+  const selectedCampus = useMemo(() => campuses.find(c => c.id === selectedCampusId) || null, [campuses, selectedCampusId]);
+  const campusAdmins = useMemo(() => {
+    if (!selectedCampus) return [] as AdminUserRecord[];
+    return admins.filter(a => (a as any).campusId === selectedCampus.id);
+  }, [admins, selectedCampus]);
+
+  // (Removed legacy read-only constituency detail; full impersonation implemented instead)
+
   return (
     <div className="min-h-screen flex flex-col relative">
-      {/* Background similar to main app */}
-      <div className="fixed inset-0 bg-gradient-to-br from-blue-50 via-white to-indigo-50 dark:from-dark-900 dark:via-dark-950 dark:to-dark-800" />
-      <div className="relative flex-1 pt-8 pb-10 px-3 sm:px-6 desktop:px-10 max-w-7xl w-full mx-auto">
-        {/* Top Bar */}
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6 mt-2">
-          <div className="space-y-1">
-            <h1 className="text-2xl sm:text-3xl font-bold gradient-text font-serif tracking-tight">Super Admin Dashboard</h1>
-            <p className="text-xs sm:text-sm text-gray-600 dark:text-dark-300 font-medium">Central overview of all admin accounts (prototype)</p>
-          </div>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={fetchAdmins}
-              disabled={loading}
-              className="group relative inline-flex items-center space-x-2 px-4 py-2 rounded-xl text-sm font-semibold bg-gradient-to-r from-indigo-500 to-blue-600 text-white shadow-md hover:shadow-lg hover:from-indigo-600 hover:to-blue-700 focus:outline-none focus:ring-2 focus:ring-indigo-400 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {loading && <span className="w-4 h-4 border-2 border-white/60 border-t-transparent rounded-full animate-spin"/>}
-              <span>{loading ? 'Refreshing...' : 'Refresh'}</span>
-            </button>
-            <button
-              onClick={onSignOut}
-              className="inline-flex items-center px-4 py-2 rounded-xl text-sm font-semibold bg-red-600 text-white shadow-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-400"
-            >
-              Sign Out
-            </button>
-          </div>
-        </div>
+      {/* Global background */}
+      <div className="fixed inset-0 bg-gradient-to-br from-white/50 via-gray-50/30 to-gray-100/20 dark:from-dark-900/50 dark:via-dark-800/30 dark:to-dark-700/20 pointer-events-none" />
 
-        {/* Stat Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-          <div className="glass rounded-2xl p-5 shadow-lg hover:shadow-xl transition-shadow">
-            <div className="flex items-center justify-between">
-              <p className="text-[11px] uppercase tracking-wider font-semibold text-gray-500 dark:text-dark-300">Total Constituencies</p>
+      {/* Fixed Header (mirrors main app style, simplified) */}
+      <header className="fixed top-0 left-0 right-0 z-40 bg-gradient-to-r from-blue-50/95 via-white/95 to-indigo-50/95 dark:from-dark-800/95 dark:via-dark-900/95 dark:to-dark-800/95 backdrop-blur-md border-b border-gray-200/50 dark:border-dark-600/50 shadow-xl">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 desktop:px-10 py-3 sm:py-4">
+          <div className="flex items-center justify-between gap-4">
+            {/* Left: Logo + Title */}
+            <button
+              onClick={() => { setSelectedCampusId(null); }}
+              className="group flex items-center gap-3 sm:gap-4 focus:outline-none"
+              title="Return to main dashboard"
+            >
+              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-white dark:bg-dark-700 rounded-xl flex items-center justify-center shadow ring-2 ring-blue-100 dark:ring-dark-600 p-1 group-hover:scale-105 transition-transform">
+                <img src="/logo.png" alt="Logo" className="w-full h-full object-contain" />
+              </div>
+              <div className="hidden xs:block text-left">
+                <h1 className="text-lg sm:text-2xl font-bold gradient-text font-serif leading-tight group-hover:opacity-90">Super Admin</h1>
+                <p className="text-[11px] sm:text-xs text-gray-600 dark:text-dark-300 font-medium tracking-wide">Global Constituency Management</p>
+              </div>
+            </button>
+            {/* Center (current context) */}
+            <div className="hidden md:flex items-center px-3 py-2 bg-white/60 dark:bg-dark-700/70 rounded-xl border border-gray-200/60 dark:border-dark-600/60 shadow-sm">
+              <span className="text-sm font-medium text-gray-700 dark:text-dark-100">Dashboard</span>
             </div>
-            <p className="mt-2 text-3xl font-bold text-indigo-600 dark:text-indigo-400 tracking-tight drop-shadow-sm">{stats?.total ?? '-'}</p>
-          </div>
-          <div className="glass rounded-2xl p-5 shadow-lg hover:shadow-xl transition-shadow">
-            <p className="text-[11px] uppercase tracking-wider font-semibold text-blue-600 dark:text-blue-400">Total Members</p>
-            <p className="mt-2 text-3xl font-bold text-blue-600 dark:text-blue-400 tracking-tight">{totalMembers != null ? totalMembers : (memberCountsLoading ? '…' : '-')}</p>
-          </div>
-          <div className="glass rounded-2xl p-5 shadow-lg hover:shadow-xl transition-shadow">
-            <p className="text-[11px] uppercase tracking-wider font-semibold text-green-600 dark:text-green-400">Active</p>
-            <p className="mt-2 text-3xl font-bold text-green-600 dark:text-green-400 tracking-tight">{stats?.active ?? '-'}</p>
-          </div>
-          <div className="glass rounded-2xl p-5 shadow-lg hover:shadow-xl transition-shadow">
-            <p className="text-[11px] uppercase tracking-wider font-semibold text-red-600 dark:text-red-400">Inactive</p>
-            <p className="mt-2 text-3xl font-bold text-red-600 dark:text-red-400 tracking-tight">{stats?.inactive ?? '-'}</p>
+            {/* Right actions */}
+            <div className="flex items-center gap-2 sm:gap-3">
+              <button
+                onClick={fetchAdmins}
+                disabled={loading}
+                className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-xs sm:text-sm font-semibold bg-gradient-to-r from-indigo-500 to-blue-600 text-white shadow hover:shadow-md hover:from-indigo-600 hover:to-blue-700 focus:outline-none focus:ring-2 focus:ring-indigo-400 disabled:opacity-50"
+              >
+                {loading && <span className="w-4 h-4 border-2 border-white/60 border-t-transparent rounded-full animate-spin"/>}
+                <span>{loading ? 'Refreshing…' : 'Refresh'}</span>
+              </button>
+              {!selectedCampus && (
+                <button
+                  onClick={() => setShowCampusModal(true)}
+                  className="hidden sm:inline-flex items-center gap-2 px-3 py-2 rounded-lg text-xs sm:text-sm font-semibold bg-indigo-600 text-white shadow hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                >New Campus</button>
+              )}
+              <button
+                onClick={onSignOut}
+                className="inline-flex items-center px-3 py-2 rounded-lg text-xs sm:text-sm font-semibold bg-red-600 text-white shadow hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-400"
+              >Sign Out</button>
+            </div>
           </div>
         </div>
+      </header>
 
+      {/* Main content area with top padding to clear fixed header */}
+      <div className="relative flex-1 pt-24 sm:pt-28 pb-10 px-3 sm:px-6 desktop:px-10 max-w-7xl w-full mx-auto">
+  {/* Impersonation banner removed */}
+        {/* Mobile quick actions under header */}
+        {!selectedCampus && (
+          <div className="flex sm:hidden items-center gap-2 mb-5">
+            <button
+              onClick={() => setShowCampusModal(true)}
+              className="flex-1 inline-flex items-center justify-center px-3 py-2 rounded-lg text-xs font-semibold bg-indigo-600 text-white shadow hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+            >New Campus</button>
+          </div>
+        )}
+
+        {/* Global Stats */}
+        {!selectedCampus && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-10 mt-2">
+            <div className="glass rounded-2xl p-5 shadow-lg hover:shadow-xl transition-shadow">
+              <div className="flex items-center justify-between">
+                <p className="text-[11px] uppercase tracking-wider font-semibold text-gray-500 dark:text-dark-300">Total Constituencies</p>
+              </div>
+              <p className="mt-2 text-3xl font-bold text-indigo-600 dark:text-indigo-400 tracking-tight drop-shadow-sm">{stats?.total ?? '-'}</p>
+            </div>
+            <div className="glass rounded-2xl p-5 shadow-lg hover:shadow-xl transition-shadow">
+              <p className="text-[11px] uppercase tracking-wider font-semibold text-blue-600 dark:text-blue-400">Total Members</p>
+              <p className="mt-2 text-3xl font-bold text-blue-600 dark:text-blue-400 tracking-tight">{totalMembers != null ? totalMembers : (memberCountsLoading ? '…' : '-')}</p>
+            </div>
+              <div className="glass rounded-2xl p-5 shadow-lg hover:shadow-xl transition-shadow">
+                <p className="text-[11px] uppercase tracking-wider font-semibold text-green-600 dark:text-green-400">Active</p>
+                <p className="mt-2 text-3xl font-bold text-green-600 dark:text-green-400 tracking-tight">{stats?.active ?? '-'}</p>
+              </div>
+              <div className="glass rounded-2xl p-5 shadow-lg hover:shadow-xl transition-shadow">
+                <p className="text-[11px] uppercase tracking-wider font-semibold text-red-600 dark:text-red-400">Inactive</p>
+                <p className="mt-2 text-3xl font-bold text-red-600 dark:text-red-400 tracking-tight">{stats?.inactive ?? '-'}</p>
+              </div>
+          </div>
+        )}
+
+        {/* Campus Overview Cards */}
+        {selectedCampus && (
+          <div className="mb-8">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-semibold text-gray-800 dark:text-dark-50 flex items-center gap-2"><span className="text-indigo-500">🏫</span> {selectedCampus.name}</h2>
+              <button onClick={() => openEditCampus(selectedCampus)} className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white">Edit Campus</button>
+            </div>
+            <div className="glass rounded-2xl shadow overflow-hidden border border-gray-200/40 dark:border-dark-600/40">
+              <div className="px-5 py-4 border-b border-gray-200/40 dark:border-dark-600/40 bg-white/60 dark:bg-dark-800/60 flex items-center justify-between">
+                <h3 className="font-semibold text-gray-700 dark:text-dark-100 text-sm">Constituencies in this Campus</h3>
+                <span className="px-2 py-0.5 rounded-md bg-gray-100 dark:bg-dark-700 text-[11px] font-semibold text-gray-600 dark:text-dark-300">{campusAdmins.length}</span>
+              </div>
+              <div className="overflow-x-auto max-h-[50vh] custom-scrollbar">
+                <table className="min-w-full text-[13px]">
+                  <thead>
+                    <tr className="text-left text-[11px] uppercase tracking-wider text-gray-500 dark:text-dark-300 bg-gray-50/70 dark:bg-dark-700/70">
+                      <th className="px-4 py-3 font-semibold w-10">#</th>
+                      <th className="px-5 py-3 font-semibold">Constituency</th>
+                      <th className="px-5 py-3 font-semibold">Members</th>
+                      <th className="px-5 py-3 font-semibold">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100/60 dark:divide-dark-600/40">
+          {campusAdmins.map((a, idx) => (
+                      <tr
+                        key={a.id}
+                        className="group hover:bg-indigo-50/60 dark:hover:bg-indigo-900/20 cursor-pointer"
+            onClick={(e) => { if ((e.target as HTMLElement).closest('select,button')) return; if (a.churchId) setPreviewAdmin(a); }}
+            title="View admin church snapshot"
+                      >
+                        <td className="px-4 py-3 text-right text-gray-500 dark:text-dark-300">{idx + 1}</td>
+                        <td className="px-5 py-3">
+                          <div className="flex flex-col leading-tight">
+                            <span className="font-medium text-gray-800 dark:text-dark-100 truncate max-w-[180px]" title={a.churchName}>{a.churchName || '—'}</span>
+                            {a.churchId && <span className="text-[10px] text-gray-400 dark:text-dark-400 font-mono">{a.churchId}</span>}
+                          </div>
+                        </td>
+                        <td className="px-5 py-3">{typeof a.memberCount === 'number' ? a.memberCount : '—'}</td>
+                        <td className="px-5 py-3">
+                          <div className="flex items-center gap-2">
+                            <select
+                              value={(a as any).campusId || ''}
+                              onChange={e => assignCampus(a, e.target.value || null)}
+                              className="px-2 py-1 rounded-md bg-white/70 dark:bg-dark-700/70 border border-gray-300 dark:border-dark-600 text-[11px] focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                            >
+                              <option value="">Unassign</option>
+                              {campuses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                            </select>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                    {campusAdmins.length === 0 && (
+                      <tr><td colSpan={4} className="px-5 py-8 text-center text-gray-500 dark:text-dark-300 text-sm">No constituencies yet.</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
+  {!isImpersonating && !selectedCampus && campusAggregates.length > 0 && (
+          <div className="mb-10">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-lg font-semibold text-gray-800 dark:text-dark-100 flex items-center gap-2"><span className="text-indigo-500">🏫</span> Campuses</h2>
+              <div className="flex items-center gap-2 text-xs">
+                <span className="px-2 py-0.5 rounded-md bg-gray-100 dark:bg-dark-700 text-gray-600 dark:text-dark-300">{campusAggregates.length}</span>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {campusAggregates.map(({ campus, adminCount, constituencyCount, members }) => (
+                <div key={campus.id} className="glass rounded-2xl p-5 shadow group hover:shadow-xl transition-all cursor-pointer" onClick={() => setSelectedCampusId(campus.id)}>
+                  <div className="flex items-start justify-between mb-3">
+                    <h3 className="font-semibold text-base text-gray-800 dark:text-dark-50 truncate" title={campus.name}>{campus.name}</h3>
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${campus.isActive === false ? 'bg-red-600/90 text-white' : 'bg-green-600/90 text-white'}`}>{campus.isActive === false ? 'INACTIVE' : 'ACTIVE'}</span>
+                  </div>
+                  <div className="flex flex-col gap-2 text-[11px] font-medium text-gray-600 dark:text-dark-300">
+                    <div className="flex items-center justify-between"><span>Admins</span><span className="text-gray-800 dark:text-dark-100 font-semibold tabular-nums">{adminCount}</span></div>
+                    <div className="flex items-center justify-between"><span>Constituencies</span><span className="text-gray-800 dark:text-dark-100 font-semibold tabular-nums">{constituencyCount}</span></div>
+                    <div className="flex items-center justify-between"><span>Members</span><span className="text-indigo-600 dark:text-indigo-400 font-semibold tabular-nums">{members}</span></div>
+                  </div>
+                  <div className="mt-3 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button onClick={(e) => { e.stopPropagation(); openEditCampus(campus); }} className="px-2 py-1 rounded-md text-[10px] font-semibold bg-indigo-600 hover:bg-indigo-700 text-white">Edit</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+  {!isImpersonating && !selectedCampus && (
+          <>
         {error && (
           <div className="glass border-l-4 border-red-500 rounded-xl p-4 mb-6 shadow-md animate-scale-in">
             <p className="text-sm font-medium text-red-700 dark:text-red-400">{error}</p>
           </div>
         )}
 
-        {/* Table Card */}
-        <div className="glass rounded-2xl shadow-xl overflow-hidden border border-gray-200/40 dark:border-dark-600/40">
-          <div className="px-5 py-4 flex items-center justify-between border-b border-gray-200/40 dark:border-dark-600/40 bg-white/60 dark:bg-dark-800/60 backdrop-blur-sm">
-            <h2 className="font-semibold text-gray-800 dark:text-white text-lg flex items-center gap-2">
-              <span className="text-indigo-500">▣</span> Admin Accounts
-            </h2>
-            <div className="flex items-center gap-3 text-xs font-medium text-gray-500 dark:text-dark-300">
-              <span className="hidden xs:inline">Showing</span>
-              <span className="px-2 py-0.5 rounded-lg bg-gray-100 dark:bg-dark-700 text-gray-700 dark:text-dark-200">{admins.length}</span>
+  {/* Table Card (unassigned constituencies) */}
+  {filteredAdmins.length > 0 && (
+  <div className="glass rounded-2xl shadow-xl overflow-hidden border border-gray-200/40 dark:border-dark-600/40">
+          <div className="px-5 py-4 flex flex-col gap-3 border-b border-gray-200/40 dark:border-dark-600/40 bg-white/60 dark:bg-dark-800/60 backdrop-blur-sm">
+            <div className="flex items-center justify-between">
+              <h2 className="font-semibold text-gray-800 dark:text-white text-lg flex items-center gap-2">
+                <span className="text-indigo-500">▣</span> Admin Accounts / Constituencies
+              </h2>
+              <div className="flex items-center gap-3 text-xs font-medium text-gray-500 dark:text-dark-300">
+                <span className="hidden xs:inline">Showing</span>
+                <span className="px-2 py-0.5 rounded-lg bg-gray-100 dark:bg-dark-700 text-gray-700 dark:text-dark-200">{filteredAdmins.length}</span>
+              </div>
+            </div>
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+              <input
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                placeholder="Search constituencies, admins, email..."
+                className="w-full sm:max-w-xs px-3 py-2 rounded-lg bg-white/70 dark:bg-dark-700/70 border border-gray-300 dark:border-dark-600 text-[12px] focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="px-3 py-2 rounded-lg text-[11px] font-semibold bg-gray-300 dark:bg-dark-600 text-gray-800 dark:text-dark-50"
+                >Clear</button>
+              )}
+              <div className="flex-1" />
+              <div className="flex items-center gap-2 text-[10px] text-gray-500 dark:text-dark-400">
+                <span className="hidden md:inline">Tip: Use campus selector in each row to move a constituency</span>
+              </div>
             </div>
           </div>
           <div className="overflow-x-auto custom-scrollbar max-h-[60vh]">
             <table className="min-w-full text-[13px]">
               <thead>
                 <tr className="text-left text-[11px] uppercase tracking-wider text-gray-500 dark:text-dark-300 bg-gray-50/70 dark:bg-dark-700/70 backdrop-blur-sm">
+                  <th className="px-4 py-3 font-semibold w-10">#</th>
                   <th className="px-5 py-3 font-semibold">Name</th>
                   <th className="px-5 py-3 font-semibold">Email</th>
                   <th className="px-5 py-3 font-semibold">Constituency</th>
+                  <th className="px-5 py-3 font-semibold">Campus</th>
                   <th className="px-5 py-3 font-semibold">Members</th>
                   <th className="px-5 py-3 font-semibold">Status</th>
                   <th className="px-5 py-3 font-semibold">Created</th>
@@ -451,11 +809,17 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100/60 dark:divide-dark-600/40">
-                {admins.map(a => {
+                {filteredAdmins.map((a, idx) => {
                   const created = a.createdAt?.toDate ? a.createdAt.toDate() : (a.createdAt ? new Date(a.createdAt) : null);
                   const lastLogin = a.lastLoginAt?.toDate ? a.lastLoginAt.toDate() : (a.lastLoginAt ? new Date(a.lastLoginAt) : null);
                   return (
-                    <tr key={a.id} className="group hover:bg-indigo-50/60 dark:hover:bg-indigo-900/20 transition-colors">
+                    <tr
+                      key={a.id}
+                      className="group hover:bg-indigo-50/60 dark:hover:bg-indigo-900/20 transition-colors cursor-pointer"
+                      onClick={(e) => { if ((e.target as HTMLElement).closest('select,button,input')) return; if (a.churchId) setPreviewAdmin(a); }}
+                      title={a.churchId ? 'View admin church snapshot' : ''}
+                    >
+                      <td className="px-4 py-3 text-gray-500 dark:text-dark-300 text-right tabular-nums select-none">{idx + 1}</td>
                       <td className="px-5 py-3 font-medium text-gray-800 dark:text-dark-50 whitespace-nowrap">
                         {a.displayName || [a.firstName, a.lastName].filter(Boolean).join(' ') || '—'}
                       </td>
@@ -486,7 +850,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
                           a.churchName ? (
                             <div className="flex flex-col leading-tight">
                               <div className="flex items-center gap-2">
-                                <span className="font-medium text-gray-800 dark:text-dark-100 truncate max-w-[140px]" title={a.churchName}>{a.churchName}</span>
+                                <span className="font-medium text-gray-800 dark:text-dark-100 truncate max-w-[140px] underline decoration-dotted" title={a.churchName}>{a.churchName}</span>
                                 <button
                                   onClick={() => startEditConstituency(a)}
                                   className="text-[10px] px-1.5 py-0.5 rounded-md bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-200 dark:hover:bg-indigo-800 transition-colors"
@@ -502,6 +866,19 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
                             >Assign</button>
                           )
                         )}
+                      </td>
+                      <td className="px-5 py-3 whitespace-nowrap min-w-[160px]">
+                        <div className="flex flex-col gap-1">
+                          <select
+                            value={(a as any).campusId || ''}
+                            onChange={e => assignCampus(a, e.target.value || null)}
+                            className="px-2 py-1 rounded-md bg-white/70 dark:bg-dark-700/70 border border-gray-300 dark:border-dark-600 text-[11px] focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                          >
+                            <option value="">No Campus</option>
+                            {campuses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                          </select>
+                          {assigningRef.current[a.id] && <span className="text-[10px] text-indigo-500">Updating…</span>}
+                        </div>
                       </td>
                       <td className="px-5 py-3 whitespace-nowrap text-gray-700 dark:text-dark-300">
                         {a.churchId ? (
@@ -547,9 +924,9 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
                     </tr>
                   );
                 })}
-                {admins.length === 0 && !loading && (
+                {filteredAdmins.length === 0 && !loading && (
                   <tr>
-                    <td className="px-5 py-10 text-center text-gray-500 dark:text-dark-300" colSpan={8}>No admin accounts found</td>
+                    <td className="px-5 py-10 text-center text-gray-500 dark:text-dark-300" colSpan={9}>No admin accounts found</td>
                   </tr>
                 )}
               </tbody>
@@ -558,8 +935,86 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
               <div className="p-4 text-center text-xs text-gray-500 dark:text-dark-300">Loading...</div>
             )}
           </div>
-        </div>
-        <p className="mt-6 text-[10px] text-gray-400 dark:text-dark-400 text-center tracking-wide">Prototype Super Admin view – more features coming soon.</p>
+          </div>
+        )}
+          {/* end of conditional sections */}
+          </>
+        )}
+  <p className="mt-6 text-[10px] text-gray-400 dark:text-dark-400 text-center tracking-wide">Prototype Super Admin view – more features coming soon.</p>
+        {showCampusModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => !creatingCampus && setShowCampusModal(false)} />
+            <div className="relative z-10 w-full max-w-sm glass rounded-2xl p-6 shadow-xl border border-gray-200/40 dark:border-dark-600/40 animate-scale-in">
+              <h3 className="text-lg font-semibold text-gray-800 dark:text-dark-50 mb-4">Create Campus</h3>
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-[11px] font-medium uppercase tracking-wide text-gray-500 dark:text-dark-300 mb-1">Name</label>
+                  <input
+                    autoFocus
+                    value={newCampusName}
+                    onChange={e => setNewCampusName(e.target.value)}
+                    placeholder="Campus name"
+                    className="w-full px-3 py-2 rounded-md bg-white/80 dark:bg-dark-700/70 border border-gray-300 dark:border-dark-600 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                  />
+                  {campusError && <p className="mt-1 text-[11px] text-red-500">{campusError}</p>}
+                </div>
+                <div className="flex items-center justify-end gap-3 pt-2">
+                  <button
+                    onClick={() => setShowCampusModal(false)}
+                    disabled={creatingCampus}
+                    className="px-4 py-2 rounded-lg text-xs font-semibold bg-gray-200 dark:bg-dark-600 text-gray-800 dark:text-dark-50 hover:bg-gray-300 dark:hover:bg-dark-500 disabled:opacity-50"
+                  >Cancel</button>
+                  <button
+                    onClick={async () => { await createCampus(); if (!campusError) setShowCampusModal(false); }}
+                    disabled={creatingCampus}
+                    className="px-4 py-2 rounded-lg text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white disabled:opacity-50"
+                  >{creatingCampus ? 'Creating…' : 'Create'}</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+        {editingCampus && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => !creatingCampus && !deletingCampus && setEditingCampus(null)} />
+            <div className="relative z-10 w-full max-w-sm glass rounded-2xl p-6 shadow-xl border border-gray-200/40 dark:border-dark-600/40 animate-scale-in">
+              <h3 className="text-lg font-semibold text-gray-800 dark:text-dark-50 mb-4">Edit Campus</h3>
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-[11px] font-medium uppercase tracking-wide text-gray-500 dark:text-dark-300 mb-1">Name</label>
+                  <input
+                    value={editingCampusName}
+                    onChange={e => setEditingCampusName(e.target.value)}
+                    className="w-full px-3 py-2 rounded-md bg-white/80 dark:bg-dark-700/70 border border-gray-300 dark:border-dark-600 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                  />
+                  {campusError && <p className="mt-1 text-[11px] text-red-500">{campusError}</p>}
+                </div>
+                <div className="flex items-center justify-between pt-2">
+                  <button
+                    onClick={deleteCampus}
+                    disabled={creatingCampus || deletingCampus}
+                    className="px-4 py-2 rounded-lg text-xs font-semibold bg-red-600 hover:bg-red-700 text-white disabled:opacity-50"
+                  >{deletingCampus ? 'Deleting…' : 'Delete'}</button>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => setEditingCampus(null)}
+                      disabled={creatingCampus || deletingCampus}
+                      className="px-4 py-2 rounded-lg text-xs font-semibold bg-gray-200 dark:bg-dark-600 text-gray-800 dark:text-dark-50 hover:bg-gray-300 dark:hover:bg-dark-500 disabled:opacity-50"
+                    >Cancel</button>
+                    <button
+                      onClick={saveCampusEdit}
+                      disabled={creatingCampus || deletingCampus}
+                      className="px-4 py-2 rounded-lg text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white disabled:opacity-50"
+                    >{creatingCampus ? 'Saving…' : 'Save'}</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+        {previewAdmin && (
+          <AdminChurchPreview admin={previewAdmin} onClose={() => setPreviewAdmin(null)} />
+        )}
       </div>
     </div>
   );
