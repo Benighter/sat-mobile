@@ -29,6 +29,7 @@ const NewBelieversTableView: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState<'all' | 'Bacenta Leader' | 'Fellowship Leader' | 'Member'>('all');
   const [bacentaFilter, setBacentaFilter] = useState('');
+  const [originFilter, setOriginFilter] = useState<'all' | 'outreach'>('all');
 
   const handleContactClick = async (contact: string) => {
     await SmartTextParser.copyPhoneToClipboard(contact, showToast);
@@ -46,7 +47,10 @@ const NewBelieversTableView: React.FC = () => {
       .filter(m => m.bornAgainStatus)
       .filter(m => {
         if (roleFilter !== 'all' && (m.role || 'Member') !== roleFilter) return false;
-        if (bacentaFilter && m.bacentaId !== bacentaFilter) return false;
+    if (originFilter === 'outreach' && !m.outreachOrigin) return false;
+        if (bacentaFilter === '__unassigned__') {
+          if (m.bacentaId) return false;
+        } else if (bacentaFilter && m.bacentaId !== bacentaFilter) return false;
         if (!search) return true;
         return (
           m.firstName.toLowerCase().includes(search) ||
@@ -55,7 +59,7 @@ const NewBelieversTableView: React.FC = () => {
         );
       })
       .sort((a, b) => a.firstName.localeCompare(b.firstName));
-  }, [members, roleFilter, bacentaFilter, searchTerm]);
+  }, [members, roleFilter, bacentaFilter, originFilter, searchTerm]);
 
   const getAttendanceStatus = (memberId: string, date: string) => {
     const record = attendanceRecords.find(ar => ar.memberId === memberId && ar.date === date);
@@ -83,12 +87,17 @@ const NewBelieversTableView: React.FC = () => {
           className="flex items-center space-x-2 cursor-pointer hover:bg-blue-50 rounded-lg p-1 -m-1 transition-colors duration-200"
           onClick={(e) => { e.stopPropagation(); openMemberForm(m); }}
         >
-          <div className="w-7 h-7 rounded-full flex items-center justify-center overflow-hidden flex-shrink-0 bg-gradient-to-br from-green-100 to-green-200 ring-2 ring-green-300">
-            <UserIcon className="w-3 h-3 text-green-700" />
+          <div className={`w-7 h-7 rounded-full flex items-center justify-center overflow-hidden flex-shrink-0 bg-gradient-to-br ${m.outreachOrigin ? 'from-orange-100 to-orange-200 ring-2 ring-orange-300' : 'from-green-100 to-green-200 ring-2 ring-green-300'}`}>
+            <UserIcon className={`w-3 h-3 ${m.outreachOrigin ? 'text-orange-700' : 'text-green-700'}`} />
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex items-center space-x-2">
               <span className="font-semibold text-sm truncate text-gray-900">{m.firstName}</span>
+              {m.outreachOrigin && (
+                <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-orange-100 text-orange-800 border border-orange-200">
+                  Outreach
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -170,7 +179,7 @@ const NewBelieversTableView: React.FC = () => {
           {/* Title (no month/year) */}
           <div className="flex items-center justify-center space-x-2 mb-3">
             <CalendarIcon className="w-5 h-5 desktop:w-6 desktop:h-6 text-blue-600" />
-            <h2 className="text-xl desktop:text-2xl desktop-lg:text-3xl font-semibold text-gray-900">Born Again</h2>
+            <h2 className="text-xl desktop:text-2xl desktop-lg:text-3xl font-semibold text-gray-900">Born Again (Sons of God)</h2>
           </div>
 
           {/* Summary */}
@@ -230,9 +239,21 @@ const NewBelieversTableView: React.FC = () => {
                 className="w-full px-3 py-3 sm:py-2 border border-gray-300 dark:border-dark-600 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent transition-colors text-base sm:text-sm bg-white dark:bg-dark-700 text-gray-900 dark:text-dark-100 text-center cursor-pointer"
               >
                 <option value="">All Bacentas</option>
+                <option value="">—</option>
+                <option value="__unassigned__">Unassigned</option>
                 {bacentaOptions.map(b => (
                   <option key={b.id} value={b.id}>{b.name}</option>
                 ))}
+              </select>
+            </div>
+            <div className="w-full sm:w-40">
+              <select
+                value={originFilter}
+                onChange={(e) => setOriginFilter(e.target.value as 'all' | 'outreach')}
+                className="w-full px-3 py-3 sm:py-2 border border-gray-300 dark:border-dark-600 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent transition-colors text-base sm:text-sm bg-white dark:bg-dark-700 text-gray-900 dark:text-dark-100 text-center cursor-pointer"
+              >
+                <option value="all">All Origins</option>
+                <option value="outreach">🟧 Outreach</option>
               </select>
             </div>
           </div>

@@ -5,6 +5,7 @@ import Select from '../ui/Select';
 import Checkbox from '../ui/Checkbox';
 import Button from '../ui/Button';
 import { useAppContext } from '../../contexts/FirebaseAppContext';
+import { membersFirebaseService } from '../../services/firebaseService';
 
 interface Props {
   isOpen: boolean;
@@ -15,7 +16,7 @@ interface Props {
 }
 
 const AddOutreachMemberModal: React.FC<Props> = ({ isOpen, onClose, bacentaId, weekStart, bacentaName }) => {
-  const { addOutreachMemberHandler, addMemberHandler, showToast } = useAppContext();
+  const { addOutreachMemberHandler, showToast } = useAppContext();
 
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
@@ -36,41 +37,58 @@ const AddOutreachMemberModal: React.FC<Props> = ({ isOpen, onClose, bacentaId, w
 
   const handleSubmit = async () => {
     const trimmed = name.trim();
+  const normalizePhone = (p: string) => p.replace(/\s+/g, '').replace(/^\+?233/, '0');
+  const normalizedPhone = phone ? normalizePhone(phone) : '';
     if (!trimmed) {
       showToast('warning', 'Please enter a name');
       return;
     }
     setSubmitting(true);
     try {
-      // 1) Add Outreach entry
+      // If born again, create a Member first (unassigned, outreach origin)
+      let bornAgainMemberId: string | undefined;
+      if (bornAgain) {
+        // Duplicate guard: if phone provided, try find an existing born-again member with same phone
+        if (normalizedPhone) {
+          try {
+            const allMembers = await membersFirebaseService.getAll();
+            const existing = allMembers.find(m => m.phoneNumber && normalizePhone(m.phoneNumber) === normalizedPhone && m.bornAgainStatus);
+            if (existing) {
+              bornAgainMemberId = existing.id;
+            }
+          } catch {}
+        }
+        if (!bornAgainMemberId) {
+          bornAgainMemberId = await membersFirebaseService.add({
+          firstName: trimmed,
+          lastName: '',
+          phoneNumber: normalizedPhone || '',
+          buildingAddress: '',
+          roomNumber: room || '',
+          bornAgainStatus: true,
+          outreachOrigin: true,
+          bacentaId: '', // keep unassigned until conversion
+          role: 'Member',
+          } as any);
+        }
+      }
+
+      // Add Outreach entry, linking the created member when applicable
       await addOutreachMemberHandler({
         name: trimmed,
-        phoneNumbers: phone ? [phone] : [],
+        phoneNumbers: normalizedPhone ? [normalizedPhone] : [],
         roomNumber: room || undefined,
         bacentaId,
         comingStatus: coming === 'yes',
         notComingReason: coming === 'no' && reason ? reason : undefined,
         outreachDate: weekStart,
-      });
-
-      // 2) If born again, also add to Members so they appear in "Sons of God"
-      if (bornAgain) {
-        await addMemberHandler({
-          firstName: trimmed,
-          lastName: '',
-          phoneNumber: phone || '',
-          buildingAddress: '',
-          roomNumber: room || '',
-          bornAgainStatus: true,
-          bacentaId,
-          role: 'Member',
-        } as any);
-      }
+        ...(bornAgain && bornAgainMemberId ? { bornAgainMemberId } : {}),
+      } as any);
 
       reset();
       onClose();
     } catch (e) {
-      // toasts are already shown in handlers, but keep defensive toast here just in case
+      // Defensive toast just in case
       showToast('error', 'Failed to add outreach member');
     } finally {
       setSubmitting(false);

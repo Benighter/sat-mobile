@@ -10,6 +10,8 @@ export interface Member {
   roomNumber?: string; // Room number for members
   profilePicture?: string; // Base64 encoded image string
   bornAgainStatus: boolean;
+  /** If true, this member originated from an Outreach flow (born again from outreach) */
+  outreachOrigin?: boolean;
   bacentaId: string; // Renamed from congregationGroup, stores Bacenta.id, empty if unassigned
   /**
    * Additional bacentas this leader is linked to. The member officially belongs
@@ -113,6 +115,8 @@ export interface OutreachMember {
   lastUpdated: string; // ISO
   convertedMemberId?: string; // If converted to permanent member
   guestId?: string; // Linked guest (for confirmations/migration)
+  /** If set, links to the created 'Born Again' member record */
+  bornAgainMemberId?: string;
 }
 
 export interface TabOption {

@@ -60,7 +60,7 @@ interface AppContextType {
   updateOutreachBacentaHandler: (data: OutreachBacenta) => Promise<void>;
   deleteOutreachBacentaHandler: (id: string) => Promise<void>;
 
-  addOutreachMemberHandler: (data: Omit<OutreachMember, 'id' | 'createdDate' | 'lastUpdated'>) => Promise<void>;
+  addOutreachMemberHandler: (data: Omit<OutreachMember, 'id' | 'createdDate' | 'lastUpdated'>) => Promise<string>;
   updateOutreachMemberHandler: (id: string, updates: Partial<OutreachMember>) => Promise<void>;
   deleteOutreachMemberHandler: (id: string) => Promise<void>;
   convertOutreachMemberToPermanentHandler: (outreachMemberId: string) => Promise<void>;
@@ -109,7 +109,7 @@ interface AppContextType {
 
   // Data Operations
   fetchInitialData: () => Promise<void>;
-  addMemberHandler: (memberData: Omit<Member, 'id' | 'createdDate' | 'lastUpdated'>) => Promise<void>;
+  addMemberHandler: (memberData: Omit<Member, 'id' | 'createdDate' | 'lastUpdated'>) => Promise<string>;
   addMultipleMembersHandler: (membersData: Omit<Member, 'id' | 'createdDate' | 'lastUpdated'>[]) => Promise<{ successful: Member[], failed: { data: Omit<Member, 'id' | 'createdDate' | 'lastUpdated'>, error: string }[] }>;
   updateMemberHandler: (memberData: Member) => Promise<void>;
   deleteMemberHandler: (memberId: string) => Promise<void>;
@@ -244,8 +244,8 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
   }>({
     isOpen: false,
     type: null,
-    data: null,
-    onConfirm: () => {}
+  data: null,
+  onConfirm: () => {}
   });
 
   // Toasts
@@ -559,11 +559,12 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
   }, []);
 
   // Member handlers
-  const addMemberHandler = useCallback(async (memberData: Omit<Member, 'id' | 'createdDate' | 'lastUpdated'>) => {
+  const addMemberHandler = useCallback(async (memberData: Omit<Member, 'id' | 'createdDate' | 'lastUpdated'>): Promise<string> => {
     try {
       setIsLoading(true);
-      await memberOperationsWithNotifications.add(memberData);
+      const newMemberId = await memberOperationsWithNotifications.add(memberData);
       showToast('success', 'Member added successfully');
+      return newMemberId;
     } catch (error: any) {
       setError(error.message);
       showToast('error', 'Failed to add member', error.message);
@@ -682,12 +683,15 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
       const memberName = `${memberToDelete.firstName} ${memberToDelete.lastName || ''}`.trim();
       await memberOperationsWithNotifications.delete(memberId, memberName);
 
-      // Clear conversion links on any outreach members that referenced this member
+      // Unconvert behavior: If this member was the conversion target for any outreach member,
+      // clear the conversion link so the outreach record remains as not converted
       try {
-        const linkedOutreachMembers = outreachMembers.filter(om => om.convertedMemberId === memberId);
-        for (const om of linkedOutreachMembers) {
+    const linkedOutreachMembers = outreachMembers.filter(om => om.convertedMemberId === memberId || om.bornAgainMemberId === memberId);
+    for (const om of linkedOutreachMembers) {
           await outreachMembersFirebaseService.update(om.id, {
-            convertedMemberId: '', // Clear conversion link (empty string hides Converted badge)
+      // Clear both possible links if pointing at the deleted member
+      convertedMemberId: om.convertedMemberId === memberId ? '' : (om.convertedMemberId || ''),
+      bornAgainMemberId: om.bornAgainMemberId === memberId ? '' : (om.bornAgainMemberId || ''),
             lastUpdated: new Date().toISOString(),
           });
           console.log('🧹 Cleared outreach conversion link due to member deletion:', { outreachMemberId: om.id, memberId });
@@ -877,10 +881,10 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     }
   }, [showToast]);
 
-  const addOutreachMemberHandler = useCallback(async (data: Omit<OutreachMember, 'id' | 'createdDate' | 'lastUpdated'>) => {
+  const addOutreachMemberHandler = useCallback(async (data: Omit<OutreachMember, 'id' | 'createdDate' | 'lastUpdated'>): Promise<string> => {
     try {
       setIsLoading(true);
-      const memberId = await outreachMembersFirebaseService.add(data);
+      const outreachMemberId = await outreachMembersFirebaseService.add(data);
 
       // If Coming is Yes, auto-copy to confirmations under same bacenta for upcoming Sunday
       if (data.comingStatus) {
@@ -897,7 +901,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
         const guestId = await guestFirebaseService.add(guestPayload as any); // createdBy is auto in service
 
         // Save link back to outreach member for possible conversion flow
-        await outreachMembersFirebaseService.update(memberId, { guestId });
+  await outreachMembersFirebaseService.update(outreachMemberId, { guestId });
 
         const recordId = `guest_${guestId}_${upcomingSunday}`;
         const record: SundayConfirmation = {
@@ -912,6 +916,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
       }
 
       showToast('success', 'Outreach member added');
+  return outreachMemberId;
     } catch (error: any) {
       setError(error.message);
       showToast('error', 'Failed to add outreach member', error.message);
@@ -1019,6 +1024,36 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
   const deleteOutreachMemberHandler = useCallback(async (id: string) => {
     try {
       setIsLoading(true);
+      // Find the outreach member to determine cascading actions
+      const om = outreachMembers.find(o => o.id === id);
+
+      // If there is a linked guest, clean up their confirmations and guest record
+      if (om?.guestId) {
+        try {
+          const guestConfs = sundayConfirmations.filter(conf => conf.guestId === om.guestId);
+          for (const conf of guestConfs) {
+            await confirmationFirebaseService.delete(conf.id);
+          }
+          await guestFirebaseService.delete(om.guestId);
+        } catch (guestErr) {
+          console.warn('Failed to cleanup guest during outreach deletion', guestErr);
+        }
+      }
+
+      // If a born again member was created from outreach and this person was NOT converted,
+      // also remove them from Sons of God per requirement
+      if (om?.bornAgainMemberId && !om?.convertedMemberId) {
+        // Only delete the linked born-again member if it still exists
+        const linkedExists = members.some(m => m.id === om.bornAgainMemberId);
+        if (linkedExists) {
+          try {
+            await deleteMemberHandler(om.bornAgainMemberId);
+          } catch (delErr) {
+            console.warn('Failed to delete linked born-again member during outreach deletion', delErr);
+          }
+        }
+      }
+
       await outreachMembersFirebaseService.delete(id);
       showToast('success', 'Outreach member deleted');
     } catch (error: any) {
@@ -1028,7 +1063,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     } finally {
       setIsLoading(false);
     }
-  }, [showToast]);
+  }, [showToast, outreachMembers, sundayConfirmations, deleteMemberHandler, members]);
 
   const convertOutreachMemberToPermanentHandler = useCallback(async (outreachMemberId: string) => {
     try {
@@ -1036,23 +1071,45 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
       const om = outreachMembers.find(o => o.id === outreachMemberId);
       if (!om) throw new Error('Outreach member not found');
 
-      // Create a Member from OutreachMember
-      const memberData: Omit<Member, 'id' | 'createdDate' | 'lastUpdated'> = {
-        firstName: om.name.trim(),
-        lastName: '',
-        phoneNumber: (om.phoneNumbers && om.phoneNumbers[0]) || '',
-        buildingAddress: '',
-        roomNumber: om.roomNumber || '',
-        bornAgainStatus: false,
-        bacentaId: om.bacentaId,
-  linkedBacentaIds: [],
-        bacentaLeaderId: '',
-        role: 'Member'
-      };
-      const newMemberId = await membersFirebaseService.add(memberData);
+      let newMemberId: string | undefined = om.bornAgainMemberId;
+
+      // If we have a bornAgainMemberId but the actual member is missing (deleted earlier), recreate
+      const existing = newMemberId ? members.find(m => m.id === newMemberId) : undefined;
+      if (newMemberId && !existing) {
+        newMemberId = undefined; // force recreation below
+      }
+
+      if (!newMemberId) {
+        // Create a new born-again member now that they are converted
+        const memberData: Omit<Member, 'id' | 'createdDate' | 'lastUpdated'> = {
+          firstName: om.name.trim(),
+          lastName: '',
+          phoneNumber: (om.phoneNumbers && om.phoneNumbers[0]) || '',
+          buildingAddress: '',
+          roomNumber: om.roomNumber || '',
+          bornAgainStatus: true,
+          outreachOrigin: true,
+          bacentaId: om.bacentaId,
+          linkedBacentaIds: [],
+          bacentaLeaderId: '',
+          role: 'Member'
+        };
+        newMemberId = await membersFirebaseService.add(memberData);
+        await outreachMembersFirebaseService.update(outreachMemberId, { bornAgainMemberId: newMemberId });
+      } else {
+        // Ensure the existing born-again member is assigned and up to date
+        await membersFirebaseService.update(newMemberId, {
+          bacentaId: om.bacentaId,
+          roomNumber: om.roomNumber || undefined,
+          phoneNumber: (om.phoneNumbers && om.phoneNumbers[0]) || undefined,
+          bornAgainStatus: true,
+          outreachOrigin: true,
+          role: 'Member'
+        });
+      }
 
       // If there is a linked guest, transfer confirmations
-      if (om.guestId) {
+      if (om.guestId && newMemberId) {
         const guestConfirmations = sundayConfirmations.filter(conf => conf.guestId === om.guestId);
         for (const confirmation of guestConfirmations) {
           const memberConfirmation: SundayConfirmation = {
@@ -1066,7 +1123,6 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
           await confirmationFirebaseService.addOrUpdate(memberConfirmation);
           await confirmationFirebaseService.delete(confirmation.id);
         }
-        // Remove the guest record after migration
         await guestFirebaseService.delete(om.guestId);
       }
 

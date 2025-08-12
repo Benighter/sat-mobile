@@ -1,6 +1,6 @@
 // Firebase Configuration for SAT Mobile
 import { initializeApp } from 'firebase/app';
-import { getFirestore, connectFirestoreEmulator, enableIndexedDbPersistence } from 'firebase/firestore';
+import { initializeFirestore, connectFirestoreEmulator, setLogLevel } from 'firebase/firestore';
 import { getAuth, connectAuthEmulator } from 'firebase/auth';
 import { getMessaging, isSupported } from 'firebase/messaging';
 
@@ -29,8 +29,15 @@ console.log('🔥 Firebase Config:', {
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 
-// Initialize Firestore with modern cache settings
-export const db = getFirestore(app);
+// Initialize Firestore with robust transport + settings to avoid network quirks (e.g. 400 on terminate)
+export const db = initializeFirestore(app, {
+  // Avoid crashing on undefined properties in updates
+  ignoreUndefinedProperties: true,
+  // Work around restrictive networks/proxies that break GRPC-Web streaming
+  experimentalAutoDetectLongPolling: true,
+});
+// Reduce noisy Firestore debug logs in production
+setLogLevel(process.env.NODE_ENV === 'development' ? 'error' : 'error');
 
 // Initialize Firebase Authentication
 export const auth = getAuth(app);

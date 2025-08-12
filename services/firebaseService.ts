@@ -383,8 +383,13 @@ export const membersFirebaseService = {
   update: async (memberId: string, updates: Partial<Member>): Promise<void> => {
     try {
       const memberRef = doc(db, getChurchCollectionPath('members'), memberId);
+      // Remove undefined values to avoid Firestore updateDoc errors
+      const sanitized: any = { ...updates };
+      Object.keys(sanitized).forEach((k) => {
+        if (sanitized[k] === undefined) delete sanitized[k];
+      });
       await updateDoc(memberRef, {
-        ...updates,
+        ...sanitized,
         lastUpdated: new Date().toISOString()
       });
     } catch (error: any) {
