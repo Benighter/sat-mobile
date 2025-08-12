@@ -155,7 +155,7 @@ export const bacentasStorage = {
     const members = membersStorage.load();
     const updatedMembers = members.map(member => 
       member.bacentaId === bacentaId 
-        ? { ...member, bacentaId: undefined }
+        ? { ...member, bacentaId: '' }
         : member
     );
     membersStorage.save(updatedMembers);
@@ -198,7 +198,6 @@ export const attendanceStorage = {
       memberId,
       date,
       status,
-      markedAt: new Date().toISOString(),
     };
     
     if (existingIndex !== -1) {
@@ -414,6 +413,33 @@ export const storageInfo = {
   
   getStorageKeys: (): string[] => {
     return Object.values(STORAGE_KEYS);
+  }
+};
+
+// Dashboard layout storage (per-user, local only)
+// Stores personal card order for the dashboard so it doesn't affect other users
+export const dashboardLayoutStorage = {
+  keyFor: (userId?: string | null) => `church_connect_dashboard_order_${userId || 'anonymous'}`,
+
+  saveOrder: (userId: string | null | undefined, order: string[]): void => {
+    const key = dashboardLayoutStorage.keyFor(userId);
+    setItem(key, order);
+  },
+
+  loadOrder: (userId: string | null | undefined, defaultOrder: string[]): string[] => {
+    const key = dashboardLayoutStorage.keyFor(userId);
+    const loaded = getItem<string[] | null>(key, null);
+    if (!loaded || !Array.isArray(loaded) || loaded.length === 0) return defaultOrder;
+    // Sanitize to only include known values from defaultOrder and preserve their uniqueness
+    const known = new Set(defaultOrder);
+    const filtered = loaded.filter((id) => known.has(id));
+    // Append any new items not present in stored order (future-proofing)
+    const missing = defaultOrder.filter((id) => !filtered.includes(id));
+    return [...filtered, ...missing];
+  },
+
+  clear: (userId?: string | null): void => {
+    removeItem(dashboardLayoutStorage.keyFor(userId));
   }
 };
 

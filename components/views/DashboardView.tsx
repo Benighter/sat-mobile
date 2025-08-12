@@ -1,5 +1,5 @@
 
-import React, { memo, useState, useEffect, useMemo } from 'react';
+import React, { memo, useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useAppContext } from '../../contexts/FirebaseAppContext';
 // import { hasAdminPrivileges } from '../../utils/permissionUtils';
 import { PeopleIcon, AttendanceIcon, CalendarIcon, ChartBarIcon, AcademicCapIcon } from '../icons';
@@ -8,6 +8,7 @@ import { db } from '../../firebase.config';
 import { doc, getDoc } from 'firebase/firestore';
 import { firebaseUtils } from '../../services/firebaseService';
 import { TabKeys } from '../../types';
+import { dashboardLayoutStorage } from '../../utils/localStorage';
 
 interface StatCardProps {
   title: string;
@@ -295,6 +296,167 @@ const DashboardView: React.FC = memo(() => {
   const monthName = getMonthName(displayedDate.getMonth());
   const year = displayedDate.getFullYear();
 
+  // Personal card rearranging (excluding Total Members)
+  type CardId = 'confirmations' | 'attendanceRate' | 'weeklyAttendance' | 'outreach' | 'prayerOverall';
+  const defaultOrder: CardId[] = ['confirmations', 'attendanceRate', 'weeklyAttendance', 'outreach', 'prayerOverall'];
+  const [cardOrder, setCardOrder] = useState<CardId[]>(() => defaultOrder);
+  const [rearrangeMode, setRearrangeMode] = useState<boolean>(false);
+  const dragItemId = useRef<CardId | null>(null);
+
+  // Load/save personal order using user ID to keep it per-user and local only
+  useEffect(() => {
+    const uid = user?.uid ?? null;
+    const loaded = dashboardLayoutStorage.loadOrder(uid, defaultOrder);
+    setCardOrder(loaded as CardId[]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.uid]);
+
+  const persistOrder = useCallback((next: CardId[]) => {
+    const uid = user?.uid ?? null;
+    setCardOrder(next);
+    dashboardLayoutStorage.saveOrder(uid, next);
+  }, [user?.uid]);
+
+  const onDragStart = useCallback((e: React.DragEvent, id: CardId) => {
+    dragItemId.current = id;
+    e.dataTransfer.effectAllowed = 'move';
+  }, []);
+
+  const onDragOver = useCallback((e: React.DragEvent) => {
+    if (!rearrangeMode) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  }, [rearrangeMode]);
+
+  const onDrop = useCallback((e: React.DragEvent, targetId: CardId) => {
+    e.preventDefault();
+    if (!rearrangeMode) return;
+    const sourceId = dragItemId.current;
+    dragItemId.current = null;
+    if (!sourceId || sourceId === targetId) return;
+    const current = [...cardOrder];
+    const fromIndex = current.indexOf(sourceId);
+    const toIndex = current.indexOf(targetId);
+    if (fromIndex === -1 || toIndex === -1) return;
+    current.splice(fromIndex, 1);
+    current.splice(toIndex, 0, sourceId);
+    persistOrder(current);
+  }, [cardOrder, persistOrder, rearrangeMode]);
+
+  const moveCard = useCallback((id: CardId, direction: -1 | 1) => {
+    const idx = cardOrder.indexOf(id);
+    if (idx === -1) return;
+    const newIndex = idx + direction;
+    if (newIndex < 0 || newIndex >= cardOrder.length) return;
+    const arr = [...cardOrder];
+    const [item] = arr.splice(idx, 1);
+    arr.splice(newIndex, 0, item);
+    persistOrder(arr);
+  }, [cardOrder, persistOrder]);
+
+  const renderCardById = (id: CardId) => {
+    switch (id) {
+      case 'confirmations':
+        return (
+          <EnhancedConfirmationCard
+            key={id}
+            title="Sunday Confirmations"
+            confirmedCount={upcomingConfirmations.total}
+            totalMembers={confirmationTarget}
+            isLoadingTarget={isLoadingTarget}
+            date={upcomingConfirmations.date}
+            onClick={() => !rearrangeMode && switchTab({ id: 'sunday_confirmations', name: 'Sunday Confirmations' })}
+          />
+        );
+      case 'attendanceRate':
+        return (
+          <StatCard
+            key={id}
+            title="Attendance Rate"
+            value={`${currentMonthAttendancePercentage()}%`}
+            icon={<AttendanceIcon className="w-full h-full" />}
+            accentColor="emerald"
+            description={`For ${monthName}`}
+            onClick={() => !rearrangeMode && switchTab({ id: 'attendance_analytics', name: 'Attendance Analytics' })}
+          />
+        );
+      case 'weeklyAttendance':
+        return (
+          <StatCard
+            key={id}
+            title="Weekly Attendance"
+            value={weeklyAttendance.total}
+            icon={<CalendarIcon className="w-full h-full" />}
+            accentColor="amber"
+            description={`For ${formatFullDate(weeklyAttendance.date).split(',')[0]}`}
+            onClick={() => !rearrangeMode && switchTab({ id: 'weekly_attendance', name: 'Weekly Attendance' })}
+          />
+        );
+      case 'outreach':
+        return (
+          <StatCard
+            key={id}
+            title="Outreach"
+            value={totalOutreachMembers}
+            icon={<ChartBarIcon className="w-full h-full" />}
+            accentColor="rose"
+            description="Community outreach programs"
+            onClick={() => !rearrangeMode && switchTab({ id: TabKeys.OUTREACH, name: 'Outreach' })}
+          />
+        );
+      case 'prayerOverall':
+        return (
+          <StatCard
+            key={id}
+            title="Prayer (Overall)"
+            value={overallPrayerMarks}
+            icon={<AcademicCapIcon className="w-full h-full" />}
+            accentColor="indigo"
+            description={`All-time prayers marked • ${overallPrayerHours} h`}
+            onClick={() => !rearrangeMode && switchTab({ id: TabKeys.PRAYER, name: 'Prayer' })}
+          />
+        );
+      default:
+        return null;
+    }
+  };
+
+  const DraggableWrap: React.FC<{ id: CardId; children: React.ReactNode }> = ({ id, children }) => (
+    <div
+      draggable={rearrangeMode}
+      onDragStart={(e) => onDragStart(e, id)}
+      onDragOver={onDragOver}
+      onDrop={(e) => onDrop(e, id)}
+      className={rearrangeMode ? 'relative ring-1 ring-dashed ring-slate-300 dark:ring-dark-600 rounded-lg' : undefined}
+      aria-grabbed={rearrangeMode ? undefined : false}
+    >
+      {rearrangeMode && (
+        <div className="absolute top-2 right-2 flex items-center gap-2">
+          <button
+            type="button"
+            className="text-[10px] sm:text-xs bg-white dark:bg-dark-800 text-slate-700 dark:text-dark-200 border border-slate-300 dark:border-dark-600 rounded px-2 py-0.5 shadow-sm"
+            onClick={() => moveCard(id, -1)}
+            title="Move left"
+          >
+            ←
+          </button>
+          <button
+            type="button"
+            className="text-[10px] sm:text-xs bg-white dark:bg-dark-800 text-slate-700 dark:text-dark-200 border border-slate-300 dark:border-dark-600 rounded px-2 py-0.5 shadow-sm"
+            onClick={() => moveCard(id, 1)}
+            title="Move right"
+          >
+            →
+          </button>
+          <span className="text-[10px] sm:text-xs bg-slate-100 dark:bg-dark-700 text-slate-600 dark:text-dark-200 px-2 py-0.5 rounded-md select-none">
+            Drag
+          </span>
+        </div>
+      )}
+      {children}
+    </div>
+  );
+
   return (
     <div className="dashboard-container space-y-4 sm:space-y-5 md:space-y-6 desktop:space-y-4 desktop-lg:space-y-6">
       {/* Clean, Professional Header with subtle accent */}
@@ -308,10 +470,23 @@ const DashboardView: React.FC = memo(() => {
           <div className="w-2 h-2 bg-slate-400 dark:bg-slate-500 rounded-full"></div>
         </div>
         <div className="w-12 sm:w-16 md:w-20 desktop:w-16 desktop-lg:w-20 h-0.5 bg-gradient-to-r from-slate-300 via-slate-400 to-slate-300 dark:from-slate-600 dark:via-slate-500 dark:to-slate-600 rounded-full mx-auto mt-2 sm:mt-3 desktop:mt-2 desktop-lg:mt-3"></div>
+
+        {/* Rearrange toggle */}
+        <div className="mt-3 flex items-center justify-center">
+          <button
+            type="button"
+            onClick={() => setRearrangeMode((v) => !v)}
+            className={`text-xs sm:text-sm px-3 py-1.5 rounded-md border transition-colors ${rearrangeMode ? 'bg-slate-800 text-white border-slate-700' : 'bg-white dark:bg-dark-800 text-slate-700 dark:text-dark-200 border-slate-300 dark:border-dark-600'}`}
+            title="Rearrange dashboard cards (personal)"
+          >
+            {rearrangeMode ? 'Done rearranging' : 'Rearrange cards'}
+          </button>
+        </div>
       </div>
 
       {/* Stats Grid - Enhanced responsive layout with improved desktop scaling */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 desktop:grid-cols-auto-fit-280 desktop-lg:grid-cols-auto-fit-300 desktop-xl:grid-cols-auto-fit-320 ultra-wide:grid-cols-auto-fit-350 gap-4 sm:gap-5 md:gap-6 desktop:gap-5 desktop-lg:gap-6 ultra-wide:gap-8">
+        {/* Fixed first card (not draggable) */}
         <StatCard
           title="Total Members"
           value={totalMembers}
@@ -319,46 +494,13 @@ const DashboardView: React.FC = memo(() => {
           accentColor="blue"
           onClick={() => switchTab({ id: 'all_members', name: 'All Members' })}
         />
-        <EnhancedConfirmationCard
-          title="Sunday Confirmations"
-          confirmedCount={upcomingConfirmations.total}
-          totalMembers={confirmationTarget}
-          isLoadingTarget={isLoadingTarget}
-          date={upcomingConfirmations.date}
-          onClick={() => switchTab({ id: 'sunday_confirmations', name: 'Sunday Confirmations' })}
-        />
-        <StatCard
-          title="Attendance Rate"
-          value={`${currentMonthAttendancePercentage()}%`}
-          icon={<AttendanceIcon className="w-full h-full" />}
-          accentColor="emerald"
-          description={`For ${monthName}`}
-          onClick={() => switchTab({ id: 'attendance_analytics', name: 'Attendance Analytics' })}
-        />
-        <StatCard
-          title="Weekly Attendance"
-          value={weeklyAttendance.total}
-          icon={<CalendarIcon className="w-full h-full" />}
-          accentColor="amber"
-          description={`For ${formatFullDate(weeklyAttendance.date).split(',')[0]}`}
-          onClick={() => switchTab({ id: 'weekly_attendance', name: 'Weekly Attendance' })}
-        />
-        <StatCard
-          title="Outreach"
-          value={totalOutreachMembers}
-          icon={<ChartBarIcon className="w-full h-full" />}
-          accentColor="rose"
-          description="Community outreach programs"
-          onClick={() => switchTab({ id: TabKeys.OUTREACH, name: 'Outreach' })}
-        />
-        <StatCard
-          title="Prayer (Overall)"
-          value={overallPrayerMarks}
-          icon={<AcademicCapIcon className="w-full h-full" />}
-          accentColor="indigo"
-          description={`All-time prayers marked • ${overallPrayerHours} h`}
-          onClick={() => switchTab({ id: TabKeys.PRAYER, name: 'Prayer' })}
-        />
+
+        {/* Draggable personal cards */}
+        {cardOrder.map((id) => (
+          <DraggableWrap key={id} id={id}>
+            {renderCardById(id)}
+          </DraggableWrap>
+        ))}
       </div>
 
 
