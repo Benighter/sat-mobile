@@ -34,7 +34,7 @@ import {
   User
 } from 'firebase/auth';
 import { db, auth } from '../firebase.config';
-import { Member, Bacenta, AttendanceRecord, NewBeliever, SundayConfirmation, Guest, MemberDeletionRequest, DeletionRequestStatus, OutreachBacenta, OutreachMember } from '../types';
+import { Member, Bacenta, AttendanceRecord, NewBeliever, SundayConfirmation, Guest, MemberDeletionRequest, DeletionRequestStatus, OutreachBacenta, OutreachMember, PrayerRecord } from '../types';
 
 // Types for Firebase operations
 export interface FirebaseUser {
@@ -803,6 +803,82 @@ export const attendanceFirebaseService = {
     } catch (error: any) {
       throw new Error(`Failed to batch update attendance: ${error.message}`);
     }
+  }
+};
+
+// Prayer Service
+export const prayerFirebaseService = {
+  // Get all prayer records
+  getAll: async (): Promise<PrayerRecord[]> => {
+    try {
+      const prayersRef = collection(db, getChurchCollectionPath('prayers'));
+      const querySnapshot = await getDocs(query(prayersRef, orderBy('date', 'desc')));
+
+      return querySnapshot.docs.map(doc => ({
+        ...doc.data(),
+        id: doc.id
+      })) as PrayerRecord[];
+    } catch (error: any) {
+      throw new Error(`Failed to fetch prayer records: ${error.message}`);
+    }
+  },
+
+  // Get prayers for specific date
+  getByDate: async (date: string): Promise<PrayerRecord[]> => {
+    try {
+      const prayersRef = collection(db, getChurchCollectionPath('prayers'));
+      const querySnapshot = await getDocs(query(prayersRef, where('date', '==', date)));
+
+      return querySnapshot.docs.map(doc => ({
+        ...doc.data(),
+        id: doc.id
+      })) as PrayerRecord[];
+    } catch (error: any) {
+      throw new Error(`Failed to fetch prayer records for date ${date}: ${error.message}`);
+    }
+  },
+
+  // Add or update prayer record
+  addOrUpdate: async (record: PrayerRecord): Promise<void> => {
+    try {
+      const prayersRef = collection(db, getChurchCollectionPath('prayers'));
+      const docRef = doc(prayersRef, record.id);
+      await setDoc(docRef, {
+        ...record,
+        recordedAt: Timestamp.now(),
+        recordedBy: currentUser?.uid || 'unknown'
+      }, { merge: true });
+    } catch (error: any) {
+      throw new Error(`Failed to save prayer record: ${error.message}`);
+    }
+  },
+
+  // Delete prayer record
+  delete: async (recordId: string): Promise<void> => {
+    try {
+      const recordRef = doc(db, getChurchCollectionPath('prayers'), recordId);
+      const docSnap = await getDoc(recordRef);
+      if (docSnap.exists()) {
+        await deleteDoc(recordRef);
+      } else {
+        throw new Error(`Prayer record not found: ${recordId}`);
+      }
+    } catch (error: any) {
+      throw new Error(`Failed to delete prayer record: ${error.message}`);
+    }
+  },
+
+  // Listen to prayer changes
+  onSnapshot: (callback: (records: PrayerRecord[]) => void): Unsubscribe => {
+    const prayersRef = collection(db, getChurchCollectionPath('prayers'));
+    const q = query(prayersRef, orderBy('date', 'desc'));
+    return onSnapshot(q, (querySnapshot) => {
+      const records = querySnapshot.docs.map(doc => ({
+        ...doc.data(),
+        id: doc.id
+      })) as PrayerRecord[];
+      callback(records);
+    });
   }
 };
 

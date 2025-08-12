@@ -17,7 +17,8 @@ import {
   LazyMyDeletionRequestsView,
   LazyMemberDeletionRequestsView,
   LazyOutreachView,
-  LazyBacentaOutreachView
+  LazyBacentaOutreachView,
+  LazyPrayerView
 } from './components/common/LazyWrapper';
 import ProfileSettingsView from './components/views/ProfileSettingsView';
 import CopyMembersView from './components/views/CopyMembersView';
@@ -204,6 +205,12 @@ const AppContent: React.FC = memo(() => {
         return (
           <LazyWrapper>
             <LazyOutreachView />
+          </LazyWrapper>
+        );
+      case TabKeys.PRAYER:
+        return (
+          <LazyWrapper>
+            <LazyPrayerView />
           </LazyWrapper>
         );
 

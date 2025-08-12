@@ -140,3 +140,44 @@ export const getUpcomingSunday = (): string => {
     return formatDateToYYYYMMDD(upcomingSunday);
   }
 };
+
+// Get the Tuesday of the week containing the given anchor date.
+// Weeks are considered Tue..Sun for Prayer tracking.
+export const getTuesdayOfWeek = (anchor: string | Date = new Date()): string => {
+  const d = typeof anchor === 'string' ? new Date(anchor + 'T00:00:00') : new Date(anchor);
+  const day = d.getDay(); // 0..6 (Sun..Sat)
+  // Compute offset from current day to Tuesday (2)
+  // For Sunday(0) and Monday(1), go back to previous Tuesday (-5 and -6 respectively)
+  let diff = 2 - day;
+  if (day === 0) diff = -5; // Sun -> previous Tue
+  if (day === 1) diff = -6; // Mon -> previous Tue
+  const tuesday = new Date(d);
+  tuesday.setDate(d.getDate() + diff);
+  return formatDateToYYYYMMDD(tuesday);
+};
+
+// Return an array of YYYY-MM-DD strings for Tue..Sun for the week of the given anchor date
+export const getTuesdayToSundayRange = (anchor: string | Date = new Date()): string[] => {
+  const tue = getTuesdayOfWeek(anchor);
+  const start = new Date(tue + 'T00:00:00');
+  const days: string[] = [];
+  for (let i = 0; i < 6; i++) {
+    const d = new Date(start);
+    d.setDate(start.getDate() + i);
+    days.push(formatDateToYYYYMMDD(d));
+  }
+  return days; // Tue..Sun (6 days)
+};
+
+// Helpers to navigate to previous/next Tue..Sun week window
+export const getPreviousPrayerWeekAnchor = (anchor: string): string => {
+  const a = new Date(anchor + 'T00:00:00');
+  a.setDate(a.getDate() - 7);
+  return formatDateToYYYYMMDD(a);
+};
+
+export const getNextPrayerWeekAnchor = (anchor: string): string => {
+  const a = new Date(anchor + 'T00:00:00');
+  a.setDate(a.getDate() + 7);
+  return formatDateToYYYYMMDD(a);
+};

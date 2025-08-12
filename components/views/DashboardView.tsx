@@ -1,8 +1,8 @@
 
 import React, { memo, useState, useEffect, useMemo } from 'react';
 import { useAppContext } from '../../contexts/FirebaseAppContext';
-import { hasAdminPrivileges } from '../../utils/permissionUtils';
-import { PeopleIcon, AttendanceIcon, CalendarIcon, ChartBarIcon, CheckIcon } from '../icons';
+// import { hasAdminPrivileges } from '../../utils/permissionUtils';
+import { PeopleIcon, AttendanceIcon, CalendarIcon, ChartBarIcon, AcademicCapIcon } from '../icons';
 import { getMonthName, getCurrentOrMostRecentSunday, formatFullDate, getUpcomingSunday } from '../../utils/dateUtils';
 import { db } from '../../firebase.config';
 import { doc, getDoc } from 'firebase/firestore';
@@ -110,7 +110,7 @@ const StatCard: React.FC<StatCardProps> = memo(({ title, value, icon, descriptio
 
 
 const DashboardView: React.FC = memo(() => {
-  const { members, attendanceRecords, newBelievers, displayedSundays, displayedDate, sundayConfirmations, guests, switchTab, user, userProfile, currentChurchId, allOutreachMembers, bacentas } = useAppContext(); // Use displayedSundays
+  const { members, attendanceRecords, newBelievers, displayedSundays, displayedDate, sundayConfirmations, guests, switchTab, user, currentChurchId, allOutreachMembers, bacentas, prayerRecords } = useAppContext(); // Use displayedSundays
 
   const totalMembers = members.length;
   
@@ -125,7 +125,7 @@ const DashboardView: React.FC = memo(() => {
   const [isLoadingTarget, setIsLoadingTarget] = useState<boolean>(true);
 
   // Check if current user is admin
-  const isAdmin = hasAdminPrivileges(userProfile);
+  // const isAdmin = hasAdminPrivileges(userProfile);
 
   // Load target from Firebase for upcoming Sunday
   useEffect(() => {
@@ -168,19 +168,15 @@ const DashboardView: React.FC = memo(() => {
           setConfirmationTarget(defaultTarget);
         }
       } catch (error: any) {
-        console.error('Error loading confirmation target for dashboard:', {
+          console.error('Error loading confirmation target for dashboard:', {
           error: error.message,
           code: error.code,
           stack: error.stack,
-          churchId: firebaseUtils.getCurrentChurchId(),
-          upcomingSunday
+          churchId: firebaseUtils.getCurrentChurchId()
         });
 
         // Check if it's an offline error
-        const isOffline = error?.code === 'unavailable' ||
-                         error?.message?.includes('offline') ||
-                         error?.message?.includes('network') ||
-                         error?.message?.includes('backend');
+  // const isOffline = error?.code === 'unavailable' || error?.message?.includes('offline') || error?.message?.includes('network') || error?.message?.includes('backend');
 
         // Fallback to member count, but only if we have members loaded
         const defaultTarget = totalMembers > 0 ? totalMembers : 0;
@@ -284,6 +280,37 @@ const DashboardView: React.FC = memo(() => {
   const weeklyAttendance = getCurrentWeekAttendance();
   const upcomingConfirmations = getUpcomingSundayConfirmations();
 
+  // Simple weekly prayer count (Tue–Sun in current week)
+  const weeklyPrayerCount = useMemo(() => {
+    // Determine current week's Tue–Sun based on today's anchor
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    const dd = String(today.getDate()).padStart(2, '0');
+    const anchor = `${yyyy}-${mm}-${dd}`;
+    // Inline calculation to avoid importing helpers here
+    const d = new Date(anchor + 'T00:00:00');
+    const day = d.getDay(); // 0 Sun..6 Sat
+    const offsetToTuesday = ((2 - day + 7) % 7);
+    const tue = new Date(d);
+    tue.setDate(d.getDate() + offsetToTuesday);
+    const range: string[] = [];
+    for (let i = 0; i < 6; i++) {
+      const dt = new Date(tue);
+      dt.setDate(tue.getDate() + i);
+      const y = dt.getFullYear();
+      const m = String(dt.getMonth() + 1).padStart(2, '0');
+      const da = String(dt.getDate()).padStart(2, '0');
+      range.push(`${y}-${m}-${da}`);
+    }
+    const dates = new Set(range);
+    const prayedMemberIds = new Set<string>();
+    prayerRecords.forEach(r => {
+      if (r.status === 'Prayed' && dates.has(r.date)) prayedMemberIds.add(r.memberId);
+    });
+    return prayedMemberIds.size;
+  }, [prayerRecords]);
+
 
 
   const monthName = getMonthName(displayedDate.getMonth());
@@ -344,6 +371,14 @@ const DashboardView: React.FC = memo(() => {
           accentColor="rose"
           description="Community outreach programs"
           onClick={() => switchTab({ id: TabKeys.OUTREACH, name: 'Outreach' })}
+        />
+        <StatCard
+          title="Prayer (This Week)"
+          value={weeklyPrayerCount}
+          icon={<AcademicCapIcon className="w-full h-full" />}
+          accentColor="indigo"
+          description="Tue–Sun prayers marked"
+          onClick={() => switchTab({ id: TabKeys.PRAYER, name: 'Prayer' })}
         />
       </div>
 

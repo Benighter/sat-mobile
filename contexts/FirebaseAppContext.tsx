@@ -2,7 +2,7 @@
 import React, { createContext, useState, useEffect, useCallback, ReactNode, useMemo } from 'react';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../firebase.config';
-import { Member, AttendanceRecord, Bacenta, TabOption, AttendanceStatus, NewBeliever, SundayConfirmation, ConfirmationStatus, Guest, MemberDeletionRequest, OutreachBacenta, OutreachMember } from '../types';
+import { Member, AttendanceRecord, Bacenta, TabOption, AttendanceStatus, NewBeliever, SundayConfirmation, ConfirmationStatus, Guest, MemberDeletionRequest, OutreachBacenta, OutreachMember, PrayerRecord, PrayerStatus } from '../types';
 import { FIXED_TABS, DEFAULT_TAB_ID } from '../constants';
 import { sessionStateStorage } from '../utils/localStorage';
 import { getSundaysOfMonth } from '../utils/dateUtils';
@@ -18,7 +18,8 @@ import {
   firebaseUtils,
   FirebaseUser,
   outreachBacentasFirebaseService,
-  outreachMembersFirebaseService
+  outreachMembersFirebaseService,
+  prayerFirebaseService
 } from '../services/firebaseService';
 import { dataMigrationService } from '../utils/dataMigration';
 import { userService } from '../services/userService';
@@ -36,6 +37,7 @@ interface AppContextType {
   // Data
   members: Member[];
   attendanceRecords: AttendanceRecord[];
+  prayerRecords: PrayerRecord[];
   bacentas: Bacenta[];
   newBelievers: NewBeliever[];
   sundayConfirmations: SundayConfirmation[];
@@ -128,6 +130,10 @@ interface AppContextType {
   markNewBelieverAttendanceHandler: (newBelieverId: string, date: string, status: AttendanceStatus) => Promise<void>;
   clearAttendanceHandler: (memberId: string, date: string) => Promise<void>;
 
+  // Prayer Operations
+  markPrayerHandler: (memberId: string, date: string, status: PrayerStatus) => Promise<void>;
+  clearPrayerHandler: (memberId: string, date: string) => Promise<void>;
+
   // Confirmation Operations
   markConfirmationHandler: (memberId: string, date: string, status: ConfirmationStatus) => Promise<void>;
   removeConfirmationHandler: (confirmationId: string) => Promise<void>;
@@ -197,6 +203,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
   // Core data state
   const [members, setMembers] = useState<Member[]>([]);
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
+  const [prayerRecords, setPrayerRecords] = useState<PrayerRecord[]>([]);
   const [bacentas, setBacentas] = useState<Bacenta[]>([]);
   const [newBelievers, setNewBelievers] = useState<NewBeliever[]>([]);
   const [sundayConfirmations, setSundayConfirmations] = useState<SundayConfirmation[]>([]);
@@ -395,6 +402,12 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
       });
       unsubscribers.push(unsubscribeAttendance);
 
+      // Listen to prayer
+      const unsubscribePrayer = prayerFirebaseService.onSnapshot((records) => {
+        setPrayerRecords(records);
+      });
+      unsubscribers.push(unsubscribePrayer);
+
       // Listen to new believers
       const unsubscribeNewBelievers = newBelieversFirebaseService.onSnapshot((newBelievers) => {
         setNewBelievers(newBelievers);
@@ -477,12 +490,13 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
       setIsLoading(true);
       setError(null);
 
-      const [membersData, bacentasData, attendanceData, newBelieversData, confirmationsData] = await Promise.all([
+      const [membersData, bacentasData, attendanceData, newBelieversData, confirmationsData, prayerData] = await Promise.all([
         membersFirebaseService.getAll(),
         bacentasFirebaseService.getAll(),
         attendanceFirebaseService.getAll(),
         newBelieversFirebaseService.getAll(),
-        confirmationFirebaseService.getAll()
+        confirmationFirebaseService.getAll(),
+        prayerFirebaseService.getAll()
       ]);
 
       setMembers(membersData);
@@ -490,12 +504,14 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
       setAttendanceRecords(attendanceData);
       setNewBelievers(newBelieversData);
       setSundayConfirmations(confirmationsData);
+      setPrayerRecords(prayerData);
       console.log('[fetchInitialData] loaded counts', {
         members: membersData.length,
         bacentas: bacentasData.length,
         attendance: attendanceData.length,
         newBelievers: newBelieversData.length,
-        confirmations: confirmationsData.length
+        confirmations: confirmationsData.length,
+        prayers: prayerData.length
       });
     } catch (error: any) {
       setError(error.message);
@@ -1119,6 +1135,32 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
       console.error('❌ Failed to clear attendance:', error);
       setError(error.message);
       showToast('error', 'Failed to clear attendance', error.message);
+      throw error;
+    }
+  }, [showToast]);
+
+  // Prayer handlers
+  const markPrayerHandler = useCallback(async (memberId: string, date: string, status: PrayerStatus) => {
+    try {
+      const recordId = `${memberId}_${date}`;
+      const record: PrayerRecord = { id: recordId, memberId, date, status };
+      await prayerFirebaseService.addOrUpdate(record);
+      showToast('success', 'Prayer marked successfully');
+    } catch (error: any) {
+      setError(error.message);
+      showToast('error', 'Failed to mark prayer', error.message);
+      throw error;
+    }
+  }, [showToast]);
+
+  const clearPrayerHandler = useCallback(async (memberId: string, date: string) => {
+    try {
+      const recordId = `${memberId}_${date}`;
+      await prayerFirebaseService.delete(recordId);
+      showToast('success', 'Prayer cleared successfully');
+    } catch (error: any) {
+      setError(error.message);
+      showToast('error', 'Failed to clear prayer', error.message);
       throw error;
     }
   }, [showToast]);
@@ -2073,6 +2115,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     // Data
     members,
     attendanceRecords,
+  prayerRecords,
     bacentas,
     newBelievers,
     sundayConfirmations,
@@ -2134,6 +2177,10 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     markAttendanceHandler,
     markNewBelieverAttendanceHandler,
     clearAttendanceHandler,
+
+  // Prayer Operations
+  markPrayerHandler,
+  clearPrayerHandler,
 
     // Confirmation Operations
     markConfirmationHandler,

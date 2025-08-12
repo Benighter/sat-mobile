@@ -52,6 +52,16 @@ export interface AttendanceRecord {
   status: AttendanceStatus;
 }
 
+// Prayer tracking types
+export type PrayerStatus = 'Prayed' | 'Missed';
+
+export interface PrayerRecord {
+  id: string; // memberId_date (YYYY-MM-DD)
+  memberId: string;
+  date: string; // Any date (Tue–Sun) as YYYY-MM-DD
+  status: PrayerStatus;
+}
+
 export type ConfirmationStatus = 'Confirmed' | 'Not Confirmed';
 
 export interface SundayConfirmation {
@@ -120,6 +130,7 @@ export enum TabKeys {
   SUNDAY_CONFIRMATIONS = 'sunday_confirmations',
   NEW_BELIEVERS = 'new_believers',
   OUTREACH = 'outreach',
+  PRAYER = 'prayer',
   BIRTHDAYS = 'birthdays',
   PROFILE_SETTINGS = 'profile_settings',
   MY_DELETION_REQUESTS = 'my_deletion_requests',

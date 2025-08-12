@@ -20,6 +20,7 @@ export const LazyMyDeletionRequestsView = lazy(() => import('../members/MyDeleti
 export const LazyMemberDeletionRequestsView = lazy(() => import('../members/MemberDeletionRequestsView'));
 export const LazyOutreachView = lazy(() => import('../outreach/OutreachView'));
 export const LazyBacentaOutreachView = lazy(() => import('../outreach/BacentaOutreachView'));
+export const LazyPrayerView = lazy(() => import('../prayer/PrayerView'));
 
 // Wrapper component for lazy loading
 interface LazyWrapperProps {
