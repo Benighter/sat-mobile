@@ -27,11 +27,31 @@ import Dropdown from '../ui/Dropdown';
 import GuestFormModal from '../modals/forms/GuestFormModal';
 import GuestConversionModal from '../new-believers/GuestConversionModal';
 
-interface BacentaConfirmation {
-  bacenta: Bacenta;
-  confirmedMembers: Member[];
-  confirmedGuests: Guest[];
+// Grouping model aligned to WeeklyAttendanceView
+interface LinkedBacentaGroup {
+  bacenta: Bacenta | { id: string; name: string };
+  members: Member[];
+  guests?: Guest[];
+  total: number; // members + guests
+}
+
+interface FellowshipGroup {
+  fellowshipLeader: Member; // role: Fellowship Leader
+  bacenta: Bacenta | { id: string; name: string };
+  members: Member[];
+  guests: Guest[];
+  linkedBacentaGroups: LinkedBacentaGroup[];
   total: number;
+}
+
+interface BacentaLeaderGroup {
+  bacentaLeader: Member; // role: Bacenta Leader
+  bacenta: Bacenta | { id: string; name: string };
+  mainMembers: Member[]; // confirmed members in leader bacenta (excluding fellowship leaders)
+  guests: Guest[]; // confirmed guests in leader bacenta
+  fellowshipGroups: FellowshipGroup[];
+  linkedBacentaGroups: LinkedBacentaGroup[];
+  total: number; // sum of all contained items
 }
 
 
@@ -277,139 +297,184 @@ const SundayConfirmationsView: React.FC = () => {
 
 
 
-  // Calculate confirmation data for the selected Sunday
+  // Calculate grouped confirmation data (structure matches WeeklyAttendance)
   const confirmationData = useMemo(() => {
-    // Get all confirmation records for the selected Sunday
+    // All confirmed records this Sunday
     const sundayRecords = sundayConfirmations.filter(
-      record => record.date === selectedSunday && record.status === 'Confirmed'
+      r => r.date === selectedSunday && r.status === 'Confirmed'
     );
 
-    // Get confirmed member IDs
-    const confirmedMemberIds = sundayRecords.map(record => record.memberId);
+    // Confirmed members (excluding frozen)
+    const confirmedMemberIds = new Set(
+      sundayRecords.filter(r => r.memberId).map(r => r.memberId as string)
+    );
+    const confirmedMembers = members.filter(m => !m.frozen && confirmedMemberIds.has(m.id));
 
-    // Get confirmed members
-    const confirmedMembers = members.filter(member => confirmedMemberIds.includes(member.id));
+    // Confirmed guests
+    const confirmedGuestIds = new Set(
+      sundayRecords.filter(r => r.guestId).map(r => r.guestId as string)
+    );
+    const confirmedGuests = guests.filter(g => confirmedGuestIds.has(g.id));
 
-    // Group by bacenta
-    const bacentaConfirmationMap = new Map<string, BacentaConfirmation>();
+    // Lookups
+    const bacentaMap = new Map<string, Bacenta>();
+    bacentas.forEach(b => bacentaMap.set(b.id, b));
 
-    // Initialize all bacentas
-    bacentas.forEach(bacenta => {
-      bacentaConfirmationMap.set(bacenta.id, {
-        bacenta,
-        confirmedMembers: [],
-        confirmedGuests: [],
-        total: 0
-      });
+    const membersByBacenta = new Map<string, Member[]>();
+    confirmedMembers.forEach(m => {
+      const key = m.bacentaId || 'unassigned';
+      if (!membersByBacenta.has(key)) membersByBacenta.set(key, []);
+      membersByBacenta.get(key)!.push(m);
     });
 
-    // Add a special entry for unassigned members
-    bacentaConfirmationMap.set('unassigned', {
-      bacenta: { id: 'unassigned', name: 'Unassigned Members' },
-      confirmedMembers: [],
-      confirmedGuests: [],
-      total: 0
+    const guestsByBacenta = new Map<string, Guest[]>();
+    confirmedGuests.forEach(g => {
+      const key = g.bacentaId || 'unassigned';
+      if (!guestsByBacenta.has(key)) guestsByBacenta.set(key, []);
+      guestsByBacenta.get(key)!.push(g);
     });
 
-    // Group confirmed members by bacenta
-    confirmedMembers.forEach(member => {
-      const bacentaId = member.bacentaId || 'unassigned';
-      const confirmation = bacentaConfirmationMap.get(bacentaId);
-      if (confirmation) {
-        confirmation.confirmedMembers.push(member);
-        confirmation.total++;
-      }
-    });
+    // Include all bacenta leaders (like WeeklyAttendance) to keep structure, then filter empty groups
+    const allBacentaLeaders = members.filter(m => m.role === 'Bacenta Leader');
 
-    // Group confirmed guests by their assigned bacenta
-    const confirmedGuests = guests.filter(guest => {
-      const guestConfirmation = sundayConfirmations.find(
-        conf => conf.guestId === guest.id && conf.date === selectedSunday && conf.status === 'Confirmed'
-      );
-      return !!guestConfirmation;
-    });
+    const groups: BacentaLeaderGroup[] = allBacentaLeaders.map(leader => {
+      const leaderBacenta = leader.bacentaId
+        ? bacentaMap.get(leader.bacentaId) || { id: leader.bacentaId, name: 'Unknown Bacenta' }
+        : { id: 'unassigned', name: 'Unassigned' };
 
-    confirmedGuests.forEach(guest => {
-      const bacentaId = guest.bacentaId || 'unassigned';
-      const confirmation = bacentaConfirmationMap.get(bacentaId);
-      if (confirmation) {
-        confirmation.confirmedGuests.push(guest);
-        confirmation.total++;
-      }
-    });
+      const allInLeaderBacenta = membersByBacenta.get(leader.bacentaId) || [];
+      const mainMembers = allInLeaderBacenta.filter(m => m.role !== 'Fellowship Leader');
+      const mainGuests = guestsByBacenta.get(leader.bacentaId || 'unassigned') || [];
 
-    // Convert to array and filter out bacentas with no confirmations
-    const confirmationList = Array.from(bacentaConfirmationMap.values())
-      .filter(confirmation => confirmation.total > 0)
-      .sort((a, b) => a.bacenta.name.localeCompare(b.bacenta.name));
+      // Fellowship leaders under this bacenta leader
+      const fellowshipLeaders = members.filter(m => m.role === 'Fellowship Leader' && m.bacentaLeaderId === leader.id);
+      const fellowshipGroups: FellowshipGroup[] = fellowshipLeaders.map(fl => {
+        const flBacenta = fl.bacentaId
+          ? bacentaMap.get(fl.bacentaId) || { id: fl.bacentaId, name: 'Unknown Bacenta' }
+          : { id: 'unassigned', name: 'Unassigned' };
+        const membersInFellowship = membersByBacenta.get(fl.bacentaId) || [];
+        const guestsInFellowship = guestsByBacenta.get(fl.bacentaId || 'unassigned') || [];
 
-    const grandTotal = confirmationList.reduce((sum, confirmation) => sum + confirmation.total, 0);
+        // Linked bacentas for fellowship leader
+        const linkedGroups: LinkedBacentaGroup[] = (fl.linkedBacentaIds || [])
+          .filter(id => id && id !== fl.bacentaId)
+          .map(id => {
+            const b = bacentaMap.get(id) || { id, name: 'Unknown Bacenta' };
+            const membersInLinked = (membersByBacenta.get(id) || []).filter(m => m.id !== fl.id);
+            const guestsInLinked = guestsByBacenta.get(id) || [];
+            const total = membersInLinked.length + guestsInLinked.length;
+            return { bacenta: b, members: membersInLinked, guests: guestsInLinked, total };
+          })
+          .filter(g => g.total > 0)
+          .sort((a, b) => a.bacenta.name.localeCompare(b.bacenta.name));
 
-    return { confirmationList, grandTotal };
+        const total = membersInFellowship.length + guestsInFellowship.length + linkedGroups.reduce((s, g) => s + g.total, 0);
+        return {
+          fellowshipLeader: fl,
+          bacenta: flBacenta,
+          members: membersInFellowship.sort((a, b) => (a.lastName || '').localeCompare(b.lastName || '') || a.firstName.localeCompare(b.firstName)),
+          guests: guestsInFellowship,
+          linkedBacentaGroups: linkedGroups,
+          total
+        };
+      }).sort((a, b) => a.bacenta.name.localeCompare(b.bacenta.name));
+
+      // Linked bacentas for bacenta leader
+      const linkedBacentaGroups: LinkedBacentaGroup[] = (leader.linkedBacentaIds || [])
+        .filter(id => id && id !== leader.bacentaId)
+        .map(id => {
+          const b = bacentaMap.get(id) || { id, name: 'Unknown Bacenta' };
+          const membersInLinked = (membersByBacenta.get(id) || []).filter(m => m.id !== leader.id);
+          const guestsInLinked = guestsByBacenta.get(id) || [];
+          const total = membersInLinked.length + guestsInLinked.length;
+          return { bacenta: b, members: membersInLinked, guests: guestsInLinked, total };
+        })
+        .filter(g => g.total > 0)
+        .sort((a, b) => a.bacenta.name.localeCompare(b.bacenta.name));
+
+      const total = mainMembers.length + mainGuests.length
+        + fellowshipGroups.reduce((s, g) => s + g.total, 0)
+        + linkedBacentaGroups.reduce((s, g) => s + g.total, 0);
+
+      return {
+        bacentaLeader: leader,
+        bacenta: leaderBacenta,
+        mainMembers: mainMembers.sort((a, b) => (a.lastName || '').localeCompare(b.lastName || '') || a.firstName.localeCompare(b.firstName)),
+        guests: mainGuests,
+        fellowshipGroups,
+        linkedBacentaGroups,
+        total
+      };
+    })
+    .filter(g => g.total > 0)
+    .sort((a, b) => a.bacenta.name.localeCompare(b.bacenta.name));
+
+    const grandTotal = groups.reduce((sum, g) => sum + g.total, 0);
+
+    return { groups, grandTotal };
   }, [selectedSunday, sundayConfirmations, members, bacentas, guests]);
 
   // Copy confirmation data as formatted text
   const copyConfirmationText = async () => {
     try {
       const dateText = formatFullDate(selectedSunday);
-      const progressPercentage = Math.round((confirmationData.grandTotal / confirmationTarget) * 100);
+      let text = `Sunday Confirmations - ${dateText}\n\n`;
 
-      let text = `Sunday Service Confirmations - ${dateText}\n\n`;
-      text += `Total Confirmed: ${confirmationData.grandTotal} of ${confirmationTarget} (${progressPercentage}%)\n`;
-      text += `Active Bacentas: ${confirmationData.confirmationList.length}\n\n`;
-
-      if (confirmationData.confirmationList.length === 0) {
+      if (confirmationData.groups.length === 0) {
         text += 'No confirmations recorded for this Sunday.';
       } else {
-        // Helper function to get role priority for sorting
-        const getRolePriority = (role: string | undefined) => {
-          switch (role) {
-            case 'Bacenta Leader': return 1;
-            case 'Fellowship Leader': return 2;
-            case 'Member': return 3;
-            default: return 4;
-          }
-        };
-
-        confirmationData.confirmationList.forEach((confirmation, index) => {
-          text += `${confirmation.bacenta.name}\n`;
-          text += '='.repeat(confirmation.bacenta.name.length) + '\n';
-
-          const sortedMembers = [...confirmation.confirmedMembers].sort((a, b) => {
-            const rolePriorityA = getRolePriority(a.role);
-            const rolePriorityB = getRolePriority(b.role);
-
-            if (rolePriorityA !== rolePriorityB) {
-              return rolePriorityA - rolePriorityB;
-            }
-
-            return (a.lastName || '').localeCompare(b.lastName || '') || a.firstName.localeCompare(b.firstName);
+        confirmationData.groups.forEach((group, i) => {
+          text += `💚 Bacenta leader: ${group.bacentaLeader.firstName} ${group.bacentaLeader.lastName || ''} (${group.bacenta.name})\n`;
+          group.mainMembers.forEach((m, idx) => {
+            text += `${idx + 1}. ${m.firstName} ${m.lastName || ''}\n`;
           });
-
-          // Add confirmed members with role indicators
-          sortedMembers.forEach((member, memberIndex) => {
-            let roleIndicator = '';
-            if (member.role === 'Bacenta Leader') {
-              roleIndicator = ' 💚';
-            } else if (member.role === 'Fellowship Leader') {
-              roleIndicator = ' ❤️';
-            }
-            text += `${memberIndex + 1}. ${member.firstName} ${member.lastName || ''}${roleIndicator}\n`;
-          });
-
-          text += `Total: ${confirmation.total}\n`;
-
-          // Add spacing between bacentas (except for the last one)
-          if (index < confirmationData.confirmationList.length - 1) {
-            text += '\n';
+          if (group.guests.length) {
+            text += `Guests:\n`;
+            group.guests.forEach((g, gIdx) => {
+              text += `${gIdx + 1}. ${g.firstName} ${g.lastName || ''} (Guest)\n`;
+            });
           }
+          group.linkedBacentaGroups.forEach(lg => {
+            text += `\n❤ ${lg.bacenta.name}\n`;
+            lg.members.forEach((m, idx) => {
+              text += `${idx + 1}. ${m.firstName} ${m.lastName || ''}\n`;
+            });
+            if (lg.guests && lg.guests.length) {
+              lg.guests.forEach((g, gi) => {
+                text += `${gi + 1}. ${g.firstName} ${g.lastName || ''} (Guest)\n`;
+              });
+            }
+          });
+          group.fellowshipGroups.forEach(fg => {
+            text += `\n❤️ Fellowship leader: ${fg.fellowshipLeader.firstName} ${fg.fellowshipLeader.lastName || ''} (${fg.bacenta.name})\n`;
+            fg.members.forEach((m, idx) => {
+              text += `${idx + 1}. ${m.firstName} ${m.lastName || ''}\n`;
+            });
+            if (fg.guests.length) {
+              fg.guests.forEach((g, gi) => {
+                text += `${gi + 1}. ${g.firstName} ${g.lastName || ''} (Guest)\n`;
+              });
+            }
+            fg.linkedBacentaGroups.forEach(lg => {
+              text += `\n❤ ${lg.bacenta.name}\n`;
+              lg.members.forEach((m, idx) => {
+                text += `${idx + 1}. ${m.firstName} ${m.lastName || ''}\n`;
+              });
+              if (lg.guests && lg.guests.length) {
+                lg.guests.forEach((g, gi) => {
+                  text += `${gi + 1}. ${g.firstName} ${g.lastName || ''} (Guest)\n`;
+                });
+              }
+            });
+          });
+          text += `\nTotal: ${group.total}\n`;
+          if (i < confirmationData.groups.length - 1) text += '\n';
         });
-
         text += `\nGrand Total: ${confirmationData.grandTotal}`;
       }
 
       await navigator.clipboard.writeText(text);
-      showToast('success', 'Copied!', 'Sunday confirmations copied to clipboard');
+  showToast('success', 'Copied!', 'Sunday confirmations copied to clipboard');
     } catch (error) {
       console.error('Failed to copy text:', error);
       showToast('error', 'Copy Failed', 'Unable to copy to clipboard');
@@ -512,7 +577,7 @@ const SundayConfirmationsView: React.FC = () => {
                     <div className="text-xs text-gray-500 uppercase tracking-wide font-medium">Confirmed</div>
                   </div>
                   <div className="text-center min-w-0">
-                    <div className="text-3xl font-bold leading-none mb-2">{confirmationData.confirmationList.length}</div>
+                    <div className="text-3xl font-bold leading-none mb-2">{confirmationData.groups.length}</div>
                     <div className="text-xs text-gray-500 uppercase tracking-wide font-medium">Bacentas</div>
                   </div>
                   <div className="text-center min-w-0">
@@ -599,9 +664,9 @@ const SundayConfirmationsView: React.FC = () => {
             </div>
           </div>
 
-          {/* Professional Confirmation Content */}
+          {/* Confirmation Content aligned to Weekly Attendance structure */}
           <div className="p-6">
-            {confirmationData.confirmationList.length === 0 ? (
+            {confirmationData.groups.length === 0 ? (
               <div className="text-center py-12">
                 <CheckIcon className="w-12 h-12 text-gray-300 mx-auto mb-4" />
                 <h3 className="text-lg font-medium text-gray-600 mb-2">No Confirmations Yet</h3>
@@ -617,162 +682,211 @@ const SundayConfirmationsView: React.FC = () => {
               </div>
             ) : (
               <>
-                {/* Professional Confirmation List */}
-                <div className="divide-y divide-gray-100">
-                  {confirmationData.confirmationList.map((confirmation, bacentaIndex) => {
-                    // Sort members by role priority
-                    const getRolePriority = (role: string | undefined) => {
-                      switch (role) {
-                        case 'Bacenta Leader': return 1;
-                        case 'Fellowship Leader': return 2;
-                        case 'Member': return 3;
-                        default: return 4;
-                      }
-                    };
-
-                    const sortedMembers = [...confirmation.confirmedMembers].sort((a, b) => {
-                      const rolePriorityA = getRolePriority(a.role);
-                      const rolePriorityB = getRolePriority(b.role);
-
-                      if (rolePriorityA !== rolePriorityB) {
-                        return rolePriorityA - rolePriorityB;
-                      }
-
-                      return (a.lastName || '').localeCompare(b.lastName || '') || a.firstName.localeCompare(b.firstName);
-                    });
-
-                    return (
-                      <div key={confirmation.bacenta.id} className={`py-4 ${bacentaIndex > 0 ? 'pt-6' : ''}`}>
-                        {/* Professional Bacenta Header */}
-                        <div className="flex items-center justify-between mb-4">
-                          <div className="flex items-center space-x-3">
-                            <div className="w-10 h-10 bg-amber-500 rounded-lg flex items-center justify-center">
-                              <span className="text-white font-bold">
-                                {confirmation.bacenta.name.charAt(0)}
-                              </span>
-                            </div>
-                            <div>
-                              <h3 className="text-lg font-semibold text-gray-900">{confirmation.bacenta.name}</h3>
-                              <p className="text-sm text-gray-500">Bacenta Community</p>
-                            </div>
-                          </div>
-                          <div className="bg-amber-100 text-amber-800 px-3 py-1 rounded-lg border border-amber-200">
-                            <span className="text-lg font-bold">{confirmation.total}</span>
-                            <span className="text-sm ml-1">confirmed</span>
-                          </div>
-                        </div>
-
-                        {/* Professional Members and Guests List */}
-                        <div className="space-y-2">
-                          {/* Members */}
-                          {sortedMembers.map((member, index) => {
-                            const confirmationId = `${member.id}_${selectedSunday}`;
-                            const memberName = `${member.firstName} ${member.lastName || ''}`;
-
+                {/* Grouped Confirmation List (same structure as Weekly Attendance) */}
+                <div className="space-y-10">
+                  {confirmationData.groups.map(group => (
+                    <div key={group.bacentaLeader.id} className="border border-gray-200 rounded-xl p-4 shadow-sm">
+                      {/* Bacenta Leader Section */}
+                      <div className="mb-4">
+                        <h3 className="text-lg font-semibold text-gray-900 flex items-center">
+                          <span className="mr-2 text-xl">💚</span>
+                          Bacenta leader: {group.bacentaLeader.firstName} {group.bacentaLeader.lastName || ''} ({group.bacenta.name})
+                        </h3>
+                        <ol className="mt-2 space-y-1 list-decimal pl-6">
+                          {group.mainMembers.map(m => {
+                            const confirmationId = `${m.id}_${selectedSunday}`;
+                            const memberName = `${m.firstName} ${m.lastName || ''}`;
                             return (
-                              <div key={`member-${member.id}`} className="flex items-start justify-between">
-                                <div className="flex items-start flex-1">
-                                  <span className="text-gray-500 text-sm font-medium w-6 pt-0.5">
-                                    {index + 1}.
-                                  </span>
-                                  <div className="flex flex-wrap items-center gap-2">
-                                    <span className="text-gray-900">
-                                      {memberName}
-                                    </span>
-                                    {member.role === 'Bacenta Leader' && (
-                                      <span className="inline-flex items-center px-2 py-1 text-xs bg-emerald-100 text-emerald-700 rounded-md border border-emerald-200">
-                                        <span className="mr-1">💚</span>
-                                        <span className="hidden sm:inline">Bacenta Leader</span>
-                                      </span>
-                                    )}
-                                    {member.role === 'Fellowship Leader' && (
-                                      <span className="inline-flex items-center px-2 py-1 text-xs bg-rose-100 text-rose-700 rounded-md border border-rose-200">
-                                        <span className="mr-1">❤️</span>
-                                        <span className="hidden sm:inline">Fellowship Leader</span>
-                                      </span>
-                                    )}
-                                  </div>
-                                </div>
-
-                                {/* Actions Dropdown */}
-                                <Dropdown
-                                  items={[
-                                    {
+                              <li key={m.id} className="text-gray-800">
+                                <span className="inline-flex w-full items-center justify-between">
+                                  <span>{memberName}</span>
+                                  <Dropdown
+                                    items={[{
                                       id: 'remove',
                                       label: 'Remove Confirmation',
                                       icon: <MinusIcon className="w-4 h-4" />,
                                       onClick: () => handleRemoveConfirmation(confirmationId, memberName),
                                       destructive: true
-                                    }
-                                  ]}
-                                  align="right"
-                                  position="above"
-                                />
-                              </div>
+                                    }]}
+                                    align="right"
+                                    position="above"
+                                  />
+                                </span>
+                              </li>
                             );
                           })}
-
-                          {/* Guests */}
-                          {confirmation.confirmedGuests.map((guest, index) => {
-                            const confirmationId = `guest_${guest.id}_${selectedSunday}`;
-                            const guestName = `${guest.firstName} ${guest.lastName || ''}`;
-                            const guestIndex = sortedMembers.length + index + 1;
-
-                            return (
-                              <div key={`guest-${guest.id}`} className="flex items-start justify-between">
-                                <div className="flex items-start flex-1">
-                                  <span className="text-gray-500 text-sm font-medium w-6 pt-0.5">
-                                    {guestIndex}.
-                                  </span>
-                                  <div className="flex flex-wrap items-center gap-2">
-                                    <span className="text-gray-900">
-                                      {guestName}
+                        </ol>
+                        {group.guests.length > 0 && (
+                          <div className="mt-3">
+                            <h5 className="text-sm font-semibold text-blue-600">Guests</h5>
+                            <ol className="mt-1 space-y-1 list-decimal pl-6">
+                              {group.guests.map((guest) => {
+                                const guestName = `${guest.firstName} ${guest.lastName || ''}`;
+                                return (
+                                  <li key={guest.id} className="text-gray-800">
+                                    <span className="inline-flex w-full items-center justify-between">
+                                      <span>{guestName} <span className="text-xs text-blue-500">(Guest)</span></span>
+                                      <Dropdown
+                                        items={[
+                                          { id: 'convert', label: 'Convert to Member', icon: <UserIcon className="w-4 h-4" />, onClick: () => handleConvertGuestToMember(guest) },
+                                          { id: 'edit', label: 'Edit Guest', icon: <EditIcon className="w-4 h-4" />, onClick: () => handleEditGuest(guest) },
+                                          { id: 'remove', label: 'Remove Confirmation', icon: <MinusIcon className="w-4 h-4" />, onClick: () => handleRemoveGuestConfirmation(guest.id, guestName), destructive: true },
+                                        ]}
+                                        align="right"
+                                        position="above"
+                                      />
                                     </span>
-                                    <span className="inline-flex items-center text-xs text-blue-700 bg-blue-50 px-2 py-1 rounded">
-                                      <UserPlusIcon className="w-3 h-3 mr-1" />
-                                      Guest
-                                    </span>
-                                    {guest.roomNumber && (
-                                      <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
-                                        Room {guest.roomNumber}
-                                      </span>
-                                    )}
-                                  </div>
-                                </div>
-
-                                {/* Actions Dropdown */}
-                                <Dropdown
-                                  items={[
-                                    {
-                                      id: 'convert',
-                                      label: 'Convert to Member',
-                                      icon: <UserIcon className="w-4 h-4" />,
-                                      onClick: () => handleConvertGuestToMember(guest)
-                                    },
-                                    {
-                                      id: 'edit',
-                                      label: 'Edit Guest',
-                                      icon: <EditIcon className="w-4 h-4" />,
-                                      onClick: () => handleEditGuest(guest)
-                                    },
-                                    {
-                                      id: 'remove',
-                                      label: 'Remove Confirmation',
-                                      icon: <MinusIcon className="w-4 h-4" />,
-                                      onClick: () => handleRemoveGuestConfirmation(guest.id, guestName),
-                                      destructive: true
-                                    }
-                                  ]}
-                                  align="right"
-                                  position="above"
-                                />
-                              </div>
-                            );
-                          })}
-                        </div>
+                                  </li>
+                                );
+                              })}
+                            </ol>
+                          </div>
+                        )}
                       </div>
-                    );
-                  })}
+
+                      {/* Linked Bacentas under Bacenta Leader */}
+                      {group.linkedBacentaGroups && group.linkedBacentaGroups.map(lg => (
+                        <div key={lg.bacenta.id} className="mb-4">
+                          <h4 className="font-medium text-gray-900 flex items-center">
+                            <span className="mr-2 text-lg">❤</span>
+                            {lg.bacenta.name}
+                          </h4>
+                          <ol className="mt-2 space-y-1 list-decimal pl-6">
+                            {lg.members.map(m => {
+                              const confirmationId = `${m.id}_${selectedSunday}`;
+                              const memberName = `${m.firstName} ${m.lastName || ''}`;
+                              return (
+                                <li key={m.id} className="text-gray-800">
+                                  <span className="inline-flex w-full items-center justify-between">
+                                    <span>{memberName}</span>
+                                    <Dropdown
+                                      items={[{ id: 'remove', label: 'Remove Confirmation', icon: <MinusIcon className="w-4 h-4" />, onClick: () => handleRemoveConfirmation(confirmationId, memberName), destructive: true }]}
+                                      align="right"
+                                      position="above"
+                                    />
+                                  </span>
+                                </li>
+                              );
+                            })}
+                            {(lg.guests || []).map(g => {
+                              const guestName = `${g.firstName} ${g.lastName || ''}`;
+                              return (
+                                <li key={g.id} className="text-gray-800">
+                                  <span className="inline-flex w-full items-center justify-between">
+                                    <span>{guestName} <span className="text-xs text-blue-500">(Guest)</span></span>
+                                    <Dropdown
+                                      items={[
+                                        { id: 'convert', label: 'Convert to Member', icon: <UserIcon className="w-4 h-4" />, onClick: () => handleConvertGuestToMember(g) },
+                                        { id: 'edit', label: 'Edit Guest', icon: <EditIcon className="w-4 h-4" />, onClick: () => handleEditGuest(g) },
+                                        { id: 'remove', label: 'Remove Confirmation', icon: <MinusIcon className="w-4 h-4" />, onClick: () => handleRemoveGuestConfirmation(g.id, guestName), destructive: true },
+                                      ]}
+                                      align="right"
+                                      position="above"
+                                    />
+                                  </span>
+                                </li>
+                              );
+                            })}
+                          </ol>
+                        </div>
+                      ))}
+
+                      {/* Fellowship Leader Groups */}
+                      {group.fellowshipGroups.map(fg => (
+                        <div key={fg.fellowshipLeader.id} className="mb-4 last:mb-0">
+                          <h4 className="font-medium text-gray-900 flex items-center">
+                            <span className="mr-2 text-lg">❤️</span>
+                            Fellowship leader: {fg.fellowshipLeader.firstName} {fg.fellowshipLeader.lastName || ''} ({fg.bacenta.name})
+                          </h4>
+                          <ol className="mt-2 space-y-1 list-decimal pl-6">
+                            {fg.members.map(m => {
+                              const confirmationId = `${m.id}_${selectedSunday}`;
+                              const memberName = `${m.firstName} ${m.lastName || ''}`;
+                              return (
+                                <li key={m.id} className="text-gray-800">
+                                  <span className="inline-flex w-full items-center justify-between">
+                                    <span>{memberName}</span>
+                                    <Dropdown
+                                      items={[{ id: 'remove', label: 'Remove Confirmation', icon: <MinusIcon className="w-4 h-4" />, onClick: () => handleRemoveConfirmation(confirmationId, memberName), destructive: true }]}
+                                      align="right"
+                                      position="above"
+                                    />
+                                  </span>
+                                </li>
+                              );
+                            })}
+                            {fg.guests.map(g => {
+                              const guestName = `${g.firstName} ${g.lastName || ''}`;
+                              return (
+                                <li key={g.id} className="text-gray-800">
+                                  <span className="inline-flex w-full items-center justify-between">
+                                    <span>{guestName} <span className="text-xs text-blue-500">(Guest)</span></span>
+                                    <Dropdown
+                                      items={[
+                                        { id: 'convert', label: 'Convert to Member', icon: <UserIcon className="w-4 h-4" />, onClick: () => handleConvertGuestToMember(g) },
+                                        { id: 'edit', label: 'Edit Guest', icon: <EditIcon className="w-4 h-4" />, onClick: () => handleEditGuest(g) },
+                                        { id: 'remove', label: 'Remove Confirmation', icon: <MinusIcon className="w-4 h-4" />, onClick: () => handleRemoveGuestConfirmation(g.id, guestName), destructive: true },
+                                      ]}
+                                      align="right"
+                                      position="above"
+                                    />
+                                  </span>
+                                </li>
+                              );
+                            })}
+                          </ol>
+                          {/* Linked bacentas under Fellowship Leader */}
+                          {fg.linkedBacentaGroups && fg.linkedBacentaGroups.map(lg => (
+                            <div key={lg.bacenta.id} className="mt-3">
+                              <h5 className="font-medium text-gray-800 flex items-center">
+                                <span className="mr-2 text-base">❤</span>
+                                {lg.bacenta.name}
+                              </h5>
+                              <ol className="mt-1 space-y-1 list-decimal pl-6">
+                                {lg.members.map(m => {
+                                  const confirmationId = `${m.id}_${selectedSunday}`;
+                                  const memberName = `${m.firstName} ${m.lastName || ''}`;
+                                  return (
+                                    <li key={m.id} className="text-gray-800">
+                                      <div className="flex items-center justify-between">
+                                        <span>{memberName}</span>
+                                        <Dropdown
+                                          items={[{ id: 'remove', label: 'Remove Confirmation', icon: <MinusIcon className="w-4 h-4" />, onClick: () => handleRemoveConfirmation(confirmationId, memberName), destructive: true }]}
+                                          align="right"
+                                          position="above"
+                                        />
+                                      </div>
+                                    </li>
+                                  );
+                                })}
+                                {(lg.guests || []).map(g => {
+                                  const guestName = `${g.firstName} ${g.lastName || ''}`;
+                                  return (
+                                    <li key={g.id} className="text-gray-800">
+                                      <div className="flex items-center justify-between">
+                                        <span>{guestName} <span className="text-xs text-blue-500">(Guest)</span></span>
+                                        <Dropdown
+                                          items={[
+                                            { id: 'convert', label: 'Convert to Member', icon: <UserIcon className="w-4 h-4" />, onClick: () => handleConvertGuestToMember(g) },
+                                            { id: 'edit', label: 'Edit Guest', icon: <EditIcon className="w-4 h-4" />, onClick: () => handleEditGuest(g) },
+                                            { id: 'remove', label: 'Remove Confirmation', icon: <MinusIcon className="w-4 h-4" />, onClick: () => handleRemoveGuestConfirmation(g.id, guestName), destructive: true },
+                                          ]}
+                                          align="right"
+                                          position="above"
+                                        />
+                                      </div>
+                                    </li>
+                                  );
+                                })}
+                              </ol>
+                            </div>
+                          ))}
+                        </div>
+                      ))}
+
+                      <div className="mt-4 text-sm font-semibold text-gray-700">Total: {group.total}</div>
+                    </div>
+                  ))}
                 </div>
 
                 {/* Clean Summary Section */}

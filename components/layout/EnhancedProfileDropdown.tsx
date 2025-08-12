@@ -32,13 +32,15 @@ const EnhancedProfileDropdown: React.FC<EnhancedProfileDropdownProps> = ({
   const dropdownRef = useRef<HTMLDivElement>(null);
   const {
     showToast,
-    openMemberForm,
-    fetchInitialData,
+  openMemberForm,
     switchTab,
     members,
     bacentas,
     newBelievers,
-    userProfile
+  userProfile,
+  // Ensure profile dropdown and navigation drawer aren't open at the same time
+  isBacentaDrawerOpen,
+  closeBacentaDrawer
   } = useAppContext();
 
   // Close dropdown when clicking outside
@@ -52,6 +54,13 @@ const EnhancedProfileDropdown: React.FC<EnhancedProfileDropdownProps> = ({
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  // Auto-close profile dropdown if navigation drawer opens
+  useEffect(() => {
+    if (isBacentaDrawerOpen && isOpen) {
+      setIsOpen(false);
+    }
+  }, [isBacentaDrawerOpen, isOpen]);
 
   const handleLogout = async () => {
     try {
@@ -120,7 +129,14 @@ const EnhancedProfileDropdown: React.FC<EnhancedProfileDropdownProps> = ({
     <div className="relative" ref={dropdownRef}>
       {/* Profile Button */}
       <button
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={() => {
+          const next = !isOpen;
+          // If we're about to open the profile dropdown, close the navigation drawer
+          if (next) {
+            try { closeBacentaDrawer?.(); } catch {}
+          }
+          setIsOpen(next);
+        }}
         className="flex items-center space-x-1 xs:space-x-2 px-1.5 xs:px-2 sm:px-3 py-1.5 xs:py-2 rounded-lg xs:rounded-xl glass hover:glass-dark transition-all duration-300 group shadow-lg touch-manipulation"
         aria-label="Open profile menu"
       >
