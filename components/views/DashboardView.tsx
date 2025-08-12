@@ -2,7 +2,7 @@
 import React, { memo, useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useAppContext } from '../../contexts/FirebaseAppContext';
 // import { hasAdminPrivileges } from '../../utils/permissionUtils';
-import { PeopleIcon, AttendanceIcon, CalendarIcon, ChartBarIcon, AcademicCapIcon } from '../icons';
+import { PeopleIcon, AttendanceIcon, CalendarIcon, ChartBarIcon, PrayerIcon } from '../icons';
 import { getMonthName, getCurrentOrMostRecentSunday, formatFullDate, getUpcomingSunday } from '../../utils/dateUtils';
 import { db } from '../../firebase.config';
 import { doc, getDoc } from 'firebase/firestore';
@@ -404,13 +404,13 @@ const DashboardView: React.FC = memo(() => {
             onClick={() => !rearrangeMode && switchTab({ id: TabKeys.OUTREACH, name: 'Outreach' })}
           />
         );
-      case 'prayerOverall':
+  case 'prayerOverall':
         return (
           <StatCard
             key={id}
             title="Prayer (Overall)"
             value={overallPrayerMarks}
-            icon={<AcademicCapIcon className="w-full h-full" />}
+    icon={<PrayerIcon className="w-full h-full" />}
             accentColor="indigo"
             description={`All-time prayers marked • ${overallPrayerHours} h`}
             onClick={() => !rearrangeMode && switchTab({ id: TabKeys.PRAYER, name: 'Prayer' })}
