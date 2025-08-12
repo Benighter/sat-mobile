@@ -246,7 +246,7 @@ const PrayerView: React.FC = () => {
               {/* Member column */}
               <th
                 className="px-3 py-2 text-left sticky top-0 z-30"
-                style={{ left: 50, width: '200px', minWidth: '200px', background: 'linear-gradient(to right, rgb(249 250 251), rgb(243 244 246))', boxShadow: '2px 0 4px rgba(0,0,0,0.08)' }}
+                style={{ left: 50, width: '140px', minWidth: '140px', background: 'linear-gradient(to right, rgb(249 250 251), rgb(243 244 246))', boxShadow: '2px 0 4px rgba(0,0,0,0.08)' }}
               >
                 Member
               </th>
@@ -288,7 +288,7 @@ const PrayerView: React.FC = () => {
                   {/* Member cell with role badge */}
                   <td
                     className="px-3 py-2 sticky z-10"
-                    style={{ left: 50, width: '200px', minWidth: '200px', backgroundColor: rowIndex % 2 === 0 ? 'white' : 'rgb(249 250 251)', boxShadow: '2px 0 4px rgba(0,0,0,0.06)' }}
+                    style={{ left: 50, width: '140px', minWidth: '140px', backgroundColor: rowIndex % 2 === 0 ? 'white' : 'rgb(249 250 251)', boxShadow: '2px 0 4px rgba(0,0,0,0.06)' }}
                   >
                     <button
                       type="button"
@@ -297,7 +297,7 @@ const PrayerView: React.FC = () => {
                       title="View prayer details"
                     >
                       <span className="font-semibold text-sm text-gray-900 truncate group-hover:text-blue-700">
-                        {m.firstName} {m.lastName || ''}
+                        {m.firstName}
                       </span>
                       <span className="text-xs" title={m.role || 'Member'}>
                         {m.role === 'Bacenta Leader' ? '💚' : m.role === 'Fellowship Leader' ? '❤️' : '👤'}

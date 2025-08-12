@@ -230,7 +230,7 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
       {
         key: 'phoneNumber',
         header: 'Phone',
-        width: '140px',
+        width: '120px',
         render: (member: Member) => (
           <div
             className={`flex items-center space-x-2 ${

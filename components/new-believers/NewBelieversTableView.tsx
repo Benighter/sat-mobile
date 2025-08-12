@@ -81,7 +81,7 @@ const NewBelieversTableView: React.FC = () => {
     {
       key: 'name',
       header: 'Name',
-      width: '200px',
+      width: '140px',
       render: (m: Member) => (
         <div
           className="flex items-center space-x-2 cursor-pointer hover:bg-blue-50 rounded-lg p-1 -m-1 transition-colors duration-200"
