@@ -126,14 +126,14 @@ const PrayerView: React.FC = () => {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="container mx-auto max-w-7xl px-3 sm:px-4 lg:px-6 space-y-4">
       {/* Centered, clean header card */}
-      <div className="bg-white dark:bg-dark-800 rounded-lg shadow-sm border border-gray-200 dark:border-dark-600 p-4">
+  <div className="bg-white dark:bg-dark-800 rounded-lg md:rounded-xl shadow-sm border border-gray-200 dark:border-dark-600 p-4 md:p-6">
         <div className="text-center">
           {/* Title */}
           <div className="flex items-center justify-center space-x-2 mb-3">
-            <CalendarIcon className="w-5 h-5 text-blue-600" />
-            <h2 className="text-xl font-semibold text-gray-900">Prayer (Tue–Sun)</h2>
+            <CalendarIcon className="w-5 h-5 md:w-6 md:h-6 text-blue-600" />
+            <h2 className="text-xl md:text-2xl font-semibold text-gray-900">Prayer (Tue–Sun)</h2>
           </div>
 
           {/* Week navigation */}
@@ -183,15 +183,10 @@ const PrayerView: React.FC = () => {
                   }
                   return acc;
                 }, { prayed: 0, missed: 0, unmarked: 0 });
-                const totalCells = filteredMembers.length * weekDates.length;
-                const prayedPct = totalCells ? Math.round((totals.prayed / totalCells) * 100) : 0;
                 return (
                   <>
                     <span className="flex items-center gap-1"><span className="w-2 h-2 bg-green-500 rounded-full"></span> Prayed: <strong>{totals.prayed}</strong></span>
                     <span className="flex items-center gap-1"><span className="w-2 h-2 bg-red-500 rounded-full"></span> Missed: <strong>{totals.missed}</strong></span>
-                    <span className="flex items-center gap-1"><span className="w-2 h-2 bg-gray-400 rounded-full"></span> Unmarked: <strong>{totals.unmarked}</strong></span>
-                    <span>•</span>
-                    <span>% Prayed: <strong>{prayedPct}%</strong></span>
                   </>
                 );
               })()}
@@ -199,7 +194,7 @@ const PrayerView: React.FC = () => {
           )}
 
           {/* Search, Bacenta Filter, Role Filter */}
-          <div className="flex flex-col sm:flex-row gap-3 sm:items-center justify-center">
+          <div className="flex flex-col md:flex-row md:flex-wrap items-stretch md:items-center justify-center md:justify-between gap-3">
             <div className="sm:w-64 w-full">
               <input
                 type="text"
@@ -237,30 +232,28 @@ const PrayerView: React.FC = () => {
         </div>
       </div>
 
-      
-
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-auto">
+      <div className="bg-white rounded-lg md:rounded-xl shadow-sm border border-gray-200 overflow-x-auto">
         <table className="min-w-full text-sm">
           <thead>
             <tr className="bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200">
               {/* Row number column */}
               <th
-                className="px-3 py-2 text-center sticky z-20"
+                className="px-3 py-2 text-center sticky top-0 z-30"
                 style={{ left: 0, width: '50px', minWidth: '50px', background: 'linear-gradient(to right, rgb(249 250 251), rgb(243 244 246))' }}
               >
                 #
               </th>
               {/* Member column */}
               <th
-                className="px-3 py-2 text-left sticky z-20"
-                style={{ left: 50, width: '160px', minWidth: '160px', background: 'linear-gradient(to right, rgb(249 250 251), rgb(243 244 246))', boxShadow: '2px 0 4px rgba(0,0,0,0.08)' }}
+                className="px-3 py-2 text-left sticky top-0 z-30"
+                style={{ left: 50, width: '200px', minWidth: '200px', background: 'linear-gradient(to right, rgb(249 250 251), rgb(243 244 246))', boxShadow: '2px 0 4px rgba(0,0,0,0.08)' }}
               >
                 Member
               </th>
               {weekDates.map(d => {
                 const info = getSessionInfoForDate(d);
                 return (
-                  <th key={d} className="px-3 py-2 text-center whitespace-nowrap" title={`${formatFullDate(d)} • ${info.start}–${info.end}`}>
+                  <th key={d} className="px-3 py-2 text-center whitespace-nowrap sticky top-0 z-10 bg-white dark:bg-dark-700" title={`${formatFullDate(d)} • ${info.start}–${info.end}`}>
                     <div className="flex flex-col items-center leading-tight">
                       <span className="font-medium">{weekday(d)}</span>
                       <span className="text-xs text-gray-500">{info.start}–{info.end}</span>
@@ -269,7 +262,7 @@ const PrayerView: React.FC = () => {
                 );
               })}
               {/* Weekly total column */}
-              <th className="px-3 py-2 text-center whitespace-nowrap">Total (h)</th>
+              <th className="px-3 py-2 text-center whitespace-nowrap sticky top-0 z-10 bg-white dark:bg-dark-700">Total (h)</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200">
@@ -295,7 +288,7 @@ const PrayerView: React.FC = () => {
                   {/* Member cell with role badge */}
                   <td
                     className="px-3 py-2 sticky z-10"
-                    style={{ left: 50, width: '160px', minWidth: '160px', backgroundColor: rowIndex % 2 === 0 ? 'white' : 'rgb(249 250 251)', boxShadow: '2px 0 4px rgba(0,0,0,0.06)' }}
+                    style={{ left: 50, width: '200px', minWidth: '200px', backgroundColor: rowIndex % 2 === 0 ? 'white' : 'rgb(249 250 251)', boxShadow: '2px 0 4px rgba(0,0,0,0.06)' }}
                   >
                     <button
                       type="button"
@@ -322,7 +315,7 @@ const PrayerView: React.FC = () => {
                   const target = new Date(date + 'T00:00:00');
                   const isPastMonth = target.getFullYear() < today.getFullYear() || (target.getFullYear() === today.getFullYear() && target.getMonth() < today.getMonth());
 
-                  const baseClasses = 'w-6 h-6 rounded border-2 flex items-center justify-center transition-all duration-200';
+                  const baseClasses = 'w-6 h-6 md:w-7 md:h-7 rounded border-2 flex items-center justify-center transition-all duration-200';
                   const classes = !editable
                     ? (isPastMonth ? 'bg-gray-200 border-gray-300 cursor-not-allowed opacity-60' : 'bg-blue-50 border-blue-200 cursor-not-allowed opacity-60')
                     : status === 'Prayed'

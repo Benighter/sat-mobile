@@ -280,6 +280,29 @@ export const ClearAllDataModal: React.FC<{
   />
 );
 
+export const ClearAllNewBelieversModal: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+  totalNewBelievers: number;
+}> = ({ isOpen, onClose, onConfirm, totalNewBelievers }) => (
+  <ConfirmationModal
+    isOpen={isOpen}
+    onClose={onClose}
+    onConfirm={onConfirm}
+    title="Delete All New Believers"
+    message="This will permanently remove all new believers from your records!"
+    confirmText="Delete All"
+    cancelText="Cancel"
+    type="danger"
+    details={[
+      `${totalNewBelievers} new believer${totalNewBelievers !== 1 ? 's' : ''} will be permanently deleted`,
+      "Attendance markers linked to these records may remain until a full data purge",
+      "This action cannot be undone"
+    ]}
+  />
+);
+
 export const CreateDeletionRequestModal: React.FC<{
   isOpen: boolean;
   onClose: () => void;

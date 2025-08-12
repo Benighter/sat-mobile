@@ -19,6 +19,7 @@
     "test:firebase": "node scripts/test-firebase.js",
     "setup:firebase": "node scripts/setup-firebase.js",
     "demo:firebase": "node scripts/demo-firebase.js",
+  "purge:new-believers": "node scripts/purge-new-believers.js",
     "migration:guide": "echo 'See FIREBASE_MIGRATION_GUIDE.md for detailed migration instructions'",
     "migrate:auth-links": "node scripts/migrate-auth-links.js migrate",
     "rollback:auth-links": "node scripts/migrate-auth-links.js rollback",

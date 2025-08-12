@@ -228,7 +228,7 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
 
               <NavigationItem
                 icon={<UsersIcon className="w-4 h-4" />}
-                label="New Believers"
+                label="Sons of God"
                 isActive={currentTab.id === TabKeys.NEW_BELIEVERS}
                 onClick={() => {
                   switchTab({ id: TabKeys.NEW_BELIEVERS, name: 'New Believers' });

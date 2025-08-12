@@ -8,6 +8,7 @@ import Badge from '../ui/Badge';
 import { UsersIcon, PlusIcon, CheckIcon, ExclamationTriangleIcon, ChevronLeftIcon, PeopleIcon, TrashIcon } from '../icons';
 import AllBacentasView from '../bacentas/AllBacentasView';
 import BulkOutreachAddModal from './BulkOutreachAddModal';
+import AddOutreachMemberModal from './AddOutreachMemberModal';
 
 
 // MonthPicker not used in this composition; removed to reduce noise
@@ -19,33 +20,16 @@ const BacentaDetail: React.FC<{
   weekStart: string;
   onBack: () => void;
 }> = ({ bacenta, members, weekStart, onBack }) => {
-  const { addOutreachMemberHandler, deleteOutreachMemberHandler, convertOutreachMemberToPermanentHandler, showToast } = useAppContext();
+  const { deleteOutreachMemberHandler, convertOutreachMemberToPermanentHandler } = useAppContext();
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [room, setRoom] = useState('');
   const [coming, setComing] = useState<boolean>(false);
   const [reason, setReason] = useState('');
   const [showBulk, setShowBulk] = useState(false);
+  const [showAddModal, setShowAddModal] = useState(false);
 
-  const handleAdd = async () => {
-    try {
-      const trimmed = name.trim();
-      if (!trimmed) throw new Error('Enter a name');
-      await addOutreachMemberHandler({
-        name: trimmed,
-        phoneNumbers: phone ? [phone] : [],
-        roomNumber: room || undefined,
-        bacentaId: bacenta.id,
-        comingStatus: coming,
-        notComingReason: !coming && reason ? reason : undefined,
-        outreachDate: weekStart // Monday date of the selected week
-      });
-      setName(''); setPhone(''); setRoom(''); setReason(''); setComing(false);
-      showToast('success', 'Outreach member added');
-    } catch (e: any) {
-      showToast('error', 'Failed to add outreach member', e.message);
-    }
-  };
+  // inline add handler replaced by modal
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-rose-50/30 dark:from-dark-950 dark:via-dark-900 dark:to-dark-800">
@@ -133,7 +117,7 @@ const BacentaDetail: React.FC<{
 
                 <div className="flex justify-end gap-4 pt-4 border-t border-gray-200 dark:border-dark-600">
                   <Button
-                    onClick={handleAdd}
+                    onClick={() => setShowAddModal(true)}
                     leftIcon={<PlusIcon className="w-5 h-5" />}
                     className="px-8 py-3 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-semibold shadow-lg hover:shadow-xl transition-all duration-200"
                   >
@@ -149,6 +133,13 @@ const BacentaDetail: React.FC<{
               </div>
             </div>
           </div>
+          <AddOutreachMemberModal
+            isOpen={showAddModal}
+            onClose={() => setShowAddModal(false)}
+            bacentaId={bacenta.id}
+            bacentaName={bacenta.name}
+            weekStart={weekStart}
+          />
           <BulkOutreachAddModal
             isOpen={showBulk}
             onClose={() => setShowBulk(false)}

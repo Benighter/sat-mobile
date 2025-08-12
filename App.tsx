@@ -47,7 +47,7 @@ import OfflineIndicator from './components/common/OfflineIndicator';
 import PendingInviteNotification from './components/notifications/PendingInviteNotification';
 import NotificationBadge from './components/notifications/NotificationBadge';
 import DeletionRequestNotificationBadge from './components/notifications/DeletionRequestNotificationBadge';
-import { DeleteMemberModal, DeleteBacentaModal, DeleteNewBelieverModal, ClearAllDataModal, ClearSelectedDataModal, CreateDeletionRequestModal } from './components/modals/confirmations/ConfirmationModal';
+import { DeleteMemberModal, DeleteBacentaModal, DeleteNewBelieverModal, ClearAllDataModal, ClearSelectedDataModal, CreateDeletionRequestModal, ClearAllNewBelieversModal } from './components/modals/confirmations/ConfirmationModal';
 import WhatsNewModal from './components/modals/general/WhatsNewModal';
 import { useWhatsNew } from './hooks/useWhatsNew';
 
@@ -491,6 +491,15 @@ const AppContent: React.FC = memo(() => {
           onClose={closeConfirmationModal}
           onConfirm={confirmationModal.onConfirm}
           memberName={`${confirmationModal.data?.member?.firstName || ''} ${confirmationModal.data?.member?.lastName || ''}`.trim() || 'Unknown Member'}
+        />
+      )}
+
+      {confirmationModal.type === 'clearAllNewBelievers' && (
+        <ClearAllNewBelieversModal
+          isOpen={confirmationModal.isOpen}
+          onClose={closeConfirmationModal}
+          onConfirm={confirmationModal.onConfirm}
+          totalNewBelievers={confirmationModal.data?.totalNewBelievers || 0}
         />
       )}
 

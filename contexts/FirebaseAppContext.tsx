@@ -85,11 +85,11 @@ interface AppContextType {
   // Confirmation Modal
   confirmationModal: {
     isOpen: boolean;
-    type: 'deleteMember' | 'deleteBacenta' | 'deleteNewBeliever' | 'clearData' | 'clearSelectedData' | 'createDeletionRequest' | null;
+    type: 'deleteMember' | 'deleteBacenta' | 'deleteNewBeliever' | 'clearData' | 'clearSelectedData' | 'createDeletionRequest' | 'clearAllNewBelievers' | null;
     data: any;
     onConfirm: () => void;
   };
-  showConfirmation: (type: 'deleteMember' | 'deleteBacenta' | 'deleteNewBeliever' | 'clearData' | 'clearSelectedData' | 'createDeletionRequest', data: any, onConfirm: () => void) => void;
+  showConfirmation: (type: 'deleteMember' | 'deleteBacenta' | 'deleteNewBeliever' | 'clearData' | 'clearSelectedData' | 'createDeletionRequest' | 'clearAllNewBelievers', data: any, onConfirm: () => void) => void;
   closeConfirmation: () => void;
 
   // Toasts
@@ -238,7 +238,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
   // Confirmation modal
   const [confirmationModal, setConfirmationModal] = useState<{
     isOpen: boolean;
-    type: 'deleteMember' | 'deleteBacenta' | 'deleteNewBeliever' | 'clearData' | 'clearSelectedData' | 'createDeletionRequest' | null;
+  type: 'deleteMember' | 'deleteBacenta' | 'deleteNewBeliever' | 'clearData' | 'clearSelectedData' | 'createDeletionRequest' | 'clearAllNewBelievers' | null;
     data: any;
     onConfirm: () => void;
   }>({
@@ -540,7 +540,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
   }, []);
 
   // Confirmation modal functions
-  const showConfirmation = useCallback((type: 'deleteMember' | 'deleteBacenta' | 'deleteNewBeliever' | 'clearData' | 'clearSelectedData' | 'createDeletionRequest', data: any, onConfirm: () => void) => {
+  const showConfirmation = useCallback((type: 'deleteMember' | 'deleteBacenta' | 'deleteNewBeliever' | 'clearData' | 'clearSelectedData' | 'createDeletionRequest' | 'clearAllNewBelievers', data: any, onConfirm: () => void) => {
     setConfirmationModal({
       isOpen: true,
       type,

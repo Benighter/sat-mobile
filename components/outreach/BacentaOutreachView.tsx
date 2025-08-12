@@ -3,11 +3,11 @@ import { useAppContext } from '../../contexts/FirebaseAppContext';
 import { OutreachMember } from '../../types';
 import { formatDateToYYYYMMDD } from '../../utils/dateUtils';
 import Button from '../ui/Button';
-import Input from '../ui/Input';
-import Select from '../ui/Select';
+// removed inline form components after switching to modal
 import Badge from '../ui/Badge';
 import { CalendarIcon, PlusIcon, CheckIcon, ExclamationTriangleIcon, ChevronLeftIcon, ChevronRightIcon, TrashIcon, UserIcon, PhoneIcon } from '../icons';
 import BulkOutreachAddModal from './BulkOutreachAddModal';
+import AddOutreachMemberModal from './AddOutreachMemberModal';
 
 // Week picker (Monday-based)
 const WeekPicker: React.FC<{ value: string; onChange: (v: string) => void }> = ({ value, onChange }) => {
@@ -55,7 +55,6 @@ const BacentaOutreachView: React.FC<BacentaOutreachViewProps> = ({ bacentaId }) 
     outreachMembers,
     outreachMonth,
     setOutreachMonth,
-    addOutreachMemberHandler,
     updateOutreachMemberHandler,
     deleteOutreachMemberHandler,
     convertOutreachMemberToPermanentHandler,
@@ -73,19 +72,15 @@ const BacentaOutreachView: React.FC<BacentaOutreachViewProps> = ({ bacentaId }) 
     return formatDateToYYYYMMDD(monday);
   });
 
-  // Form state
-  const [name, setName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [room, setRoom] = useState('');
-  const [coming, setComing] = useState<boolean>(false);
-  const [reason, setReason] = useState('');
+  // old inline form state removed in favor of modal
   // Keep monthly subscription in sync when week changes
   useEffect(() => {
     const ym = weekStart.slice(0,7);
     if (ym !== outreachMonth) setOutreachMonth(ym);
   }, [weekStart, outreachMonth, setOutreachMonth]);
 
-  const [showForm, setShowForm] = useState(false);
+  // replaced inline form with modal
+  const [showAddModal, setShowAddModal] = useState(false);
   const [showBulkModal, setShowBulkModal] = useState(false);
 
   const bacenta = bacentas.find(b => b.id === bacentaId);
@@ -107,26 +102,7 @@ const BacentaOutreachView: React.FC<BacentaOutreachViewProps> = ({ bacentaId }) 
     );
   }, [outreachMembers, bacentaId, weekStart]);
 
-  const handleAdd = async () => {
-    const trimmed = name.trim();
-    if (!trimmed) return;
-    try {
-      await addOutreachMemberHandler({
-        name: trimmed,
-        phoneNumbers: phone ? [phone] : [],
-        roomNumber: room || undefined,
-        bacentaId: bacentaId,
-        comingStatus: coming,
-        notComingReason: !coming && reason ? reason : undefined,
-  outreachDate: weekStart, // Monday date of the selected week
-      });
-      setName(''); setPhone(''); setRoom(''); setReason(''); setComing(false);
-      setShowForm(false); // Close form after adding
-      showToast('success', 'Outreach member added');
-    } catch (error) {
-      showToast('error', 'Failed to add outreach member');
-    }
-  };
+  // removed old handleAdd - handled in modal
 
   const handleToggleComing = async (member: OutreachMember) => {
     try {
@@ -179,53 +155,21 @@ const BacentaOutreachView: React.FC<BacentaOutreachViewProps> = ({ bacentaId }) 
       </div>
 
       {/* Add member button/form */}
-      {!showForm ? (
-        <div className="flex justify-center gap-3">
-          <Button
-            onClick={() => setShowForm(true)}
-            leftIcon={<PlusIcon className="w-4 h-4" />}
-            className="bg-gradient-to-r from-rose-500 to-amber-500 hover:from-rose-600 hover:to-amber-600 text-white border-0 shadow-lg"
-          >
-            Add Outreach Member
-          </Button>
-          <Button
-            onClick={() => setShowBulkModal(true)}
-            variant="secondary"
-          >
-            Bulk Add
-          </Button>
-        </div>
-      ) : (
-        <div className="glass p-6 rounded-2xl border border-slate-200 dark:border-dark-600">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold">Add Outreach Member</h3>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setShowForm(false)}
-              className="text-gray-500 hover:text-gray-700"
-            >
-              ✕
-            </Button>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-12 gap-4">
-            <Input label="Name" placeholder="Full name" value={name} onChange={setName} className="sm:col-span-4" />
-            <Input label="Phone" placeholder="e.g. 024XXXXXXX" value={phone} onChange={setPhone} className="sm:col-span-3" />
-            <Input label="Room" placeholder="Room or area" value={room} onChange={setRoom} className="sm:col-span-3" />
-            <Select label="Coming?" value={coming ? 'yes' : 'no'} onChange={(v) => setComing(v === 'yes')} className="sm:col-span-2">
-              <option value="no">No</option>
-              <option value="yes">Yes</option>
-            </Select>
-            {!coming && (
-              <Input label="Reason (optional)" placeholder="Why not coming?" value={reason} onChange={setReason} className="sm:col-span-12" />
-            )}
-            <div className="sm:col-span-12 flex justify-end gap-2 pt-2">
-              <Button variant="ghost" onClick={() => setShowForm(false)}>Cancel</Button>
-              <Button onClick={handleAdd} leftIcon={<PlusIcon className="w-4 h-4" />}>Add Member</Button>
-            </div>
-          </div>
-        </div>
-      )}
+      <div className="flex justify-center gap-3">
+        <Button
+          onClick={() => setShowAddModal(true)}
+          leftIcon={<PlusIcon className="w-4 h-4" />}
+          className="bg-gradient-to-r from-rose-500 to-amber-500 hover:from-rose-600 hover:to-amber-600 text-white border-0 shadow-lg"
+        >
+          Add Outreach Member
+        </Button>
+        <Button
+          onClick={() => setShowBulkModal(true)}
+          variant="secondary"
+        >
+          Bulk Add
+        </Button>
+      </div>
 
       {/* Members table */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
@@ -348,6 +292,13 @@ const BacentaOutreachView: React.FC<BacentaOutreachViewProps> = ({ bacentaId }) 
       <BulkOutreachAddModal
         isOpen={showBulkModal}
         onClose={() => setShowBulkModal(false)}
+        bacentaId={bacentaId}
+        bacentaName={bacenta?.name}
+        weekStart={weekStart}
+      />
+      <AddOutreachMemberModal
+        isOpen={showAddModal}
+        onClose={() => setShowAddModal(false)}
         bacentaId={bacentaId}
         bacentaName={bacenta?.name}
         weekStart={weekStart}
