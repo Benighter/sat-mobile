@@ -131,6 +131,7 @@ export enum TabKeys {
   NEW_BELIEVERS = 'new_believers',
   OUTREACH = 'outreach',
   PRAYER = 'prayer',
+  PRAYER_MEMBER_DETAILS = 'prayer_member_details',
   BIRTHDAYS = 'birthdays',
   PROFILE_SETTINGS = 'profile_settings',
   MY_DELETION_REQUESTS = 'my_deletion_requests',

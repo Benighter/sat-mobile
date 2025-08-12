@@ -3,24 +3,25 @@ import { useAppContext } from '../../contexts/FirebaseAppContext';
 import { getTuesdayToSundayRange, getPreviousPrayerWeekAnchor, getNextPrayerWeekAnchor, formatFullDate } from '../../utils/dateUtils';
 import { isDateEditable } from '../../utils/attendanceUtils';
 import { CheckIcon, XMarkIcon, ChevronLeftIcon, ChevronRightIcon, CalendarIcon } from '../icons';
-import { Member, PrayerStatus } from '../../types';
+import { Member, PrayerStatus, TabKeys } from '../../types';
 
 const PrayerView: React.FC = () => {
-  const { members, bacentas, prayerRecords, markPrayerHandler, clearPrayerHandler, userProfile } = useAppContext();
+  const { members, bacentas, prayerRecords, markPrayerHandler, clearPrayerHandler, userProfile, switchTab } = useAppContext();
   const [anchorDate, setAnchorDate] = useState<string>(getTuesdayToSundayRange()[0]);
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [bacentaFilter, setBacentaFilter] = useState<string>(''); // empty => all
-  const [roleFilter, setRoleFilter] = useState<'all' | 'Bacenta Leader' | 'Fellowship Leader' | 'Member'>('all');
+  type RoleFilter = 'all' | 'Bacenta Leader' | 'Fellowship Leader' | 'Member';
+  const [roleFilter, setRoleFilter] = useState<RoleFilter>('all');
+  const coerceRoleFilter = (v: string): RoleFilter => {
+    if (v === 'Bacenta Leader' || v === 'Fellowship Leader' || v === 'Member' || v === 'all') return v;
+    return 'all';
+  };
 
   const allowEditPreviousSundays = userProfile?.preferences?.allowEditPreviousSundays ?? false;
 
   const weekDates = useMemo(() => getTuesdayToSundayRange(anchorDate), [anchorDate]);
 
-  const weekday = (d: string) => {
-    const dt = new Date(d + 'T00:00:00');
-    return dt.toLocaleDateString(undefined, { weekday: 'long' });
-  };
-
+  // Map of memberId_date -> status for quick lookups
   const recordsByKey = useMemo(() => {
     const map = new Map<string, PrayerStatus>();
     for (const r of prayerRecords) {
@@ -28,6 +29,45 @@ const PrayerView: React.FC = () => {
     }
     return map;
   }, [prayerRecords]);
+
+  // Session info per day: start, end, hours
+  const getSessionInfoForDate = (date: string) => {
+    const dt = new Date(date + 'T00:00:00');
+    const day = dt.getDay(); // 0=Sun,1=Mon,2=Tue...6=Sat
+    // Tue(2), Fri(5): 04:30-06:30; Wed(3), Thu(4): 04:00-06:00; Sat(6), Sun(0): 05:00-07:00
+    if (day === 2 || day === 5) {
+      return { start: '04:30', end: '06:30', hours: 2 };
+    }
+    if (day === 3 || day === 4) {
+      return { start: '04:00', end: '06:00', hours: 2 };
+    }
+    if (day === 6 || day === 0) {
+      return { start: '05:00', end: '07:00', hours: 2 };
+    }
+    // Default fallback
+    return { start: '00:00', end: '00:00', hours: 0 };
+  };
+
+  // Compute per-member weekly hours and combined total hours for filtered set
+  const memberWeeklyHours = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const m of members) {
+      let sum = 0;
+      for (const d of weekDates) {
+        const status = recordsByKey.get(`${m.id}_${d}`);
+        if (status === 'Prayed') sum += getSessionInfoForDate(d).hours;
+      }
+      map.set(m.id, sum);
+    }
+    return map;
+  }, [members, weekDates, recordsByKey]);
+
+  const weekday = (d: string) => {
+    const dt = new Date(d + 'T00:00:00');
+    return dt.toLocaleDateString(undefined, { weekday: 'long' });
+  };
+
+  // recordsByKey moved above to ensure availability
 
   // Helpers matching Members table behavior
   const getRolePriority = (role?: string) => {
@@ -44,8 +84,8 @@ const PrayerView: React.FC = () => {
     const searchLower = searchTerm.trim().toLowerCase();
     return members
       .filter(m => {
-        // Bacenta filter
-        if (bacentaFilter && m.bacentaId !== bacentaFilter) return false;
+  // Bacenta filter
+  if (bacentaFilter && m.bacentaId !== bacentaFilter) return false;
   // Role filter
   if (roleFilter !== 'all' && (m.role || 'Member') !== roleFilter) return false;
         // Search filter (name, phone, address)
@@ -67,7 +107,11 @@ const PrayerView: React.FC = () => {
         if (last !== 0) return last;
         return a.firstName.localeCompare(b.firstName);
       });
-  }, [members, bacentaFilter, searchTerm]);
+  }, [members, bacentaFilter, roleFilter, searchTerm]);
+
+  const combinedWeeklyHours = useMemo(() => {
+    return (filteredMembers || []).reduce((acc, m) => acc + (memberWeeklyHours.get(m.id) || 0), 0);
+  }, [filteredMembers, memberWeeklyHours]);
 
   const onToggle = async (memberId: string, date: string) => {
     const key = `${memberId}_${date}`;
@@ -116,9 +160,43 @@ const PrayerView: React.FC = () => {
           </div>
 
           {/* Summary */}
-          <div className="text-sm text-gray-600 mb-4">
-            {filteredMembers.length} member{filteredMembers.length !== 1 ? 's' : ''}
+          <div className="text-sm text-gray-600 mb-4 flex items-center justify-center gap-2">
+            <span>
+              {filteredMembers.length} member{filteredMembers.length !== 1 ? 's' : ''}
+            </span>
+            <span>•</span>
+            <span>
+              {combinedWeeklyHours} h this week
+            </span>
           </div>
+
+          {/* Quick analytics strip */}
+          {filteredMembers.length > 0 && (
+            <div className="flex items-center justify-center gap-4 text-xs sm:text-sm text-gray-700 dark:text-dark-300 mb-2">
+              {(() => {
+                const totals = weekDates.reduce((acc, d) => {
+                  for (const m of filteredMembers) {
+                    const s = recordsByKey.get(`${m.id}_${d}`);
+                    if (s === 'Prayed') acc.prayed += 1;
+                    else if (s === 'Missed') acc.missed += 1;
+                    else acc.unmarked += 1;
+                  }
+                  return acc;
+                }, { prayed: 0, missed: 0, unmarked: 0 });
+                const totalCells = filteredMembers.length * weekDates.length;
+                const prayedPct = totalCells ? Math.round((totals.prayed / totalCells) * 100) : 0;
+                return (
+                  <>
+                    <span className="flex items-center gap-1"><span className="w-2 h-2 bg-green-500 rounded-full"></span> Prayed: <strong>{totals.prayed}</strong></span>
+                    <span className="flex items-center gap-1"><span className="w-2 h-2 bg-red-500 rounded-full"></span> Missed: <strong>{totals.missed}</strong></span>
+                    <span className="flex items-center gap-1"><span className="w-2 h-2 bg-gray-400 rounded-full"></span> Unmarked: <strong>{totals.unmarked}</strong></span>
+                    <span>•</span>
+                    <span>% Prayed: <strong>{prayedPct}%</strong></span>
+                  </>
+                );
+              })()}
+            </div>
+          )}
 
           {/* Search, Bacenta Filter, Role Filter */}
           <div className="flex flex-col sm:flex-row gap-3 sm:items-center justify-center">
@@ -146,7 +224,7 @@ const PrayerView: React.FC = () => {
             <div className="sm:w-56 w-full">
               <select
                 value={roleFilter}
-                onChange={(e) => setRoleFilter(e.target.value as any)}
+                onChange={(e) => setRoleFilter(coerceRoleFilter(e.target.value))}
                 className="w-full px-3 py-3 sm:py-2 border border-gray-300 dark:border-dark-600 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent bg-white dark:bg-dark-700 text-gray-900 dark:text-dark-100 text-center cursor-pointer"
               >
                 <option value="all">All Roles</option>
@@ -158,6 +236,8 @@ const PrayerView: React.FC = () => {
           </div>
         </div>
       </div>
+
+      
 
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-auto">
         <table className="min-w-full text-sm">
@@ -177,17 +257,25 @@ const PrayerView: React.FC = () => {
               >
                 Member
               </th>
-              {weekDates.map(d => (
-                <th key={d} className="px-3 py-2 text-center whitespace-nowrap" title={formatFullDate(d)}>
-                  {weekday(d)}
-                </th>
-              ))}
+              {weekDates.map(d => {
+                const info = getSessionInfoForDate(d);
+                return (
+                  <th key={d} className="px-3 py-2 text-center whitespace-nowrap" title={`${formatFullDate(d)} • ${info.start}–${info.end}`}>
+                    <div className="flex flex-col items-center leading-tight">
+                      <span className="font-medium">{weekday(d)}</span>
+                      <span className="text-xs text-gray-500">{info.start}–{info.end}</span>
+                    </div>
+                  </th>
+                );
+              })}
+              {/* Weekly total column */}
+              <th className="px-3 py-2 text-center whitespace-nowrap">Total (h)</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200">
             {filteredMembers.length === 0 ? (
               <tr>
-                <td className="px-3 py-6 text-center text-gray-500" colSpan={2 + weekDates.length}>
+                <td className="px-3 py-6 text-center text-gray-500" colSpan={3 + weekDates.length}>
                   {bacentaFilter || searchTerm ? 'No members match your filter' : 'No members added yet'}
                 </td>
               </tr>
@@ -209,14 +297,19 @@ const PrayerView: React.FC = () => {
                     className="px-3 py-2 sticky z-10"
                     style={{ left: 50, width: '160px', minWidth: '160px', backgroundColor: rowIndex % 2 === 0 ? 'white' : 'rgb(249 250 251)', boxShadow: '2px 0 4px rgba(0,0,0,0.06)' }}
                   >
-                    <div className="flex items-center space-x-1">
-                      <span className="font-semibold text-sm text-gray-900 truncate">
+                    <button
+                      type="button"
+                      onClick={() => switchTab({ id: TabKeys.PRAYER_MEMBER_DETAILS, name: 'Prayer Details', data: { memberId: m.id } })}
+                      className="w-full text-left flex items-center space-x-1 group"
+                      title="View prayer details"
+                    >
+                      <span className="font-semibold text-sm text-gray-900 truncate group-hover:text-blue-700">
                         {m.firstName} {m.lastName || ''}
                       </span>
                       <span className="text-xs" title={m.role || 'Member'}>
                         {m.role === 'Bacenta Leader' ? '💚' : m.role === 'Fellowship Leader' ? '❤️' : '👤'}
                       </span>
-                    </div>
+                    </button>
                   </td>
                   {weekDates.map(date => {
                   const key = `${m.id}_${date}`;
@@ -263,6 +356,10 @@ const PrayerView: React.FC = () => {
                       </td>
                   );
                   })}
+                  {/* Weekly total hours cell */}
+                  <td className="px-3 py-2 text-center text-sm font-medium text-gray-700">
+                    {memberWeeklyHours.get(m.id) || 0}
+                  </td>
                 </tr>
               ))
             )}

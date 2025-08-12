@@ -280,36 +280,15 @@ const DashboardView: React.FC = memo(() => {
   const weeklyAttendance = getCurrentWeekAttendance();
   const upcomingConfirmations = getUpcomingSundayConfirmations();
 
-  // Simple weekly prayer count (Tue–Sun in current week)
-  const weeklyPrayerCount = useMemo(() => {
-    // Determine current week's Tue–Sun based on today's anchor
-    const today = new Date();
-    const yyyy = today.getFullYear();
-    const mm = String(today.getMonth() + 1).padStart(2, '0');
-    const dd = String(today.getDate()).padStart(2, '0');
-    const anchor = `${yyyy}-${mm}-${dd}`;
-    // Inline calculation to avoid importing helpers here
-    const d = new Date(anchor + 'T00:00:00');
-    const day = d.getDay(); // 0 Sun..6 Sat
-    const offsetToTuesday = ((2 - day + 7) % 7);
-    const tue = new Date(d);
-    tue.setDate(d.getDate() + offsetToTuesday);
-    const range: string[] = [];
-    for (let i = 0; i < 6; i++) {
-      const dt = new Date(tue);
-      dt.setDate(tue.getDate() + i);
-      const y = dt.getFullYear();
-      const m = String(dt.getMonth() + 1).padStart(2, '0');
-      const da = String(dt.getDate()).padStart(2, '0');
-      range.push(`${y}-${m}-${da}`);
-    }
-    const dates = new Set(range);
-    const prayedMemberIds = new Set<string>();
-    prayerRecords.forEach(r => {
-      if (r.status === 'Prayed' && dates.has(r.date)) prayedMemberIds.add(r.memberId);
-    });
-    return prayedMemberIds.size;
+  // Overall prayer totals (all-time)
+  const overallPrayerMarks = useMemo(() => {
+    return prayerRecords.reduce((acc, r) => acc + (r.status === 'Prayed' ? 1 : 0), 0);
   }, [prayerRecords]);
+
+  const overallPrayerHours = useMemo(() => {
+    // Each 'Prayed' mark corresponds to a 2-hour session currently
+    return overallPrayerMarks * 2;
+  }, [overallPrayerMarks]);
 
 
 
@@ -373,11 +352,11 @@ const DashboardView: React.FC = memo(() => {
           onClick={() => switchTab({ id: TabKeys.OUTREACH, name: 'Outreach' })}
         />
         <StatCard
-          title="Prayer (This Week)"
-          value={weeklyPrayerCount}
+          title="Prayer (Overall)"
+          value={overallPrayerMarks}
           icon={<AcademicCapIcon className="w-full h-full" />}
           accentColor="indigo"
-          description="Tue–Sun prayers marked"
+          description={`All-time prayers marked • ${overallPrayerHours} h`}
           onClick={() => switchTab({ id: TabKeys.PRAYER, name: 'Prayer' })}
         />
       </div>
