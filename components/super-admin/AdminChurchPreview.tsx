@@ -77,14 +77,14 @@ const AdminChurchPreview: React.FC<AdminChurchPreviewProps> = ({ admin, onClose 
 
   const displayedDate = new Date();
   const sundays = getSundaysOfMonth(displayedDate.getFullYear(), displayedDate.getMonth());
-  const totalMembers = members.length;
+  const totalMembers = members.filter(m => !m.frozen).length;
 
   let attendanceRate = 0;
   if (sundays.length && totalMembers) {
     const totalPossible = totalMembers * sundays.length;
     let presents = 0;
     sundays.forEach(s => {
-      members.forEach(m => {
+      members.filter(m => !m.frozen).forEach(m => {
         const rec = attendance.find(ar => ar.memberId === m.id && ar.date === s && ar.status === 'Present');
         if (rec) presents++;
       });
@@ -96,7 +96,7 @@ const AdminChurchPreview: React.FC<AdminChurchPreviewProps> = ({ admin, onClose 
   const sundayRecords = attendance.filter(r => r.date === currentSunday && r.status === 'Present');
   const presentMemberIds = new Set(sundayRecords.filter(r => r.memberId).map(r => r.memberId));
   const presentNewBelieverIds = new Set(sundayRecords.filter(r => r.newBelieverId).map(r => r.newBelieverId));
-  const weeklyAttendance = members.filter(m => presentMemberIds.has(m.id)).length + newBelievers.filter(nb => presentNewBelieverIds.has(nb.id)).length;
+  const weeklyAttendance = members.filter(m => !m.frozen && presentMemberIds.has(m.id)).length + newBelievers.filter(nb => presentNewBelieverIds.has(nb.id)).length;
 
   const upcomingSunday = getUpcomingSunday();
   const confirmationRecords = confirmations.filter(r => r.date === upcomingSunday && r.status === 'Confirmed');

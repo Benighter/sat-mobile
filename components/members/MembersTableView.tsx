@@ -1,15 +1,14 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useAppContext } from '../../contexts/FirebaseAppContext';
-import { Member, ConfirmationStatus, MemberDeletionRequest } from '../../types';
-import { formatDisplayDate, getSundaysOfMonth, getMonthName, formatDateToYYYYMMDD, getUpcomingSunday } from '../../utils/dateUtils';
+import { Member, ConfirmationStatus } from '../../types';
+import { formatDisplayDate, getSundaysOfMonth, getMonthName, getUpcomingSunday } from '../../utils/dateUtils';
 import { isDateEditable } from '../../utils/attendanceUtils';
 import { canDeleteMemberWithRole, hasAdminPrivileges } from '../../utils/permissionUtils';
 import { SmartTextParser } from '../../utils/smartTextParser';
 import { memberDeletionRequestService } from '../../services/firebaseService';
 import { UserIcon, TrashIcon, PhoneIcon, CalendarIcon, ChevronLeftIcon, ChevronRightIcon, EllipsisVerticalIcon, CheckIcon, ClockIcon, ClipboardIcon } from '../icons';
-import Button from '../ui/Button';
-import Input from '../ui/Input';
-import ConfirmationMarker from '../common/ConfirmationMarker';
+// Removed unused UI imports
 
 interface MembersTableViewProps {
   bacentaFilter?: string | null;
@@ -26,6 +25,7 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
     markAttendanceHandler,
     clearAttendanceHandler,
     markConfirmationHandler,
+  updateMemberHandler,
     isLoading,
     userProfile,
     showConfirmation,
@@ -144,8 +144,8 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
           return rolePriorityA - rolePriorityB;
         }
 
-        // Then sort by last name, then first name within the same role
-        return a.lastName.localeCompare(b.lastName) || a.firstName.localeCompare(b.firstName);
+  // Then sort by last name, then first name within the same role
+  return (a.lastName || '').localeCompare(b.lastName || '') || a.firstName.localeCompare(b.firstName);
       });
   }, [members, bacentaFilter, searchTerm, roleFilter]);
 
@@ -157,7 +157,7 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
       key: 'number',
       header: '#',
       width: '50px',
-      render: (member: Member, index: number) => (
+  render: (_member: Member, index: number) => (
         <div className="flex items-center justify-center">
           <span className="text-sm font-medium text-gray-600">
             {index + 1}
@@ -215,6 +215,9 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
                     ⭐
                   </span>
                 )}
+                {member.frozen && (
+                  <span className="ml-1 text-[10px] px-1.5 py-0.5 rounded bg-sky-100 text-sky-700 border border-sky-200" title="Frozen – excluded from counts and absentees">Frozen</span>
+                )}
               </div>
             </div>
           </div>
@@ -231,6 +234,7 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
         key: 'phoneNumber',
         header: 'Phone',
         width: '120px',
+  align: 'left' as const,
         render: (member: Member) => (
           <div
             className={`flex items-center space-x-2 ${
@@ -251,11 +255,6 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
     // Add attendance columns for each Sunday
     const attendanceColumns = currentMonthSundays.map((sundayDate) => {
       const isEditable = isDateEditable(sundayDate, allowEditPreviousSundays);
-      const today = new Date();
-      const todayStr = formatDateToYYYYMMDD(today);
-      const targetDate = new Date(sundayDate + 'T00:00:00');
-      const isPastMonth = targetDate.getFullYear() < today.getFullYear() ||
-                        (targetDate.getFullYear() === today.getFullYear() && targetDate.getMonth() < today.getMonth());
 
       return {
         key: `attendance_${sundayDate}`,
@@ -273,7 +272,6 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
         const isPresent = status === 'Present';
         const isEditable = isDateEditable(sundayDate, allowEditPreviousSundays);
         const today = new Date();
-        const todayStr = formatDateToYYYYMMDD(today);
         const targetDate = new Date(sundayDate + 'T00:00:00');
         const isPastMonth = targetDate.getFullYear() < today.getFullYear() ||
                           (targetDate.getFullYear() === today.getFullYear() && targetDate.getMonth() < today.getMonth());
@@ -282,7 +280,9 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
           <div className="flex justify-center">
             <div
               className={`w-6 h-6 rounded border-2 flex items-center justify-center transition-all duration-200 ${
-                !isEditable
+                member.frozen
+                  ? 'bg-gray-100 border-gray-200 text-gray-300 cursor-not-allowed opacity-60'
+                  : !isEditable
                   ? isPastMonth
                     ? 'bg-gray-200 border-gray-300 cursor-not-allowed opacity-60'
                     : 'bg-blue-50 border-blue-200 cursor-not-allowed opacity-60'
@@ -292,12 +292,14 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
                   ? 'bg-red-500 border-red-500 text-white hover:bg-red-600 cursor-pointer'
                   : 'bg-gray-100 border-gray-300 text-gray-400 hover:bg-gray-200 cursor-pointer'
               }`}
-              onClick={isEditable ? (e) => {
+              onClick={isEditable && !member.frozen ? (e) => {
                 e.stopPropagation();
                 handleAttendanceToggle(member.id, sundayDate);
               } : undefined}
               title={
-                !isEditable
+                member.frozen
+                  ? 'Frozen member – attendance disabled'
+                  : !isEditable
                   ? isPastMonth
                     ? `Past month - cannot edit ${formatDisplayDate(sundayDate)}`
                     : `Future date - cannot edit ${formatDisplayDate(sundayDate)}`
@@ -339,6 +341,7 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
             userProfile={userProfile}
             members={members}
             showToast={showToast}
+            updateMemberHandler={updateMemberHandler}
           />
         );
       },
@@ -391,7 +394,7 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
           <div className="flex items-center justify-center space-x-2 text-sm text-gray-600 mb-3">
             <span>{currentMonthSundays.length} Sunday{currentMonthSundays.length !== 1 ? 's' : ''} in {currentMonthName}</span>
             <span>•</span>
-            <span>{filteredMembers.length} member{filteredMembers.length !== 1 ? 's' : ''}</span>
+            <span>{filteredMembers.filter(m => !m.frozen).length} member{filteredMembers.filter(m => !m.frozen).length !== 1 ? 's' : ''}</span>
           </div>
 
           {/* Role Statistics */}
@@ -399,19 +402,19 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
             <div className="flex items-center justify-center space-x-2 min-w-0">
               <span className="w-3 h-3 bg-green-500 rounded-full flex-shrink-0"></span>
               <span className="text-gray-700 font-medium whitespace-nowrap">
-                {filteredMembers.filter(m => (m.role || 'Member') === 'Bacenta Leader').length} BL
+                {filteredMembers.filter(m => !m.frozen && (m.role || 'Member') === 'Bacenta Leader').length} BL
               </span>
             </div>
             <div className="flex items-center justify-center space-x-2 min-w-0">
               <span className="w-3 h-3 bg-red-500 rounded-full flex-shrink-0"></span>
               <span className="text-gray-700 font-medium whitespace-nowrap">
-                {filteredMembers.filter(m => (m.role || 'Member') === 'Fellowship Leader').length} FL
+                {filteredMembers.filter(m => !m.frozen && (m.role || 'Member') === 'Fellowship Leader').length} FL
               </span>
             </div>
             <div className="flex items-center justify-center space-x-2 min-w-0">
               <span className="w-3 h-3 bg-blue-500 rounded-full flex-shrink-0"></span>
               <span className="text-gray-700 font-medium whitespace-nowrap">
-                {filteredMembers.filter(m => (m.role || 'Member') === 'Member').length} M
+                {filteredMembers.filter(m => !m.frozen && (m.role || 'Member') === 'Member').length} M
               </span>
             </div>
           </div>
@@ -506,8 +509,8 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
         </div>
       </div>
 
-      {/* Members Attendance Table with Fixed Name Column */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+  {/* Members Attendance Table with Fixed Name Column */}
+  <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-visible">
         {isLoading ? (
           <div className="flex items-center justify-center py-8">
             <div className="text-gray-500">Loading...</div>
@@ -546,20 +549,24 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
                     </th>
                   ))}
                   {/* Scrollable Headers */}
-                  {scrollableColumns.map((column, index) => (
-                    <th
-                      key={index}
-                      className={`px-3 py-3 text-xs font-semibold text-gray-700 uppercase tracking-wider ${
-                        column.align === 'center' ? 'text-center' : column.align === 'right' ? 'text-right' : 'text-left'
-                      }`}
-                      style={{
-                        width: column.width,
-                        minWidth: column.width || '80px'
-                      }}
-                    >
-                      <div className="truncate">{column.header}</div>
-                    </th>
-                  ))}
+                  {scrollableColumns.map((column, index) => {
+                    const alignment = (column as any).align as 'left' | 'center' | 'right' | undefined;
+                    const thClass = `px-3 py-3 text-xs font-semibold text-gray-700 uppercase tracking-wider ${
+                      alignment === 'center' ? 'text-center' : alignment === 'right' ? 'text-right' : 'text-left'
+                    }`;
+                    return (
+                      <th
+                        key={index}
+                        className={thClass}
+                        style={{
+                          width: column.width,
+                          minWidth: column.width || '80px'
+                        }}
+                      >
+                        <div className="truncate">{column.header}</div>
+                      </th>
+                    );
+                  })}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
@@ -591,13 +598,12 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
                     ))}
                     {/* Scrollable Cells */}
                     {scrollableColumns.map((column, colIndex) => {
+                      const alignment = (column as any).align as 'left' | 'center' | 'right' | undefined;
                       const value = member[column.key as keyof Member];
                       return (
                         <td
                           key={colIndex}
-                          className={`px-3 py-3 text-sm ${
-                            column.align === 'center' ? 'text-center' : column.align === 'right' ? 'text-right' : 'text-left'
-                          }`}
+                          className={`px-3 py-3 text-sm ${alignment === 'center' ? 'text-center' : alignment === 'right' ? 'text-right' : 'text-left'}`}
                           style={{
                             width: column.width,
                             minWidth: column.width || '80px'
@@ -622,13 +628,18 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
 interface MemberActionsDropdownProps {
   member: Member;
   upcomingSunday: string;
-  getConfirmationStatus: (memberId: string, date: string) => ConfirmationStatus;
+  getConfirmationStatus: (memberId: string, date: string) => ConfirmationStatus | undefined;
   markConfirmationHandler: (memberId: string, date: string, status: ConfirmationStatus) => void;
   deleteMemberHandler: (memberId: string) => void;
-  showConfirmation: (type: string, data: any, callback: () => void) => void;
+  showConfirmation: (
+    type: 'deleteMember' | 'createDeletionRequest' | 'deleteBacenta' | 'deleteNewBeliever' | 'clearData' | 'clearSelectedData' | 'clearAllNewBelievers',
+    data: any,
+    onConfirm: () => void
+  ) => void;
   userProfile: any;
   members: Member[];
-  showToast: (type: string, title: string, message: string) => void;
+  showToast: (type: 'error' | 'success' | 'warning' | 'info', title: string, message?: string) => void;
+  updateMemberHandler: (member: Member) => Promise<void>;
 }
 
 const MemberActionsDropdown: React.FC<MemberActionsDropdownProps> = ({
@@ -640,15 +651,43 @@ const MemberActionsDropdown: React.FC<MemberActionsDropdownProps> = ({
   showConfirmation,
   userProfile,
   members,
-  showToast
+  showToast,
+  updateMemberHandler
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [placement, setPlacement] = useState<'above' | 'below'>('above');
+  const [menuCoords, setMenuCoords] = useState<{ top: number; left: number } | null>(null);
+
+  const updatePosition = () => {
+    const btn = buttonRef.current?.getBoundingClientRect();
+    const viewportH = window.innerHeight;
+    const viewportW = window.innerWidth;
+    const menuW = 288; // w-72
+    const gap = 8;
+    if (!btn) return;
+    const estimatedH = 260; // rough height
+    let nextPlacement: 'above' | 'below' = 'above';
+    const spaceAbove = btn.top;
+    const spaceBelow = viewportH - btn.bottom;
+    if (spaceAbove >= estimatedH) nextPlacement = 'above';
+    else if (spaceBelow >= estimatedH) nextPlacement = 'below';
+    else nextPlacement = spaceAbove > spaceBelow ? 'above' : 'below';
+    setPlacement(nextPlacement);
+    const top = nextPlacement === 'above' ? Math.max(8, btn.top - estimatedH - gap) : Math.min(viewportH - 8, btn.bottom + gap);
+    const left = Math.min(Math.max(8, btn.right - menuW), viewportW - menuW - 8);
+    setMenuCoords({ top, left });
+  };
 
   // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+      const target = event.target as Node;
+      const clickedInsideButton = dropdownRef.current?.contains(target);
+      const clickedInsideMenu = menuRef.current?.contains(target);
+      if (!clickedInsideButton && !clickedInsideMenu) {
         setIsOpen(false);
       }
     };
@@ -741,70 +780,131 @@ const MemberActionsDropdown: React.FC<MemberActionsDropdownProps> = ({
     }
   };
 
+  const handleToggleFreeze = async () => {
+    try {
+      await updateMemberHandler({ ...member, frozen: !member.frozen, lastUpdated: new Date().toISOString() });
+      showToast('success', member.frozen ? 'Unfrozen' : 'Frozen', `${member.firstName} ${member.lastName || ''} ${member.frozen ? 'is now active' : 'has been frozen'}`);
+    } catch (e:any) {
+      showToast('error', 'Failed', 'Could not update freeze status');
+    } finally {
+      setIsOpen(false);
+    }
+  };
+
   return (
     <div className="relative" ref={dropdownRef}>
       {/* Actions Button */}
       <button
-        onClick={(e) => {
+        ref={buttonRef}
+    onClick={(e) => {
           e.stopPropagation();
-          setIsOpen(!isOpen);
+          const next = !isOpen;
+          setIsOpen(next);
+          if (next) {
+            // Compute smart placement on open
+      requestAnimationFrame(() => updatePosition());
+          }
         }}
-        className="p-1.5 rounded-md hover:bg-gray-100 transition-colors duration-200"
+        className={`p-1.5 rounded-md transition-colors duration-200 ${isOpen ? 'bg-gray-100 ring-1 ring-gray-200' : 'hover:bg-gray-100'}`}
         title="Member actions"
+        aria-haspopup="menu"
+        aria-expanded={isOpen}
       >
         <EllipsisVerticalIcon className="w-4 h-4 text-gray-600" />
       </button>
 
       {/* Dropdown Menu */}
-      {isOpen && (
-        <div className="absolute right-0 top-full mt-1 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50">
-          {/* Sunday Confirmation Action */}
-          <button
-            onClick={handleConfirmationToggle}
-            className={`w-full px-3 py-2 text-left hover:bg-gray-50 transition-colors duration-200 flex items-center space-x-3 ${
-              isConfirmed ? 'text-green-700' : 'text-gray-700'
-            }`}
-          >
-            {isConfirmed ? (
-              <CheckIcon className="w-4 h-4 text-green-600" />
-            ) : (
-              <ClockIcon className="w-4 h-4 text-gray-500" />
-            )}
-            <div className="flex-1">
-              <div className="text-sm font-medium">
-                {isConfirmed ? 'Unconfirm' : 'Confirm'} for Sunday
+      {isOpen && menuCoords && createPortal(
+        <div
+          ref={menuRef}
+          className="fixed w-72 bg-white rounded-xl shadow-xl border border-gray-100 ring-1 ring-black/5 overflow-visible z-[1000]"
+          style={{ top: menuCoords.top, left: menuCoords.left }}
+        >
+          {/* Header */}
+          <div className="px-4 py-3 bg-gradient-to-r from-gray-50 to-white border-b border-gray-100">
+            <div className="flex items-center gap-3">
+              <div className={`w-9 h-9 rounded-full flex items-center justify-center overflow-hidden flex-shrink-0 ${member.bornAgainStatus ? 'bg-green-100 ring-2 ring-green-300' : 'bg-gray-100'}`}>
+                <UserIcon className={`w-4 h-4 ${member.bornAgainStatus ? 'text-green-700' : 'text-gray-500'}`} />
               </div>
-              <div className="text-xs text-gray-500">
-                {formatDisplayDate(upcomingSunday)}
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-sm text-gray-900 truncate">{`${member.firstName} ${member.lastName || ''}`.trim()}</span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-700 border border-gray-200">
+                    {(member.role || 'Member') === 'Bacenta Leader' ? '💚 BL' : (member.role || 'Member') === 'Fellowship Leader' ? '❤️ FL' : '👤 M'}
+                  </span>
+                  {member.frozen && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-sky-100 text-sky-700 border border-sky-200" title="Frozen – excluded from counts and absentees">Frozen</span>
+                  )}
+                </div>
+                {member.phoneNumber && member.phoneNumber !== '-' && (
+                  <div className="text-xs text-gray-500 truncate">{member.phoneNumber}</div>
+                )}
               </div>
             </div>
-          </button>
+          </div>
 
-          {/* Divider */}
-          <div className="border-t border-gray-100 my-1"></div>
-
-          {/* Remove Action */}
-          {canDelete ? (
+          {/* Actions */}
+          <div className="p-1 relative">
+            {/* Freeze/Unfreeze */}
             <button
-              onClick={handleRemove}
-              className="w-full px-3 py-2 text-left hover:bg-red-50 transition-colors duration-200 flex items-center space-x-3 text-red-700"
+              onClick={handleToggleFreeze}
+              className="w-full px-3 py-2.5 text-left hover:bg-gray-50 rounded-lg transition-colors duration-150 flex items-start gap-3 text-gray-700"
             >
-              <TrashIcon className="w-4 h-4 text-red-600" />
-              <span className="text-sm font-medium">Remove Member</span>
+              <span className="mt-0.5">❄️</span>
+              <div className="flex-1">
+                <div className="text-sm font-medium">{member.frozen ? 'Unfreeze' : 'Freeze'}</div>
+                <div className="text-xs text-gray-500">{member.frozen ? 'Include in counts again' : 'Exclude from totals and absentees'}</div>
+              </div>
             </button>
-          ) : (
-            <div
-              className="w-full px-3 py-2 flex items-center space-x-3 text-gray-400 cursor-not-allowed"
-              title={member.role === 'Bacenta Leader' || member.role === 'Fellowship Leader'
-                ? "You cannot delete leaders. Only original administrators can delete Bacenta Leaders and Fellowship Leaders."
-                : "You do not have permission to delete this member"
-              }
+
+            {/* Confirm/Unconfirm for Sunday */}
+            <button
+              onClick={handleConfirmationToggle}
+              className={`w-full px-3 py-2.5 text-left hover:bg-gray-50 rounded-lg transition-colors duration-150 flex items-start gap-3 ${isConfirmed ? 'text-green-700' : 'text-gray-700'}`}
             >
-              <TrashIcon className="w-4 h-4 text-gray-400" />
-              <span className="text-sm">Remove Member</span>
-            </div>
-          )}
-        </div>
+              {isConfirmed ? (
+                <CheckIcon className="w-4 h-4 mt-0.5 text-green-600" />
+              ) : (
+                <ClockIcon className="w-4 h-4 mt-0.5 text-gray-500" />
+              )}
+              <div className="flex-1">
+                <div className="text-sm font-medium">{isConfirmed ? 'Unconfirm for Sunday' : 'Confirm for Sunday'}</div>
+                <div className="text-xs text-gray-500">{formatDisplayDate(upcomingSunday)}</div>
+              </div>
+            </button>
+
+            {/* Danger zone */}
+            <div className="my-1 border-t border-gray-100"></div>
+            {canDelete ? (
+              <button
+                onClick={handleRemove}
+                className="w-full px-3 py-2.5 text-left hover:bg-red-50 rounded-lg transition-colors duration-150 flex items-start gap-3 text-red-700"
+              >
+                <TrashIcon className="w-4 h-4 mt-0.5 text-red-600" />
+                <div className="text-sm font-medium">Remove Member</div>
+              </button>
+            ) : (
+              <div
+                className="w-full px-3 py-2.5 flex items-start gap-3 text-gray-400 cursor-not-allowed"
+                title={member.role === 'Bacenta Leader' || member.role === 'Fellowship Leader'
+                  ? 'You cannot delete leaders. Only original administrators can delete Bacenta Leaders and Fellowship Leaders.'
+                  : 'You do not have permission to delete this member'
+                }
+              >
+                <TrashIcon className="w-4 h-4 mt-0.5 text-gray-400" />
+                <div className="text-sm">Remove Member</div>
+              </div>
+            )}
+
+            {/* Pointer arrow (auto positions based on placement) */}
+            {placement === 'above' ? (
+              <div className="pointer-events-none absolute -bottom-2 right-4 h-3 w-3 bg-white rotate-45 border-b border-r border-gray-100 ring-1 ring-black/5"></div>
+            ) : (
+              <div className="pointer-events-none absolute -top-2 right-4 h-3 w-3 bg-white rotate-45 border-t border-l border-gray-100 ring-1 ring-black/5"></div>
+            )}
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   );

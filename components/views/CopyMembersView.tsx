@@ -63,7 +63,7 @@ const CopyMembersView: React.FC = () => {
       }
     };
 
-    return members
+  return members
       .filter(member => {
         // Filter by bacenta if specified
         if (bacentaFilter && member.bacentaId !== bacentaFilter) {

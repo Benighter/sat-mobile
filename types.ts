@@ -10,6 +10,8 @@ export interface Member {
   roomNumber?: string; // Room number for members
   profilePicture?: string; // Base64 encoded image string
   bornAgainStatus: boolean;
+  /** If true, this member is temporarily frozen (excluded from counts/absentees) */
+  frozen?: boolean;
   /** If true, this member originated from an Outreach flow (born again from outreach) */
   outreachOrigin?: boolean;
   bacentaId: string; // Renamed from congregationGroup, stores Bacenta.id, empty if unassigned

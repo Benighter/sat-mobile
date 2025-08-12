@@ -87,6 +87,7 @@ const CopyAbsenteesView: React.FC = () => {
     };
 
     return members
+      .filter(member => !member.frozen) // exclude frozen from any copying context
       .filter(member => {
         // Filter by bacenta if specified
         if (bacentaFilter && member.bacentaId !== bacentaFilter) {
@@ -148,6 +149,7 @@ const CopyAbsenteesView: React.FC = () => {
     // 1. They have no attendance record for this date, OR
     // 2. They are explicitly marked as absent
     return filteredMembers.filter(member => {
+      if (member.frozen) return false; // exclude frozen from absentees
       const hasAttendanceRecord = dateAttendanceRecords.some(record => record.memberId === member.id);
       const isPresent = presentMemberIds.includes(member.id);
       const isExplicitlyAbsent = explicitlyAbsentMemberIds.includes(member.id);

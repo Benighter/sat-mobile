@@ -63,7 +63,7 @@ const WeeklyAttendanceView: React.FC = () => {
       sundayRecords.filter(r => r.newBelieverId).map(r => r.newBelieverId as string)
     );
 
-    const presentMembers = members.filter(m => presentMemberIds.has(m.id));
+  const presentMembers = members.filter(m => !m.frozen && presentMemberIds.has(m.id));
     const presentNewBelievers = newBelievers.filter(nb => presentNewBelieverIds.has(nb.id));
 
     // Helper lookups
@@ -71,14 +71,14 @@ const WeeklyAttendanceView: React.FC = () => {
     bacentas.forEach(b => bacentaMap.set(b.id, b));
 
     const presentByBacenta = new Map<string, Member[]>();
-    presentMembers.forEach(m => {
+  presentMembers.forEach(m => {
       const key = m.bacentaId || 'unassigned';
       if (!presentByBacenta.has(key)) presentByBacenta.set(key, []);
       presentByBacenta.get(key)!.push(m);
     });
 
     // All bacenta leaders (regardless of presence)
-    const allBacentaLeaders = members.filter(m => m.role === 'Bacenta Leader');
+  const allBacentaLeaders = members.filter(m => m.role === 'Bacenta Leader');
 
     const groups: BacentaLeaderGroup[] = allBacentaLeaders.map(leader => {
       const leaderBacenta = leader.bacentaId ? bacentaMap.get(leader.bacentaId) || { id: leader.bacentaId, name: 'Unknown Bacenta' } : { id: 'unassigned', name: 'Unassigned' };
@@ -87,7 +87,7 @@ const WeeklyAttendanceView: React.FC = () => {
       const mainMembers = allInLeaderBacenta.filter(m => m.role !== 'Fellowship Leader');
 
       // Fellowship leaders under this bacenta leader
-      const fellowshipLeaders = members.filter(m => m.role === 'Fellowship Leader' && m.bacentaLeaderId === leader.id);
+  const fellowshipLeaders = members.filter(m => m.role === 'Fellowship Leader' && m.bacentaLeaderId === leader.id);
       const fellowshipGroups: FellowshipGroup[] = fellowshipLeaders.map(fl => {
         const flBacenta = fl.bacentaId ? bacentaMap.get(fl.bacentaId) || { id: fl.bacentaId, name: 'Unknown Bacenta' } : { id: 'unassigned', name: 'Unassigned' };
         const membersInFellowship = (presentByBacenta.get(fl.bacentaId) || []); // all present in that bacenta incl fellowship leader (if present)
