@@ -10,8 +10,8 @@ import {
   limit,
   Timestamp 
 } from 'firebase/firestore';
-import { db } from '../config/firebase';
-import { BirthdayNotification, Member, User, Bacenta, NotificationRecipient } from '../types';
+import { db } from '../firebase.config';
+import { BirthdayNotification, Member, User, Bacenta } from '../types';
 import { 
   determineNotificationRecipients, 
   hasNotificationBeenSent, 

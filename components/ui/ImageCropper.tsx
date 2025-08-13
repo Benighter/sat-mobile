@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { X, Check, RotateCcw, ZoomIn, ZoomOut } from 'lucide-react';
+import { X, Check, ZoomIn, ZoomOut } from 'lucide-react';
 
 interface ImageCropperProps {
   image: string;

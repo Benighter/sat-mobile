@@ -162,6 +162,10 @@ export interface NavigationHistoryItem {
 export interface UserPreferences {
   theme: 'light' | 'dark' | 'system';
   allowEditPreviousSundays: boolean;
+  /** Optional custom app display name shown in header */
+  appDisplayName?: string;
+  /** Optional selected ministry name; can be used as default app name */
+  ministryName?: string;
 }
 
 export interface NotificationPreferences {

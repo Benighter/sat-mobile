@@ -8,8 +8,7 @@ import {
   UserGroupIcon,
   CheckIcon,
   XMarkIcon,
-  ClockIcon,
-  UserIcon
+  ClockIcon
 } from '../icons';
 
 const PendingInviteNotification: React.FC = () => {

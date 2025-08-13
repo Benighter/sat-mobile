@@ -31,7 +31,7 @@ export const useWhatsNew = (): WhatsNewState => {
         return;
       }
 
-      const { version, timestamp } = JSON.parse(storedData);
+  const { version } = JSON.parse(storedData);
       
       // Show modal if the current version is different from stored version
       if (version !== CURRENT_VERSION) {

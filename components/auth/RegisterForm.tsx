@@ -51,7 +51,7 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, onSwitchToLogin,
     password: '',
     confirmPassword: '',
     churchName: 'First Love Church', // Default church name
-    phoneNumber: ''
+  phoneNumber: ''
   });
   
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -111,6 +111,7 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, onSwitchToLogin,
       case 'churchName':
         error = validateChurchName(formData.churchName);
         break;
+  // no ministry field in SAT variant
     }
 
     if (error) {
@@ -396,7 +397,7 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, onSwitchToLogin,
       });
 
       showToast('success', 'Registration Successful!',
-        `Welcome to SAT Mobile! Your church "${churchName}" has been set up.`);
+        'Welcome! Your account has been created successfully.');
       onSuccess();
     } catch (error: any) {
       showToast('error', 'Registration Failed', getErrorMessage(error.message || error.code || error.toString()));
@@ -404,6 +405,8 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, onSwitchToLogin,
       setIsLoading(false);
     }
   };
+
+  // No ministry selector in SAT variant
 
   return (
     <div className="space-y-6">
@@ -486,9 +489,7 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, onSwitchToLogin,
           )}
         </div>
 
-
-
-        {/* Phone Number */}
+  {/* Phone Number */}
         <div>
           <div className="relative">
             <input

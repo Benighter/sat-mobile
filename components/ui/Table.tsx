@@ -161,7 +161,15 @@ function Table<T extends Record<string, any>>({
                     style={{ width: column.width, minWidth: column.width || '80px' }}
                   >
                     <div className="truncate">
-                      {column.render ? column.render(item, value) : value || '-'}
+                      {column.render
+                        ? column.render(item, value)
+                        : (typeof value === 'string' || typeof value === 'number' || typeof value === 'bigint' || typeof value === 'boolean' || value == null)
+                          ? (value as any) ?? '-'
+                          : Array.isArray(value)
+                            ? JSON.stringify(value)
+                            : typeof value === 'object'
+                              ? JSON.stringify(value)
+                              : String(value)}
                     </div>
                   </td>
                 );

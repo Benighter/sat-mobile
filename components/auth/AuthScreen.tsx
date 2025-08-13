@@ -4,8 +4,11 @@ import { useAppContext } from '../../contexts/FirebaseAppContext';
 import { authService, FirebaseUser } from '../../services/firebaseService';
 import { LoginForm } from './LoginForm';
 import RegisterForm from './RegisterForm';
+import MinistryLoginForm from './ministry/MinistryLoginForm';
+import MinistryRegisterForm from './ministry/MinistryRegisterForm';
 import OptimizedLoader from '../common/OptimizedLoader';
 import SuperAdminDashboard from '../super-admin/SuperAdminDashboard';
+import { getAppDisplayName, isMinistryVariant } from '../../constants';
 
 // Utility function to convert Firebase errors to user-friendly messages
 const getErrorMessage = (error: string): string => {
@@ -133,7 +136,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ children, showToast }) =
           <div className="flex flex-col items-center space-y-4">
             <OptimizedLoader />
             <div className="text-center">
-              <p className="text-lg font-semibold gradient-text">Loading SAT Mobile...</p>
+              <p className="text-lg font-semibold gradient-text">Loading {isMinistryVariant() ? `FLC ${getAppDisplayName('Ministry')}` : getAppDisplayName('SAT Mobile')}...</p>
               <p className="text-sm text-gray-600 mt-1">Preparing your spiritual dashboard</p>
             </div>
           </div>
@@ -171,12 +174,21 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ children, showToast }) =
         <div className="w-full relative z-10">
           {authMode === 'login' ? (
             <div>
-              <LoginForm
-                onSignIn={handleSignIn}
-                error={error}
-                loading={loading}
-                showToast={showToast}
-              />
+              {isMinistryVariant() ? (
+                <MinistryLoginForm
+                  onSignIn={handleSignIn}
+                  error={error}
+                  loading={loading}
+                  showToast={showToast}
+                />
+              ) : (
+                <LoginForm
+                  onSignIn={handleSignIn}
+                  error={error}
+                  loading={loading}
+                  showToast={showToast}
+                />
+              )}
 
               {/* Switch to Register */}
               <div className="mt-6 text-center">
@@ -199,15 +211,23 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ children, showToast }) =
                   <div className="mx-auto w-20 h-20 bg-white rounded-2xl flex items-center justify-center mb-4 shadow-lg transform hover:scale-105 transition-transform duration-200 p-1">
                     <img src="/logo.png" alt="First Love Church" className="w-full h-full object-contain" />
                   </div>
-                  <h1 className="text-2xl font-bold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent mb-1">Join SAT Mobile</h1>
+                  <h1 className="text-2xl font-bold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent mb-1">Join {isMinistryVariant() ? `FLC ${getAppDisplayName('Ministry')}` : getAppDisplayName('SAT Mobile')}</h1>
                   <p className="text-gray-500 text-sm">Join First Love Church</p>
                 </div>
 
-                <RegisterForm
-                  onSuccess={handleRegisterSuccess}
-                  onSwitchToLogin={switchToLogin}
-                  showToast={showToast}
-                />
+                {isMinistryVariant() ? (
+                  <MinistryRegisterForm
+                    onSuccess={handleRegisterSuccess}
+                    onSwitchToLogin={switchToLogin}
+                    showToast={showToast}
+                  />
+                ) : (
+                  <RegisterForm
+                    onSuccess={handleRegisterSuccess}
+                    onSwitchToLogin={switchToLogin}
+                    showToast={showToast}
+                  />
+                )}
 
                 {/* Switch to Login */}
                 <div className="mt-6 text-center">

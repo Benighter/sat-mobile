@@ -128,7 +128,7 @@ export const userService = {
   },
 
   // Create church and update user profile (for church setup)
-  createChurchAndUpdateUser: async (churchData: {
+  createChurchAndUpdateUser: async (_churchData: {
     name: string;
     address: string;
     contactInfo: {
@@ -173,9 +173,10 @@ export const userService = {
         totalUsers: users.length,
         activeUsers: users.filter(user => user.isActive).length,
         adminUsers: users.filter(user => user.role === 'admin').length,
-        recentLogins: users.filter(user => 
-          user.lastLoginDate && new Date(user.lastLoginDate) >= sevenDaysAgo
-        ).length
+        recentLogins: users.filter(user => {
+          const last = (user as any).lastLoginAt;
+          return !!last && new Date(last) >= sevenDaysAgo;
+        }).length
       };
     } catch (error: any) {
       throw new Error(`Failed to get user statistics: ${error.message}`);

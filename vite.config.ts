@@ -11,7 +11,7 @@ export default defineConfig(({ mode }) => {
       resolve: {
         alias: {
           '@': path.resolve(__dirname, '.'),
-        }
+  }
       },
       build: {
         outDir: 'dist',
@@ -21,6 +21,10 @@ export default defineConfig(({ mode }) => {
         target: 'es2020',
         cssCodeSplit: true,
         rollupOptions: {
+          input: {
+            main: path.resolve(__dirname, 'index.html'),
+            ministry: path.resolve(__dirname, 'ministry.html'),
+          },
           output: {
             manualChunks: {
               vendor: ['react', 'react-dom'],

@@ -43,7 +43,14 @@ class PushNotificationService {
   private currentUser: User | null = null;
   private currentChurchId: string | null = null;
   private isInitialized = false;
-  private vapidKey = process.env.REACT_APP_FIREBASE_VAPID_KEY || 'BKxf8KJjJZv_RrXd7JYF6v8cS_8oLh7hQtYhTzZ1x2lQ3mB0GqJ5vX8mD2nF5sK9';
+  private vapidKey = (() => {
+    const env: any = (typeof import.meta !== 'undefined' ? (import.meta as any).env : {}) || {};
+    const isMinistry = (typeof globalThis !== 'undefined' && (globalThis as any).__APP_VARIANT__ === 'ministry') || (typeof window !== 'undefined' && window.location.pathname.includes('ministry'));
+    const sat = env.VITE_FIREBASE_VAPID_KEY || process.env.REACT_APP_FIREBASE_VAPID_KEY || '';
+    const min = env.VITE_MINISTRY_FIREBASE_VAPID_KEY || process.env.REACT_APP_MINISTRY_FIREBASE_VAPID_KEY || '';
+    const fallback = sat || min || 'BKxf8KJjJZv_RrXd7JYF6v8cS_8oLh7hQtYhTzZ1x2lQ3mB0GqJ5vX8mD2nF5sK9';
+    return isMinistry ? (min || fallback) : (sat || fallback);
+  })();
 
   constructor() {
     this.initialize();
@@ -55,14 +62,15 @@ class PushNotificationService {
 
     try {
       // Initialize Firebase Messaging for web
-      if (!Capacitor.isNativePlatform()) {
+  if (!Capacitor.isNativePlatform()) {
+    const isMinistry = (typeof globalThis !== 'undefined' && (globalThis as any).__APP_VARIANT__ === 'ministry') || (typeof window !== 'undefined' && window.location.pathname.includes('ministry'));
         // Ensure service worker is registered early (idempotent)
         try {
-          if ('serviceWorker' in navigator) {
+      if ('serviceWorker' in navigator) {
             const registrations = await navigator.serviceWorker.getRegistrations();
             const hasExisting = registrations.some(r => r.active && r.active.scriptURL.includes('firebase-messaging-sw'));
             if (!hasExisting) {
-              await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+    await navigator.serviceWorker.register(isMinistry ? '/firebase-messaging-sw-ministry.js' : '/firebase-messaging-sw.js');
               console.log('✅ Firebase messaging service worker registered');
             }
           } else {
@@ -499,7 +507,8 @@ class PushNotificationService {
             const regs = await navigator.serviceWorker.getRegistrations();
             const hasMessaging = regs.some(r => r.active && r.active.scriptURL.includes('firebase-messaging-sw'));
             if (!hasMessaging) {
-              await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+              const isMinistry = (typeof globalThis !== 'undefined' && (globalThis as any).__APP_VARIANT__ === 'ministry') || (typeof window !== 'undefined' && window.location.pathname.includes('ministry'));
+              await navigator.serviceWorker.register(isMinistry ? '/firebase-messaging-sw-ministry.js' : '/firebase-messaging-sw.js');
               console.log('✅ (Late) service worker registered after permission grant');
             }
           } catch (e) {

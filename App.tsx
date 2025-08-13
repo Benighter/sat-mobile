@@ -33,7 +33,7 @@ import {
   Bars3Icon
 } from './components/icons';
 import { TabKeys } from './types';
-import { DEFAULT_CHURCH } from './constants';
+import { DEFAULT_CHURCH, getAppDisplayName, isMinistryVariant } from './constants';
 import { firebaseUtils } from './services/firebaseService';
 import MemberFormModal from './components/modals/forms/MemberFormModal';
 import BulkMemberAddModal from './components/members/BulkMemberAddModal';
@@ -308,10 +308,14 @@ const AppContent: React.FC = memo(() => {
                 </div>
                 <div className="hidden sm:block desktop:block">
                   <h1 className="text-lg sm:text-xl desktop:text-xl desktop-lg:text-2xl font-bold gradient-text font-serif group-hover:text-gray-700 dark:group-hover:text-dark-200 transition-colors duration-300">
-                    {isBacentaTab ? currentTab.name : 'SAT Mobile'}
+                    {isBacentaTab
+                      ? currentTab.name
+                      : (isMinistryVariant() ? `FLC ${getAppDisplayName('Ministry')}` : getAppDisplayName('SAT Mobile'))}
                   </h1>
                   <p className="text-xs desktop:text-sm text-gray-600 dark:text-dark-300 font-medium group-hover:text-gray-700 dark:group-hover:text-dark-200 transition-colors duration-300">
-                    {isBacentaTab ? 'Bacenta Management' : DEFAULT_CHURCH.NAME}
+                    {isBacentaTab
+                      ? 'Bacenta Management'
+                      : (isMinistryVariant() ? DEFAULT_CHURCH.NAME : DEFAULT_CHURCH.NAME)}
                   </p>
                 </div>
               </button>

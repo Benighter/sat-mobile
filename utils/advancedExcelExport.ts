@@ -595,7 +595,7 @@ const createExecutiveDashboard = async (workbook: ExcelJS.Workbook, data: Advanc
   // Apply conditional formatting to attendance rate column
   for (let i = 0; i < membersData.length; i++) {
     const attendanceCell = worksheet.getCell(currentRow - membersData.length + i, 8);
-    const rate = parseInt(membersData[i][7]);
+  const rate = parseInt((membersData[i][7] ?? '0').toString());
     if (rate >= 80) {
       attendanceCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: colors.success } };
     } else if (rate >= 60) {
@@ -986,17 +986,17 @@ const createEnhancedMemberDirectory = async (workbook: ExcelJS.Workbook, data: A
 
     // Color code attendance rate (column 9)
     const attendanceRateCell = worksheet.getCell(rowNum, 9);
-    const attendanceRate = parseInt(memberData[i][8].replace('%', ''));
+  const attendanceRate = parseInt((memberData[i][8] ?? '0').toString().replace('%', ''));
     applyAttendanceRateFormatting(attendanceRateCell, attendanceRate, colors);
 
     // Color code member status (column 12)
     const statusCell = worksheet.getCell(rowNum, 12);
     const status = memberData[i][11];
-    applyPerformanceFormatting(statusCell, status, colors);
+  applyPerformanceFormatting(statusCell, (status ?? '').toString(), colors);
 
     // Color code engagement score (column 13)
     const engagementCell = worksheet.getCell(rowNum, 13);
-    const engagementScore = parseInt(memberData[i][12].split('/')[0]);
+  const engagementScore = parseInt(((memberData[i][12] ?? '0/100').toString().split('/')[0]));
     applyAttendanceRateFormatting(engagementCell, engagementScore, colors);
   }
 

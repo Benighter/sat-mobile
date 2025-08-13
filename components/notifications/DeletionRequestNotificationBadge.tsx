@@ -4,15 +4,11 @@ import { MemberDeletionRequest } from '../../types';
 import { memberDeletionRequestService } from '../../services/firebaseService';
 import { hasAdminPrivileges } from '../../utils/permissionUtils';
 import { TabKeys } from '../../types';
-import {
-  ExclamationTriangleIcon,
-  BellIcon
-} from '../icons';
+import { ExclamationTriangleIcon } from '../icons';
 
 const DeletionRequestNotificationBadge: React.FC = () => {
-  const { userProfile, showToast, switchTab } = useAppContext();
+  const { userProfile, switchTab } = useAppContext();
   const [pendingRequests, setPendingRequests] = useState<MemberDeletionRequest[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
 
   // Check if current user is admin
   const isAdmin = hasAdminPrivileges(userProfile);
@@ -23,7 +19,6 @@ const DeletionRequestNotificationBadge: React.FC = () => {
 
     const loadPendingRequests = async () => {
       try {
-        setIsLoading(true);
         const requests = await memberDeletionRequestService.getAll();
         const pending = requests.filter(r => r.status === 'pending');
         setPendingRequests(pending);
@@ -31,7 +26,7 @@ const DeletionRequestNotificationBadge: React.FC = () => {
         console.error('Error loading pending deletion requests:', error);
         // Don't show toast for this error as it's background loading
       } finally {
-        setIsLoading(false);
+        // no-op
       }
     };
 
@@ -41,7 +36,7 @@ const DeletionRequestNotificationBadge: React.FC = () => {
     const unsubscribe = memberDeletionRequestService.onSnapshot((requests) => {
       const pending = requests.filter(r => r.status === 'pending');
       setPendingRequests(pending);
-      setIsLoading(false);
+  // no-op
     });
 
     return () => unsubscribe();

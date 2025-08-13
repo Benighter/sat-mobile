@@ -11,7 +11,7 @@ import {
   startAfter,
   DocumentSnapshot
 } from 'firebase/firestore';
-import { db } from '../config/firebase';
+import { db } from '../firebase.config';
 import { BirthdayNotification } from '../types';
 
 /**

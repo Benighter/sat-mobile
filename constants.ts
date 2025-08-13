@@ -27,6 +27,7 @@ export const DEFAULT_CHURCH = {
 
 // Ministry options for New Believers dropdown
 export const MINISTRY_OPTIONS = [
+  'GLGC',
   'Choir',
   'Dancing Stars',
   'Ushers',
@@ -34,3 +35,29 @@ export const MINISTRY_OPTIONS = [
   'Airport Stars',
   'Media'
 ];
+
+export const isMinistryVariant = (): boolean => {
+  try {
+    if (typeof globalThis !== 'undefined' && (globalThis as any).__APP_VARIANT__ === 'ministry') return true;
+    if (typeof window !== 'undefined' && window.location.pathname.includes('ministry')) return true;
+  } catch {}
+  return false;
+};
+
+export const getVariantDisplayNameKey = (): string => {
+  return `app.displayName.${isMinistryVariant() ? 'ministry' : 'sat'}`;
+};
+
+// Resolve app display name from variant-specific key
+export const getAppDisplayName = (fallback: string = 'SAT Mobile'): string => {
+  try {
+    const g: any = (globalThis as any) || {};
+    if (g.__APP_NAME__) return g.__APP_NAME__;
+    if (typeof window !== 'undefined') {
+      const key = getVariantDisplayNameKey();
+      const stored = window.localStorage.getItem(key);
+      if (stored) return stored;
+    }
+  } catch {}
+  return fallback;
+};

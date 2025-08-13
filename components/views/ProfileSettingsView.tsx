@@ -4,6 +4,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { userService } from '../../services/userService';
 import { inviteService } from '../../services/inviteService';
 import { getDefaultNotificationPreferences } from '../../utils/notificationUtils';
+import { MINISTRY_OPTIONS, getVariantDisplayNameKey } from '../../constants';
 import { NotificationPreferences } from '../../types';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
@@ -29,6 +30,8 @@ import {
 interface UserPreferences {
   theme: 'light' | 'dark' | 'system';
   allowEditPreviousSundays: boolean;
+  appDisplayName?: string;
+  ministryName?: string;
 }
 
 interface ProfileFormData {
@@ -44,7 +47,13 @@ const ProfileSettingsView: React.FC = () => {
 
   const [preferences, setPreferences] = useState<UserPreferences>({
     theme: theme,
-    allowEditPreviousSundays: userProfile?.preferences?.allowEditPreviousSundays ?? true
+    allowEditPreviousSundays: userProfile?.preferences?.allowEditPreviousSundays ?? true,
+    appDisplayName:
+      userProfile?.preferences?.appDisplayName ||
+      (typeof window !== 'undefined' ? window.localStorage.getItem(getVariantDisplayNameKey()) || '' : ''),
+    ministryName:
+      userProfile?.preferences?.ministryName ||
+      (typeof window !== 'undefined' ? window.localStorage.getItem('app.displayName') || '' : '')
   });
 
   const [notificationPreferences, setNotificationPreferences] = useState<NotificationPreferences>(
@@ -69,7 +78,13 @@ const ProfileSettingsView: React.FC = () => {
     if (userProfile) {
       setPreferences({
         theme: theme,
-        allowEditPreviousSundays: userProfile.preferences?.allowEditPreviousSundays ?? true
+        allowEditPreviousSundays: userProfile.preferences?.allowEditPreviousSundays ?? true,
+        appDisplayName:
+          userProfile.preferences?.appDisplayName ||
+          (typeof window !== 'undefined' ? window.localStorage.getItem(getVariantDisplayNameKey()) || '' : ''),
+        ministryName:
+          userProfile.preferences?.ministryName ||
+          (typeof window !== 'undefined' ? window.localStorage.getItem('app.displayName') || '' : '')
       });
 
       setNotificationPreferences(
@@ -99,6 +114,18 @@ const ProfileSettingsView: React.FC = () => {
   const handleNotificationPreferenceChange = (key: keyof NotificationPreferences, value: any) => {
     setNotificationPreferences(prev => ({ ...prev, [key]: value }));
   };
+
+  // Keep localStorage in sync so header name updates immediately
+  useEffect(() => {
+    try {
+      if (typeof window !== 'undefined') {
+        const display = (preferences.appDisplayName || preferences.ministryName || '').trim();
+        if (display) {
+          window.localStorage.setItem(getVariantDisplayNameKey(), display);
+        }
+      }
+    } catch {}
+  }, [preferences.appDisplayName, preferences.ministryName]);
 
   const handleBirthdayNotificationChange = (key: keyof NotificationPreferences['birthdayNotifications'], value: any) => {
     setNotificationPreferences(prev => ({
@@ -158,9 +185,19 @@ const ProfileSettingsView: React.FC = () => {
       };
 
       await userService.updateUserProfile(user.uid, updates);
+      // Ensure local storage reflects saved app name so header updates without reload
+      try {
+        if (typeof window !== 'undefined') {
+          const display = (preferences.appDisplayName || preferences.ministryName || '').trim();
+          if (display) {
+            window.localStorage.setItem(getVariantDisplayNameKey(), display);
+            (window as any).__APP_NAME__ = display;
+          }
+        }
+      } catch {}
       await refreshUserProfile();
 
-      showToast('success', 'Profile Updated!', 'Your profile and preferences have been saved successfully');
+  showToast('success', 'Profile Updated!', 'Your profile and preferences have been saved successfully');
     } catch (error: any) {
       showToast('error', 'Save Failed', error.message);
     } finally {
@@ -312,6 +349,43 @@ const ProfileSettingsView: React.FC = () => {
           </div>
 
           <div className="space-y-6">
+            {/* App Display Name */}
+            <div className="bg-gradient-to-r from-indigo-50 to-blue-50 dark:from-indigo-900/20 dark:to-blue-900/20 rounded-2xl p-6 border border-indigo-100 dark:border-indigo-800">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div className="flex-1">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-dark-100 mb-2">App Name</h3>
+                  <p className="text-gray-600 dark:text-dark-300">Name shown at the top of the app</p>
+                </div>
+                <Input
+                  type="text"
+                  name="appDisplayName"
+                  value={preferences.appDisplayName || ''}
+                  onChange={(val) => handlePreferenceChange('appDisplayName', val)}
+                  placeholder="e.g., GLGC, Ushers, Media"
+                  className="h-12 text-base border-2 border-gray-200 dark:border-dark-600 focus:border-indigo-500 dark:focus:border-indigo-400 rounded-2xl px-4 transition-all duration-200 bg-white dark:bg-dark-700 text-gray-900 dark:text-dark-100 min-w-[220px]"
+                />
+              </div>
+            </div>
+
+            {/* Ministry Selection */}
+            <div className="bg-gradient-to-r from-teal-50 to-emerald-50 dark:from-teal-900/20 dark:to-emerald-900/20 rounded-2xl p-6 border border-teal-100 dark:border-teal-800">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div className="flex-1">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-dark-100 mb-2">Ministry</h3>
+                  <p className="text-gray-600 dark:text-dark-300">Pick a ministry (optional)</p>
+                </div>
+                <select
+                  value={preferences.ministryName || ''}
+                  onChange={(e) => handlePreferenceChange('ministryName', e.target.value)}
+                  className="h-12 px-4 border-2 border-gray-200 dark:border-dark-600 rounded-2xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white dark:bg-dark-700 text-base font-medium min-w-[180px] text-gray-900 dark:text-dark-100"
+                >
+                  <option value="">-- Select Ministry --</option>
+                  {MINISTRY_OPTIONS.map(opt => (
+                    <option key={opt} value={opt}>{opt}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
             <div className="bg-gradient-to-r from-orange-50 to-pink-50 dark:from-orange-900/20 dark:to-pink-900/20 rounded-2xl p-6 border border-orange-100 dark:border-orange-800">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div className="flex-1">

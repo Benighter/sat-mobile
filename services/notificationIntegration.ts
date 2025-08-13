@@ -1,15 +1,13 @@
 // Notification Integration Service - Wraps existing Firebase operations to create notifications
-import { createNotificationHelpers, setNotificationContext } from './notificationService';
+import { createNotificationHelpers } from './notificationService';
 import { membersFirebaseService, newBelieversFirebaseService, guestFirebaseService, confirmationFirebaseService } from './firebaseService';
 import { Member, NewBeliever, Guest, SundayConfirmation, User } from '../types';
 
 // Set up notification context
 let currentUser: User | null = null;
-let currentChurchId: string | null = null;
 
-export const setNotificationIntegrationContext = (user: User | null, churchId: string | null) => {
+export const setNotificationIntegrationContext = (user: User | null, _churchId: string | null) => {
   currentUser = user;
-  currentChurchId = churchId;
   // No need to call setNotificationContext here as it's already called in the main context
 };
 
@@ -170,7 +168,7 @@ export const newBelieverOperationsWithNotifications = {
 // Guest operations with notifications
 export const guestOperationsWithNotifications = {
   // Add guest with notification
-  add: async (guest: Omit<Guest, 'id' | 'createdDate' | 'lastUpdated' | 'createdBy'>): Promise<string> => {
+  add: async (guest: Omit<Guest, 'id'>): Promise<string> => {
     try {
       // Call original add function - note that the original function will add createdBy automatically
       const guestId = await guestFirebaseService.add(guest);

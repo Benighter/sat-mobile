@@ -4,17 +4,38 @@ import { initializeFirestore, connectFirestoreEmulator, setLogLevel } from 'fire
 import { getAuth, connectAuthEmulator } from 'firebase/auth';
 import { getMessaging, isSupported } from 'firebase/messaging';
 
-// Firebase configuration object
-// Using your actual Firebase project configuration
-const firebaseConfig = {
-  apiKey: process.env.REACT_APP_FIREBASE_API_KEY || "AIzaSyDkyjDhyz_LCbUpRgftD2qo31e5SteAiKg",
-  authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN || "sat-mobile-de6f1.firebaseapp.com",
-  projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID || "sat-mobile-de6f1",
-  storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET || "sat-mobile-de6f1.firebasestorage.app",
-  messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID || "1076014285349",
-  appId: process.env.REACT_APP_FIREBASE_APP_ID || "1:1076014285349:web:d72d460aefe5ca8d76b5cc",
-  measurementId: process.env.REACT_APP_FIREBASE_MEASUREMENT_ID || "G-XSWJRZZ751"
+// Select project by variant: default SAT; ministry for Ministry App
+const isMinistryVariant =
+  (typeof globalThis !== 'undefined' && (globalThis as any).__APP_VARIANT__ === 'ministry') ||
+  (typeof window !== 'undefined' && window.location.pathname.includes('ministry'));
+
+// Prefer Vite env variables (import.meta.env) with fallbacks to process.env and defaults
+const env = (typeof import.meta !== 'undefined' ? (import.meta as any).env : {}) || {};
+
+// SAT defaults (existing project)
+const SAT_FB = {
+  apiKey: env.VITE_FIREBASE_API_KEY || process.env.REACT_APP_FIREBASE_API_KEY || "AIzaSyDkyjDhyz_LCbUpRgftD2qo31e5SteAiKg",
+  authDomain: env.VITE_FIREBASE_AUTH_DOMAIN || process.env.REACT_APP_FIREBASE_AUTH_DOMAIN || "sat-mobile-de6f1.firebaseapp.com",
+  projectId: env.VITE_FIREBASE_PROJECT_ID || process.env.REACT_APP_FIREBASE_PROJECT_ID || "sat-mobile-de6f1",
+  storageBucket: env.VITE_FIREBASE_STORAGE_BUCKET || process.env.REACT_APP_FIREBASE_STORAGE_BUCKET || "sat-mobile-de6f1.firebasestorage.app",
+  messagingSenderId: env.VITE_FIREBASE_MESSAGING_SENDER_ID || process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID || "1076014285349",
+  appId: env.VITE_FIREBASE_APP_ID || process.env.REACT_APP_FIREBASE_APP_ID || "1:1076014285349:web:d72d460aefe5ca8d76b5cc",
+  measurementId: env.VITE_FIREBASE_MEASUREMENT_ID || process.env.REACT_APP_FIREBASE_MEASUREMENT_ID || "G-XSWJRZZ751"
 };
+
+// Ministry project (set via Vite env with MINISTRY_ prefix)
+const MIN_FB = {
+  apiKey: env.VITE_MINISTRY_FIREBASE_API_KEY || process.env.REACT_APP_MINISTRY_FIREBASE_API_KEY || SAT_FB.apiKey,
+  authDomain: env.VITE_MINISTRY_FIREBASE_AUTH_DOMAIN || process.env.REACT_APP_MINISTRY_FIREBASE_AUTH_DOMAIN || SAT_FB.authDomain,
+  projectId: env.VITE_MINISTRY_FIREBASE_PROJECT_ID || process.env.REACT_APP_MINISTRY_FIREBASE_PROJECT_ID || SAT_FB.projectId,
+  storageBucket: env.VITE_MINISTRY_FIREBASE_STORAGE_BUCKET || process.env.REACT_APP_MINISTRY_FIREBASE_STORAGE_BUCKET || SAT_FB.storageBucket,
+  messagingSenderId: env.VITE_MINISTRY_FIREBASE_MESSAGING_SENDER_ID || process.env.REACT_APP_MINISTRY_FIREBASE_MESSAGING_SENDER_ID || SAT_FB.messagingSenderId,
+  appId: env.VITE_MINISTRY_FIREBASE_APP_ID || process.env.REACT_APP_MINISTRY_FIREBASE_APP_ID || SAT_FB.appId,
+  measurementId: env.VITE_MINISTRY_FIREBASE_MEASUREMENT_ID || process.env.REACT_APP_MINISTRY_FIREBASE_MEASUREMENT_ID || SAT_FB.measurementId
+};
+
+// Firebase configuration object
+const firebaseConfig = isMinistryVariant ? MIN_FB : SAT_FB;
 
 // Debug: Log the configuration being used (remove in production)
 console.log('🔥 Firebase Config:', {
