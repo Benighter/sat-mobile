@@ -1,12 +1,12 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useAppContext } from '../../contexts/FirebaseAppContext';
 import { getTuesdayToSundayRange, getPreviousPrayerWeekAnchor, getNextPrayerWeekAnchor, formatFullDate } from '../../utils/dateUtils';
 import { isDateEditable } from '../../utils/attendanceUtils';
-import { CheckIcon, XMarkIcon, ChevronLeftIcon, ChevronRightIcon, CalendarIcon } from '../icons';
+import { CheckIcon, XMarkIcon, ChevronLeftIcon, ChevronRightIcon, CalendarIcon, ClipboardIcon } from '../icons';
 import { Member, PrayerStatus, TabKeys } from '../../types';
 
 const PrayerView: React.FC = () => {
-  const { members, bacentas, prayerRecords, markPrayerHandler, clearPrayerHandler, userProfile, switchTab } = useAppContext();
+  const { members, bacentas, prayerRecords, markPrayerHandler, clearPrayerHandler, userProfile, switchTab, showToast } = useAppContext();
   const [anchorDate, setAnchorDate] = useState<string>(getTuesdayToSundayRange()[0]);
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [bacentaFilter, setBacentaFilter] = useState<string>(''); // empty => all
@@ -20,6 +20,24 @@ const PrayerView: React.FC = () => {
   const allowEditPreviousSundays = userProfile?.preferences?.allowEditPreviousSundays ?? false;
 
   const weekDates = useMemo(() => getTuesdayToSundayRange(anchorDate), [anchorDate]);
+
+  // Selected day for copy/bulk actions (defaults to the latest day in the current range up to today)
+  const [selectedDay, setSelectedDay] = useState<string>(() => {
+    const dates = getTuesdayToSundayRange(anchorDate);
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const valid = dates.filter(d => d <= todayStr);
+    return valid.length ? valid[valid.length - 1] : dates[0];
+  });
+
+  // Ensure selected day stays within the current week range when navigating
+  useEffect(() => {
+    if (!weekDates.includes(selectedDay)) {
+      const todayStr = new Date().toISOString().slice(0, 10);
+      const valid = weekDates.filter(d => d <= todayStr);
+      setSelectedDay(valid.length ? valid[valid.length - 1] : weekDates[0]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [weekDates.join(',')]);
 
   // Map of memberId_date -> status for quick lookups
   const recordsByKey = useMemo(() => {
@@ -125,6 +143,46 @@ const PrayerView: React.FC = () => {
     }
   };
 
+  // Helper to get bacenta name (no longer used in copy formatting)
+
+  // Build clean text for a day: ONLY prayed names (no bacenta groups)
+  const buildCopyTextForDay = (date: string) => {
+    const weekdayLabel = new Date(date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'long' });
+    const prayed: Member[] = [];
+    for (const m of filteredMembers) {
+      const s = recordsByKey.get(`${m.id}_${date}`);
+      if (s === 'Prayed') prayed.push(m);
+    }
+
+    // Sort by last name then first name
+    prayed.sort((a, b) => (a.lastName || '').localeCompare(b.lastName || '') || a.firstName.localeCompare(b.firstName));
+
+    const header = `Prayer — ${weekdayLabel}, ${formatFullDate(date)}`;
+    if (prayed.length === 0) {
+      return `${header}\n\nNo prayed records yet.`;
+    }
+    const lines: string[] = [header, ''];
+    prayed.forEach((m, idx) => {
+      const fullName = `${m.firstName}${m.lastName ? ' ' + m.lastName : ''}`.trim();
+      lines.push(`${idx + 1}. ${fullName}`);
+    });
+    lines.push('', `Total: ${prayed.length}`);
+    return lines.join('\n');
+  };
+
+  const handleCopyDay = async () => {
+    try {
+      const text = buildCopyTextForDay(selectedDay);
+      await navigator.clipboard.writeText(text);
+      showToast('success', 'Copied', `Prayer attendance for ${formatFullDate(selectedDay)} copied to clipboard`);
+    } catch (err: any) {
+      console.error('Copy failed', err);
+      showToast('error', 'Copy Failed', err?.message || 'Unable to copy to clipboard');
+    }
+  };
+
+  // Removed bulk mark missed feature per request
+
   return (
     <div className="container mx-auto max-w-7xl px-3 sm:px-4 lg:px-6 space-y-4">
       {/* Centered, clean header card */}
@@ -227,6 +285,33 @@ const PrayerView: React.FC = () => {
                 <option value="Fellowship Leader">❤️ Fellowship Leaders</option>
                 <option value="Member">👤 Members</option>
               </select>
+            </div>
+          </div>
+
+          {/* Day tools: select a day from this week, copy, and bulk mark */}
+          <div className="mt-4 flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3">
+            <div className="sm:w-64 w-full">
+              <select
+                value={selectedDay}
+                onChange={(e) => setSelectedDay(e.target.value)}
+                className="w-full px-3 py-3 sm:py-2 border border-gray-300 dark:border-dark-600 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent bg-white dark:bg-dark-700 text-gray-900 dark:text-dark-100 text-center cursor-pointer"
+              >
+                {weekDates.map(d => (
+                  <option key={d} value={d}>
+                    {new Date(d + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'short' })} • {formatFullDate(d)}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <button
+                onClick={handleCopyDay}
+                className="inline-flex items-center justify-center gap-2 px-3.5 py-2 rounded-lg border border-blue-300 text-blue-700 bg-white hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-300 shadow-sm font-medium"
+                title="Copy prayed names for selected day"
+              >
+                <ClipboardIcon className="w-4 h-4" />
+                <span>Copy Attendance</span>
+              </button>
             </div>
           </div>
         </div>
@@ -359,6 +444,8 @@ const PrayerView: React.FC = () => {
           </tbody>
         </table>
       </div>
+
+  {/* Bulk mark modal removed */}
     </div>
   );
 };

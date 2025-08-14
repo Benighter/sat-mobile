@@ -409,10 +409,10 @@ const DashboardView: React.FC = memo(() => {
           <StatCard
             key={id}
             title="Prayer (Overall)"
-            value={overallPrayerMarks}
+            value={`${overallPrayerHours} h`}
     icon={<PrayerIcon className="w-full h-full" />}
             accentColor="indigo"
-            description={`All-time prayers marked • ${overallPrayerHours} h`}
+            description={`All-time prayers marked • ${overallPrayerMarks}`}
             onClick={() => !rearrangeMode && switchTab({ id: TabKeys.PRAYER, name: 'Prayer' })}
           />
         );

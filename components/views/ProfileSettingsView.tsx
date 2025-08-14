@@ -4,7 +4,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { userService } from '../../services/userService';
 import { inviteService } from '../../services/inviteService';
 import { getDefaultNotificationPreferences } from '../../utils/notificationUtils';
-import { MINISTRY_OPTIONS, getVariantDisplayNameKey } from '../../constants';
+// Ministry feature removed – no MINISTRY_OPTIONS import
 import { NotificationPreferences } from '../../types';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
@@ -26,12 +26,12 @@ import {
   BellIcon,
   CakeIcon
 } from '../icons';
+import { collection, doc, getDocs, query, Timestamp, updateDoc, where } from 'firebase/firestore';
+import { db } from '../../firebase.config';
 
 interface UserPreferences {
   theme: 'light' | 'dark' | 'system';
   allowEditPreviousSundays: boolean;
-  appDisplayName?: string;
-  ministryName?: string;
 }
 
 interface ProfileFormData {
@@ -47,14 +47,11 @@ const ProfileSettingsView: React.FC = () => {
 
   const [preferences, setPreferences] = useState<UserPreferences>({
     theme: theme,
-    allowEditPreviousSundays: userProfile?.preferences?.allowEditPreviousSundays ?? true,
-    appDisplayName:
-      userProfile?.preferences?.appDisplayName ||
-      (typeof window !== 'undefined' ? window.localStorage.getItem(getVariantDisplayNameKey()) || '' : ''),
-    ministryName:
-      userProfile?.preferences?.ministryName ||
-      (typeof window !== 'undefined' ? window.localStorage.getItem('app.displayName') || '' : '')
+    allowEditPreviousSundays: userProfile?.preferences?.allowEditPreviousSundays ?? true
   });
+
+  // Constituency (church) name editor – linked to Super Admin feature
+  const [constituencyName, setConstituencyName] = useState<string>(userProfile?.churchName || '');
 
   const [notificationPreferences, setNotificationPreferences] = useState<NotificationPreferences>(
     userProfile?.notificationPreferences || getDefaultNotificationPreferences()
@@ -78,14 +75,10 @@ const ProfileSettingsView: React.FC = () => {
     if (userProfile) {
       setPreferences({
         theme: theme,
-        allowEditPreviousSundays: userProfile.preferences?.allowEditPreviousSundays ?? true,
-        appDisplayName:
-          userProfile.preferences?.appDisplayName ||
-          (typeof window !== 'undefined' ? window.localStorage.getItem(getVariantDisplayNameKey()) || '' : ''),
-        ministryName:
-          userProfile.preferences?.ministryName ||
-          (typeof window !== 'undefined' ? window.localStorage.getItem('app.displayName') || '' : '')
+        allowEditPreviousSundays: userProfile.preferences?.allowEditPreviousSundays ?? true
       });
+
+      setConstituencyName(userProfile.churchName || '');
 
       setNotificationPreferences(
         userProfile.notificationPreferences || getDefaultNotificationPreferences()
@@ -115,17 +108,7 @@ const ProfileSettingsView: React.FC = () => {
     setNotificationPreferences(prev => ({ ...prev, [key]: value }));
   };
 
-  // Keep localStorage in sync so header name updates immediately
-  useEffect(() => {
-    try {
-      if (typeof window !== 'undefined') {
-        const display = (preferences.appDisplayName || preferences.ministryName || '').trim();
-        if (display) {
-          window.localStorage.setItem(getVariantDisplayNameKey(), display);
-        }
-      }
-    } catch {}
-  }, [preferences.appDisplayName, preferences.ministryName]);
+  // Removed legacy app/ministry display name sync – header uses churchName now
 
   const handleBirthdayNotificationChange = (key: keyof NotificationPreferences['birthdayNotifications'], value: any) => {
     setNotificationPreferences(prev => ({
@@ -173,6 +156,9 @@ const ProfileSettingsView: React.FC = () => {
     }
 
     setIsLoading(true);
+    // Safety: ensure we never get stuck in loading state
+    const clearLoadingSafely = () => setIsLoading(false);
+    const safetyTimer = setTimeout(clearLoadingSafely, 15000);
     try {
       const updates = {
         firstName: profileData.firstName.trim(),
@@ -185,22 +171,71 @@ const ProfileSettingsView: React.FC = () => {
       };
 
       await userService.updateUserProfile(user.uid, updates);
-      // Ensure local storage reflects saved app name so header updates without reload
-      try {
-        if (typeof window !== 'undefined') {
-          const display = (preferences.appDisplayName || preferences.ministryName || '').trim();
-          if (display) {
-            window.localStorage.setItem(getVariantDisplayNameKey(), display);
-            (window as any).__APP_NAME__ = display;
-          }
+
+      // If constituency name changed and user is an admin, update own doc immediately
+      // and propagate to others in the background so Save UI isn't blocked.
+      const newName = (constituencyName || '').trim();
+      const currentName = userProfile?.churchName || '';
+      const isAdmin = hasAdminPrivileges(userProfile);
+      if (isAdmin && newName && newName !== currentName) {
+        try {
+          // Immediate update to current admin's doc
+          await updateDoc(doc(db, 'users', user.uid), { churchName: newName, lastUpdated: Timestamp.now() });
+
+          // Fire-and-forget background propagation to reduce UI wait time
+          (async () => {
+            try {
+              // Update church doc if present
+              if (userProfile?.churchId) {
+                try {
+                  await updateDoc(doc(db, 'churches', userProfile.churchId), { name: newName, lastUpdated: Timestamp.now() });
+                } catch (e) { console.warn('Failed updating church doc', e); }
+              }
+
+              // Cascade to leaders and all users of same church
+              const updatedLeaderIds = new Set<string>();
+              const adminUid = user.uid;
+              const leadersByInvite = query(collection(db, 'users'), where('invitedByAdminId', '==', adminUid), where('role', '==', 'leader'));
+              const leadersByInviteSnap = await getDocs(leadersByInvite);
+              const writes: Promise<any>[] = [];
+              leadersByInviteSnap.forEach(l => {
+                updatedLeaderIds.add(l.id);
+                writes.push(updateDoc(doc(db, 'users', l.id), { churchName: newName, lastUpdated: Timestamp.now() }));
+              });
+              if (userProfile?.churchId) {
+                const leadersByChurch = query(collection(db, 'users'), where('churchId', '==', userProfile.churchId), where('role', '==', 'leader'));
+                const leadersByChurchSnap = await getDocs(leadersByChurch);
+                leadersByChurchSnap.forEach(l => {
+                  if (!updatedLeaderIds.has(l.id)) {
+                    updatedLeaderIds.add(l.id);
+                    writes.push(updateDoc(doc(db, 'users', l.id), { churchName: newName, lastUpdated: Timestamp.now() }));
+                  }
+                });
+                const allUsersSameChurch = query(collection(db, 'users'), where('churchId', '==', userProfile.churchId));
+                const allSnap = await getDocs(allUsersSameChurch);
+                allSnap.forEach(u => {
+                  if (u.id !== user.uid && !updatedLeaderIds.has(u.id)) {
+                    writes.push(updateDoc(doc(db, 'users', u.id), { churchName: newName, lastUpdated: Timestamp.now() }));
+                  }
+                });
+              }
+              if (writes.length) await Promise.allSettled(writes);
+              try { window.dispatchEvent(new CustomEvent('constituencyUpdated', { detail: { adminId: user.uid, newName } })); } catch {}
+            } catch (e) {
+              console.warn('Background propagation of constituency rename failed', e);
+            }
+          })();
+        } catch (e) {
+          console.warn('Failed to update constituency on current admin profile', e);
         }
-      } catch {}
+      }
       await refreshUserProfile();
 
   showToast('success', 'Profile Updated!', 'Your profile and preferences have been saved successfully');
     } catch (error: any) {
       showToast('error', 'Save Failed', error.message);
     } finally {
+      clearTimeout(safetyTimer);
       setIsLoading(false);
     }
   };
@@ -349,43 +384,24 @@ const ProfileSettingsView: React.FC = () => {
           </div>
 
           <div className="space-y-6">
-            {/* App Display Name */}
+            {/* Constituency Name (linked to Super Admin) */}
             <div className="bg-gradient-to-r from-indigo-50 to-blue-50 dark:from-indigo-900/20 dark:to-blue-900/20 rounded-2xl p-6 border border-indigo-100 dark:border-indigo-800">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div className="flex-1">
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-dark-100 mb-2">App Name</h3>
-                  <p className="text-gray-600 dark:text-dark-300">Name shown at the top of the app</p>
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-dark-100 mb-2">Constituency Name</h3>
+                  <p className="text-gray-600 dark:text-dark-300">This updates the name shown at the top of the app and syncs with Super Admin</p>
                 </div>
                 <Input
                   type="text"
-                  name="appDisplayName"
-                  value={preferences.appDisplayName || ''}
-                  onChange={(val) => handlePreferenceChange('appDisplayName', val)}
-                  placeholder="e.g., GLGC, Ushers, Media"
+                  name="constituencyName"
+                  value={constituencyName}
+                  onChange={(val) => setConstituencyName(val)}
+                  placeholder="Enter constituency name"
                   className="h-12 text-base border-2 border-gray-200 dark:border-dark-600 focus:border-indigo-500 dark:focus:border-indigo-400 rounded-2xl px-4 transition-all duration-200 bg-white dark:bg-dark-700 text-gray-900 dark:text-dark-100 min-w-[220px]"
                 />
               </div>
             </div>
 
-            {/* Ministry Selection */}
-            <div className="bg-gradient-to-r from-teal-50 to-emerald-50 dark:from-teal-900/20 dark:to-emerald-900/20 rounded-2xl p-6 border border-teal-100 dark:border-teal-800">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <div className="flex-1">
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-dark-100 mb-2">Ministry</h3>
-                  <p className="text-gray-600 dark:text-dark-300">Pick a ministry (optional)</p>
-                </div>
-                <select
-                  value={preferences.ministryName || ''}
-                  onChange={(e) => handlePreferenceChange('ministryName', e.target.value)}
-                  className="h-12 px-4 border-2 border-gray-200 dark:border-dark-600 rounded-2xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white dark:bg-dark-700 text-base font-medium min-w-[180px] text-gray-900 dark:text-dark-100"
-                >
-                  <option value="">-- Select Ministry --</option>
-                  {MINISTRY_OPTIONS.map(opt => (
-                    <option key={opt} value={opt}>{opt}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
             <div className="bg-gradient-to-r from-orange-50 to-pink-50 dark:from-orange-900/20 dark:to-pink-900/20 rounded-2xl p-6 border border-orange-100 dark:border-orange-800">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div className="flex-1">

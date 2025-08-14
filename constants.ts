@@ -25,27 +25,12 @@ export const DEFAULT_CHURCH = {
   NAME: 'First Love Church'
 };
 
-// Ministry options for New Believers dropdown
-export const MINISTRY_OPTIONS = [
-  'GLGC',
-  'Choir',
-  'Dancing Stars',
-  'Ushers',
-  'Arrival Stars',
-  'Airport Stars',
-  'Media'
-];
-
-export const isMinistryVariant = (): boolean => {
-  try {
-    if (typeof globalThis !== 'undefined' && (globalThis as any).__APP_VARIANT__ === 'ministry') return true;
-    if (typeof window !== 'undefined' && window.location.pathname.includes('ministry')) return true;
-  } catch {}
-  return false;
-};
+// Ministry variant removed – keep empty options for backward compatibility if any component still imports it
+export const MINISTRY_OPTIONS: string[] = [];
 
 export const getVariantDisplayNameKey = (): string => {
-  return `app.displayName.${isMinistryVariant() ? 'ministry' : 'sat'}`;
+  // Kept for backward compatibility; returns single unified key
+  return `app.displayName.sat`;
 };
 
 // Resolve app display name from variant-specific key

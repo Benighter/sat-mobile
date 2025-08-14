@@ -4,10 +4,7 @@ import { initializeFirestore, connectFirestoreEmulator, setLogLevel } from 'fire
 import { getAuth, connectAuthEmulator } from 'firebase/auth';
 import { getMessaging, isSupported } from 'firebase/messaging';
 
-// Select project by variant: default SAT; ministry for Ministry App
-const isMinistryVariant =
-  (typeof globalThis !== 'undefined' && (globalThis as any).__APP_VARIANT__ === 'ministry') ||
-  (typeof window !== 'undefined' && window.location.pathname.includes('ministry'));
+// Ministry variant removed – single SAT project only
 
 // Prefer Vite env variables (import.meta.env) with fallbacks to process.env and defaults
 const env = (typeof import.meta !== 'undefined' ? (import.meta as any).env : {}) || {};
@@ -23,19 +20,8 @@ const SAT_FB = {
   measurementId: env.VITE_FIREBASE_MEASUREMENT_ID || process.env.REACT_APP_FIREBASE_MEASUREMENT_ID || "G-XSWJRZZ751"
 };
 
-// Ministry project (set via Vite env with MINISTRY_ prefix)
-const MIN_FB = {
-  apiKey: env.VITE_MINISTRY_FIREBASE_API_KEY || process.env.REACT_APP_MINISTRY_FIREBASE_API_KEY || SAT_FB.apiKey,
-  authDomain: env.VITE_MINISTRY_FIREBASE_AUTH_DOMAIN || process.env.REACT_APP_MINISTRY_FIREBASE_AUTH_DOMAIN || SAT_FB.authDomain,
-  projectId: env.VITE_MINISTRY_FIREBASE_PROJECT_ID || process.env.REACT_APP_MINISTRY_FIREBASE_PROJECT_ID || SAT_FB.projectId,
-  storageBucket: env.VITE_MINISTRY_FIREBASE_STORAGE_BUCKET || process.env.REACT_APP_MINISTRY_FIREBASE_STORAGE_BUCKET || SAT_FB.storageBucket,
-  messagingSenderId: env.VITE_MINISTRY_FIREBASE_MESSAGING_SENDER_ID || process.env.REACT_APP_MINISTRY_FIREBASE_MESSAGING_SENDER_ID || SAT_FB.messagingSenderId,
-  appId: env.VITE_MINISTRY_FIREBASE_APP_ID || process.env.REACT_APP_MINISTRY_FIREBASE_APP_ID || SAT_FB.appId,
-  measurementId: env.VITE_MINISTRY_FIREBASE_MEASUREMENT_ID || process.env.REACT_APP_MINISTRY_FIREBASE_MEASUREMENT_ID || SAT_FB.measurementId
-};
-
 // Firebase configuration object
-const firebaseConfig = isMinistryVariant ? MIN_FB : SAT_FB;
+const firebaseConfig = SAT_FB;
 
 // Debug: Log the configuration being used (remove in production)
 console.log('🔥 Firebase Config:', {

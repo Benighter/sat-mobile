@@ -22,8 +22,7 @@ export default defineConfig(({ mode }) => {
         cssCodeSplit: true,
         rollupOptions: {
           input: {
-            main: path.resolve(__dirname, 'index.html'),
-            ministry: path.resolve(__dirname, 'ministry.html'),
+            main: path.resolve(__dirname, 'index.html')
           },
           output: {
             manualChunks: {
