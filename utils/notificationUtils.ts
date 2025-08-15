@@ -108,7 +108,7 @@ export const hasNotificationBeenSent = (
  */
 export const getMembersNeedingNotifications = (
   members: Member[],
-  notificationDays: number[] = [7, 3, 1],
+  notificationDays: number[] = [7, 5, 3, 2, 1, 0],
   referenceDate: Date = new Date()
 ): Array<{ member: Member; daysUntilBirthday: number }> => {
   const membersNeedingNotifications: Array<{ member: Member; daysUntilBirthday: number }> = [];
@@ -200,8 +200,10 @@ export const validateNotificationSettings = (
 export const getDefaultNotificationPreferences = () => ({
   birthdayNotifications: {
     enabled: true,
-    daysBeforeNotification: [7, 3, 1],
-    emailTime: '09:00'
+    // Notify 7, 5, 3, 2, 1 days before and on the day (0)
+    daysBeforeNotification: [7, 5, 3, 2, 1, 0],
+    // Midnight by default
+    emailTime: '00:00'
   },
   emailNotifications: true,
   pushNotifications: true

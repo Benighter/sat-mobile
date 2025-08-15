@@ -65,7 +65,7 @@ const StatCard: React.FC<StatCardProps> = memo(({ title, value, icon, descriptio
 
   return (
     <div
-      className={`p-4 sm:p-5 md:p-6 desktop:p-5 desktop-lg:p-6 bg-white dark:bg-dark-800 border border-gray-200 dark:border-dark-600 ${accents.border} rounded-lg desktop:rounded-xl shadow-sm hover:shadow-md desktop:hover:shadow-lg relative min-h-[120px] sm:min-h-[140px] desktop:min-h-[160px] desktop-lg:min-h-[180px] flex flex-col justify-between transition-all duration-200 desktop-card-hover overflow-hidden ${
+  className={`p-4 sm:p-5 md:p-6 desktop:p-5 desktop-lg:p-6 bg-white dark:bg-dark-800 border border-gray-200 dark:border-dark-600 ${accents.border} rounded-lg desktop:rounded-xl shadow-sm hover:shadow-md desktop:hover:shadow-lg relative h-[120px] sm:h-[140px] desktop:h-[160px] desktop-lg:h-[180px] flex flex-col justify-between transition-all duration-200 desktop-card-hover overflow-hidden ${
         onClick ? `cursor-pointer ${accents.hover}` : ''
       }`}
       onClick={onClick}
@@ -556,7 +556,7 @@ const EnhancedConfirmationCard: React.FC<EnhancedConfirmationCardProps> = memo((
 
   return (
     <div
-      className={`p-4 sm:p-5 md:p-6 desktop:p-5 desktop-lg:p-6 bg-white dark:bg-dark-800 border border-gray-200 dark:border-dark-600 border-l-4 ${borderColor} rounded-lg desktop:rounded-xl shadow-sm hover:shadow-md desktop:hover:shadow-lg relative min-h-[120px] sm:min-h-[140px] desktop:min-h-[160px] desktop-lg:min-h-[180px] flex flex-col justify-between cursor-pointer transition-all duration-200 desktop-card-hover overflow-hidden`}
+  className={`p-4 sm:p-5 md:p-6 desktop:p-5 desktop-lg:p-6 bg-white dark:bg-dark-800 border border-gray-200 dark:border-dark-600 border-l-4 ${borderColor} rounded-lg desktop:rounded-xl shadow-sm hover:shadow-md desktop:hover:shadow-lg relative h-[120px] sm:h-[140px] desktop:h-[160px] desktop-lg:h-[180px] flex flex-col justify-between cursor-pointer transition-all duration-200 desktop-card-hover overflow-hidden`}
       onClick={onClick}
     >
       {/* Header with title */}

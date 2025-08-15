@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Bell } from 'lucide-react';
 import { notificationService, setNotificationContext } from '../../services/notificationService';
 import { useAppContext } from '../../contexts/FirebaseAppContext';
-import { hasAdminPrivileges } from '../../utils/permissionUtils';
+import { hasLeaderPrivileges } from '../../utils/permissionUtils';
 import NotificationCenter from './NotificationCenter';
 
 const NotificationBadge: React.FC = () => {
@@ -11,11 +11,11 @@ const NotificationBadge: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const { userProfile, currentChurchId } = useAppContext();
 
-  // Only show notification badge for admins
-  const isAdmin = hasAdminPrivileges(userProfile);
+  // Show notification badge for leaders and admins
+  const isLeader = hasLeaderPrivileges(userProfile);
 
   useEffect(() => {
-    if (!isAdmin || !userProfile?.uid || !currentChurchId) {
+  if (!isLeader || !userProfile?.uid || !currentChurchId) {
       setUnreadCount(0);
       return;
     }
@@ -46,10 +46,10 @@ const NotificationBadge: React.FC = () => {
         unsubscribe();
       }
     };
-  }, [isAdmin, userProfile?.uid, currentChurchId]);
+  }, [isLeader, userProfile?.uid, currentChurchId]);
 
   const loadUnreadCount = async () => {
-    if (!userProfile?.uid || !currentChurchId) return;
+  if (!userProfile?.uid || !currentChurchId) return;
 
     try {
       setLoading(true);
@@ -67,8 +67,8 @@ const NotificationBadge: React.FC = () => {
     setIsNotificationCenterOpen(true);
   };
 
-  // Don't render if user is not an admin
-  if (!isAdmin) {
+  // Don't render if user is not a leader/admin
+  if (!isLeader) {
     return null;
   }
 

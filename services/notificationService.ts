@@ -54,8 +54,8 @@ export const notificationService = {
         throw new Error('User context not set');
       }
 
-      // Find all admins who are linked to this leader
-      const linkedAdminIds = await getAdminsLinkedToLeader(leaderId);
+  // Find all admins who are linked to this leader
+  const linkedAdminIds = await getAdminsLinkedToLeader(leaderId);
 
       if (linkedAdminIds.length === 0) {
         console.log(`⚠️ No linked admins found for leader ${leaderId}, skipping notification creation`);
@@ -103,6 +103,47 @@ export const notificationService = {
     }
   },
 
+  // Create direct notifications to specific recipients (used by birthday reminders)
+  createForRecipients: async (
+    recipients: string[],
+    activityType: NotificationActivityType,
+    description: string,
+    details: Partial<AdminNotification['details']>,
+    metadata?: AdminNotification['metadata']
+  ): Promise<void> => {
+    try {
+      if (!currentChurchId || !currentUser) {
+        throw new Error('Church or user context not set');
+      }
+
+      const notificationsRef = collection(db, getNotificationCollectionPath(currentChurchId));
+      const batch = writeBatch(db);
+
+      for (const adminId of recipients) {
+        const notificationData: Omit<AdminNotification, 'id'> = {
+          leaderId: currentUser.uid,
+          leaderName: currentUser.displayName || `${currentUser.firstName || ''} ${currentUser.lastName || ''}`.trim() || 'System',
+          adminId,
+          activityType,
+          timestamp: new Date().toISOString(),
+          isRead: false,
+          churchId: currentChurchId,
+          details: {
+            description,
+            ...details
+          },
+          metadata
+        };
+        const newNotificationRef = doc(notificationsRef);
+        batch.set(newNotificationRef, notificationData);
+      }
+
+      await batch.commit();
+    } catch (error: any) {
+      console.error('Failed to create recipient notifications:', error);
+    }
+  },
+
   // Get notifications for the current admin
   getForAdmin: async (adminId: string, limitCount: number = 50): Promise<AdminNotification[]> => {
     try {
@@ -133,6 +174,11 @@ export const notificationService = {
     }
   },
 
+  // Generic get for any user (admin or leader)
+  getForUser: async (userId: string, limitCount: number = 50): Promise<AdminNotification[]> => {
+    return notificationService.getForAdmin(userId, limitCount);
+  },
+
   // Get unread notification count for admin
   getUnreadCount: async (adminId: string): Promise<number> => {
     try {
@@ -154,6 +200,11 @@ export const notificationService = {
       console.error('Failed to fetch unread count:', error);
       return 0; // Return 0 on error
     }
+  },
+
+  // Get unread count for any user
+  getUnreadCountForUser: async (userId: string): Promise<number> => {
+    return notificationService.getUnreadCount(userId);
   },
 
   // Mark notification as read
@@ -329,6 +380,13 @@ const getAdminsLinkedToLeader = async (leaderId: string): Promise<string[]> => {
 
 // Utility functions for creating specific notification types
 export const createNotificationHelpers = {
+  // Resolve leader display name once
+  _leaderDisplayName(): string | null {
+    if (!currentUser) return null;
+    const display = currentUser.displayName || `${currentUser.firstName || ''} ${currentUser.lastName || ''}`.trim();
+    return display && display.length > 0 ? display : 'Unknown Leader';
+  },
+
   // Member added notification
   memberAdded: async (leaderName: string, memberName: string, memberRole: string, bacentaName?: string) => {
     if (!currentUser) return;
@@ -457,6 +515,62 @@ export const createNotificationHelpers = {
       {
         attendanceCount: -count, // Negative to indicate removal
         action: 'removed'
+      }
+    );
+  },
+
+  // Bacenta assignment changed
+  bacentaAssignmentChanged: async (leaderName: string, memberName: string, previousBacenta?: string, newBacenta?: string) => {
+    if (!currentUser) return;
+
+    await notificationService.create(
+      currentUser.uid,
+      leaderName,
+      'bacenta_assignment_changed',
+      {
+        memberName,
+        bacentaName: newBacenta,
+        description: `${leaderName} moved ${memberName} ${previousBacenta ? `from ${previousBacenta} ` : ''}to ${newBacenta || 'another bacenta'}`
+      },
+      {
+        previousValue: previousBacenta || undefined,
+        newValue: newBacenta || undefined
+      }
+    );
+  },
+
+  // Member freeze/unfreeze toggled
+  memberFreezeToggled: async (leaderName: string, memberName: string, frozen: boolean) => {
+    if (!currentUser) return;
+
+    await notificationService.create(
+      currentUser.uid,
+      leaderName,
+      'member_freeze_toggled',
+      {
+        memberName,
+        description: `${leaderName} ${frozen ? 'froze' : 'unfroze'} member: ${memberName}`
+      },
+      {
+        newValue: frozen ? 'frozen' : 'active'
+      }
+    );
+  },
+
+  // Outreach/Guest converted to permanent member
+  memberConverted: async (leaderName: string, personName: string, source: 'guest' | 'outreach') => {
+    if (!currentUser) return;
+
+    await notificationService.create(
+      currentUser.uid,
+      leaderName,
+      'member_converted',
+      {
+        memberName: personName,
+        description: `${leaderName} converted ${personName} from ${source === 'guest' ? 'guest' : 'outreach'} to permanent member`
+      },
+      {
+        source
       }
     );
   }

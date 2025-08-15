@@ -191,8 +191,10 @@ const BacentaOutreachView: React.FC<BacentaOutreachViewProps> = ({ bacentaId }) 
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-8">#</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                  {/* Sticky number column */}
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-12 sticky left-0 z-20 bg-gray-50">#</th>
+                  {/* Sticky name column with smaller width */}
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[160px] w-[180px] sticky left-12 z-20 bg-gray-50">Name</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Phone</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Room</th>
                   <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
@@ -203,20 +205,22 @@ const BacentaOutreachView: React.FC<BacentaOutreachViewProps> = ({ bacentaId }) 
               <tbody className="bg-white divide-y divide-gray-200">
                 {weeklyMembers.map((member, index) => (
                   <tr key={member.id} className={`${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'} hover:bg-blue-50/50 transition-colors duration-200`}>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">
+                    {/* Sticky number cell */}
+                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 text-center w-12 sticky left-0 z-10 bg-white">
                       {index + 1}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    {/* Sticky name cell with reduced footprint */}
+                    <td className="px-4 py-4 whitespace-nowrap min-w-[160px] w-[180px] sticky left-12 z-10 bg-white">
                       <div className="flex items-center">
-                        <div className="flex-shrink-0 h-8 w-8">
-                          <div className="h-8 w-8 rounded-full bg-gradient-to-r from-rose-400 to-amber-400 flex items-center justify-center">
+                        <div className="flex-shrink-0 h-7 w-7">
+                          <div className="h-7 w-7 rounded-full bg-gradient-to-r from-rose-400 to-amber-400 flex items-center justify-center">
                             <span className="text-xs font-medium text-white">
                               {member.name.charAt(0).toUpperCase()}
                             </span>
                           </div>
                         </div>
-                        <div className="ml-3">
-                          <div className="text-sm font-medium text-gray-900">{member.name}</div>
+                        <div className="ml-3 min-w-0">
+                          <div className="text-sm font-medium text-gray-900 truncate" title={member.name}>{member.name}</div>
                           {member.convertedMemberId && (
                             <div className="text-xs text-purple-600 font-medium">✓ Converted</div>
                           )}

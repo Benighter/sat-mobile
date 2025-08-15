@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Bell, Check, CheckCheck, X, User, Users, UserPlus, Calendar, Heart, Home, Trash2, Clock, Sparkles } from 'lucide-react';
+import { Bell, Check, CheckCheck, X, User, Users, UserPlus, Calendar, Heart, Home, Trash2, Clock, Sparkles, Snowflake, Repeat, Cake } from 'lucide-react';
 import { AdminNotification, NotificationActivityType } from '../../types';
 import { notificationService } from '../../services/notificationService';
 import { useAppContext } from '../../contexts/FirebaseAppContext';
@@ -152,6 +152,24 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({ isOpen, onClose
         return (
           <div className="w-10 h-10 bg-gradient-to-br from-teal-400 to-teal-600 rounded-full flex items-center justify-center shadow-lg">
             <Home className="w-5 h-5 text-white" />
+          </div>
+        );
+      case 'member_freeze_toggled':
+        return (
+          <div className="w-10 h-10 bg-gradient-to-br from-sky-400 to-sky-600 rounded-full flex items-center justify-center shadow-lg">
+            <Snowflake className="w-5 h-5 text-white" />
+          </div>
+        );
+      case 'member_converted':
+        return (
+          <div className="w-10 h-10 bg-gradient-to-br from-amber-400 to-amber-600 rounded-full flex items-center justify-center shadow-lg">
+            <Repeat className="w-5 h-5 text-white" />
+          </div>
+        );
+      case 'birthday_reminder':
+        return (
+          <div className="w-10 h-10 bg-gradient-to-br from-rose-400 to-rose-600 rounded-full flex items-center justify-center shadow-lg">
+            <Cake className="w-5 h-5 text-white" />
           </div>
         );
       default:

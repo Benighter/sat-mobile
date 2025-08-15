@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../../contexts/FirebaseAppContext';
-import { useTheme } from '../../contexts/ThemeContext';
+// import { useTheme } from '../../contexts/ThemeContext'; // Theme selection disabled
 import { userService } from '../../services/userService';
 import { inviteService } from '../../services/inviteService';
 import { getDefaultNotificationPreferences } from '../../utils/notificationUtils';
+// import { emailServiceClient } from '../../services/emailServiceClient'; // Email feature on hold
 // Ministry feature removed – no MINISTRY_OPTIONS import
 import { NotificationPreferences } from '../../types';
 import Button from '../ui/Button';
@@ -30,7 +31,7 @@ import { collection, doc, getDocs, query, Timestamp, updateDoc, where } from 'fi
 import { db } from '../../firebase.config';
 
 interface UserPreferences {
-  theme: 'light' | 'dark' | 'system';
+  // theme: 'light' | 'dark' | 'system'; // disabled
   allowEditPreviousSundays: boolean;
 }
 
@@ -43,11 +44,11 @@ interface ProfileFormData {
 
 const ProfileSettingsView: React.FC = () => {
   const { userProfile, user, showToast, refreshUserProfile } = useAppContext();
-  const { theme, setTheme } = useTheme();
+  // const { theme, setTheme } = useTheme(); // Theme selection disabled
 
   const [preferences, setPreferences] = useState<UserPreferences>({
-    theme: theme,
-    allowEditPreviousSundays: userProfile?.preferences?.allowEditPreviousSundays ?? true
+    // theme: theme,
+    allowEditPreviousSundays: true // default enabled
   });
 
   // Constituency (church) name editor – linked to Super Admin feature
@@ -69,13 +70,14 @@ const ProfileSettingsView: React.FC = () => {
   const [isChangePasswordModalOpen, setIsChangePasswordModalOpen] = useState(false);
   const [isAdminInviteModalOpen, setIsAdminInviteModalOpen] = useState(false);
   const [isFixingAccess, setIsFixingAccess] = useState(false);
+  // const [isSendingTestEmail, setIsSendingTestEmail] = useState(false); // Email feature on hold
 
   // Update state when userProfile changes
   useEffect(() => {
     if (userProfile) {
       setPreferences({
-        theme: theme,
-        allowEditPreviousSundays: userProfile.preferences?.allowEditPreviousSundays ?? true
+        // theme: theme,
+        allowEditPreviousSundays: true
       });
 
       setConstituencyName(userProfile.churchName || '');
@@ -93,16 +95,11 @@ const ProfileSettingsView: React.FC = () => {
 
       setImagePreview(userProfile.profilePicture || '');
     }
-  }, [userProfile, theme]);
+  }, [userProfile]);
 
-  const handlePreferenceChange = (key: keyof UserPreferences, value: any) => {
-    setPreferences(prev => ({ ...prev, [key]: value }));
-
-    // If theme is being changed, update the theme context immediately
-    if (key === 'theme') {
-      setTheme(value);
-    }
-  };
+  // const handlePreferenceChange = (key: keyof UserPreferences, value: any) => {
+  //   setPreferences(prev => ({ ...prev, [key]: value }));
+  // };
 
   const handleNotificationPreferenceChange = (key: keyof NotificationPreferences, value: any) => {
     setNotificationPreferences(prev => ({ ...prev, [key]: value }));
@@ -119,6 +116,37 @@ const ProfileSettingsView: React.FC = () => {
       }
     }));
   };
+
+  // const handleSendTestEmail = async () => {
+  //   if (!user || !user.email) {
+  //     showToast('error', 'Not Signed In', 'You must be signed in with an email to send a test email');
+  //     return;
+  //   }
+  //   if (!hasAdminPrivileges(userProfile)) {
+  //     showToast('error', 'Admin Only', 'Only admins can send the test email');
+  //     return;
+  //   }
+  //   try {
+  //     setIsSendingTestEmail(true);
+  //     const displayName = `${userProfile?.firstName || user.displayName || 'Admin'} ${userProfile?.lastName || ''}`.trim();
+  //     const res = await emailServiceClient.sendTestBirthdayEmail({
+  //       uid: user.uid,
+  //       email: user.email,
+  //       displayName,
+  //       role: (userProfile as any)?.role || 'admin'
+  //     });
+  //     if ((res as any)?.success) {
+  //       showToast('success', 'Test Email Sent', 'Please check your inbox for the birthday test email');
+  //     } else {
+  //       const msg = (res as any)?.error || 'Unknown failure while sending the test email';
+  //       showToast('error', 'Test Email Failed', msg);
+  //     }
+  //   } catch (e: any) {
+  //     showToast('error', 'Test Email Failed', e?.message || 'An error occurred while sending the test email');
+  //   } finally {
+  //     setIsSendingTestEmail(false);
+  //   }
+  // };
 
   const handleNotificationDaysChange = (days: number, enabled: boolean) => {
     const currentDays = notificationPreferences.birthdayNotifications.daysBeforeNotification;
@@ -166,7 +194,7 @@ const ProfileSettingsView: React.FC = () => {
         displayName: `${profileData.firstName.trim()} ${profileData.lastName.trim()}`,
         phoneNumber: profileData.phoneNumber.trim(),
         profilePicture: profileData.profilePicture,
-        preferences: preferences,
+  preferences: { ...preferences, allowEditPreviousSundays: true, theme: 'light' as any },
         notificationPreferences: notificationPreferences
       };
 
@@ -402,47 +430,9 @@ const ProfileSettingsView: React.FC = () => {
               </div>
             </div>
 
-            <div className="bg-gradient-to-r from-orange-50 to-pink-50 dark:from-orange-900/20 dark:to-pink-900/20 rounded-2xl p-6 border border-orange-100 dark:border-orange-800">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <div className="flex-1">
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-dark-100 mb-2">Theme</h3>
-                  <p className="text-gray-600 dark:text-dark-300">Choose your preferred theme appearance</p>
-                </div>
-                <select
-                  value={preferences.theme}
-                  onChange={(e) => handlePreferenceChange('theme', e.target.value)}
-                  className="h-12 px-4 border-2 border-gray-200 dark:border-dark-600 rounded-2xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 bg-white dark:bg-dark-700 text-base font-medium min-w-[140px] text-gray-900 dark:text-dark-100"
-                >
-                  <option value="light">☀️ Light</option>
-                  <option value="dark">🌙 Dark</option>
-                  <option value="system">⚙️ System</option>
-                </select>
-              </div>
-            </div>
+            {/* Theme selection temporarily disabled */}
 
-            <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-2xl p-6 border border-blue-100">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <div className="flex-1">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Edit Previous Sundays</h3>
-                  <p className="text-gray-600">Allow editing attendance for past dates</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => handlePreferenceChange('allowEditPreviousSundays', !preferences.allowEditPreviousSundays)}
-                  className={`relative inline-flex h-8 w-16 items-center rounded-full transition-all duration-300 ${
-                    preferences.allowEditPreviousSundays
-                      ? 'bg-gradient-to-r from-blue-600 to-purple-600 shadow-lg'
-                      : 'bg-gray-300'
-                  }`}
-                >
-                  <span
-                    className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform duration-300 shadow-md ${
-                      preferences.allowEditPreviousSundays ? 'translate-x-9' : 'translate-x-1'
-                    }`}
-                  />
-                </button>
-              </div>
-            </div>
+            {/* Edit Previous Sundays control temporarily disabled; default remains enabled */}
           </div>
         </div>
 
@@ -506,6 +496,8 @@ const ProfileSettingsView: React.FC = () => {
                     <p className="text-xs text-gray-500">Receive all email notifications from the church management system</p>
                   </div>
                 </label>
+
+                {/* Email test button temporarily disabled */}
               </div>
             </div>
 

@@ -212,9 +212,11 @@ export interface Church {
     timezone?: string;
     defaultMinistries?: string[];
     notificationSettings?: {
-      birthdayNotificationsEnabled: boolean;
-      defaultNotificationDays: number[];
-      defaultNotificationTime: string;
+  birthdayNotificationsEnabled: boolean;
+  // Days before birthday to notify (e.g., [7,5,3,2,1,0])
+  defaultNotificationDays: number[];
+  // Local time of day for sending notifications, 'HH:mm' (e.g., '00:00' for midnight)
+  defaultNotificationTime: string;
     };
   };
   createdAt: string;
@@ -230,7 +232,7 @@ export interface BirthdayNotification {
   bacentaId: string;
   bacentaName: string;
   notificationDate: string; // YYYY-MM-DD format - when notification was sent
-  daysBeforeBirthday: number; // 7, 3, or 1
+  daysBeforeBirthday: number; // e.g., 7, 5, 3, 2, 1, or 0 (on the day)
   sentTo: string[]; // Array of user IDs who received the notification
   status: 'sent' | 'failed' | 'pending';
   emailDetails?: {
@@ -326,7 +328,10 @@ export type NotificationActivityType =
   | 'new_believer_added'
   | 'new_believer_updated'
   | 'guest_added'
-  | 'bacenta_assignment_changed';
+  | 'bacenta_assignment_changed'
+  | 'member_freeze_toggled'
+  | 'member_converted'
+  | 'birthday_reminder';
 
 export interface AdminNotification {
   id: string; // Auto-generated document ID

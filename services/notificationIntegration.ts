@@ -74,11 +74,34 @@ export const memberOperationsWithNotifications = {
         if (updates.bacentaId && updates.bacentaId !== originalMember.bacentaId) {
           changes.push('bacenta assignment');
         }
+        const leaderName = currentUser.displayName || `${currentUser.firstName || ''} ${currentUser.lastName || ''}`.trim() || 'Unknown Leader';
+        const memberFullName = `${originalMember.firstName} ${originalMember.lastName || ''}`.trim();
+
+        // Freeze/unfreeze toggle detection
+        if (typeof updates.frozen === 'boolean' && updates.frozen !== !!originalMember.frozen) {
+          await createNotificationHelpers.memberFreezeToggled(
+            leaderName,
+            memberFullName,
+            updates.frozen
+          );
+        }
+
+        // Bacenta assignment moved notification with names
+        if (updates.bacentaId && updates.bacentaId !== originalMember.bacentaId) {
+          const prevName = originalMember.bacentaId ? await getBacentaName(originalMember.bacentaId) : undefined;
+          const newName = updates.bacentaId ? await getBacentaName(updates.bacentaId) : undefined;
+          await createNotificationHelpers.bacentaAssignmentChanged(
+            leaderName,
+            memberFullName,
+            prevName,
+            newName
+          );
+        }
 
         if (changes.length > 0) {
           await createNotificationHelpers.memberUpdated(
-            currentUser.displayName || `${currentUser.firstName || ''} ${currentUser.lastName || ''}`.trim() || 'Unknown Leader',
-            `${originalMember.firstName} ${originalMember.lastName || ''}`.trim(),
+            leaderName,
+            memberFullName,
             changes
           );
         }

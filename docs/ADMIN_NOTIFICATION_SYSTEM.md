@@ -49,6 +49,11 @@ The system automatically tracks the following leader activities:
 - **Guest Management**
   - Adding guests to bacentas
 
+- **Other Actions**
+  - Freezing and unfreezing members
+  - Converting guests/outreach to permanent members
+  - Changing bacenta assignment
+
 ### Role-Based Filtering
 
 - Only **admins** receive notifications

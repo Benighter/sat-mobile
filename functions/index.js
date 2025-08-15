@@ -3,6 +3,13 @@
 
 const functions = require('firebase-functions');
 const admin = require('firebase-admin');
+const sgMail = require('@sendgrid/mail');
+const { defineSecret } = require('firebase-functions/params');
+const { Resend } = require('resend');
+
+// Secret for SendGrid API Key (configure via: firebase functions:secrets:set SENDGRID_API_KEY)
+const SENDGRID_API_KEY = defineSecret('SENDGRID_API_KEY');
+const RESEND_API_KEY = defineSecret('RESEND_API_KEY');
 
 // Initialize Firebase Admin SDK
 if (!admin.apps.length) {
@@ -130,6 +137,65 @@ exports.sendPushNotification = functions.https.onCall(async (data, context) => {
     throw new functions.https.HttpsError('internal', 'Failed to send push notification');
   }
 });
+
+// Callable: send birthday email using SendGrid to a single recipient
+exports.sendBirthdayEmail = functions
+  .runWith({ secrets: [SENDGRID_API_KEY, RESEND_API_KEY] })
+  .https.onCall(async (data, context) => {
+    if (!context.auth) {
+      throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
+    }
+
+    const { to, subject, html, text, from } = data || {};
+
+    if (!to || typeof to !== 'string') {
+      throw new functions.https.HttpsError('invalid-argument', 'Recipient email `to` is required');
+    }
+    if (!subject || typeof subject !== 'string') {
+      throw new functions.https.HttpsError('invalid-argument', 'Email `subject` is required');
+    }
+    if ((!html || typeof html !== 'string') && (!text || typeof text !== 'string')) {
+      throw new functions.https.HttpsError('invalid-argument', 'Either `html` or `text` content is required');
+    }
+
+    // Default sender; you must verify this in your email provider
+    const fromAddress = from || 'no-reply@sat-mobile.app';
+
+    try {
+      const resendKey = RESEND_API_KEY.value();
+      if (resendKey) {
+        // Use Resend if configured
+        const resend = new Resend(resendKey);
+        const result = await resend.emails.send({
+          from: fromAddress,
+          to,
+          subject,
+          html: html || undefined,
+          text: text || undefined
+        });
+        if (result?.error) {
+          throw new Error(result.error?.message || 'Resend error');
+        }
+        return { success: true, messageId: result?.data?.id || null };
+      } else {
+        // Fallback to SendGrid
+        sgMail.setApiKey(SENDGRID_API_KEY.value());
+        const [response] = await sgMail.send({
+          to,
+          from: fromAddress,
+          subject,
+          html: html || undefined,
+          text: text || undefined
+        });
+        const messageId = response?.headers?.['x-message-id'] || response?.headers?.['x-message-id'.toLowerCase()];
+        return { success: true, messageId: messageId || null, statusCode: response?.statusCode || response?.status };
+      }
+    } catch (err) {
+      console.error('sendBirthdayEmail failed', err);
+      const code = err?.code === 403 ? 'permission-denied' : 'internal';
+      throw new functions.https.HttpsError(code, err?.message || 'Failed to send email');
+    }
+  });
 
 // Callable function: get member counts per church (constituency) – counts ONLY active members (isActive != false)
 exports.getMemberCounts = functions.https.onCall(async (data, context) => {

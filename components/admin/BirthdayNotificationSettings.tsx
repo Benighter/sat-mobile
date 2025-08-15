@@ -2,15 +2,18 @@ import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../../contexts/FirebaseAppContext';
 import { NotificationPreferences } from '../../types';
 import { getDefaultNotificationPreferences } from '../../utils/notificationUtils';
-import { BellIcon, CakeIcon, ClockIcon, EnvelopeIcon, CheckIcon, XMarkIcon } from '../icons';
+import { BellIcon, CakeIcon, ClockIcon, EnvelopeIcon, CheckIcon, XMarkIcon, CalendarIcon } from '../icons';
 import Button from '../ui/Button';
+import { emailServiceClient } from '../../services/emailServiceClient';
+import { EmailNotificationService } from '../../services/emailNotificationService';
+import { userService } from '../../services/userService';
 
 interface BirthdayNotificationSettingsProps {
   onClose?: () => void;
 }
 
 const BirthdayNotificationSettings: React.FC<BirthdayNotificationSettingsProps> = ({ onClose }) => {
-  const { user, userProfile, showToast } = useAppContext();
+  const { user, userProfile, showToast, members, bacentas, currentChurchId } = useAppContext();
   
   const [settings, setSettings] = useState<NotificationPreferences>(
     userProfile?.notificationPreferences || getDefaultNotificationPreferences()
@@ -18,6 +21,8 @@ const BirthdayNotificationSettings: React.FC<BirthdayNotificationSettingsProps> 
   
   const [isLoading, setIsLoading] = useState(false);
   const [testEmailSent, setTestEmailSent] = useState(false);
+  const [digestEmailSent, setDigestEmailSent] = useState(false);
+  const [groupDigestSent, setGroupDigestSent] = useState(false);
 
   useEffect(() => {
     if (userProfile?.notificationPreferences) {
@@ -76,19 +81,103 @@ const BirthdayNotificationSettings: React.FC<BirthdayNotificationSettingsProps> 
   };
 
   const handleTestEmail = async () => {
+    if (!user?.email) {
+      showToast('error', 'No email', 'Your account has no email address');
+      return;
+    }
     setIsLoading(true);
     try {
-      // TODO: Implement test email functionality
-      // This would send a sample birthday notification to the user's email
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      setTestEmailSent(true);
-      showToast('success', 'Test Email Sent', 'A sample birthday notification has been sent to your email');
-      
-      // Reset the test email sent state after 5 seconds
-      setTimeout(() => setTestEmailSent(false), 5000);
+      const res = await emailServiceClient.sendTestBirthdayEmail({
+        uid: user.uid,
+  email: user.email,
+  displayName: user.displayName ?? undefined
+      });
+
+      if (res?.success) {
+        setTestEmailSent(true);
+        showToast('success', 'Test Email Sent', 'Check your inbox for the sample birthday email');
+        setTimeout(() => setTestEmailSent(false), 5000);
+      } else {
+        throw new Error(res?.error || 'Unknown error');
+      }
     } catch (error: any) {
       showToast('error', 'Test Failed', error.message || 'Failed to send test email');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSendUpcomingDigest = async () => {
+    if (!user?.email) {
+      showToast('error', 'No email', 'Your account has no email address');
+      return;
+    }
+    setIsLoading(true);
+    try {
+      const res = await emailServiceClient.sendUpcomingBirthdaysDigest(
+        { uid: user.uid, email: user.email, displayName: user.displayName ?? undefined },
+        members,
+        bacentas
+      );
+      if (res?.success) {
+        setDigestEmailSent(true);
+        showToast('success', 'Digest Sent', 'Check your inbox for the upcoming birthdays digest');
+        setTimeout(() => setDigestEmailSent(false), 5000);
+      } else {
+        throw new Error(res?.error || 'Unknown error');
+      }
+    } catch (error: any) {
+      showToast('error', 'Send Failed', error.message || 'Failed to send upcoming birthdays digest');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSendDigestToLeadersAndAdmin = async () => {
+    if (!currentChurchId) {
+      showToast('error', 'No church context', 'Cannot determine current church to fetch recipients');
+      return;
+    }
+    setIsLoading(true);
+    try {
+      // Build digest once
+      const svc = EmailNotificationService.getInstance();
+      const digest = svc.generateUpcomingBirthdaysDigest(members, bacentas);
+
+      // Fetch users in church and filter: admins + invited leaders (with email prefs enabled)
+      const users = await userService.getChurchUsers(currentChurchId);
+      const recipients = users.filter(u => (u.role === 'admin' || (u as any).isInvitedAdminLeader) && !!u.email)
+        .filter(u => {
+          const np = (u as any).notificationPreferences;
+          if (np?.emailNotifications === false) return false;
+          if (np?.birthdayNotifications?.enabled === false) return false;
+          return true;
+        });
+
+      if (recipients.length === 0) {
+        showToast('warning', 'No recipients', 'No admin or invited leaders with email found');
+        setIsLoading(false);
+        return;
+      }
+
+      let success = 0, failed = 0;
+      for (const r of recipients) {
+        const res = await emailServiceClient.sendBirthdayEmail(
+          r.email!,
+          digest.subject,
+          digest.htmlContent,
+          digest.textContent
+        );
+        if (res?.success) success++; else failed++;
+        // Gentle spacing to avoid provider rate limits
+        await new Promise(resolve => setTimeout(resolve, 150));
+      }
+
+      setGroupDigestSent(true);
+      showToast('success', 'Digest Sent', `Sent to ${success}/${recipients.length} recipients${failed ? ` (${failed} failed)` : ''}`);
+      setTimeout(() => setGroupDigestSent(false), 5000);
+    } catch (error: any) {
+      showToast('error', 'Send Failed', error.message || 'Failed to send to leaders and admin');
     } finally {
       setIsLoading(false);
     }
@@ -237,6 +326,28 @@ const BirthdayNotificationSettings: React.FC<BirthdayNotificationSettingsProps> 
                     Notifications will be sent around this time each day
                   </p>
                 </div>
+
+                {/* Test buttons inside settings card for quick access */}
+                <div className="mt-4 flex flex-wrap gap-3">
+                  <Button
+                    variant="secondary"
+                    onClick={handleSendUpcomingDigest}
+                    loading={isLoading}
+                    disabled={!settings.birthdayNotifications.enabled || !settings.emailNotifications}
+                    leftIcon={digestEmailSent ? <CheckIcon className="w-4 h-4" /> : <CalendarIcon className="w-4 h-4" />}
+                  >
+                    {digestEmailSent ? 'Digest Sent!' : 'Send Upcoming Birthdays (to me)'}
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    onClick={handleSendDigestToLeadersAndAdmin}
+                    loading={isLoading}
+                    disabled={!settings.birthdayNotifications.enabled || !settings.emailNotifications}
+                    leftIcon={groupDigestSent ? <CheckIcon className="w-4 h-4" /> : <EnvelopeIcon className="w-4 h-4" />}
+                  >
+                    {groupDigestSent ? 'Group Digest Sent!' : 'Send to Leaders & Admin'}
+                  </Button>
+                </div>
               </>
             )}
           </div>
@@ -253,15 +364,17 @@ const BirthdayNotificationSettings: React.FC<BirthdayNotificationSettingsProps> 
 
         {/* Action Buttons */}
         <div className="flex items-center justify-between pt-6 border-t border-gray-200">
-          <Button
-            variant="secondary"
-            onClick={handleTestEmail}
-            loading={isLoading}
-            disabled={!settings.birthdayNotifications.enabled || !settings.emailNotifications}
-            leftIcon={testEmailSent ? <CheckIcon className="w-4 h-4" /> : <EnvelopeIcon className="w-4 h-4" />}
-          >
-            {testEmailSent ? 'Test Email Sent!' : 'Send Test Email'}
-          </Button>
+          <div className="flex items-center gap-3">
+            <Button
+              variant="secondary"
+              onClick={handleTestEmail}
+              loading={isLoading}
+              disabled={!settings.birthdayNotifications.enabled || !settings.emailNotifications}
+              leftIcon={testEmailSent ? <CheckIcon className="w-4 h-4" /> : <EnvelopeIcon className="w-4 h-4" />}
+            >
+              {testEmailSent ? 'Test Email Sent!' : 'Send Test Email'}
+            </Button>
+          </div>
 
           <div className="flex space-x-3">
             {onClose && (

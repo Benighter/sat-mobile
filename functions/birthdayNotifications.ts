@@ -1,6 +1,6 @@
 /**
  * Firebase Cloud Function for automated birthday notifications
- * Runs daily at 9:00 AM to send birthday alerts to relevant administrators and leaders
+ * Runs daily (cron) and sends birthday alerts to relevant administrators and leaders
  */
 
 import { onSchedule } from 'firebase-functions/v2/scheduler';
@@ -15,11 +15,12 @@ initializeApp();
 const db = getFirestore();
 
 /**
- * Scheduled function that runs daily at 9:00 AM to process birthday notifications
+ * Scheduled function that runs daily to process birthday notifications
  */
 export const processDailyBirthdayNotifications = onSchedule({
-  schedule: '0 9 * * *', // Run daily at 9:00 AM
-  timeZone: 'UTC', // Adjust based on your church's timezone
+  // Run every day at 00:05 UTC; we'll gate per-church by local time
+  schedule: '5 0 * * *',
+  timeZone: 'UTC',
   memory: '1GiB',
   timeoutSeconds: 540, // 9 minutes timeout
 }, async (event) => {
@@ -79,8 +80,42 @@ export const processDailyBirthdayNotifications = onSchedule({
           continue;
         }
 
-        // Get notification settings
-        const notificationDays = church.settings?.notificationSettings?.defaultNotificationDays || [7, 3, 1];
+        // Determine local time gating per church
+        const tz = church.settings?.timezone || church.settings?.notificationSettings?.timezone || 'UTC';
+        const desiredTime = church.settings?.notificationSettings?.defaultNotificationTime || '00:00';
+        const nowUtc = new Date();
+        // Compute the church's local HH:mm for now
+        const formatter = new Intl.DateTimeFormat('en-GB', {
+          timeZone: tz,
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false
+        });
+        const parts = formatter.formatToParts(nowUtc);
+        const hh = parts.find(p => p.type === 'hour')?.value ?? '00';
+        const mm = parts.find(p => p.type === 'minute')?.value ?? '00';
+        const currentLocalTime = `${hh}:${mm}`;
+
+        // Only proceed for this church if we are within the 10-minute window of desired time
+        const withinWindow = (() => {
+          try {
+            const [dh, dm] = desiredTime.split(':').map(n => parseInt(n, 10));
+            const [ch, cm] = [parseInt(hh, 10), parseInt(mm, 10)];
+            const desiredMins = dh * 60 + dm;
+            const currentMins = ch * 60 + cm;
+            return Math.abs(currentMins - desiredMins) <= 10;
+          } catch (e) {
+            return true; // Fallback: run
+          }
+        })();
+
+        if (!withinWindow) {
+          logger.info(`Skipping church ${church.name} (${church.id}) due to local time gating: now=${currentLocalTime} tz=${tz} desired=${desiredTime}`);
+          continue;
+        }
+
+        // Get notification day offsets
+        const notificationDays = church.settings?.notificationSettings?.defaultNotificationDays || [7, 5, 3, 2, 1, 0];
         
         // Process notifications
         const notificationService = BirthdayNotificationService.getInstance();
@@ -322,7 +357,7 @@ export const manualBirthdayNotificationTrigger = onRequest({
       members.filter(m => m.birthday),
       users,
       bacentas,
-      [7, 3, 1],
+  [7, 5, 3, 2, 1, 0],
       new Date()
     );
 

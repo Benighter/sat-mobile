@@ -640,7 +640,8 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
   const updateMemberHandler = useCallback(async (memberData: Member) => {
     try {
       setIsLoading(true);
-      await membersFirebaseService.update(memberData.id, memberData);
+      const original = members.find(m => m.id === memberData.id);
+      await memberOperationsWithNotifications.update(memberData.id, memberData, original || undefined);
       showToast('success', 'Member updated successfully');
     } catch (error: any) {
       setError(error.message);
@@ -649,7 +650,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     } finally {
       setIsLoading(false);
     }
-  }, [showToast]);
+  }, [showToast, members]);
 
   const deleteMemberHandler = useCallback(async (memberId: string) => {
     try {
@@ -1129,6 +1130,15 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
       // Mark outreach member as converted
       await outreachMembersFirebaseService.update(outreachMemberId, { convertedMemberId: newMemberId });
 
+      // Notify linked admins that the leader converted someone to member
+      try {
+        const { createNotificationHelpers } = await import('../services/notificationService');
+        const leaderName = userProfile?.displayName || `${userProfile?.firstName || ''} ${userProfile?.lastName || ''}`.trim() || 'Unknown Leader';
+        await createNotificationHelpers.memberConverted(leaderName, om.name, 'outreach');
+      } catch (notifyErr) {
+        console.warn('⚠️ Failed to send conversion notification:', notifyErr);
+      }
+
       showToast('success', 'Converted to permanent member');
     } catch (error: any) {
       setError(error.message);
@@ -1585,6 +1595,16 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
       // Step 3: Delete the guest record
       await guestFirebaseService.delete(guestId);
       console.log('✅ Guest record deleted');
+
+      // Notify linked admins that the leader converted a guest to member
+      try {
+        const { createNotificationHelpers } = await import('../services/notificationService');
+        const leaderName = userProfile?.displayName || `${userProfile?.firstName || ''} ${userProfile?.lastName || ''}`.trim() || 'Unknown Leader';
+        const personName = `${guest.firstName} ${guest.lastName || ''}`.trim();
+        await createNotificationHelpers.memberConverted(leaderName, personName, 'guest');
+      } catch (notifyErr) {
+        console.warn('⚠️ Failed to send conversion notification (guest):', notifyErr);
+      }
 
       showToast('success', 'Guest converted to member successfully');
     } catch (error: any) {

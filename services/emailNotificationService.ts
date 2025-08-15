@@ -1,5 +1,5 @@
-import { BirthdayEmailTemplate, NotificationRecipient, Member } from '../types';
-import { calculateAge, formatBirthdayDisplay } from '../utils/birthdayUtils';
+import { BirthdayEmailTemplate, NotificationRecipient, Member, Bacenta } from '../types';
+import { calculateAge, formatBirthdayDisplay, getUpcomingBirthdays } from '../utils/birthdayUtils';
 
 /**
  * Email notification service for birthday alerts
@@ -27,7 +27,6 @@ export class EmailNotificationService {
     daysUntilBirthday: number
   ): BirthdayEmailTemplate {
     const memberAge = calculateAge(member.birthday!);
-    const birthdayDisplay = formatBirthdayDisplay(member.birthday!);
     const memberFullName = `${member.firstName} ${member.lastName || ''}`.trim();
     
     // Generate subject line
@@ -61,6 +60,104 @@ export class EmailNotificationService {
       },
       daysUntilBirthday
     };
+  }
+
+  /**
+   * Generate an Upcoming Birthdays digest email (HTML + Text)
+   */
+  public generateUpcomingBirthdaysDigest(
+    members: Member[],
+    bacentas?: Bacenta[],
+    referenceDate: Date = new Date()
+  ): { subject: string; htmlContent: string; textContent: string; count: number } {
+    const monthName = new Intl.DateTimeFormat('en-US', { month: 'long' }).format(referenceDate);
+    const upcoming = getUpcomingBirthdays(members, referenceDate);
+    const bacentaMap: Record<string, string> = (bacentas || []).reduce((acc, b) => {
+      acc[b.id] = b.name;
+      return acc;
+    }, {} as Record<string, string>);
+
+    const subject = upcoming.length > 0
+      ? `Upcoming Birthdays – ${monthName} (${upcoming.length})`
+      : `Upcoming Birthdays – ${monthName} (None)`;
+
+    const itemsHtml = upcoming.length > 0
+      ? upcoming.map(item => {
+          const fullName = `${item.member.firstName} ${item.member.lastName || ''}`.trim();
+          const daysText = item.daysUntil === 0
+            ? 'Today'
+            : item.daysUntil === 1
+              ? 'Tomorrow'
+              : `${item.daysUntil} days`;
+          const bacentaName = bacentaMap[item.member.bacentaId] || 'Unassigned';
+          return `
+            <tr>
+              <td style="padding: 8px 12px; border-bottom: 1px solid #eee;">${fullName}</td>
+              <td style="padding: 8px 12px; border-bottom: 1px solid #eee;">${bacentaName}</td>
+              <td style="padding: 8px 12px; border-bottom: 1px solid #eee; white-space: nowrap;">${item.displayDate}</td>
+              <td style="padding: 8px 12px; border-bottom: 1px solid #eee; text-align: right;">Turns ${item.age}${item.isToday ? ' 🎉' : ''}</td>
+              <td style="padding: 8px 12px; border-bottom: 1px solid #eee; text-align: right; color: #555;">${daysText}</td>
+            </tr>
+          `;
+        }).join('')
+      : `<tr><td colspan="5" style="padding: 16px; text-align: center; color: #666;">No upcoming birthdays found.</td></tr>`;
+
+    const htmlContent = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Upcoming Birthdays</title>
+  <style>
+    @media (prefers-color-scheme: dark) {
+      body { background: #111; color: #eee; }
+    }
+  </style>
+  </head>
+  <body style="font-family: Arial, sans-serif; line-height:1.6; color:#333; max-width: 680px; margin:0 auto; padding:20px;">
+    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #fff; padding: 24px 28px; border-radius: 12px;">
+      <h1 style="margin:0; font-size: 22px;">🎂 Upcoming Birthdays Digest</h1>
+      <p style="margin:6px 0 0; opacity:.95;">${monthName}${upcoming.length ? ` • ${upcoming.length} member${upcoming.length !== 1 ? 's' : ''}` : ''}</p>
+    </div>
+    <div style="background:#fff; border:1px solid #e9ecef; border-radius:12px; margin-top:16px; overflow:hidden;">
+      <table style="width:100%; border-collapse:collapse;">
+        <thead style="background:#f8f9fa;">
+          <tr>
+            <th align="left" style="padding:10px 12px; font-size:12px; text-transform:uppercase; color:#666; letter-spacing:.03em;">Name</th>
+            <th align="left" style="padding:10px 12px; font-size:12px; text-transform:uppercase; color:#666; letter-spacing:.03em;">Bacenta</th>
+            <th align="left" style="padding:10px 12px; font-size:12px; text-transform:uppercase; color:#666; letter-spacing:.03em;">Date</th>
+            <th align="right" style="padding:10px 12px; font-size:12px; text-transform:uppercase; color:#666; letter-spacing:.03em;">Age</th>
+            <th align="right" style="padding:10px 12px; font-size:12px; text-transform:uppercase; color:#666; letter-spacing:.03em;">When</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${itemsHtml}
+        </tbody>
+      </table>
+    </div>
+    <p style="font-size:12px; color:#777; margin-top:12px;">This automated digest includes birthdays for the current month${upcoming.length ? ' (and the first week of the next month if near month-end)' : ''}.</p>
+  </body>
+</html>`;
+
+    const textContent = upcoming.length > 0
+      ? [
+          `UPCOMING BIRTHDAYS – ${monthName}`,
+          '',
+          ...upcoming.map(item => {
+            const fullName = `${item.member.firstName} ${item.member.lastName || ''}`.trim();
+            const daysText = item.daysUntil === 0
+              ? 'Today'
+              : item.daysUntil === 1
+                ? 'Tomorrow'
+                : `${item.daysUntil} days`;
+            const bacentaName = bacentaMap[item.member.bacentaId] || 'Unassigned';
+            return `• ${fullName} — ${item.displayDate} — turns ${item.age} — ${bacentaName} — ${daysText}`;
+          })
+        ].join('\n')
+      : `UPCOMING BIRTHDAYS – ${monthName}\n\nNo upcoming birthdays found.`;
+
+    return { subject, htmlContent, textContent, count: upcoming.length };
   }
 
   /**
@@ -226,34 +323,21 @@ You received this because you have oversight responsibilities for members in the
     recipient: NotificationRecipient
   ): Promise<{ success: boolean; error?: string; messageId?: string }> {
     try {
-      // TODO: Implement actual email sending logic
-      // This could use services like SendGrid, AWS SES, Firebase Functions with Nodemailer, etc.
-
-      console.log(`Sending birthday notification to ${recipient.email}`);
-      console.log(`Subject: ${template.subject}`);
-
-      // Example implementation with SendGrid (commented out):
-      /*
-      const sgMail = require('@sendgrid/mail');
-      sgMail.setApiKey(process.env.SENDGRID_API_KEY);
-
-      const msg = {
+      // Call callable function backed by SendGrid
+      const { getFunctions, httpsCallable } = await import('firebase/functions');
+      const functions = getFunctions();
+      const fn = httpsCallable(functions, 'sendBirthdayEmail');
+      const res: any = await fn({
         to: recipient.email,
-        from: 'noreply@yourchurch.com',
         subject: template.subject,
-        text: template.textContent,
         html: template.htmlContent,
-      };
-
-      const response = await sgMail.send(msg);
-      return { success: true, messageId: response[0].headers['x-message-id'] };
-      */
-
-      // Simulate email sending for now
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
-      return { success: true, messageId: `sim_${Date.now()}_${Math.random().toString(36).substr(2, 9)}` };
-
+        text: template.textContent
+      });
+      const data = res?.data || {};
+      if (data.success) {
+        return { success: true, messageId: data.messageId };
+      }
+      return { success: false, error: data.error || 'Unknown email send failure' };
     } catch (error: any) {
       console.error('Failed to send birthday notification:', error);
       return {

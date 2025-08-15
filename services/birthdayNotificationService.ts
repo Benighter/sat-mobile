@@ -8,7 +8,7 @@ import {
   where, 
   orderBy, 
   limit,
-  Timestamp 
+  deleteDoc
 } from 'firebase/firestore';
 import { db } from '../firebase.config';
 import { BirthdayNotification, Member, User, Bacenta } from '../types';
@@ -16,10 +16,10 @@ import {
   determineNotificationRecipients, 
   hasNotificationBeenSent, 
   getMembersNeedingNotifications,
-  createBirthdayNotificationRecord,
-  validateNotificationSettings
+  createBirthdayNotificationRecord
 } from '../utils/notificationUtils';
 import { EmailNotificationService } from './emailNotificationService';
+import { notificationService, setNotificationContext } from './notificationService';
 
 /**
  * Firebase service for managing birthday notifications
@@ -234,6 +234,46 @@ export class BirthdayNotificationService {
             );
             results.sent++;
             console.log(`Birthday notification sent successfully for ${member.firstName} ${member.lastName}`);
+
+            // Also create in-app bell notifications for each recipient
+            try {
+              // Ensure notification context is set for creation
+              // Use a pseudo/system user context to attribute the reminder
+              setNotificationContext({
+                // Minimal User shape for context
+                id: 'system',
+                uid: 'system',
+                email: 'noreply@sat-mobile',
+                displayName: 'System',
+                churchId,
+                role: 'leader',
+                isActive: true,
+                createdAt: new Date().toISOString(),
+                lastLoginAt: new Date().toISOString()
+              } as any, churchId);
+
+              const recipientIds = recipients.map(r => r.userId);
+              const description = daysUntilBirthday === 0
+                ? `Birthday today: ${member.firstName} ${member.lastName || ''}`.trim()
+                : `Birthday in ${daysUntilBirthday} day${daysUntilBirthday !== 1 ? 's' : ''}: ${member.firstName} ${member.lastName || ''}`.trim();
+
+              await notificationService.createForRecipients(
+                recipientIds,
+                'birthday_reminder',
+                description,
+                {
+                  memberName: `${member.firstName} ${member.lastName || ''}`.trim(),
+                  description
+                },
+                {
+                  daysUntilBirthday,
+                  bacentaId: member.bacentaId,
+                  bacentaName
+                } as any
+              );
+            } catch (bellErr) {
+              console.warn('Failed to create in-app birthday bell notifications:', bellErr);
+            }
           } else {
             // Update notification status to failed
             const failureReasons = failedEmails.map(result => 
@@ -328,7 +368,7 @@ export class BirthdayNotificationService {
       // Note: In a production environment, you'd want to use batch deletes
       // and possibly run this as a scheduled Cloud Function
       for (const docSnapshot of snapshot.docs) {
-        await docSnapshot.ref.delete();
+        await deleteDoc(docSnapshot.ref);
         deletedCount++;
       }
 

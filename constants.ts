@@ -46,3 +46,36 @@ export const getAppDisplayName = (fallback: string = 'SAT Mobile'): string => {
   } catch {}
   return fallback;
 };
+
+// Resolve primary external Email API URL from globals or localStorage.
+// If not set, client code should fall back to Firebase callable.
+export const getPrimaryEmailApiUrl = (): string | undefined => {
+  try {
+    const g: any = (globalThis as any) || {};
+    const fromGlobal = g.__PRIMARY_EMAIL_API_URL__ || g.__EMAIL_API_URL__;
+    if (typeof fromGlobal === 'string' && fromGlobal.trim()) return fromGlobal.trim();
+    if (typeof window !== 'undefined') {
+      const fromLs =
+        window.localStorage.getItem('PRIMARY_EMAIL_API_URL') ||
+        window.localStorage.getItem('EMAIL_API_URL');
+      if (fromLs && fromLs.trim()) return fromLs.trim();
+    }
+  } catch {}
+  return undefined;
+};
+
+// Optional API key for the external Email API, read from globals or localStorage.
+export const getPrimaryEmailApiKey = (): string | undefined => {
+  try {
+    const g: any = (globalThis as any) || {};
+    const fromGlobal = g.__PRIMARY_EMAIL_API_KEY__ || g.__EMAIL_API_KEY__;
+    if (typeof fromGlobal === 'string' && fromGlobal.trim()) return fromGlobal.trim();
+    if (typeof window !== 'undefined') {
+      const fromLs =
+        window.localStorage.getItem('PRIMARY_EMAIL_API_KEY') ||
+        window.localStorage.getItem('EMAIL_API_KEY');
+      if (fromLs && fromLs.trim()) return fromLs.trim();
+    }
+  } catch {}
+  return undefined;
+};
