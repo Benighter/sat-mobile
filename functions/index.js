@@ -138,7 +138,38 @@ exports.sendPushNotification = functions.https.onCall(async (data, context) => {
   }
 });
 
-// Callable: send birthday email using SendGrid to a single recipient
+// Shared provider-based email sender
+async function sendEmailWithProviders({ to, subject, html, text, from }) {
+  const fromAddress = from || 'no-reply@sat-mobile.app';
+  const resendKey = RESEND_API_KEY.value();
+  if (resendKey) {
+    const resend = new Resend(resendKey);
+    const result = await resend.emails.send({
+      from: fromAddress,
+      to,
+      subject,
+      html: html || undefined,
+      text: text || undefined
+    });
+    if (result?.error) {
+      throw new Error(result.error?.message || 'Resend error');
+    }
+    return { success: true, messageId: result?.data?.id || null };
+  }
+  // Fallback to SendGrid
+  sgMail.setApiKey(SENDGRID_API_KEY.value());
+  const [response] = await sgMail.send({
+    to,
+    from: fromAddress,
+    subject,
+    html: html || undefined,
+    text: text || undefined
+  });
+  const messageId = response?.headers?.['x-message-id'] || response?.headers?.['x-message-id'.toLowerCase()];
+  return { success: true, messageId: messageId || null, statusCode: response?.statusCode || response?.status };
+}
+
+// Callable: send birthday email using provider(s) — admin only
 exports.sendBirthdayEmail = functions
   .runWith({ secrets: [SENDGRID_API_KEY, RESEND_API_KEY] })
   .https.onCall(async (data, context) => {
@@ -146,8 +177,21 @@ exports.sendBirthdayEmail = functions
       throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
     }
 
-    const { to, subject, html, text, from } = data || {};
+    // Enforce admin-only triggering
+    try {
+      const uid = context.auth.uid;
+      const userSnap = await admin.firestore().doc(`users/${uid}`).get();
+      const role = userSnap.exists ? (userSnap.data().role || '').toString() : '';
+      if (role !== 'admin') {
+        throw new functions.https.HttpsError('permission-denied', 'Only admins can send birthday emails');
+      }
+    } catch (e) {
+      if (e instanceof functions.https.HttpsError) throw e;
+      console.error('Role verification failed:', e);
+      throw new functions.https.HttpsError('permission-denied', 'Role verification failed');
+    }
 
+    const { to, subject, html, text, from } = data || {};
     if (!to || typeof to !== 'string') {
       throw new functions.https.HttpsError('invalid-argument', 'Recipient email `to` is required');
     }
@@ -157,43 +201,66 @@ exports.sendBirthdayEmail = functions
     if ((!html || typeof html !== 'string') && (!text || typeof text !== 'string')) {
       throw new functions.https.HttpsError('invalid-argument', 'Either `html` or `text` content is required');
     }
-
-    // Default sender; you must verify this in your email provider
-    const fromAddress = from || 'no-reply@sat-mobile.app';
-
     try {
-      const resendKey = RESEND_API_KEY.value();
-      if (resendKey) {
-        // Use Resend if configured
-        const resend = new Resend(resendKey);
-        const result = await resend.emails.send({
-          from: fromAddress,
-          to,
-          subject,
-          html: html || undefined,
-          text: text || undefined
-        });
-        if (result?.error) {
-          throw new Error(result.error?.message || 'Resend error');
-        }
-        return { success: true, messageId: result?.data?.id || null };
-      } else {
-        // Fallback to SendGrid
-        sgMail.setApiKey(SENDGRID_API_KEY.value());
-        const [response] = await sgMail.send({
-          to,
-          from: fromAddress,
-          subject,
-          html: html || undefined,
-          text: text || undefined
-        });
-        const messageId = response?.headers?.['x-message-id'] || response?.headers?.['x-message-id'.toLowerCase()];
-        return { success: true, messageId: messageId || null, statusCode: response?.statusCode || response?.status };
-      }
+      return await sendEmailWithProviders({ to, subject, html, text, from });
     } catch (err) {
       console.error('sendBirthdayEmail failed', err);
       const code = err?.code === 403 ? 'permission-denied' : 'internal';
       throw new functions.https.HttpsError(code, err?.message || 'Failed to send email');
+    }
+  });
+
+// Small helper to set robust CORS headers
+function setCors(req, res) {
+  const origin = req.headers.origin || '*';
+  const reqHeaders = req.headers['access-control-request-headers'];
+  res.set('Vary', 'Origin, Access-Control-Request-Method, Access-Control-Request-Headers');
+  res.set('Access-Control-Allow-Origin', origin);
+  res.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.set('Access-Control-Allow-Headers', reqHeaders || 'Content-Type, Authorization');
+  // Optional: cache preflight for 1 hour
+  res.set('Access-Control-Max-Age', '3600');
+}
+
+// HTTP (CORS-enabled) fallback for sending birthday email (for local dev or non-callable clients)
+exports.sendBirthdayEmailHttp = functions
+  .runWith({ secrets: [SENDGRID_API_KEY, RESEND_API_KEY] })
+  .https.onRequest(async (req, res) => {
+    setCors(req, res);
+    if (req.method === 'OPTIONS') {
+      return res.status(204).send('');
+    }
+    if (req.method !== 'POST') {
+      return res.status(405).json({ success: false, error: 'Method Not Allowed' });
+    }
+    // Verify Firebase ID token and role (admin only)
+    try {
+      const authHeader = req.headers.authorization || req.headers.Authorization;
+      if (!authHeader || !authHeader.toString().startsWith('Bearer ')) {
+        return res.status(401).json({ success: false, error: 'Missing Authorization Bearer token' });
+      }
+      const idToken = authHeader.toString().replace('Bearer ', '');
+      const decoded = await admin.auth().verifyIdToken(idToken);
+      const uid = decoded.uid;
+      const userSnap = await admin.firestore().doc(`users/${uid}`).get();
+      const role = userSnap.exists ? (userSnap.data().role || '').toString() : '';
+      if (role !== 'admin') {
+        return res.status(403).json({ success: false, error: 'Only admins can send birthday emails' });
+      }
+    } catch (authErr) {
+      console.error('Auth/role verification failed on HTTP endpoint:', authErr);
+      return res.status(403).json({ success: false, error: 'Unauthorized' });
+    }
+    try {
+      const { to, subject, html, text, from } = req.body || {};
+      if (!to || !subject || (!html && !text)) {
+        return res.status(400).json({ success: false, error: 'Invalid payload' });
+      }
+      const result = await sendEmailWithProviders({ to, subject, html, text, from });
+      return res.status(200).json(result);
+    } catch (err) {
+      console.error('sendBirthdayEmailHttp failed', err);
+      return res.status(500).json({ success: false, error: err?.message || 'Failed to send email' });
     }
   });
 
@@ -415,9 +482,7 @@ exports.cleanupOldTokens = functions.pubsub.schedule('0 2 * * *')
 // HTTP endpoint for sending notifications (for development/testing)
 exports.sendNotificationHTTP = functions.https.onRequest(async (req, res) => {
   // Enable CORS
-  res.set('Access-Control-Allow-Origin', '*');
-  res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  setCors(req, res);
 
   if (req.method === 'OPTIONS') {
     res.status(200).end();

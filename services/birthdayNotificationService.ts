@@ -28,6 +28,8 @@ import { notificationService, setNotificationContext } from './notificationServi
 export class BirthdayNotificationService {
   private static instance: BirthdayNotificationService;
   private emailService: EmailNotificationService;
+  // Feature flag: set to true to enable email delivery; false uses in-app notifications only
+  private static ENABLE_BIRTHDAY_EMAILS = false;
   
   private constructor() {
     this.emailService = EmailNotificationService.getInstance();
@@ -125,7 +127,8 @@ export class BirthdayNotificationService {
     users: User[],
     bacentas: Bacenta[],
     notificationDays: number[] = [7, 3, 1],
-    referenceDate: Date = new Date()
+  referenceDate: Date = new Date(),
+  options?: { force?: boolean; actorAdminId?: string }
   ): Promise<{
     processed: number;
     sent: number;
@@ -142,6 +145,28 @@ export class BirthdayNotificationService {
     };
 
     try {
+      // Ensure notification service has church/user context so bell writes succeed
+      // Prefer the acting admin as context; otherwise fall back to a system actor
+      const actor = options?.actorAdminId
+        ? (users.find(u => u.uid === options.actorAdminId || (u as any).id === options.actorAdminId) || null)
+        : null;
+      const actorForContext = actor || ({
+        id: 'system',
+        uid: 'system',
+        email: 'noreply@sat-mobile',
+        displayName: 'System',
+        churchId,
+        role: 'leader',
+        isActive: true,
+        createdAt: new Date().toISOString(),
+        lastLoginAt: new Date().toISOString()
+      } as any);
+      try {
+        setNotificationContext(actorForContext as any, churchId);
+      } catch (ctxErr) {
+        console.warn('Failed to set notification context, proceeding anyway:', ctxErr);
+      }
+
       // Get members who need notifications today
       const membersNeedingNotifications = getMembersNeedingNotifications(
         members, 
@@ -166,20 +191,96 @@ export class BirthdayNotificationService {
         endDate
       );
 
-      // Process each member
+      // Helper to enforce a timeout on async operations
+      const withTimeout = async <T>(promise: Promise<T>, ms: number): Promise<T> => {
+        return await new Promise<T>((resolve, reject) => {
+          const id = setTimeout(() => reject(new Error('Operation timed out')), ms);
+          promise
+            .then((val) => {
+              clearTimeout(id);
+              resolve(val);
+            })
+            .catch((err) => {
+              clearTimeout(id);
+              reject(err);
+            });
+        });
+      };
+
+    const force = options?.force === true;
+
+    // Process each member
       for (const { member, daysUntilBirthday } of membersNeedingNotifications) {
         results.processed++;
 
         try {
           // Check if notification already sent
-          if (hasNotificationBeenSent(existingNotifications, member.id, daysUntilBirthday, referenceDate)) {
+      if (!force && hasNotificationBeenSent(existingNotifications, member.id, daysUntilBirthday, referenceDate)) {
             console.log(`Notification already sent for ${member.firstName} ${member.lastName} (${daysUntilBirthday} days)`);
             results.skipped++;
             continue;
           }
 
           // Determine recipients
-          const recipients = determineNotificationRecipients(member, users, bacentas);
+          let recipients = determineNotificationRecipients(
+            member,
+            users,
+            bacentas,
+            { actorAdminId: options?.actorAdminId }
+          );
+
+          // If triggered by a specific admin, ensure recipients explicitly include:
+          // - the acting admin
+          // - all leaders linked to that admin via adminInvites (accepted)
+          if (options?.actorAdminId) {
+            try {
+              // Acting admin
+              const actorUser = users.find(u => (u as any).uid === options.actorAdminId || (u as any).id === options.actorAdminId);
+              if (actorUser) {
+                recipients.push({
+                  userId: (actorUser as any).uid || (actorUser as any).id,
+                  email: actorUser.email || '',
+                  firstName: actorUser.firstName || (actorUser.displayName || '').split(' ')[0] || 'User',
+                  lastName: actorUser.lastName || (actorUser.displayName || '').split(' ').slice(1).join(' ') || '',
+                  role: actorUser.role,
+                  relationshipToMember: 'admin'
+                } as any);
+              }
+
+              // Leaders linked via adminInvites
+              const invitesRef = collection(db, 'adminInvites');
+              const qInv = query(
+                invitesRef,
+                where('createdBy', '==', options.actorAdminId),
+                where('status', '==', 'accepted'),
+                where('churchId', '==', churchId)
+              );
+              const invSnap = await getDocs(qInv);
+              const invitedLeaderIds = invSnap.docs.map(d => (d.data() as any).invitedUserId).filter(Boolean);
+              const invitedLeaders = users.filter(u => invitedLeaderIds.includes((u as any).uid || (u as any).id));
+              invitedLeaders.forEach(u => {
+                recipients.push({
+                  userId: (u as any).uid || (u as any).id,
+                  email: u.email || '',
+                  firstName: u.firstName || (u.displayName || '').split(' ')[0] || 'User',
+                  lastName: u.lastName || (u.displayName || '').split(' ').slice(1).join(' ') || '',
+                  role: u.role,
+                  relationshipToMember: 'admin'
+                } as any);
+              });
+
+              // Deduplicate by userId
+              const seen = new Set<string>();
+              recipients = recipients.filter(r => {
+                if (!r.userId) return false;
+                if (seen.has(r.userId)) return false;
+                seen.add(r.userId);
+                return true;
+              });
+            } catch (linkErr) {
+              console.warn('Failed to augment recipients via adminInvites linkage:', linkErr);
+            }
+          }
           
           if (recipients.length === 0) {
             console.log(`No valid recipients found for ${member.firstName} ${member.lastName}`);
@@ -203,95 +304,111 @@ export class BirthdayNotificationService {
           // Save notification record
           const notificationId = await this.saveBirthdayNotification(churchId, notificationRecord);
 
-          // Send emails to recipients
-          const emailTemplates = recipients.map(recipient => ({
-            template: this.emailService.generateBirthdayEmailTemplate(
-              member,
-              recipient,
-              bacentaName,
-              daysUntilBirthday
-            ),
-            recipient
-          }));
+          // Create in-app bell notifications for each recipient immediately (not dependent on email success)
+          try {
+            const recipientIds = recipients.map(r => r.userId);
+            const description = daysUntilBirthday === 0
+              ? `Birthday today: ${member.firstName} ${member.lastName || ''}`.trim()
+              : `Birthday in ${daysUntilBirthday} day${daysUntilBirthday !== 1 ? 's' : ''}: ${member.firstName} ${member.lastName || ''}`.trim();
 
-          const emailResults = await this.emailService.sendBulkBirthdayNotifications(emailTemplates);
+            await notificationService.createForRecipients(
+              recipientIds,
+              'birthday_reminder',
+              description,
+              {
+                memberName: `${member.firstName} ${member.lastName || ''}`.trim(),
+                description
+              },
+              {
+                daysUntilBirthday,
+                bacentaId: member.bacentaId,
+                bacentaName
+              } as any,
+              { id: 'system', name: 'System' }
+            );
+            // Also push a church-wide admin copy for traceability (optional)
+            // no-op if you want minimal volume
+          } catch (bellErr) {
+            console.warn('Failed to create in-app birthday bell notifications:', bellErr);
+          }
 
-          // Check if all emails were sent successfully
-          const allEmailsSent = emailResults.every(result => result.success);
-          const failedEmails = emailResults.filter(result => !result.success);
+          if (BirthdayNotificationService.ENABLE_BIRTHDAY_EMAILS) {
+            // Send emails to recipients with a timeout so UI doesn't hang indefinitely
+            const emailTemplates = recipients
+              .filter(r => !!r.email) // only those with emails
+              .map(recipient => ({
+              template: this.emailService.generateBirthdayEmailTemplate(
+                member,
+                recipient,
+                bacentaName,
+                daysUntilBirthday
+              ),
+              recipient
+            }));
 
-          if (allEmailsSent) {
-            // Update notification status to sent
+            try {
+              const emailResults = await withTimeout(
+                this.emailService.sendBulkBirthdayNotifications(emailTemplates),
+                20000 // 20s timeout for bulk send
+              );
+
+              const allEmailsSent = emailResults.every(result => result.success);
+              const failedEmails = emailResults.filter(result => !result.success);
+
+              if (allEmailsSent) {
+                await this.updateNotificationStatus(
+                  churchId,
+                  notificationId,
+                  'sent',
+                  {
+                    subject: emailTemplates[0].template.subject,
+                    sentAt: new Date().toISOString(),
+                    messageId: emailResults[0].messageId
+                  }
+                );
+                results.sent++;
+                console.log(`Birthday notification emails sent for ${member.firstName} ${member.lastName}`);
+              } else {
+                const failureReasons = failedEmails.map(result => `${result.recipient.email}: ${result.error}`).join('; ');
+                await this.updateNotificationStatus(
+                  churchId,
+                  notificationId,
+                  'failed',
+                  {
+                    subject: emailTemplates[0].template.subject,
+                    sentAt: new Date().toISOString(),
+                    failureReason: failureReasons
+                  }
+                );
+                results.failed++;
+                results.errors.push(`Failed to send notification for ${member.firstName} ${member.lastName}: ${failureReasons}`);
+              }
+            } catch (emailErr: any) {
+              await this.updateNotificationStatus(
+                churchId,
+                notificationId,
+                'failed',
+                {
+                  subject: 'Birthday Notification',
+                  sentAt: new Date().toISOString(),
+                  failureReason: emailErr?.message || 'Email send failed (timeout)'
+                }
+              );
+              results.failed++;
+              results.errors.push(`Email send error for ${member.firstName} ${member.lastName}: ${emailErr?.message || 'timeout'}`);
+            }
+          } else {
+            // Email delivery disabled: mark as sent based on in-app notifications
             await this.updateNotificationStatus(
               churchId,
               notificationId,
               'sent',
               {
-                subject: emailTemplates[0].template.subject,
-                sentAt: new Date().toISOString(),
-                messageId: emailResults[0].messageId
+                subject: 'Birthday Notification',
+                sentAt: new Date().toISOString()
               }
             );
             results.sent++;
-            console.log(`Birthday notification sent successfully for ${member.firstName} ${member.lastName}`);
-
-            // Also create in-app bell notifications for each recipient
-            try {
-              // Ensure notification context is set for creation
-              // Use a pseudo/system user context to attribute the reminder
-              setNotificationContext({
-                // Minimal User shape for context
-                id: 'system',
-                uid: 'system',
-                email: 'noreply@sat-mobile',
-                displayName: 'System',
-                churchId,
-                role: 'leader',
-                isActive: true,
-                createdAt: new Date().toISOString(),
-                lastLoginAt: new Date().toISOString()
-              } as any, churchId);
-
-              const recipientIds = recipients.map(r => r.userId);
-              const description = daysUntilBirthday === 0
-                ? `Birthday today: ${member.firstName} ${member.lastName || ''}`.trim()
-                : `Birthday in ${daysUntilBirthday} day${daysUntilBirthday !== 1 ? 's' : ''}: ${member.firstName} ${member.lastName || ''}`.trim();
-
-              await notificationService.createForRecipients(
-                recipientIds,
-                'birthday_reminder',
-                description,
-                {
-                  memberName: `${member.firstName} ${member.lastName || ''}`.trim(),
-                  description
-                },
-                {
-                  daysUntilBirthday,
-                  bacentaId: member.bacentaId,
-                  bacentaName
-                } as any
-              );
-            } catch (bellErr) {
-              console.warn('Failed to create in-app birthday bell notifications:', bellErr);
-            }
-          } else {
-            // Update notification status to failed
-            const failureReasons = failedEmails.map(result => 
-              `${result.recipient.email}: ${result.error}`
-            ).join('; ');
-
-            await this.updateNotificationStatus(
-              churchId,
-              notificationId,
-              'failed',
-              {
-                subject: emailTemplates[0].template.subject,
-                sentAt: new Date().toISOString(),
-                failureReason: failureReasons
-              }
-            );
-            results.failed++;
-            results.errors.push(`Failed to send notification for ${member.firstName} ${member.lastName}: ${failureReasons}`);
           }
 
         } catch (memberError: any) {

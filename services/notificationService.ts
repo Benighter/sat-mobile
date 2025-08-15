@@ -109,11 +109,12 @@ export const notificationService = {
     activityType: NotificationActivityType,
     description: string,
     details: Partial<AdminNotification['details']>,
-    metadata?: AdminNotification['metadata']
+    metadata?: AdminNotification['metadata'],
+    actor?: { id: string; name: string }
   ): Promise<void> => {
     try {
-      if (!currentChurchId || !currentUser) {
-        throw new Error('Church or user context not set');
+      if (!currentChurchId) {
+        throw new Error('Church context not set');
       }
 
       const notificationsRef = collection(db, getNotificationCollectionPath(currentChurchId));
@@ -121,8 +122,8 @@ export const notificationService = {
 
       for (const adminId of recipients) {
         const notificationData: Omit<AdminNotification, 'id'> = {
-          leaderId: currentUser.uid,
-          leaderName: currentUser.displayName || `${currentUser.firstName || ''} ${currentUser.lastName || ''}`.trim() || 'System',
+          leaderId: actor?.id || currentUser?.uid || 'system',
+          leaderName: actor?.name || currentUser?.displayName || `${currentUser?.firstName || ''} ${currentUser?.lastName || ''}`.trim() || 'System',
           adminId,
           activityType,
           timestamp: new Date().toISOString(),

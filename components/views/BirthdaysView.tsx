@@ -1,7 +1,11 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useAppContext } from '../../contexts/FirebaseAppContext';
 import { getUpcomingBirthdays, getBirthdayStats, calculateAge, getBirthdaysForMonth } from '../../utils/birthdayUtils';
 import { CakeIcon, GiftIcon, CalendarIcon, UserIcon, ChevronLeftIcon, ChevronRightIcon } from '../icons';
+import { CheckIcon } from '../icons';
+import Button from '../ui/Button';
+import { BirthdayNotificationService } from '../../services/birthdayNotificationService';
+import { userService } from '../../services/userService';
 
 // Minimal stat item to keep layout clean
 const StatItem = ({ icon, label, value, bg }: { icon: React.ReactNode; label: string; value: React.ReactNode; bg?: string }) => (
@@ -16,7 +20,10 @@ const StatItem = ({ icon, label, value, bg }: { icon: React.ReactNode; label: st
 
 
 const BirthdaysView: React.FC = () => {
-  const { members, bacentas, displayedDate, navigateToPreviousMonth, navigateToNextMonth } = useAppContext();
+  const { members, bacentas, displayedDate, navigateToPreviousMonth, navigateToNextMonth, currentChurchId, userProfile, showToast } = useAppContext();
+
+  const [isTriggering, setIsTriggering] = useState(false);
+  const [triggeredNow, setTriggeredNow] = useState(false);
 
   const upcomingBirthdays = useMemo(() => getUpcomingBirthdays(members), [members]);
   const selectedMonthBirthdays = useMemo(() => getBirthdaysForMonth(members, displayedDate), [members, displayedDate]);
@@ -162,6 +169,50 @@ const BirthdaysView: React.FC = () => {
         <p className="mt-3 text-xs sm:text-sm md:text-base text-gray-600 dark:text-dark-300 max-w-2xl mx-auto">
           Celebrate with your church family. This month and the next 7 days.
         </p>
+  {/* Quick action: trigger all birthday notifications now (admin only) */}
+  {userProfile?.role === 'admin' && (
+  <div className="mt-3 flex justify-center">
+          <Button
+            variant="primary"
+            onClick={async () => {
+              if (!currentChurchId) {
+                showToast('error', 'No church context', 'Cannot determine church to process');
+                return;
+              }
+              setIsTriggering(true);
+              try {
+                const users = await userService.getChurchUsers(currentChurchId);
+                const membersWithBirthdays = members.filter(m => !!m.birthday);
+                const days = userProfile?.notificationPreferences?.birthdayNotifications?.daysBeforeNotification?.length
+                  ? userProfile.notificationPreferences.birthdayNotifications.daysBeforeNotification
+                  : [7, 5, 3, 2, 1, 0];
+
+                const svc = BirthdayNotificationService.getInstance();
+                const results = await svc.processBirthdayNotifications(
+                  currentChurchId,
+                  membersWithBirthdays,
+                  users as any,
+                  bacentas,
+                  days,
+                  new Date(),
+                  { force: true, actorAdminId: userProfile?.uid }
+                );
+                setTriggeredNow(true);
+                showToast('success', 'Notifications Sent', `Processed ${results.processed}, sent ${results.sent}, failed ${results.failed}`);
+                setTimeout(() => setTriggeredNow(false), 5000);
+              } catch (error: any) {
+                showToast('error', 'Trigger Failed', error?.message || 'Failed to trigger processing');
+              } finally {
+                setIsTriggering(false);
+              }
+            }}
+            loading={isTriggering}
+            leftIcon={triggeredNow ? <CheckIcon className="w-4 h-4" /> : <CalendarIcon className="w-4 h-4" />}
+          >
+            {triggeredNow ? 'Triggered!' : 'Send Birthday Notifications Now'}
+          </Button>
+  </div>
+  )}
       </div>
 
       {/* Month navigator */}

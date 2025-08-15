@@ -322,10 +322,44 @@ You received this because you have oversight responsibilities for members in the
     template: BirthdayEmailTemplate,
     recipient: NotificationRecipient
   ): Promise<{ success: boolean; error?: string; messageId?: string }> {
+    const isLocal = typeof window !== 'undefined' && window.location.origin.includes('localhost');
+    // Prefer HTTP on localhost to avoid callable preflight edge cases
+    if (isLocal) {
+      try {
+        const { getApp } = await import('firebase/app');
+        const { getAuth } = await import('firebase/auth');
+        const app = getApp();
+        const projectId = (app.options as any)?.projectId || 'sat-mobile-de6f1';
+        const url = `https://us-central1-${projectId}.cloudfunctions.net/sendBirthdayEmailHttp`;
+        const auth = getAuth();
+        const idToken = await auth.currentUser?.getIdToken();
+        const resp = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(idToken ? { Authorization: `Bearer ${idToken}` } : {})
+          },
+          body: JSON.stringify({
+            to: recipient.email,
+            subject: template.subject,
+            html: template.htmlContent,
+            text: template.textContent
+          })
+        });
+        const data = await resp.json();
+        if (resp.ok && data?.success) {
+          return { success: true, messageId: data.messageId };
+        }
+        // Fall through to callable if HTTP failed
+      } catch (e) {
+        console.warn('Local HTTP email send failed, falling back to callable', e);
+      }
+    }
+
     try {
       // Call callable function backed by SendGrid
-      const { getFunctions, httpsCallable } = await import('firebase/functions');
-      const functions = getFunctions();
+  const { getFunctions, httpsCallable } = await import('firebase/functions');
+  const functions = getFunctions(undefined as any, 'us-central1');
       const fn = httpsCallable(functions, 'sendBirthdayEmail');
       const res: any = await fn({
         to: recipient.email,
@@ -340,10 +374,40 @@ You received this because you have oversight responsibilities for members in the
       return { success: false, error: data.error || 'Unknown email send failure' };
     } catch (error: any) {
       console.error('Failed to send birthday notification:', error);
-      return {
-        success: false,
-        error: error.message || 'Unknown error occurred while sending email'
-      };
+      // Fallback to HTTP endpoint with ID token (handles CORS explicitly)
+      try {
+        const { getApp } = await import('firebase/app');
+        const { getAuth } = await import('firebase/auth');
+        const app = getApp();
+        const projectId = (app.options as any)?.projectId || 'sat-mobile-de6f1';
+        const url = `https://us-central1-${projectId}.cloudfunctions.net/sendBirthdayEmailHttp`;
+        const auth = getAuth();
+        const idToken = await auth.currentUser?.getIdToken();
+        const resp = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(idToken ? { Authorization: `Bearer ${idToken}` } : {})
+          },
+          body: JSON.stringify({
+            to: recipient.email,
+            subject: template.subject,
+            html: template.htmlContent,
+            text: template.textContent
+          })
+        });
+        const data = await resp.json();
+        if (resp.ok && data?.success) {
+          return { success: true, messageId: data.messageId };
+        }
+        return { success: false, error: data?.error || `HTTP fallback failed (${resp.status})` };
+      } catch (httpErr: any) {
+        console.error('HTTP fallback also failed:', httpErr);
+        return {
+          success: false,
+          error: httpErr?.message || error?.message || 'Email send failed'
+        };
+      }
     }
   }
 

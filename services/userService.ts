@@ -5,8 +5,7 @@ import {
   getDocs, 
   updateDoc, 
   query, 
-  where, 
-  orderBy 
+  where 
 } from 'firebase/firestore';
 import { db } from '../firebase.config';
 import { User, Church } from '../types';
@@ -66,20 +65,52 @@ export const userService = {
   // Get all users in a church
   getChurchUsers: async (churchId: string): Promise<User[]> => {
     try {
+      // Avoid composite index by skipping orderBy in Firestore; sort client-side
       const usersQuery = query(
         collection(db, 'users'),
         where('churchId', '==', churchId),
-        where('isActive', '==', true),
-        orderBy('firstName') // Removed orderBy lastName since it's now optional
+        where('isActive', '==', true)
       );
-      
+
       const querySnapshot = await getDocs(usersQuery);
-      return querySnapshot.docs.map(doc => ({
+      const users = querySnapshot.docs.map(doc => ({
         ...doc.data(),
         id: doc.id
       })) as User[];
-    } catch (error: any) {
-      throw new Error(`Failed to get church users: ${error.message}`);
+
+      // Sort by firstName then lastName locally
+      users.sort((a: any, b: any) => {
+        const af = (a.firstName || '').toLowerCase();
+        const bf = (b.firstName || '').toLowerCase();
+        if (af !== bf) return af.localeCompare(bf);
+        const al = (a.lastName || '').toLowerCase();
+        const bl = (b.lastName || '').toLowerCase();
+        return al.localeCompare(bl);
+      });
+      return users;
+    } catch (primaryError: any) {
+      // Fallback: query only by churchId and filter active in-memory (for older indexes)
+      try {
+        const fallbackQuery = query(
+          collection(db, 'users'),
+          where('churchId', '==', churchId)
+        );
+        const snapshot = await getDocs(fallbackQuery);
+        const users = snapshot.docs
+          .map(doc => ({ ...doc.data(), id: doc.id }) as User)
+          .filter(u => (u as any).isActive !== false);
+        users.sort((a: any, b: any) => {
+          const af = (a.firstName || '').toLowerCase();
+          const bf = (b.firstName || '').toLowerCase();
+          if (af !== bf) return af.localeCompare(bf);
+          const al = (a.lastName || '').toLowerCase();
+          const bl = (b.lastName || '').toLowerCase();
+          return al.localeCompare(bl);
+        });
+        return users;
+      } catch (fallbackError: any) {
+        throw new Error(`Failed to get church users: ${primaryError.message || fallbackError.message}`);
+      }
     }
   },
 

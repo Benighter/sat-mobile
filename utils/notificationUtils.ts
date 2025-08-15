@@ -1,6 +1,9 @@
 import { Member, User, Bacenta, NotificationRecipient, BirthdayNotification } from '../types';
 import { calculateDaysUntilBirthday } from './birthdayUtils';
 
+// Feature flag: When true, only admins and leaders linked by an admin receive birthday notifications
+const ONLY_ADMIN_AND_LINKED = true;
+
 /**
  * Determine who should receive birthday notifications for a specific member
  * Respects organizational hierarchy and privacy boundaries
@@ -8,63 +11,69 @@ import { calculateDaysUntilBirthday } from './birthdayUtils';
 export const determineNotificationRecipients = (
   member: Member,
   users: User[],
-  bacentas: Bacenta[]
+  bacentas: Bacenta[],
+  options?: { actorAdminId?: string }
 ): NotificationRecipient[] => {
   const recipients: NotificationRecipient[] = [];
   const memberBacenta = bacentas.find(b => b.id === member.bacentaId);
-
+  // If no bacenta, we'll still notify admins/invited leaders; log and continue
   if (!memberBacenta) {
-    console.warn(`No bacenta found for member ${member.id}`);
-    return recipients;
+    console.warn(`No bacenta found for member ${member.id}; will notify admins/invited leaders only`);
   }
 
   // Find users who should receive notifications for this member
   users.forEach(user => {
-    // Skip if user has disabled birthday notifications
-    if (user.notificationPreferences?.birthdayNotifications?.enabled === false) {
-      return;
-    }
-
-    // Skip if user has disabled email notifications entirely
-    if (user.notificationPreferences?.emailNotifications === false) {
-      return;
-    }
+    const resolvedUid = (user as any).uid || (user as any).id;
+  // Note: In-app birthday reminders are independent of email preferences.
+  // We do not filter by emailNotifications or per-user birthday toggle here
+  // to ensure all relevant linked recipients get the reminder.
 
     let shouldReceiveNotification = false;
     let relationshipToMember: 'admin' | 'bacenta_leader' | 'fellowship_leader' = 'admin';
 
-    // Admin users: Only if they have oversight of this member's bacenta
+    // Admins always receive
     if (user.role === 'admin') {
-      // For now, all admins receive notifications (can be refined based on church structure)
-      shouldReceiveNotification = true;
-      relationshipToMember = 'admin';
+      // If an actor admin is specified, only that admin should get the notification.
+      // Otherwise, all admins receive.
+      const isActorAdmin = options?.actorAdminId ? resolvedUid === options.actorAdminId : true;
+      if (isActorAdmin) {
+        shouldReceiveNotification = true;
+        relationshipToMember = 'admin';
+      }
     }
 
-    // Bacenta Leaders: Only if they are the leader of this member's bacenta
-    if (user.role === 'leader') {
-      // Check if this user is the Bacenta Leader for the member's bacenta
+    // Leaders explicitly linked by an admin (invited) receive as 'admin' scope
+    if (!shouldReceiveNotification && user.role === 'leader') {
+      const invitedByAdminId = (user as any).invitedByAdminId as string | undefined;
+      const invitedFlag = (user as any).isInvitedAdminLeader === true;
+      const actorMatches = options?.actorAdminId ? invitedByAdminId === options.actorAdminId : true;
+  if (actorMatches && (invitedFlag || !!invitedByAdminId)) {
+        shouldReceiveNotification = true;
+        relationshipToMember = 'admin';
+      }
+    }
+
+    // Optional extended delivery to bacenta/fellowship leaders (disabled when ONLY_ADMIN_AND_LINKED)
+    if (!ONLY_ADMIN_AND_LINKED && user.role === 'leader') {
       if (member.bacentaLeaderId === user.uid) {
         shouldReceiveNotification = true;
         relationshipToMember = 'bacenta_leader';
       }
-      
-      // Check if this user is a Fellowship Leader in the same bacenta
-      // (Fellowship Leaders report to the Bacenta Leader)
       const userAsMember = findUserAsMember(user.uid, member, users);
-      if (userAsMember && 
-          userAsMember.bacentaId === member.bacentaId && 
-          userAsMember.role === 'Fellowship Leader') {
+      if (userAsMember && userAsMember.bacentaId === member.bacentaId && userAsMember.role === 'Fellowship Leader') {
         shouldReceiveNotification = true;
         relationshipToMember = 'fellowship_leader';
       }
     }
 
-    if (shouldReceiveNotification && user.email) {
+  if (shouldReceiveNotification) {
+      const display = user.displayName || '';
+      const [df, ...dl] = display ? display.split(' ') : [''];
       recipients.push({
-        userId: user.uid,
-        email: user.email,
-        firstName: user.firstName || user.displayName.split(' ')[0] || 'User',
-        lastName: user.lastName || user.displayName.split(' ').slice(1).join(' ') || '',
+    userId: resolvedUid,
+        email: user.email || '',
+        firstName: user.firstName || df || 'User',
+        lastName: user.lastName || (dl.length ? dl.join(' ') : ''),
         role: user.role,
         relationshipToMember,
         bacentaId: relationshipToMember !== 'admin' ? member.bacentaId : undefined

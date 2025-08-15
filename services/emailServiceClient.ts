@@ -34,7 +34,23 @@ export const emailServiceClient = {
       }
     }
 
-    // Fallback: Firebase callable
+    // Local dev: try CORS-enabled HTTP function first
+    try {
+      const httpUrl = `https://us-central1-sat-mobile-de6f1.cloudfunctions.net/sendBirthdayEmailHttp`;
+      const response = await fetch(httpUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to, subject, html, text })
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (data?.success) return data;
+      }
+    } catch (err) {
+      // ignore and fallback to callable
+    }
+
+    // Fallback: Firebase callable (requires auth; no CORS on callable path)
     const { getFunctions, httpsCallable } = await import('firebase/functions');
     const appFunctions = getFunctions();
     const fn = httpsCallable(appFunctions, 'sendBirthdayEmail');

@@ -7,6 +7,7 @@ import Button from '../ui/Button';
 import { emailServiceClient } from '../../services/emailServiceClient';
 import { EmailNotificationService } from '../../services/emailNotificationService';
 import { userService } from '../../services/userService';
+import { BirthdayNotificationService } from '../../services/birthdayNotificationService';
 
 interface BirthdayNotificationSettingsProps {
   onClose?: () => void;
@@ -23,6 +24,7 @@ const BirthdayNotificationSettings: React.FC<BirthdayNotificationSettingsProps> 
   const [testEmailSent, setTestEmailSent] = useState(false);
   const [digestEmailSent, setDigestEmailSent] = useState(false);
   const [groupDigestSent, setGroupDigestSent] = useState(false);
+  const [triggeredNow, setTriggeredNow] = useState(false);
 
   useEffect(() => {
     if (userProfile?.notificationPreferences) {
@@ -178,6 +180,41 @@ const BirthdayNotificationSettings: React.FC<BirthdayNotificationSettingsProps> 
       setTimeout(() => setGroupDigestSent(false), 5000);
     } catch (error: any) {
       showToast('error', 'Send Failed', error.message || 'Failed to send to leaders and admin');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Trigger server-side processing of upcoming birthday notifications now (emails + bell alerts)
+  const handleTriggerBirthdayNotificationsNow = async () => {
+    if (!currentChurchId) {
+      showToast('error', 'No church context', 'Cannot determine church to process');
+      return;
+    }
+    setIsLoading(true);
+    try {
+      // Use client-side service to process now (sends emails + creates bell notifications)
+      const users = await userService.getChurchUsers(currentChurchId);
+      const membersWithBirthdays = members.filter(m => !!m.birthday);
+      const days = settings.birthdayNotifications.daysBeforeNotification?.length
+        ? settings.birthdayNotifications.daysBeforeNotification
+        : [7, 5, 3, 2, 1, 0];
+
+      const svc = BirthdayNotificationService.getInstance();
+      const results = await svc.processBirthdayNotifications(
+        currentChurchId,
+        membersWithBirthdays,
+        users as any,
+        bacentas,
+  days,
+  new Date(),
+  { force: true, actorAdminId: userProfile?.uid }
+      );
+      setTriggeredNow(true);
+      showToast('success', 'Notifications Sent', `Processed ${results.processed}, sent ${results.sent}, failed ${results.failed}`);
+      setTimeout(() => setTriggeredNow(false), 5000);
+    } catch (error: any) {
+      showToast('error', 'Trigger Failed', error.message || 'Failed to trigger processing');
     } finally {
       setIsLoading(false);
     }
@@ -346,6 +383,14 @@ const BirthdayNotificationSettings: React.FC<BirthdayNotificationSettingsProps> 
                     leftIcon={groupDigestSent ? <CheckIcon className="w-4 h-4" /> : <EnvelopeIcon className="w-4 h-4" />}
                   >
                     {groupDigestSent ? 'Group Digest Sent!' : 'Send to Leaders & Admin'}
+                  </Button>
+                  <Button
+                    variant="primary"
+                    onClick={handleTriggerBirthdayNotificationsNow}
+                    loading={isLoading}
+                    leftIcon={triggeredNow ? <CheckIcon className="w-4 h-4" /> : <CalendarIcon className="w-4 h-4" />}
+                  >
+                    {triggeredNow ? 'Triggered!' : 'Send Birthday Notifications Now'}
                   </Button>
                 </div>
               </>
