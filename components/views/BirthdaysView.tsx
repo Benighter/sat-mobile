@@ -223,10 +223,15 @@ const BirthdaysView: React.FC = () => {
               setIsTriggering(true);
               try {
                 const users = await userService.getChurchUsers(currentChurchId);
-                const membersWithBirthdays = members.filter(m => !!m.birthday);
-                const days = userProfile?.notificationPreferences?.birthdayNotifications?.daysBeforeNotification?.length
-                  ? userProfile.notificationPreferences.birthdayNotifications.daysBeforeNotification
-                  : [7, 5, 3, 2, 1, 0];
+                // Only send for members listed under "Upcoming This Month"
+                const targetEntries = monthFutureBirthdays;
+                if (targetEntries.length === 0) {
+                  showToast('info', 'No Upcoming This Month', 'There are no upcoming birthdays in this month');
+                  setIsTriggering(false);
+                  return;
+                }
+                const membersWithBirthdays = targetEntries.map(e => e.member);
+                const days = Array.from(new Set(targetEntries.map(e => e.daysUntil)));
 
                 const svc = BirthdayNotificationService.getInstance();
                 const results = await svc.processBirthdayNotifications(

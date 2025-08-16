@@ -8,6 +8,7 @@ import { emailServiceClient } from '../../services/emailServiceClient';
 import { EmailNotificationService } from '../../services/emailNotificationService';
 import { userService } from '../../services/userService';
 import { BirthdayNotificationService } from '../../services/birthdayNotificationService';
+import { calculateDaysUntilBirthday } from '../../utils/birthdayUtils';
 
 interface BirthdayNotificationSettingsProps {
   onClose?: () => void;
@@ -199,15 +200,26 @@ const BirthdayNotificationSettings: React.FC<BirthdayNotificationSettingsProps> 
       // Use client-side service to process now (sends emails + creates bell notifications)
       const users = await userService.getChurchUsers(currentChurchId);
       const membersWithBirthdays = members.filter(m => !!m.birthday);
-  // Use locked days [7,3,1,0]
-  const days = [7, 3, 1, 0];
+      // Only trigger for the next upcoming birthdays (exclude already-passed)
+      const nonNegativeOffsets = membersWithBirthdays
+        .map(m => ({ m, d: calculateDaysUntilBirthday(m.birthday!, new Date()) }))
+        .filter(x => x.d >= 0);
+
+      if (nonNegativeOffsets.length === 0) {
+        showToast('info', 'No Upcoming', 'There are no upcoming birthdays to notify right now');
+        setIsLoading(false);
+        return;
+      }
+
+      const minDays = Math.min(...nonNegativeOffsets.map(x => x.d));
+      const days = [minDays];
 
       const svc = BirthdayNotificationService.getInstance();
       const results = await svc.processBirthdayNotifications(
         currentChurchId,
         membersWithBirthdays,
         users as any,
-        bacentas,
+  bacentas,
   days,
   new Date(),
   { force: true, actorAdminId: userProfile?.uid }
