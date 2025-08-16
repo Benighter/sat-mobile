@@ -38,7 +38,7 @@ const CopyMembersView: React.FC = () => {
   const bacentaFilter = currentTab.data?.bacentaFilter || null;
   const searchTerm = currentTab.data?.searchTerm || '';
   const roleFilter = currentTab.data?.roleFilter || 'all';
-  const showFrozen: boolean = currentTab.data?.showFrozen !== undefined ? currentTab.data.showFrozen : true;
+  const showFrozen: boolean = currentTab.data?.showFrozen !== undefined ? currentTab.data.showFrozen : false;
 
   // Get bacenta name if filtering by bacenta
   const getBacentaName = (bacentaId: string) => {

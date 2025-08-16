@@ -114,6 +114,7 @@ const DashboardView: React.FC = memo(() => {
   const { members, attendanceRecords, newBelievers, displayedSundays, displayedDate, sundayConfirmations, guests, switchTab, user, currentChurchId, allOutreachMembers, bacentas, prayerRecords } = useAppContext(); // Use displayedSundays
 
   const totalMembers = members.length;
+  const activeMembers = useMemo(() => members.filter(m => !m.frozen).length, [members]);
   
   // Filter out orphaned outreach members whose bacentaId doesn't exist anymore
   const validOutreachMembers = useMemo(() => {
@@ -489,7 +490,7 @@ const DashboardView: React.FC = memo(() => {
         {/* Fixed first card (not draggable) */}
         <StatCard
           title="Total Members"
-          value={totalMembers}
+          value={activeMembers}
           icon={<PeopleIcon className="w-full h-full" />}
           accentColor="blue"
           onClick={() => switchTab({ id: 'all_members', name: 'All Members' })}

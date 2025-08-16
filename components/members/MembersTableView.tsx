@@ -39,7 +39,7 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
   const [searchTerm, setSearchTerm] = useState('');
   const [displayedDate, setDisplayedDate] = useState(new Date());
   const [roleFilter, setRoleFilter] = useState<'all' | 'Bacenta Leader' | 'Fellowship Leader' | 'Member'>('all');
-  const [showFrozen, setShowFrozen] = useState(true);
+  const [showFrozen, setShowFrozen] = useState(false);
 
   // Get upcoming Sunday for confirmation
   const upcomingSunday = useMemo(() => getUpcomingSunday(), []);
