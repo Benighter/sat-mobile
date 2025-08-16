@@ -8,6 +8,7 @@ import Badge from '../ui/Badge';
 import { CalendarIcon, PlusIcon, CheckIcon, ExclamationTriangleIcon, ChevronLeftIcon, ChevronRightIcon, TrashIcon, UserIcon, PhoneIcon } from '../icons';
 import BulkOutreachAddModal from './BulkOutreachAddModal';
 import AddOutreachMemberModal from './AddOutreachMemberModal';
+import EditOutreachMemberModal from './EditOutreachMemberModal';
 
 // Week picker (Monday-based)
 const WeekPicker: React.FC<{ value: string; onChange: (v: string) => void }> = ({ value, onChange }) => {
@@ -82,6 +83,7 @@ const BacentaOutreachView: React.FC<BacentaOutreachViewProps> = ({ bacentaId }) 
   // replaced inline form with modal
   const [showAddModal, setShowAddModal] = useState(false);
   const [showBulkModal, setShowBulkModal] = useState(false);
+  const [editingMember, setEditingMember] = useState<OutreachMember | null>(null);
 
   const bacenta = bacentas.find(b => b.id === bacentaId);
 
@@ -220,7 +222,13 @@ const BacentaOutreachView: React.FC<BacentaOutreachViewProps> = ({ bacentaId }) 
                           </div>
                         </div>
                         <div className="ml-3 min-w-0">
-                          <div className="text-sm font-medium text-gray-900 truncate" title={member.name}>{member.name}</div>
+                          <button
+                            className="text-left text-sm font-medium text-blue-600 hover:underline truncate"
+                            title="Edit outreach member"
+                            onClick={() => setEditingMember(member)}
+                          >
+                            {member.name}
+                          </button>
                           {member.convertedMemberId && (
                             <div className="text-xs text-purple-600 font-medium">✓ Converted</div>
                           )}
@@ -306,6 +314,12 @@ const BacentaOutreachView: React.FC<BacentaOutreachViewProps> = ({ bacentaId }) 
         bacentaId={bacentaId}
         bacentaName={bacenta?.name}
         weekStart={weekStart}
+      />
+      <EditOutreachMemberModal
+        isOpen={!!editingMember}
+        onClose={() => setEditingMember(null)}
+        member={editingMember}
+        bacentaName={bacenta?.name}
       />
     </div>
   );

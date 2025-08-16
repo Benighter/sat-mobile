@@ -7,10 +7,9 @@
   "author": "SAT Mobile Team",
   "homepage": ".",
   "scripts": {
-  "dev": "vite",
-  "dev:3001": "vite --port 3001",
-  
-  "build": "vite build && node scripts/optimize-build.js",
+    "dev": "vite",
+    "dev:3001": "vite --port 3001",
+    "build": "vite build && node scripts/optimize-build.js",
     "build:fast": "vite build",
     "preview": "vite preview",
     "build:mobile": "vite build --mode production && node scripts/optimize-build.js",
@@ -35,6 +34,7 @@
     "@google/generative-ai": "^0.24.1",
     "chart.js": "^4.5.0",
     "chartjs-to-image": "^1.2.2",
+    "cli-cursor": "^5.0.0",
     "date-fns": "^4.1.0",
     "exceljs": "^4.4.0",
     "firebase": "^11.9.1",
