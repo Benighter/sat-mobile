@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useAppContext } from '../../contexts/FirebaseAppContext';
 import {
   getCurrentOrMostRecentSunday,
@@ -16,6 +16,7 @@ import {
   ClipboardIcon
 } from '../icons';
 import { Member, NewBeliever, Bacenta } from '../../types';
+import { hasAdminPrivileges } from '../../utils/permissionUtils';
 
 // New grouped structure types
 interface LinkedBacentaGroup {
@@ -48,8 +49,24 @@ const WeeklyAttendanceView: React.FC = () => {
     newBelievers,
     bacentas,
     attendanceRecords,
-    showToast
+    showToast,
+    userProfile
   } = useAppContext();
+
+  const isAdmin = hasAdminPrivileges(userProfile);
+
+  // Keep constituency name in sync with App Preferences (and react immediately to updates)
+  const [constituencyName, setConstituencyName] = useState<string>(userProfile?.churchName || '');
+  useEffect(() => {
+    setConstituencyName(userProfile?.churchName || '');
+  }, [userProfile?.churchName]);
+  useEffect(() => {
+    const handler = (e: any) => {
+      if (e?.detail?.newName) setConstituencyName(e.detail.newName);
+    };
+    window.addEventListener('constituencyUpdated', handler as EventListener);
+    return () => window.removeEventListener('constituencyUpdated', handler as EventListener);
+  }, []);
 
   const [selectedSunday, setSelectedSunday] = useState<string>(getCurrentOrMostRecentSunday());
 
@@ -163,6 +180,14 @@ const WeeklyAttendanceView: React.FC = () => {
     return { groups, leftoverGroup, grandTotal };
   }, [selectedSunday, attendanceRecords, members, newBelievers, bacentas]);
 
+  // Helper: format date as "10 August 2025"
+  const formatDayMonthYear = (dateStr: string) => {
+    // Always formats the provided Sunday (selectedSunday) as "10 August 2025" using user's locale for month name only
+    const d = new Date(dateStr + 'T00:00:00');
+    if (Number.isNaN(d.getTime())) return dateStr; // fallback to raw
+    return `${d.getDate()} ${d.toLocaleString(undefined, { month: 'long' })} ${d.getFullYear()}`;
+  };
+
   // Copy attendance data as formatted text
   const copyAttendanceText = async () => {
     try {
@@ -220,6 +245,64 @@ const WeeklyAttendanceView: React.FC = () => {
     } catch (error) {
       console.error('Failed to copy text:', error);
       showToast('error', 'Copy Failed', 'Unable to copy to clipboard');
+    }
+  };
+
+  // Copy COs report (Admins only)
+  const copyCOsReportText = async () => {
+    try {
+  // Constituency/Admin details (kept in sync with App Preferences)
+      const coFirstName = (userProfile?.firstName || '').trim() || 'CO';
+
+      // Build per-leader totals (members only; exclude new believers)
+      const leaderTotals = groupedAttendance.groups.map(g => ({
+        name: `${g.bacentaLeader.firstName}`.trim(),
+        count:
+          g.mainMembers.length +
+          g.fellowshipGroups.reduce((s, fg) => s + fg.total, 0) +
+          g.linkedBacentaGroups.reduce((s, lg) => s + lg.total, 0)
+      }))
+        .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+
+      const totalAttendance = leaderTotals.reduce((s, x) => s + x.count, 0);
+
+      // First timers present today (new believers marked present AND isFirstTime)
+      const presentNewBelieverIds = new Set(
+        attendanceRecords
+          .filter(r => r.date === selectedSunday && r.status === 'Present' && r.newBelieverId)
+          .map(r => r.newBelieverId as string)
+      );
+      const todaysFirstTimers = newBelievers.filter(nb => presentNewBelieverIds.has(nb.id) && nb.isFirstTime).length;
+
+      // Today's new believers (joined today)
+      const todaysNewBelievers = newBelievers.filter(nb => nb.joinedDate === selectedSunday).length || 0;
+
+      // Previous week's new believers (from last Sunday up to day before selected Sunday)
+      const prevSunday = getPreviousSunday(selectedSunday);
+      const prevWeeksNewBelievers = newBelievers.filter(nb => nb.joinedDate >= prevSunday && nb.joinedDate < selectedSunday).length || 0;
+
+      // Compose text
+  let text = `*${constituencyName}* COs Sunday Report\n\n`;
+      text += `*(CO Name: ${coFirstName})*\n\n`;
+      text += `*Date: ${formatDayMonthYear(selectedSunday)}*\n\n`;
+      text += `*Attendance per bacenta leader: in descending order*\n\n`;
+      if (leaderTotals.length === 0) {
+        text += `No bacenta leaders with attendance.\n`;
+      } else {
+        leaderTotals.forEach((lt, idx) => {
+          text += `${idx + 1}. ${lt.name}: ${lt.count}\n`;
+        });
+      }
+      text += `\n*Total: ${totalAttendance}*\n\n`;
+      text += `*No of Today's First Timers: ${todaysFirstTimers}*\n\n`;
+      text += `*No of Todays New believers: ${todaysNewBelievers}*\n\n`;
+      text += `*Number of Previous weeks new believers: ${prevWeeksNewBelievers}*`;
+
+      await navigator.clipboard.writeText(text);
+      showToast('success', 'Copied!', 'COs report copied to clipboard');
+    } catch (error) {
+      console.error('Failed to copy COs report:', error);
+      showToast('error', 'Copy Failed', 'Unable to copy COs report');
     }
   };
 
@@ -283,15 +366,27 @@ const WeeklyAttendanceView: React.FC = () => {
               </div>
             </div>
 
-            {/* Copy Button */}
-            <button
-              onClick={copyAttendanceText}
-              className="inline-flex items-center space-x-2 px-4 py-2 bg-slate-600 hover:bg-slate-700 text-white rounded-lg transition-all duration-200 text-sm font-medium shadow-sm"
-              title="Copy attendance as text"
-            >
-              <ClipboardIcon className="w-4 h-4" />
-              <span>Copy Attendance</span>
-            </button>
+            {/* Copy Buttons */}
+            <div className="flex items-center justify-center gap-3">
+              <button
+                onClick={copyAttendanceText}
+                className="inline-flex items-center space-x-2 px-4 py-2 bg-slate-600 hover:bg-slate-700 text-white rounded-lg transition-all duration-200 text-sm font-medium shadow-sm"
+                title="Copy attendance as text"
+              >
+                <ClipboardIcon className="w-4 h-4" />
+                <span>Copy Attendance</span>
+              </button>
+              {isAdmin && (
+                <button
+                  onClick={copyCOsReportText}
+                  className="inline-flex items-center space-x-2 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg transition-all duration-200 text-sm font-medium shadow-sm"
+                  title="Copy COs report (Admins only)"
+                >
+                  <ClipboardIcon className="w-4 h-4" />
+                  <span>Copy COs report</span>
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Professional Attendance Content */}

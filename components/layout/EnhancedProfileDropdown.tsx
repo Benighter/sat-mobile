@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useAppContext } from '../../contexts/FirebaseAppContext';
 import { authService, FirebaseUser } from '../../services/firebaseService';
 import { TabKeys } from '../../types';
@@ -42,6 +42,9 @@ const EnhancedProfileDropdown: React.FC<EnhancedProfileDropdownProps> = ({
   isBacentaDrawerOpen,
   closeBacentaDrawer
   } = useAppContext();
+
+  // Use active (non-frozen) members across the app
+  const activeMembersCount = useMemo(() => members.filter(m => !m.frozen).length, [members]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -178,7 +181,7 @@ const EnhancedProfileDropdown: React.FC<EnhancedProfileDropdownProps> = ({
           <div className="p-4 bg-gray-50 border-b border-gray-100">
             <div className="grid grid-cols-3 gap-4 text-center">
               <div>
-                <p className="text-2xl font-bold text-blue-600">{members.length}</p>
+                <p className="text-2xl font-bold text-blue-600">{activeMembersCount}</p>
                 <p className="text-xs text-gray-600">Members</p>
               </div>
               <div>

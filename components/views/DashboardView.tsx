@@ -113,7 +113,6 @@ const StatCard: React.FC<StatCardProps> = memo(({ title, value, icon, descriptio
 const DashboardView: React.FC = memo(() => {
   const { members, attendanceRecords, newBelievers, displayedSundays, displayedDate, sundayConfirmations, guests, switchTab, user, currentChurchId, allOutreachMembers, bacentas, prayerRecords } = useAppContext(); // Use displayedSundays
 
-  const totalMembers = members.length;
   const activeMembers = useMemo(() => members.filter(m => !m.frozen).length, [members]);
   
   // Filter out orphaned outreach members whose bacentaId doesn't exist anymore
@@ -165,8 +164,8 @@ const DashboardView: React.FC = memo(() => {
           setConfirmationTarget(target);
         } else {
           // Default to total member count if no target is set
-          // Only use totalMembers if we actually have members loaded
-          const defaultTarget = totalMembers > 0 ? totalMembers : 0;
+          // Only use activeMembers if we actually have members loaded
+          const defaultTarget = activeMembers > 0 ? activeMembers : 0;
           setConfirmationTarget(defaultTarget);
         }
       } catch (error: any) {
@@ -180,8 +179,8 @@ const DashboardView: React.FC = memo(() => {
         // Check if it's an offline error
   // const isOffline = error?.code === 'unavailable' || error?.message?.includes('offline') || error?.message?.includes('network') || error?.message?.includes('backend');
 
-        // Fallback to member count, but only if we have members loaded
-        const defaultTarget = totalMembers > 0 ? totalMembers : 0;
+  // Fallback to member count, but only if we have members loaded
+  const defaultTarget = activeMembers > 0 ? activeMembers : 0;
         setConfirmationTarget(defaultTarget);
       } finally {
         setIsLoadingTarget(false);
@@ -192,7 +191,7 @@ const DashboardView: React.FC = memo(() => {
     if (user) {
       loadTarget();
     }
-  }, [user, totalMembers, currentChurchId]); // Added totalMembers and currentChurchId as dependencies
+  }, [user, activeMembers, currentChurchId]); // Depend on activeMembers for consistency
 
   const currentMonthAttendancePercentage = () => {
     if (!displayedSundays.length || !members.length) return 0;
