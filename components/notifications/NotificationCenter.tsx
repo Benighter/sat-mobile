@@ -13,6 +13,8 @@ interface NotificationCenterProps {
 const NotificationCenter: React.FC<NotificationCenterProps> = ({ isOpen, onClose }) => {
   const [notifications, setNotifications] = useState<AdminNotification[]>([]);
   const [loading, setLoading] = useState(false);
+  const [clearingAll, setClearingAll] = useState(false);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [markingAsRead, setMarkingAsRead] = useState<string | null>(null);
   const { userProfile, showToast } = useAppContext();
 
@@ -247,18 +249,65 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({ isOpen, onClose
         </div>
 
         {/* Actions */}
-        {unreadCount > 0 && (
-          <div className="px-6 py-4 bg-gradient-to-r from-blue-50 to-purple-50 border-b">
-            <button
-              onClick={markAllAsRead}
-              className="flex items-center space-x-2 text-sm font-medium text-blue-600 hover:text-blue-700 transition-all duration-200 hover:scale-105 group"
-            >
-              <CheckCheck className="w-4 h-4 group-hover:rotate-12 transition-transform duration-200" />
-              <span>Mark all as read</span>
-              <Sparkles className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
-            </button>
+        <div className="px-6 py-4 bg-gradient-to-r from-blue-50 to-purple-50 border-b flex items-center justify-between space-x-4">
+          <div>
+            {unreadCount > 0 && (
+              <button
+                onClick={markAllAsRead}
+                className="flex items-center space-x-2 text-sm font-medium text-blue-600 hover:text-blue-700 transition-all duration-200 hover:scale-105 group"
+              >
+                <CheckCheck className="w-4 h-4 group-hover:rotate-12 transition-transform duration-200" />
+                <span>Mark all as read</span>
+                <Sparkles className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
+              </button>
+            )}
           </div>
-        )}
+
+          <div className="flex items-center space-x-2">
+            {!showClearConfirm ? (
+              <button
+                onClick={() => setShowClearConfirm(true)}
+                className="text-sm text-red-600 hover:text-red-700 transition-all duration-200 px-3 py-2 bg-white border border-red-100 rounded-md shadow-sm hover:scale-105"
+                title="Clear all notifications"
+              >
+                Clear all
+              </button>
+            ) : (
+              <div className="flex items-center space-x-2">
+                <span className="text-sm text-gray-600">Confirm?</span>
+                <button
+                  onClick={async () => {
+                    if (!userProfile?.uid) return;
+                    try {
+                      setClearingAll(true);
+                      await notificationService.clearAll(userProfile.uid);
+                      setNotifications([]);
+                      showToast('success', 'Success', 'All notifications cleared');
+                    } catch (error: any) {
+                      console.error(error);
+                      showToast('error', 'Error', 'Failed to clear notifications');
+                    } finally {
+                      setClearingAll(false);
+                      setShowClearConfirm(false);
+                    }
+                  }}
+                  disabled={clearingAll}
+                  className="text-sm text-white bg-red-600 hover:bg-red-700 px-3 py-2 rounded-md shadow-sm disabled:opacity-50"
+                >
+                  {clearingAll ? 'Clearing...' : 'Yes'}
+                </button>
+
+                <button
+                  onClick={() => setShowClearConfirm(false)}
+                  disabled={clearingAll}
+                  className="text-sm text-gray-600 bg-white px-3 py-2 rounded-md border border-gray-100 shadow-sm hover:scale-105 disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
 
         {/* Notifications List */}
         <div className="flex-1 overflow-y-auto bg-gray-50">

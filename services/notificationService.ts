@@ -251,6 +251,37 @@ export const notificationService = {
     }
   },
 
+  // Permanently delete all notifications for an admin
+  clearAll: async (adminId: string): Promise<void> => {
+    try {
+      if (!currentChurchId) {
+        throw new Error('Church context not set');
+      }
+
+      const notificationsRef = collection(db, getNotificationCollectionPath(currentChurchId));
+      const q = query(
+        notificationsRef,
+        where('adminId', '==', adminId)
+      );
+
+      const querySnapshot = await getDocs(q);
+      if (querySnapshot.empty) return;
+
+      // Firestore batch supports up to 500 operations per batch. If there are more,
+      // process in chunks of 400 to be safe.
+      const chunkSize = 400;
+      const docs = querySnapshot.docs;
+      for (let i = 0; i < docs.length; i += chunkSize) {
+        const batch = writeBatch(db);
+        const slice = docs.slice(i, i + chunkSize);
+        slice.forEach(docSnap => batch.delete(docSnap.ref));
+        await batch.commit();
+      }
+    } catch (error: any) {
+      throw new Error(`Failed to clear all notifications: ${error.message}`);
+    }
+  },
+
   // Delete notification
   delete: async (notificationId: string): Promise<void> => {
     try {
