@@ -4,7 +4,6 @@ import {
   getUpcomingSunday,
   getNextSunday,
   getPreviousSunday,
-  formatFullDate,
   formatCompactDate,
   getTodayYYYYMMDD
 } from '../../utils/dateUtils';
@@ -26,6 +25,7 @@ import { Member, Bacenta, Guest } from '../../types';
 import Dropdown from '../ui/Dropdown';
 import GuestFormModal from '../modals/forms/GuestFormModal';
 import GuestConversionModal from '../new-believers/GuestConversionModal';
+import CopyConfirmationsModal from '../modals/confirmations/CopyConfirmationsModal';
 
 // Grouping model aligned to WeeklyAttendanceView
 interface LinkedBacentaGroup {
@@ -85,6 +85,7 @@ const SundayConfirmationsView: React.FC = () => {
   // Guest conversion state
   const [isConversionModalOpen, setIsConversionModalOpen] = useState<boolean>(false);
   const [convertingGuest, setConvertingGuest] = useState<Guest | null>(null);
+  const [isCopyModalOpen, setIsCopyModalOpen] = useState<boolean>(false);
 
   // Check if current user is admin
   const isAdmin = hasAdminPrivileges(userProfile);
@@ -295,6 +296,10 @@ const SundayConfirmationsView: React.FC = () => {
     setConvertingGuest(null);
   };
 
+  // Copy modal handlers
+  const openCopyModal = () => setIsCopyModalOpen(true);
+  const closeCopyModal = () => setIsCopyModalOpen(false);
+
 
 
   // Calculate grouped confirmation data (structure matches WeeklyAttendance)
@@ -414,72 +419,7 @@ const SundayConfirmationsView: React.FC = () => {
     return { groups, grandTotal };
   }, [selectedSunday, sundayConfirmations, members, bacentas, guests]);
 
-  // Copy confirmation data as formatted text
-  const copyConfirmationText = async () => {
-    try {
-      const dateText = formatFullDate(selectedSunday);
-      let text = `Sunday Confirmations - ${dateText}\n\n`;
-
-      if (confirmationData.groups.length === 0) {
-        text += 'No confirmations recorded for this Sunday.';
-      } else {
-        confirmationData.groups.forEach((group, i) => {
-          text += `💚 Bacenta leader: ${group.bacentaLeader.firstName} ${group.bacentaLeader.lastName || ''} (${group.bacenta.name})\n`;
-          group.mainMembers.forEach((m, idx) => {
-            text += `${idx + 1}. ${m.firstName} ${m.lastName || ''}\n`;
-          });
-          if (group.guests.length) {
-            text += `Guests:\n`;
-            group.guests.forEach((g, gIdx) => {
-              text += `${gIdx + 1}. ${g.firstName} ${g.lastName || ''} (Guest)\n`;
-            });
-          }
-          group.linkedBacentaGroups.forEach(lg => {
-            text += `\n❤ ${lg.bacenta.name}\n`;
-            lg.members.forEach((m, idx) => {
-              text += `${idx + 1}. ${m.firstName} ${m.lastName || ''}\n`;
-            });
-            if (lg.guests && lg.guests.length) {
-              lg.guests.forEach((g, gi) => {
-                text += `${gi + 1}. ${g.firstName} ${g.lastName || ''} (Guest)\n`;
-              });
-            }
-          });
-          group.fellowshipGroups.forEach(fg => {
-            text += `\n❤️ Fellowship leader: ${fg.fellowshipLeader.firstName} ${fg.fellowshipLeader.lastName || ''} (${fg.bacenta.name})\n`;
-            fg.members.forEach((m, idx) => {
-              text += `${idx + 1}. ${m.firstName} ${m.lastName || ''}\n`;
-            });
-            if (fg.guests.length) {
-              fg.guests.forEach((g, gi) => {
-                text += `${gi + 1}. ${g.firstName} ${g.lastName || ''} (Guest)\n`;
-              });
-            }
-            fg.linkedBacentaGroups.forEach(lg => {
-              text += `\n❤ ${lg.bacenta.name}\n`;
-              lg.members.forEach((m, idx) => {
-                text += `${idx + 1}. ${m.firstName} ${m.lastName || ''}\n`;
-              });
-              if (lg.guests && lg.guests.length) {
-                lg.guests.forEach((g, gi) => {
-                  text += `${gi + 1}. ${g.firstName} ${g.lastName || ''} (Guest)\n`;
-                });
-              }
-            });
-          });
-          text += `\nTotal: ${group.total}\n`;
-          if (i < confirmationData.groups.length - 1) text += '\n';
-        });
-        text += `\nGrand Total: ${confirmationData.grandTotal}`;
-      }
-
-      await navigator.clipboard.writeText(text);
-  showToast('success', 'Copied!', 'Sunday confirmations copied to clipboard');
-    } catch (error) {
-      console.error('Failed to copy text:', error);
-      showToast('error', 'Copy Failed', 'Unable to copy to clipboard');
-    }
-  };
+  // Copy handled via CopyConfirmationsModal
 
   // Navigation handlers
   const handlePreviousSunday = () => {
@@ -653,7 +593,7 @@ const SundayConfirmationsView: React.FC = () => {
                   </button>
 
                   <button
-                    onClick={copyConfirmationText}
+                    onClick={openCopyModal}
                     className="flex items-center justify-center px-5 py-2.5 bg-white border border-gray-300 hover:bg-gray-50 rounded-lg transition-all duration-200 text-gray-700 shadow-sm"
                   >
                     <ClipboardIcon className="w-4 h-4 mr-2" />
@@ -931,6 +871,14 @@ const SundayConfirmationsView: React.FC = () => {
         guest={convertingGuest}
         bacenta={convertingGuest ? bacentas.find(b => b.id === convertingGuest.bacentaId) || null : null}
         isLoading={isLoading}
+      />
+
+      {/* Copy Confirmations Modal */}
+      <CopyConfirmationsModal
+        isOpen={isCopyModalOpen}
+        onClose={closeCopyModal}
+        selectedSunday={selectedSunday}
+        groups={confirmationData.groups as any}
       />
     </div>
   );
