@@ -16,8 +16,24 @@ interface BirthdayNotificationSettingsProps {
 const BirthdayNotificationSettings: React.FC<BirthdayNotificationSettingsProps> = ({ onClose }) => {
   const { user, userProfile, showToast, members, bacentas, currentChurchId } = useAppContext();
   
+  // Force fixed defaults for birthday notifications: enabled, days [7,3,1,0], time '00:00'
+  const forcedBirthdayDefaults = {
+    enabled: true,
+    daysBeforeNotification: [7, 3, 1, 0],
+    emailTime: '00:00'
+  } as NotificationPreferences['birthdayNotifications'];
+
   const [settings, setSettings] = useState<NotificationPreferences>(
-    userProfile?.notificationPreferences || getDefaultNotificationPreferences()
+    (() => {
+      const base = userProfile?.notificationPreferences || getDefaultNotificationPreferences();
+      return {
+        ...base,
+        birthdayNotifications: {
+          ...base.birthdayNotifications,
+          ...forcedBirthdayDefaults
+        }
+      } as NotificationPreferences;
+    })()
   );
   
   const [isLoading, setIsLoading] = useState(false);
@@ -28,39 +44,26 @@ const BirthdayNotificationSettings: React.FC<BirthdayNotificationSettingsProps> 
 
   useEffect(() => {
     if (userProfile?.notificationPreferences) {
-      setSettings(userProfile.notificationPreferences);
+      setSettings({
+        ...userProfile.notificationPreferences,
+        birthdayNotifications: {
+          ...userProfile.notificationPreferences.birthdayNotifications,
+          ...forcedBirthdayDefaults
+        }
+      } as NotificationPreferences);
     }
   }, [userProfile]);
 
   const handleSettingChange = (key: keyof NotificationPreferences, value: any) => {
+    // Prevent changing birthdayNotifications via this generic handler
+    if (key === 'birthdayNotifications') return;
     setSettings(prev => ({
       ...prev,
       [key]: value
     }));
   };
 
-  const handleBirthdaySettingChange = (key: keyof NotificationPreferences['birthdayNotifications'], value: any) => {
-    setSettings(prev => ({
-      ...prev,
-      birthdayNotifications: {
-        ...prev.birthdayNotifications,
-        [key]: value
-      }
-    }));
-  };
-
-  const handleNotificationDaysChange = (days: number, enabled: boolean) => {
-    const currentDays = settings.birthdayNotifications.daysBeforeNotification;
-    let newDays: number[];
-    
-    if (enabled) {
-      newDays = [...currentDays, days].sort((a, b) => b - a);
-    } else {
-      newDays = currentDays.filter(d => d !== days);
-    }
-    
-    handleBirthdaySettingChange('daysBeforeNotification', newDays);
-  };
+  // Birthday notification handlers removed - settings are locked in UI
 
   const handleSaveSettings = async () => {
     if (!user) return;
@@ -196,9 +199,8 @@ const BirthdayNotificationSettings: React.FC<BirthdayNotificationSettingsProps> 
       // Use client-side service to process now (sends emails + creates bell notifications)
       const users = await userService.getChurchUsers(currentChurchId);
       const membersWithBirthdays = members.filter(m => !!m.birthday);
-      const days = settings.birthdayNotifications.daysBeforeNotification?.length
-        ? settings.birthdayNotifications.daysBeforeNotification
-        : [7, 5, 3, 2, 1, 0];
+  // Use locked days [7,3,1,0]
+  const days = [7, 3, 1, 0];
 
       const svc = BirthdayNotificationService.getInstance();
       const results = await svc.processBirthdayNotifications(
@@ -227,16 +229,7 @@ const BirthdayNotificationSettings: React.FC<BirthdayNotificationSettingsProps> 
     { days: 0, label: 'On the day' }
   ];
 
-  const timeOptions = [
-    { value: '08:00', label: '8:00 AM' },
-    { value: '09:00', label: '9:00 AM' },
-    { value: '10:00', label: '10:00 AM' },
-    { value: '11:00', label: '11:00 AM' },
-    { value: '12:00', label: '12:00 PM' },
-    { value: '13:00', label: '1:00 PM' },
-    { value: '14:00', label: '2:00 PM' },
-    { value: '15:00', label: '3:00 PM' }
-  ];
+  // timeOptions removed since time is locked to 00:00
 
   return (
     <div className="max-w-4xl mx-auto p-6 bg-white rounded-xl shadow-lg">
@@ -306,17 +299,18 @@ const BirthdayNotificationSettings: React.FC<BirthdayNotificationSettingsProps> 
           </h3>
           
           <div className="space-y-6">
-            {/* Enable Birthday Notifications */}
-            <label className="flex items-center space-x-3 cursor-pointer">
+            {/* Birthday Notifications are managed by the organization and cannot be changed here */}
+            <label className="flex items-center space-x-3">
               <input
                 type="checkbox"
-                checked={settings.birthdayNotifications.enabled}
-                onChange={(e) => handleBirthdaySettingChange('enabled', e.target.checked)}
-                className="w-4 h-4 text-pink-600 border-gray-300 rounded focus:ring-pink-500"
+                checked={true}
+                readOnly
+                disabled
+                className="w-4 h-4 text-pink-600 border-gray-300 rounded"
               />
               <div>
-                <span className="text-sm font-medium text-gray-700">Enable Birthday Notifications</span>
-                <p className="text-xs text-gray-500">Receive email notifications for upcoming member birthdays</p>
+                <span className="text-sm font-medium text-gray-700">Birthday Notifications (managed by admin)</span>
+                <p className="text-xs text-gray-500">These settings are controlled by the organisation and cannot be changed here</p>
               </div>
             </label>
 
@@ -330,12 +324,13 @@ const BirthdayNotificationSettings: React.FC<BirthdayNotificationSettingsProps> 
                   </label>
                   <div className="grid grid-cols-2 gap-3">
                     {notificationDayOptions.map(option => (
-                      <label key={option.days} className="flex items-center space-x-2 cursor-pointer">
+                      <label key={option.days} className="flex items-center space-x-2">
                         <input
                           type="checkbox"
                           checked={settings.birthdayNotifications.daysBeforeNotification.includes(option.days)}
-                          onChange={(e) => handleNotificationDaysChange(option.days, e.target.checked)}
-                          className="w-4 h-4 text-pink-600 border-gray-300 rounded focus:ring-pink-500"
+                          readOnly
+                          disabled
+                          className="w-4 h-4 text-pink-600 border-gray-300 rounded"
                         />
                         <span className="text-sm text-gray-700">{option.label}</span>
                       </label>
@@ -350,14 +345,10 @@ const BirthdayNotificationSettings: React.FC<BirthdayNotificationSettingsProps> 
                   </label>
                   <select
                     value={settings.birthdayNotifications.emailTime}
-                    onChange={(e) => handleBirthdaySettingChange('emailTime', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+                    disabled
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-700"
                   >
-                    {timeOptions.map(option => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
+                    <option value="00:00">12:00 AM</option>
                   </select>
                   <p className="text-xs text-gray-500 mt-1">
                     Notifications will be sent around this time each day

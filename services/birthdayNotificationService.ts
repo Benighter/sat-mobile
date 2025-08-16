@@ -126,7 +126,7 @@ export class BirthdayNotificationService {
     members: Member[],
     users: User[],
     bacentas: Bacenta[],
-    notificationDays: number[] = [7, 3, 1],
+  notificationDays: number[] = [7, 3, 1, 0],
   referenceDate: Date = new Date(),
   options?: { force?: boolean; actorAdminId?: string }
   ): Promise<{
@@ -147,9 +147,15 @@ export class BirthdayNotificationService {
     try {
       // Ensure notification service has church/user context so bell writes succeed
       // Prefer the acting admin as context; otherwise fall back to a system actor
-      const actor = options?.actorAdminId
-        ? (users.find(u => u.uid === options.actorAdminId || (u as any).id === options.actorAdminId) || null)
-        : null;
+      // Resolve acting admin: prefer explicit actorAdminId, otherwise pick the first active admin in users
+      let actor = null as any;
+      if (options?.actorAdminId) {
+        actor = users.find(u => u.uid === options.actorAdminId || (u as any).id === options.actorAdminId) || null;
+      }
+      if (!actor) {
+        actor = users.find(u => u.role === 'admin' && (u as any).isActive !== false) || null;
+      }
+
       const actorForContext = actor || ({
         id: 'system',
         uid: 'system',

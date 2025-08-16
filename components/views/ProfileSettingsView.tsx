@@ -54,8 +54,24 @@ const ProfileSettingsView: React.FC = () => {
   // Constituency (church) name editor – linked to Super Admin feature
   const [constituencyName, setConstituencyName] = useState<string>(userProfile?.churchName || '');
 
+  // Force birthday preferences to org defaults: enabled, days [7,3,1,0], time '00:00'
+  const forcedBirthdayDefaults = {
+    enabled: true,
+    daysBeforeNotification: [7, 3, 1, 0],
+    emailTime: '00:00'
+  } as NotificationPreferences['birthdayNotifications'];
+
   const [notificationPreferences, setNotificationPreferences] = useState<NotificationPreferences>(
-    userProfile?.notificationPreferences || getDefaultNotificationPreferences()
+    (() => {
+      const base = userProfile?.notificationPreferences || getDefaultNotificationPreferences();
+      return {
+        ...base,
+        birthdayNotifications: {
+          ...base.birthdayNotifications,
+          ...forcedBirthdayDefaults
+        }
+      } as NotificationPreferences;
+    })()
   );
 
   const [profileData, setProfileData] = useState<ProfileFormData>({
@@ -82,9 +98,13 @@ const ProfileSettingsView: React.FC = () => {
 
       setConstituencyName(userProfile.churchName || '');
 
-      setNotificationPreferences(
-        userProfile.notificationPreferences || getDefaultNotificationPreferences()
-      );
+      setNotificationPreferences({
+        ...userProfile.notificationPreferences,
+        birthdayNotifications: {
+          ...userProfile.notificationPreferences?.birthdayNotifications,
+          ...forcedBirthdayDefaults
+        }
+      } as NotificationPreferences);
 
       setProfileData({
         firstName: userProfile.firstName || '',
@@ -107,14 +127,9 @@ const ProfileSettingsView: React.FC = () => {
 
   // Removed legacy app/ministry display name sync – header uses churchName now
 
-  const handleBirthdayNotificationChange = (key: keyof NotificationPreferences['birthdayNotifications'], value: any) => {
-    setNotificationPreferences(prev => ({
-      ...prev,
-      birthdayNotifications: {
-        ...prev.birthdayNotifications,
-        [key]: value
-      }
-    }));
+  // Birthday notification preferences are controlled by the organisation and cannot be changed via profile UI
+  const handleBirthdayNotificationChange = (_key: keyof NotificationPreferences['birthdayNotifications'], _value: any) => {
+    return;
   };
 
   // const handleSendTestEmail = async () => {
@@ -510,16 +525,16 @@ const ProfileSettingsView: React.FC = () => {
 
               <div className="space-y-6">
                 {/* Enable Birthday Notifications */}
-                <label className="flex items-center space-x-3 cursor-pointer">
+                <label className="flex items-center space-x-3">
                   <input
                     type="checkbox"
-                    checked={notificationPreferences.birthdayNotifications.enabled}
-                    onChange={(e) => handleBirthdayNotificationChange('enabled', e.target.checked)}
-                    className="w-4 h-4 text-pink-600 border-gray-300 rounded focus:ring-pink-500"
+                    checked={true}
+                    disabled
+                    className="w-4 h-4 text-pink-600 border-gray-300 rounded"
                   />
                   <div>
-                    <span className="text-sm font-medium text-gray-700">Enable Birthday Notifications</span>
-                    <p className="text-xs text-gray-500">Receive email notifications for upcoming member birthdays</p>
+                    <span className="text-sm font-medium text-gray-700">Birthday Notifications (managed by admin)</span>
+                    <p className="text-xs text-gray-500">These settings are controlled by the organisation and cannot be changed here</p>
                   </div>
                 </label>
 
@@ -537,12 +552,12 @@ const ProfileSettingsView: React.FC = () => {
                           { days: 1, label: '1 day before' },
                           { days: 0, label: 'On the day' }
                         ].map(option => (
-                          <label key={option.days} className="flex items-center space-x-2 cursor-pointer">
+                          <label key={option.days} className="flex items-center space-x-2">
                             <input
                               type="checkbox"
                               checked={notificationPreferences.birthdayNotifications.daysBeforeNotification.includes(option.days)}
-                              onChange={(e) => handleNotificationDaysChange(option.days, e.target.checked)}
-                              className="w-4 h-4 text-pink-600 border-gray-300 rounded focus:ring-pink-500"
+                              disabled
+                              className="w-4 h-4 text-pink-600 border-gray-300 rounded"
                             />
                             <span className="text-sm text-gray-700">{option.label}</span>
                           </label>
@@ -557,20 +572,10 @@ const ProfileSettingsView: React.FC = () => {
                       </label>
                       <select
                         value={notificationPreferences.birthdayNotifications.emailTime}
-                        onChange={(e) => handleBirthdayNotificationChange('emailTime', e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+                        disabled
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-700"
                       >
-                        {[
-                          { value: '08:00', label: '8:00 AM' },
-                          { value: '09:00', label: '9:00 AM' },
-                          { value: '10:00', label: '10:00 AM' },
-                          { value: '11:00', label: '11:00 AM' },
-                          { value: '12:00', label: '12:00 PM' }
-                        ].map(option => (
-                          <option key={option.value} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
+                        <option value="00:00">12:00 AM</option>
                       </select>
                       <p className="text-xs text-gray-500 mt-1">
                         Notifications will be sent around this time each day

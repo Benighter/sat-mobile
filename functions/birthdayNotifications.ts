@@ -82,7 +82,7 @@ export const processDailyBirthdayNotifications = onSchedule({
 
         // Determine local time gating per church
         const tz = church.settings?.timezone || church.settings?.notificationSettings?.timezone || 'UTC';
-        const desiredTime = church.settings?.notificationSettings?.defaultNotificationTime || '00:00';
+  const desiredTime = church.settings?.notificationSettings?.defaultNotificationTime || '00:00';
         const nowUtc = new Date();
         // Compute the church's local HH:mm for now
         const formatter = new Intl.DateTimeFormat('en-GB', {
@@ -96,14 +96,14 @@ export const processDailyBirthdayNotifications = onSchedule({
         const mm = parts.find(p => p.type === 'minute')?.value ?? '00';
         const currentLocalTime = `${hh}:${mm}`;
 
-        // Only proceed for this church if we are within the 10-minute window of desired time
-        const withinWindow = (() => {
+    // Only proceed for this church if we are within the 5-minute window of desired time (midnight precision)
+    const withinWindow = (() => {
           try {
             const [dh, dm] = desiredTime.split(':').map(n => parseInt(n, 10));
             const [ch, cm] = [parseInt(hh, 10), parseInt(mm, 10)];
             const desiredMins = dh * 60 + dm;
             const currentMins = ch * 60 + cm;
-            return Math.abs(currentMins - desiredMins) <= 10;
+      return Math.abs(currentMins - desiredMins) <= 5;
           } catch (e) {
             return true; // Fallback: run
           }
@@ -115,9 +115,13 @@ export const processDailyBirthdayNotifications = onSchedule({
         }
 
         // Get notification day offsets
-        const notificationDays = church.settings?.notificationSettings?.defaultNotificationDays || [7, 5, 3, 2, 1, 0];
+  // Default to 7,3,1 and on the day (0)
+  const notificationDays = church.settings?.notificationSettings?.defaultNotificationDays || [7, 3, 1, 0];
         
-        // Process notifications
+        // Determine a per-church acting admin (first active admin) so notifications appear to come from an admin
+        const actingAdmin = users.find(u => u.role === 'admin' && (u as any).isActive !== false) || null;
+
+        // Process notifications, passing actorAdminId so recipients include invited leaders and in-app bells are created with admin context
         const notificationService = BirthdayNotificationService.getInstance();
         const results = await notificationService.processBirthdayNotifications(
           church.id,
@@ -125,7 +129,8 @@ export const processDailyBirthdayNotifications = onSchedule({
           users,
           bacentas,
           notificationDays,
-          new Date()
+          new Date(),
+          { actorAdminId: actingAdmin ? (actingAdmin.uid || actingAdmin.id) : undefined }
         );
 
         // Aggregate results
@@ -357,7 +362,7 @@ export const manualBirthdayNotificationTrigger = onRequest({
       members.filter(m => m.birthday),
       users,
       bacentas,
-  [7, 5, 3, 2, 1, 0],
+      [7, 3, 1, 0],
       new Date()
     );
 

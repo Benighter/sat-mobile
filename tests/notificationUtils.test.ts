@@ -70,8 +70,8 @@ const mockUsers: User[] = [
     notificationPreferences: {
       birthdayNotifications: {
         enabled: true,
-        daysBeforeNotification: [7, 3, 1],
-        emailTime: '09:00'
+  daysBeforeNotification: [7, 3, 1, 0],
+  emailTime: '00:00'
       },
       emailNotifications: true,
       pushNotifications: true
@@ -96,8 +96,8 @@ const mockUsers: User[] = [
     notificationPreferences: {
       birthdayNotifications: {
         enabled: true,
-        daysBeforeNotification: [7, 3, 1],
-        emailTime: '09:00'
+  daysBeforeNotification: [7, 3, 1, 0],
+  emailTime: '00:00'
       },
       emailNotifications: true,
       pushNotifications: false
@@ -121,9 +121,9 @@ const mockUsers: User[] = [
     },
     notificationPreferences: {
       birthdayNotifications: {
-        enabled: false, // Disabled notifications
-        daysBeforeNotification: [7, 3, 1],
-        emailTime: '09:00'
+          enabled: false, // Disabled notifications
+        daysBeforeNotification: [7, 3, 1, 0],
+        emailTime: '00:00'
       },
       emailNotifications: true,
       pushNotifications: true
@@ -330,8 +330,8 @@ describe('Notification Utils', () => {
       const defaults = getDefaultNotificationPreferences();
       
       expect(defaults.birthdayNotifications.enabled).toBe(true);
-      expect(defaults.birthdayNotifications.daysBeforeNotification).toEqual([7, 3, 1]);
-      expect(defaults.birthdayNotifications.emailTime).toBe('09:00');
+  expect(defaults.birthdayNotifications.daysBeforeNotification).toEqual([7, 3, 1, 0]);
+  expect(defaults.birthdayNotifications.emailTime).toBe('00:00');
       expect(defaults.emailNotifications).toBe(true);
       expect(defaults.pushNotifications).toBe(true);
     });
