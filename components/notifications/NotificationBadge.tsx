@@ -76,28 +76,28 @@ const NotificationBadge: React.FC = () => {
     <>
       <button
         onClick={handleBadgeClick}
-        className="relative p-1.5 xs:p-2 sm:p-2.5 text-gray-600 hover:text-gray-900 hover:bg-gradient-to-br hover:from-blue-50 hover:to-purple-50 rounded-lg xs:rounded-xl transition-all duration-300 hover:scale-110 group touch-manipulation"
         aria-label="Notifications"
+        className="relative inline-flex items-center justify-center w-9 h-9 xs:w-10 xs:h-10 sm:w-11 sm:h-11 rounded-full text-gray-700 hover:text-gray-900 transition-transform duration-200 hover:scale-110 group touch-manipulation bg-white/60 backdrop-blur supports-[backdrop-filter]:bg-white/40 shadow-sm hover:bg-gradient-to-br hover:from-blue-50 hover:to-purple-50"
       >
-        <Bell className="w-4 h-4 xs:w-5 xs:h-5 group-hover:animate-pulse" />
+        {/* Soft glow when there are notifications */}
+        {unreadCount > 0 && (
+          <span className="absolute inset-0 rounded-full bg-gradient-to-r from-blue-400 to-purple-400 opacity-20 animate-pulse pointer-events-none" />
+        )}
+
+        <Bell className="w-5 h-5 sm:w-5 sm:h-5 group-hover:animate-pulse" />
 
         {/* Unread count badge */}
         {unreadCount > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 xs:-top-1 xs:-right-1 bg-gradient-to-r from-red-500 to-pink-500 text-white text-xs rounded-full min-w-[16px] h-[16px] xs:min-w-[18px] xs:h-[18px] sm:min-w-[20px] sm:h-[20px] flex items-center justify-center font-bold shadow-lg animate-bounce">
-            <span className="text-[10px] xs:text-xs">
-              {unreadCount > 99 ? '99+' : unreadCount}
-            </span>
+          <span
+            className="absolute top-0 right-0 translate-x-1/4 -translate-y-1/4 xs:translate-x-1/3 xs:-translate-y-1/3 bg-gradient-to-r from-red-500 to-pink-500 text-white rounded-full min-w-[18px] h-[18px] xs:min-w-[20px] xs:h-[20px] sm:min-w-[20px] sm:h-[20px] px-1 flex items-center justify-center text-[10px] xs:text-xs font-bold shadow-lg ring-2 ring-white"
+          >
+            {unreadCount > 99 ? '99+' : unreadCount}
           </span>
         )}
 
-        {/* Loading indicator */}
-        {loading && (
-          <span className="absolute -top-0.5 -right-0.5 xs:-top-1 xs:-right-1 w-3 h-3 xs:w-4 xs:h-4 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full animate-pulse shadow-lg"></span>
-        )}
-
-        {/* Subtle glow effect when there are notifications */}
-        {unreadCount > 0 && (
-          <div className="absolute inset-0 bg-gradient-to-r from-blue-400 to-purple-400 rounded-lg xs:rounded-xl opacity-20 animate-pulse"></div>
+        {/* Loading indicator (tiny dot) when fetching */}
+        {loading && unreadCount === 0 && (
+          <span className="absolute top-0 right-0 translate-x-1/4 -translate-y-1/4 w-3 h-3 xs:w-3.5 xs:h-3.5 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full animate-pulse shadow" />
         )}
       </button>
 
