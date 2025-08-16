@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Bell } from 'lucide-react';
 import { notificationService, setNotificationContext } from '../../services/notificationService';
+import { startNotificationSound, stopNotificationSound } from '../../services/notificationSound';
 import { useAppContext } from '../../contexts/FirebaseAppContext';
 import { hasLeaderPrivileges } from '../../utils/permissionUtils';
 import NotificationCenter from './NotificationCenter';
@@ -30,10 +31,22 @@ const NotificationBadge: React.FC = () => {
     let unsubscribe: (() => void) | null = null;
     
     try {
+      let previousUnread = 0;
+      let initialized = false;
       unsubscribe = notificationService.onSnapshot(
         userProfile.uid,
         (notifications) => {
           const unread = notifications.filter(n => !n.isRead).length;
+          if (!initialized) {
+            // Set baseline without sound on first snapshot
+            initialized = true;
+          } else {
+            // Play sound when unread count increases (new notification)
+            if (unread > previousUnread) {
+              startNotificationSound(3000); // auto stops after ~3s
+            }
+          }
+          previousUnread = unread;
           setUnreadCount(unread);
         }
       );
@@ -64,6 +77,8 @@ const NotificationBadge: React.FC = () => {
   };
 
   const handleBadgeClick = () => {
+  // Stop any playing sound once the bell is opened
+  stopNotificationSound();
     setIsNotificationCenterOpen(true);
   };
 

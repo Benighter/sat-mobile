@@ -361,6 +361,15 @@ class PushNotificationService {
 
   // Handle foreground notification display
   private handleForegroundNotification(notification: any): void {
+    try {
+      // Attempt to play a short notification sound on web
+      if (typeof window !== 'undefined') {
+        // Lazy import to avoid bundling issues in non-web platforms
+        import('./notificationSound').then(m => {
+          m.startNotificationSound(3000);
+        }).catch(() => {/* ignore */});
+      }
+    } catch { /* ignore */ }
     // Show in-app notification or update UI
     if ('Notification' in window && Notification.permission === 'granted') {
       const title = notification.title || notification.notification?.title || 'SAT Mobile';
@@ -383,6 +392,9 @@ class PushNotificationService {
         window.focus();
         this.handleNotificationClick(notification);
         browserNotification.close();
+        try {
+          import('./notificationSound').then(m => m.stopNotificationSound()).catch(() => {/* ignore */});
+        } catch { /* ignore */ }
       };
     }
   }
