@@ -38,6 +38,7 @@ const CopyMembersView: React.FC = () => {
   const bacentaFilter = currentTab.data?.bacentaFilter || null;
   const searchTerm = currentTab.data?.searchTerm || '';
   const roleFilter = currentTab.data?.roleFilter || 'all';
+  const showFrozen: boolean = currentTab.data?.showFrozen !== undefined ? currentTab.data.showFrozen : true;
 
   // Get bacenta name if filtering by bacenta
   const getBacentaName = (bacentaId: string) => {
@@ -64,6 +65,7 @@ const CopyMembersView: React.FC = () => {
     };
 
   return members
+      .filter(member => (showFrozen ? true : !member.frozen))
       .filter(member => {
         // Filter by bacenta if specified
         if (bacentaFilter && member.bacentaId !== bacentaFilter) {
@@ -101,8 +103,8 @@ const CopyMembersView: React.FC = () => {
         const lastNameA = a.lastName || '';
         const lastNameB = b.lastName || '';
         return lastNameA.localeCompare(lastNameB) || a.firstName.localeCompare(b.firstName);
-      });
-  }, [members, bacentaFilter, searchTerm, roleFilter]);
+    });
+  }, [members, bacentaFilter, searchTerm, roleFilter, showFrozen]);
 
   // Filter members based on selected type
   const getFilteredMembersByType = () => {

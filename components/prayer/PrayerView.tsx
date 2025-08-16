@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useAppContext } from '../../contexts/FirebaseAppContext';
 import { getTuesdayToSundayRange, getPreviousPrayerWeekAnchor, getNextPrayerWeekAnchor, formatFullDate } from '../../utils/dateUtils';
 import { isDateEditable } from '../../utils/attendanceUtils';
+import { hasAdminPrivileges } from '../../utils/permissionUtils';
 import { CheckIcon, XMarkIcon, ChevronLeftIcon, ChevronRightIcon, CalendarIcon, ClipboardIcon } from '../icons';
 import { Member, PrayerStatus, TabKeys } from '../../types';
 
@@ -18,6 +19,7 @@ const PrayerView: React.FC = () => {
   };
 
   const allowEditPreviousSundays = userProfile?.preferences?.allowEditPreviousSundays ?? false;
+  const isAdmin = hasAdminPrivileges(userProfile);
 
   const weekDates = useMemo(() => getTuesdayToSundayRange(anchorDate), [anchorDate]);
 
@@ -143,6 +145,19 @@ const PrayerView: React.FC = () => {
     }
   };
 
+  // Prayer editability rules:
+  // - Future dates: not editable for anyone
+  // - Past dates: only admins can edit
+  // - Today: leaders can edit
+  const isPrayerDateEditable = (date: string) => {
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const target = new Date(date + 'T00:00:00');
+    if (target.getTime() > startOfToday.getTime()) return false; // future date
+    if (isAdmin) return true; // admin can edit past and today
+    return target.getTime() === startOfToday.getTime(); // leaders: only today
+  };
+
   // Helper to get bacenta name (no longer used in copy formatting)
 
   // Build clean text for a day: ONLY prayed names (no bacenta groups)
@@ -182,6 +197,69 @@ const PrayerView: React.FC = () => {
   };
 
   // Removed bulk mark missed feature per request
+  // Bulk mark "Missed" for selected day: marks every filtered member who is NOT marked "Prayed"
+  const [bulkMarkLoading, setBulkMarkLoading] = useState(false);
+  const handleAutoMarkMissedForDay = async () => {
+    if (bulkMarkLoading) return;
+    const editable = isPrayerDateEditable(selectedDay);
+    if (!editable) {
+      const now = new Date();
+      const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const target = new Date(selectedDay + 'T00:00:00');
+      const isFuture = target.getTime() > startOfToday.getTime();
+      showToast(
+        'warning',
+        'Not allowed',
+        isFuture ? 'Future date cannot be edited' : 'Past dates are editable by admins only'
+      );
+      return;
+    }
+
+    setBulkMarkLoading(true);
+    try {
+      let toMiss: { id: string; name: string }[] = [];
+      let alreadyMissed = 0;
+      let prayed = 0;
+
+      for (const m of filteredMembers) {
+        if (m.frozen) continue; // keep frozen out of bulk ops
+        const key = `${m.id}_${selectedDay}`;
+        const status = recordsByKey.get(key);
+        if (status === 'Prayed') {
+          prayed += 1;
+          continue;
+        }
+        if (status === 'Missed') {
+          alreadyMissed += 1;
+          continue;
+        }
+        toMiss.push({ id: m.id, name: m.firstName });
+      }
+
+      if (toMiss.length === 0) {
+        showToast('info', 'Nothing to do', prayed
+          ? `All editable members are already marked (Prayed: ${prayed}, Missed: ${alreadyMissed}).`
+          : 'No members to mark for this day.');
+        return;
+      }
+
+      const ops = toMiss.map(m => markPrayerHandler(m.id, selectedDay, 'Missed'));
+      const results = await Promise.allSettled(ops);
+      const success = results.filter(r => r.status === 'fulfilled').length;
+      const failed = results.length - success;
+
+      showToast(
+        failed ? 'warning' : 'success',
+        failed ? 'Marked with some errors' : 'Marked missed',
+        `Missed: ${success} • Already missed: ${alreadyMissed} • Prayed (skipped): ${prayed}${failed ? ` • Failed: ${failed}` : ''}`
+      );
+    } catch (e: any) {
+      console.error('Bulk mark missed failed', e);
+      showToast('error', 'Bulk mark failed', e?.message || 'Unexpected error while marking missed');
+    } finally {
+      setBulkMarkLoading(false);
+    }
+  };
 
   return (
     <div className="container mx-auto max-w-7xl px-3 sm:px-4 lg:px-6 space-y-4">
@@ -313,6 +391,34 @@ const PrayerView: React.FC = () => {
                 <span>Copy Attendance</span>
               </button>
             </div>
+            <div>
+              {(() => {
+                const editable = isPrayerDateEditable(selectedDay);
+                const now = new Date();
+                const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                const target = new Date(selectedDay + 'T00:00:00');
+                const isFuture = target.getTime() > startOfToday.getTime();
+                const isPast = target.getTime() < startOfToday.getTime();
+                const title = editable
+                  ? 'Mark all not-present members as Missed for the selected day'
+                  : (isFuture
+                      ? `Future date - cannot edit ${formatFullDate(selectedDay)}`
+                      : `Past date - only admins can edit ${formatFullDate(selectedDay)}`);
+                return (
+                  <button
+                    onClick={handleAutoMarkMissedForDay}
+                    disabled={!editable || bulkMarkLoading}
+                    className={`inline-flex items-center justify-center gap-2 px-3.5 py-2 rounded-lg border text-red-700 bg-white focus:outline-none shadow-sm font-medium focus:ring-2 ${
+                      !editable ? 'border-gray-300 text-gray-400 cursor-not-allowed opacity-60' : 'border-red-300 hover:bg-red-50 focus:ring-red-300'
+                    }`}
+                    title={title}
+                  >
+                    <XMarkIcon className="w-4 h-4" />
+                    <span>{bulkMarkLoading ? 'Marking…' : 'Mark Missed'}</span>
+                  </button>
+                );
+              })()}
+            </div>
           </div>
         </div>
       </div>
@@ -387,22 +493,29 @@ const PrayerView: React.FC = () => {
                       <span className="text-xs" title={m.role || 'Member'}>
                         {m.role === 'Bacenta Leader' ? '💚' : m.role === 'Fellowship Leader' ? '❤️' : '👤'}
                       </span>
+                      {m.frozen && (
+                        <span className="ml-1 text-[10px] px-1.5 py-0.5 rounded bg-sky-100 text-sky-700 border border-sky-200" title="Frozen – excluded from counts and absentees">Frozen</span>
+                      )}
                     </button>
                   </td>
                   {weekDates.map(date => {
                   const key = `${m.id}_${date}`;
                   const status = recordsByKey.get(key);
-                  const editable = isDateEditable(date, allowEditPreviousSundays);
+                  const dateEditable = isPrayerDateEditable(date);
+                  const editable = dateEditable && !m.frozen; // disable edits for frozen members
 
-                  // Compute disabled style (reuse attendance look & feel)
-                  const today = new Date();
-                  // const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+                  // Compute disabled styling and reason
+                  const now = new Date();
+                  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
                   const target = new Date(date + 'T00:00:00');
-                  const isPastMonth = target.getFullYear() < today.getFullYear() || (target.getFullYear() === today.getFullYear() && target.getMonth() < today.getMonth());
+                  const isFuture = target.getTime() > startOfToday.getTime();
+                  const isPast = target.getTime() < startOfToday.getTime();
 
                   const baseClasses = 'w-6 h-6 md:w-7 md:h-7 rounded border-2 flex items-center justify-center transition-all duration-200';
                   const classes = !editable
-                    ? (isPastMonth ? 'bg-gray-200 border-gray-300 cursor-not-allowed opacity-60' : 'bg-blue-50 border-blue-200 cursor-not-allowed opacity-60')
+                    ? (m.frozen
+                        ? 'bg-gray-200 border-gray-300 cursor-not-allowed opacity-60'
+                        : (isFuture ? 'bg-blue-50 border-blue-200 cursor-not-allowed opacity-60' : 'bg-gray-200 border-gray-300 cursor-not-allowed opacity-60'))
                     : status === 'Prayed'
                       ? 'bg-green-500 border-green-500 text-white hover:bg-green-600 cursor-pointer'
                       : status === 'Missed'
@@ -410,9 +523,11 @@ const PrayerView: React.FC = () => {
                         : 'bg-gray-100 border-gray-300 text-gray-400 hover:bg-gray-200 cursor-pointer';
 
                   const title = !editable
-                    ? (isPastMonth
-                        ? `Past month - cannot edit ${formatFullDate(date)}`
-                        : `Future date - cannot edit ${formatFullDate(date)}`)
+                    ? (m.frozen
+                        ? 'Frozen member – prayer marking disabled'
+                        : (isFuture
+                            ? `Future date - cannot edit ${formatFullDate(date)}`
+                            : `Past date - only admins can edit ${formatFullDate(date)}`))
                     : `Click to ${!status ? 'mark prayed' : status === 'Prayed' ? 'mark missed' : 'clear'} for ${formatFullDate(date)}`;
 
                   return (

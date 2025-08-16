@@ -39,6 +39,7 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
   const [searchTerm, setSearchTerm] = useState('');
   const [displayedDate, setDisplayedDate] = useState(new Date());
   const [roleFilter, setRoleFilter] = useState<'all' | 'Bacenta Leader' | 'Fellowship Leader' | 'Member'>('all');
+  const [showFrozen, setShowFrozen] = useState(true);
 
   // Get upcoming Sunday for confirmation
   const upcomingSunday = useMemo(() => getUpcomingSunday(), []);
@@ -148,6 +149,11 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
   return (a.lastName || '').localeCompare(b.lastName || '') || a.firstName.localeCompare(b.firstName);
       });
   }, [members, bacentaFilter, searchTerm, roleFilter]);
+
+  // Apply frozen visibility toggle to the filtered list
+  const displayMembers = useMemo(() => {
+    return filteredMembers.filter(m => (showFrozen ? true : !m.frozen));
+  }, [filteredMembers, showFrozen]);
 
 
 
@@ -394,7 +400,7 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
           <div className="flex items-center justify-center space-x-2 text-sm text-gray-600 mb-3">
             <span>{currentMonthSundays.length} Sunday{currentMonthSundays.length !== 1 ? 's' : ''} in {currentMonthName}</span>
             <span>•</span>
-            <span>{filteredMembers.filter(m => !m.frozen).length} member{filteredMembers.filter(m => !m.frozen).length !== 1 ? 's' : ''}</span>
+            <span>{filteredMembers.filter(m => !m.frozen).length} active member{filteredMembers.filter(m => !m.frozen).length !== 1 ? 's' : ''}</span>
           </div>
 
           {/* Role Statistics */}
@@ -439,7 +445,7 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
             </button>
           </div>
 
-          {/* Search, Filter, and Copy */}
+          {/* Search, Filter, Frozen Toggle, and Copy */}
           <div className="flex flex-col space-y-3 sm:flex-row sm:space-y-0 sm:space-x-3 sm:items-end justify-center">
             <div className="w-full sm:w-64">
               <input
@@ -462,6 +468,18 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
                 <option value="Member">👤 Members</option>
               </select>
             </div>
+            {/* Show/Hide Frozen Toggle */}
+            <div className="w-full sm:w-auto flex items-center justify-center">
+              <label className="inline-flex items-center space-x-2 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg shadow-sm cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  className="form-checkbox h-4 w-4 text-blue-600"
+                  checked={showFrozen}
+                  onChange={(e) => setShowFrozen(e.target.checked)}
+                />
+                <span className="text-sm text-gray-700">Show Frozen</span>
+              </label>
+            </div>
             <div className="w-full sm:w-auto flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
               <button
                 onClick={() => {
@@ -472,16 +490,17 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
                     data: {
                       bacentaFilter,
                       searchTerm,
-                      roleFilter
+                      roleFilter,
+                      showFrozen
                     }
                   });
                 }}
-                disabled={filteredMembers.length === 0}
+                disabled={displayMembers.length === 0}
                 className="w-full sm:w-auto flex items-center justify-center space-x-2 px-4 py-3 sm:py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg shadow-sm transition-colors text-base sm:text-sm font-medium"
-                title={`Copy ${filteredMembers.length} member${filteredMembers.length !== 1 ? 's' : ''} information to clipboard`}
+                title={`Copy ${displayMembers.length} member${displayMembers.length !== 1 ? 's' : ''} information to clipboard`}
               >
                 <ClipboardIcon className="w-4 h-4" />
-                <span>Copy Members ({filteredMembers.length})</span>
+                <span>Copy Members ({displayMembers.length})</span>
               </button>
 
               <button
@@ -493,11 +512,12 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
                     data: {
                       bacentaFilter,
                       searchTerm,
-                      roleFilter
+                      roleFilter,
+                      showFrozen
                     }
                   });
                 }}
-                disabled={filteredMembers.length === 0}
+                disabled={displayMembers.length === 0}
                 className="w-full sm:w-auto flex items-center justify-center space-x-2 px-4 py-3 sm:py-2 bg-orange-600 hover:bg-orange-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg shadow-sm transition-colors text-base sm:text-sm font-medium"
                 title="Copy absentee information for selected dates"
               >
@@ -515,14 +535,16 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
           <div className="flex items-center justify-center py-8">
             <div className="text-gray-500">Loading...</div>
           </div>
-        ) : filteredMembers.length === 0 ? (
+  ) : displayMembers.length === 0 ? (
           <div className="flex items-center justify-center py-8">
             <div className="text-gray-500">
               {bacentaFilter
                 ? "No members found in this bacenta"
                 : searchTerm
                   ? "No members match your search"
-                  : "No members added yet"}
+                  : showFrozen
+                    ? "No members added yet"
+                    : "No active (unfrozen) members to show"}
             </div>
           </div>
         ) : (
@@ -570,7 +592,7 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {filteredMembers.map((member, rowIndex) => (
+                {displayMembers.map((member, rowIndex) => (
                   <tr
                     key={rowIndex}
                     className={`
