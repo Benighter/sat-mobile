@@ -3,19 +3,20 @@ import { useAppContext } from '../../contexts/FirebaseAppContext';
 import { getUpcomingBirthdays, getBirthdayStats, calculateAge, getBirthdaysForMonth } from '../../utils/birthdayUtils';
 import { CakeIcon, GiftIcon, CalendarIcon, UserIcon, ChevronLeftIcon, ChevronRightIcon } from '../icons';
 import { CheckIcon } from '../icons';
+import Modal from '../ui/Modal';
 import Button from '../ui/Button';
 import { BirthdayNotificationService } from '../../services/birthdayNotificationService';
 import { userService } from '../../services/userService';
 
 // Minimal stat item to keep layout clean
-const StatItem = ({ icon, label, value, bg }: { icon: React.ReactNode; label: string; value: React.ReactNode; bg?: string }) => (
-  <div className={`flex items-center gap-3 rounded-lg border border-gray-200 dark:border-dark-600 bg-white dark:bg-dark-800 p-3 shadow-sm`}>
+const StatItem = ({ icon, label, value, bg, onClick }: { icon: React.ReactNode; label: string; value: React.ReactNode; bg?: string; onClick?: () => void }) => (
+  <button onClick={onClick} className={`flex items-center gap-3 rounded-lg border border-gray-200 dark:border-dark-600 bg-white dark:bg-dark-800 p-3 shadow-sm text-left w-full`}>
     <div className={`w-8 h-8 rounded-md flex items-center justify-center ${bg || 'bg-gray-50'}`}>{icon}</div>
     <div>
       <p className="text-lg font-semibold text-gray-900 dark:text-dark-100 leading-5">{value}</p>
       <p className="text-xs text-gray-500 dark:text-dark-400">{label}</p>
     </div>
-  </div>
+  </button>
 );
 
 
@@ -29,6 +30,9 @@ const BirthdaysView: React.FC = () => {
   const selectedMonthBirthdays = useMemo(() => getBirthdaysForMonth(members, displayedDate), [members, displayedDate]);
 
   const birthdayStats = useMemo(() => getBirthdayStats(members), [members]);
+
+  // Modal state for listing members
+  const [showMembersModal, setShowMembersModal] = useState(false);
 
   const todaysBirthdays = useMemo(() => upcomingBirthdays.filter(b => b.isToday), [upcomingBirthdays]);
   const futureBirthdays = useMemo(() => upcomingBirthdays.filter(b => !b.isToday), [upcomingBirthdays]);
@@ -65,6 +69,43 @@ const BirthdaysView: React.FC = () => {
       <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-semibold shadow-lg ring-2 ring-white/20">
         <span className="text-sm">{initials}</span>
       </div>
+    );
+  };
+
+  // Simple modal listing members who have birthdays (for the members stat)
+  const MembersListModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isOpen, onClose }) => {
+    const membersWithBirthdays = members.filter(m => !!m.birthday);
+
+    return (
+      <Modal isOpen={isOpen} onClose={onClose} title={`Members (${membersWithBirthdays.length})`} size="lg">
+        <div className="space-y-3">
+          {membersWithBirthdays.length === 0 && (
+            <p className="text-sm text-gray-500">No members with birthday data available.</p>
+          )}
+          {membersWithBirthdays.map((m: any) => (
+            <div key={m.id} className="flex items-center gap-3 p-3 rounded-lg border border-gray-100">
+              <div className="flex-shrink-0">
+                {m.profilePicture ? (
+                  <img src={m.profilePicture} alt={m.firstName} className="w-10 h-10 rounded-full object-cover" />
+                ) : (
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-semibold">
+                    {(m.firstName?.charAt(0) || '').toUpperCase()}{(m.lastName?.charAt(0) || '').toUpperCase()}
+                  </div>
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between">
+                  <div className="truncate">
+                    <div className="font-semibold text-sm text-gray-900">{m.firstName} {m.lastName || ''}</div>
+                    <div className="text-xs text-gray-500">{m.bacentaId ? getBacentaName(m.bacentaId) : 'Unassigned'}</div>
+                  </div>
+                  <div className="text-xs text-gray-500">{m.birthday ? new Date(m.birthday).toLocaleDateString() : '—'}</div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </Modal>
     );
   };
 
@@ -243,11 +284,14 @@ const BirthdaysView: React.FC = () => {
 
       {/* Compact stats - reduced visual noise */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
-        <StatItem icon={<UserIcon className="w-4 h-4 text-blue-600" />} label="Members" value={birthdayStats.totalMembersWithBirthdays} bg="bg-blue-50" />
+        <StatItem icon={<UserIcon className="w-4 h-4 text-blue-600" />} label="Members" value={birthdayStats.totalMembersWithBirthdays} bg="bg-blue-50" onClick={() => setShowMembersModal(true)} />
         <StatItem icon={<CalendarIcon className="w-4 h-4 text-green-600" />} label="Upcoming" value={birthdayStats.upcomingCount} bg="bg-green-50" />
         <StatItem icon={<CakeIcon className="w-4 h-4 text-amber-600" />} label="Today" value={birthdayStats.todayCount} bg="bg-amber-50" />
         <StatItem icon={<GiftIcon className="w-4 h-4 text-purple-600" />} label="Coverage" value={`${birthdayStats.percentageWithBirthdays}%`} bg="bg-purple-50" />
       </div>
+
+      {/* Members list modal */}
+      <MembersListModal isOpen={showMembersModal} onClose={() => setShowMembersModal(false)} />
 
       {/* Birthday List - grouped for readability */}
       <div className="bg-white dark:bg-dark-800 rounded-xl border border-gray-200 dark:border-dark-600 shadow-sm">
