@@ -223,10 +223,10 @@ const BirthdaysView: React.FC = () => {
               setIsTriggering(true);
               try {
                 const users = await userService.getChurchUsers(currentChurchId);
-                // Only send for members listed under "Upcoming This Month"
-                const targetEntries = monthFutureBirthdays;
+                // Only send for members listed under "Upcoming This Month" and within 7 days
+                const targetEntries = monthFutureBirthdays.filter(e => e.daysUntil <= 7);
                 if (targetEntries.length === 0) {
-                  showToast('info', 'No Upcoming This Month', 'There are no upcoming birthdays in this month');
+                  showToast('info', 'No Upcoming in 7 Days', 'No upcoming birthdays in the next 7 days for this month');
                   setIsTriggering(false);
                   return;
                 }

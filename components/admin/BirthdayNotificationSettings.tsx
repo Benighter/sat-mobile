@@ -200,19 +200,18 @@ const BirthdayNotificationSettings: React.FC<BirthdayNotificationSettingsProps> 
       // Use client-side service to process now (sends emails + creates bell notifications)
       const users = await userService.getChurchUsers(currentChurchId);
       const membersWithBirthdays = members.filter(m => !!m.birthday);
-      // Only trigger for the next upcoming birthdays (exclude already-passed)
+      // Only next 7 days (including today); exclude passed
       const nonNegativeOffsets = membersWithBirthdays
         .map(m => ({ m, d: calculateDaysUntilBirthday(m.birthday!, new Date()) }))
-        .filter(x => x.d >= 0);
+        .filter(x => x.d >= 0 && x.d <= 7);
 
       if (nonNegativeOffsets.length === 0) {
-        showToast('info', 'No Upcoming', 'There are no upcoming birthdays to notify right now');
+        showToast('info', 'No Upcoming (7 days)', 'There are no upcoming birthdays in the next 7 days');
         setIsLoading(false);
         return;
       }
-
-      const minDays = Math.min(...nonNegativeOffsets.map(x => x.d));
-      const days = [minDays];
+      // Send exactly for the offsets present within the next 7 days
+      const days = Array.from(new Set(nonNegativeOffsets.map(x => x.d)));
 
       const svc = BirthdayNotificationService.getInstance();
       const results = await svc.processBirthdayNotifications(
