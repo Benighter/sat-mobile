@@ -8,7 +8,7 @@ import { emailServiceClient } from '../../services/emailServiceClient';
 import { EmailNotificationService } from '../../services/emailNotificationService';
 import { userService } from '../../services/userService';
 import { BirthdayNotificationService } from '../../services/birthdayNotificationService';
-import { calculateDaysUntilBirthday } from '../../utils/birthdayUtils';
+import { getBirthdaysForMonth } from '../../utils/birthdayUtils';
 
 interface BirthdayNotificationSettingsProps {
   onClose?: () => void;
@@ -199,19 +199,18 @@ const BirthdayNotificationSettings: React.FC<BirthdayNotificationSettingsProps> 
     try {
       // Use client-side service to process now (sends emails + creates bell notifications)
       const users = await userService.getChurchUsers(currentChurchId);
-      const membersWithBirthdays = members.filter(m => !!m.birthday);
-      // Only next 7 days (including today); exclude passed
-      const nonNegativeOffsets = membersWithBirthdays
-        .map(m => ({ m, d: calculateDaysUntilBirthday(m.birthday!, new Date()) }))
-        .filter(x => x.d >= 0 && x.d <= 7);
+      // Mirror Birthdays page: Upcoming This Month within 7 days (exclude Today and Already Celebrated)
+  const monthEntries = getBirthdaysForMonth(members, new Date());
+  // Include Today (isToday) and future within 7 days; exclude already celebrated
+  const targetEntries = monthEntries.filter(e => !e.hasPassedThisYear && e.daysUntil <= 7);
 
-      if (nonNegativeOffsets.length === 0) {
-        showToast('info', 'No Upcoming (7 days)', 'There are no upcoming birthdays in the next 7 days');
+      if (targetEntries.length === 0) {
+        showToast('info', 'No Upcoming in 7 Days', 'There are no upcoming birthdays in the next 7 days for this month');
         setIsLoading(false);
         return;
       }
-      // Send exactly for the offsets present within the next 7 days
-      const days = Array.from(new Set(nonNegativeOffsets.map(x => x.d)));
+      const membersWithBirthdays = targetEntries.map(e => e.member);
+      const days = Array.from(new Set(targetEntries.map(e => e.daysUntil)));
 
       const svc = BirthdayNotificationService.getInstance();
       const results = await svc.processBirthdayNotifications(

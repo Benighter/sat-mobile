@@ -111,7 +111,6 @@ const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({ isOpen, onClo
               <form onSubmit={handleSubmit} className="space-y-6">
                 <div>
                   <div className="relative">
-                    <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
                     <input
                       type="email"
                       value={email}
@@ -121,7 +120,7 @@ const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({ isOpen, onClo
                           setValidationError('');
                         }
                       }}
-                      className={`w-full pl-10 pr-4 py-3.5 bg-gray-50/50 border rounded-xl focus:outline-none focus:ring-2 focus:bg-white transition-all duration-200 placeholder-gray-400 ${
+                      className={`w-full pl-4 pr-4 py-3.5 bg-gray-50/50 border rounded-xl focus:outline-none focus:ring-2 focus:bg-white transition-all duration-200 placeholder-gray-400 ${
                         validationError
                           ? 'border-red-300 focus:ring-red-500 focus:border-red-500'
                           : 'border-gray-200 focus:ring-blue-500 focus:border-blue-500'

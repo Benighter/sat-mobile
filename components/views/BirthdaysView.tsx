@@ -42,6 +42,12 @@ const BirthdaysView: React.FC = () => {
   const monthFutureBirthdays = useMemo(() => selectedMonthBirthdays.filter(b => !b.hasPassedThisYear && !b.isToday), [selectedMonthBirthdays]);
   const monthTodaysBirthdays = useMemo(() => selectedMonthBirthdays.filter(b => b.isToday), [selectedMonthBirthdays]);
 
+  // Count of birthdays we would send for (Upcoming This Month + Today) within next 7 days
+  const next7DaysCount = useMemo(() => {
+    const entries = [...monthTodaysBirthdays, ...monthFutureBirthdays].filter(e => e.daysUntil <= 7);
+    return entries.length;
+  }, [monthTodaysBirthdays, monthFutureBirthdays]);
+
   const isCurrentMonth = useMemo(() => {
     const now = new Date();
     return now.getFullYear() === displayedDate.getFullYear() && now.getMonth() === displayedDate.getMonth();
@@ -212,7 +218,7 @@ const BirthdaysView: React.FC = () => {
         </p>
   {/* Quick action: trigger all birthday notifications now (admin only) */}
   {userProfile?.role === 'admin' && (
-  <div className="mt-3 flex justify-center">
+  <div className="mt-3 flex flex-col items-center">
           <Button
             variant="primary"
             onClick={async () => {
@@ -223,10 +229,10 @@ const BirthdaysView: React.FC = () => {
               setIsTriggering(true);
               try {
                 const users = await userService.getChurchUsers(currentChurchId);
-                // Only send for members listed under "Upcoming This Month" and within 7 days
-                const targetEntries = monthFutureBirthdays.filter(e => e.daysUntil <= 7);
+                // Only send for members listed under "Upcoming This Month" plus Today, within 7 days
+                const targetEntries = [...monthTodaysBirthdays, ...monthFutureBirthdays].filter(e => e.daysUntil <= 7);
                 if (targetEntries.length === 0) {
-                  showToast('info', 'No Upcoming in 7 Days', 'No upcoming birthdays in the next 7 days for this month');
+                  showToast('info', 'No Upcoming in 7 Days', 'No birthdays today or in the next 7 days for this month');
                   setIsTriggering(false);
                   return;
                 }
@@ -257,6 +263,9 @@ const BirthdaysView: React.FC = () => {
           >
             {triggeredNow ? 'Triggered!' : 'Send Birthday Notifications Now'}
           </Button>
+          <p className="mt-2 text-xs text-gray-500 dark:text-dark-400">
+            {`Will send ${next7DaysCount} birthday${next7DaysCount !== 1 ? 's' : ''} in the next 7 days`}
+          </p>
   </div>
   )}
       </div>
