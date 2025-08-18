@@ -36,6 +36,8 @@ const CopyAbsenteesView: React.FC = () => {
   const bacentaFilter = currentTab.data?.bacentaFilter || null;
   const searchTerm = currentTab.data?.searchTerm || '';
   const roleFilter = currentTab.data?.roleFilter || 'all';
+  const ministryOnly: boolean = currentTab.data?.ministryOnly === true;
+  const ministryName: string | null = currentTab.data?.ministryName || null;
 
   // Get bacenta name if filtering by bacenta
   const getBacentaName = (bacentaId: string) => {
@@ -94,6 +96,12 @@ const CopyAbsenteesView: React.FC = () => {
           return false;
         }
 
+        // Filter by ministry if requested
+        if (ministryOnly) {
+          if (!(member.ministry && member.ministry.trim() !== '')) return false;
+          if (ministryName && (member.ministry || '').toLowerCase() !== ministryName.toLowerCase()) return false;
+        }
+
         // Filter by role
         if (roleFilter !== 'all' && (member.role || 'Member') !== roleFilter) {
           return false;
@@ -126,7 +134,7 @@ const CopyAbsenteesView: React.FC = () => {
         const lastNameB = b.lastName || '';
         return lastNameA.localeCompare(lastNameB) || a.firstName.localeCompare(b.firstName);
       });
-  }, [members, bacentaFilter, searchTerm, roleFilter]);
+  }, [members, bacentaFilter, searchTerm, roleFilter, ministryOnly, ministryName]);
 
   // Get absentee members for the selected date
   const absenteeMembers = useMemo(() => {
@@ -311,7 +319,7 @@ const CopyAbsenteesView: React.FC = () => {
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Copy Absentees</h1>
             <p className="text-sm text-gray-600">
-              {currentBacentaName ? `${currentBacentaName} Bacenta` : 'All Members'} • {formatDisplayDate(selectedDate)} • {absenteeCount} absentee{absenteeCount !== 1 ? 's' : ''}
+              {ministryOnly ? (ministryName ? `${ministryName} Ministry` : 'All Ministries') : (currentBacentaName ? `${currentBacentaName} Bacenta` : 'All Members')} • {formatDisplayDate(selectedDate)} • {absenteeCount} absentee{absenteeCount !== 1 ? 's' : ''}
             </p>
           </div>
         </div>

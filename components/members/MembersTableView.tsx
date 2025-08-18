@@ -30,7 +30,8 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
     userProfile,
     showConfirmation,
     showToast,
-    switchTab
+  switchTab,
+  currentTab,
   } = useAppContext();
 
   // Get user preference for editing previous Sundays
@@ -102,6 +103,8 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
 
   // Filter and search members
   const filteredMembers = useMemo(() => {
+    // Optional ministry-only filter passed via current tab data
+    const ministryOnly: boolean = (currentTab?.data as any)?.ministryOnly === true;
     const getRolePriority = (role: string | undefined) => {
       switch (role) {
         case 'Bacenta Leader': return 1;
@@ -115,6 +118,11 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
       .filter(member => {
         // Filter by bacenta if specified
         if (bacentaFilter && member.bacentaId !== bacentaFilter) {
+          return false;
+        }
+
+        // Filter by ministry if requested
+        if (ministryOnly && !(member.ministry && member.ministry.trim() !== '')) {
           return false;
         }
 
@@ -491,7 +499,10 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
                       bacentaFilter,
                       searchTerm,
                       roleFilter,
-                      showFrozen
+                      showFrozen,
+                      // pass ministry context if active on this tab
+                      ministryOnly: (currentTab?.data as any)?.ministryOnly === true,
+                      ministryName: (currentTab?.data as any)?.ministryName || null
                     }
                   });
                 }}
@@ -513,7 +524,9 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
                       bacentaFilter,
                       searchTerm,
                       roleFilter,
-                      showFrozen
+                      showFrozen,
+                      ministryOnly: (currentTab?.data as any)?.ministryOnly === true,
+                      ministryName: (currentTab?.data as any)?.ministryName || null
                     }
                   });
                 }}

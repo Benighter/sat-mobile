@@ -39,6 +39,8 @@ const CopyMembersView: React.FC = () => {
   const searchTerm = currentTab.data?.searchTerm || '';
   const roleFilter = currentTab.data?.roleFilter || 'all';
   const showFrozen: boolean = currentTab.data?.showFrozen !== undefined ? currentTab.data.showFrozen : false;
+  const ministryOnly: boolean = currentTab.data?.ministryOnly === true;
+  const ministryName: string | null = currentTab.data?.ministryName || null;
 
   // Get bacenta name if filtering by bacenta
   const getBacentaName = (bacentaId: string) => {
@@ -70,6 +72,12 @@ const CopyMembersView: React.FC = () => {
         // Filter by bacenta if specified
         if (bacentaFilter && member.bacentaId !== bacentaFilter) {
           return false;
+        }
+
+        // Filter by ministry context
+        if (ministryOnly) {
+          if (!(member.ministry && member.ministry.trim() !== '')) return false;
+          if (ministryName && (member.ministry || '').toLowerCase() !== ministryName.toLowerCase()) return false;
         }
 
         // Filter by role
@@ -104,7 +112,7 @@ const CopyMembersView: React.FC = () => {
         const lastNameB = b.lastName || '';
         return lastNameA.localeCompare(lastNameB) || a.firstName.localeCompare(b.firstName);
     });
-  }, [members, bacentaFilter, searchTerm, roleFilter, showFrozen]);
+  }, [members, bacentaFilter, searchTerm, roleFilter, showFrozen, ministryOnly, ministryName]);
 
   // Filter members based on selected type
   const getFilteredMembersByType = () => {
@@ -271,11 +279,11 @@ const CopyMembersView: React.FC = () => {
           </button>
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Copy Members</h1>
-            {noMembers ? (
+      {noMembers ? (
               <p className="text-sm text-gray-600">No members available</p>
             ) : (
               <p className="text-sm text-gray-600">
-                {currentBacentaName ? `${currentBacentaName} Bacenta` : 'All Members'} • {memberCount} member{memberCount !== 1 ? 's' : ''}
+        {ministryOnly ? (ministryName ? `${ministryName} Ministry` : 'All Ministries') : (currentBacentaName ? `${currentBacentaName} Bacenta` : 'All Members')} • {memberCount} member{memberCount !== 1 ? 's' : ''}
               </p>
             )}
           </div>

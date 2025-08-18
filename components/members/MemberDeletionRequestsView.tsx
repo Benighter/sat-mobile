@@ -5,7 +5,6 @@ import { memberDeletionRequestService } from '../../services/firebaseService';
 import { hasAdminPrivileges } from '../../utils/permissionUtils';
 import { formatISODate } from '../../utils/dateUtils';
 import Button from '../ui/Button';
-import Input from '../ui/Input';
 import Badge from '../ui/Badge';
 import {
   UserIcon,
@@ -14,7 +13,6 @@ import {
   XMarkIcon,
   ClockIcon,
   ExclamationTriangleIcon,
-  SearchIcon,
   CalendarIcon,
   UserGroupIcon,
   InformationCircleIcon
@@ -186,39 +184,59 @@ const MemberDeletionRequestsView: React.FC<MemberDeletionRequestsViewProps> = ()
   }
 
   const pendingCount = deletionRequests.filter(r => r.status === 'pending').length;
+  const completedCount = deletionRequests.filter(r => r.status === 'approved' || r.status === 'rejected').length;
 
   return (
     <div className="flex flex-col h-full bg-gray-50">
-      {/* Header */}
-      <div className="bg-white border-b border-gray-200 px-6 py-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
-              <ExclamationTriangleIcon className="w-6 h-6 text-red-600" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">Member Deletion Requests</h1>
-              <p className="text-sm text-gray-600">
-                Review and manage member deletion requests from leaders
-                {pendingCount > 0 && (
-                  <span className="ml-2 inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-                    {pendingCount} pending
-                  </span>
-                )}
-              </p>
-            </div>
-          </div>
+      {/* Header / Hero */}
+      <div className="bg-white border-b border-gray-200 px-6 py-8">
+        <div className="max-w-6xl mx-auto relative text-center">
+          {/* Desktop: Clear Completed button in the top-right */}
+          {completedCount > 0 && (
+            <Button
+              onClick={() => setShowClearConfirmation(true)}
+              variant="secondary"
+              size="sm"
+              disabled={isClearingCompleted}
+              className="hidden sm:inline-flex items-center gap-2 absolute right-0 top-1/2 -translate-y-1/2 bg-white/80 backdrop-blur-sm border border-gray-200 rounded-full px-4 py-2 shadow-sm hover:bg-white hover:shadow-md text-gray-700 hover:text-gray-900"
+            >
+              {isClearingCompleted ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600"></div>
+                  <span>Clearing...</span>
+                </>
+              ) : (
+                <>
+                  <TrashIcon className="w-4 h-4" />
+                  <span>Clear Completed ({completedCount})</span>
+                </>
+              )}
+            </Button>
+          )}
 
-          {/* Clear Completed Requests Button */}
-          {(() => {
-            const completedCount = deletionRequests.filter(r => r.status === 'approved' || r.status === 'rejected').length;
-            return completedCount > 0 && (
+          {/* Centered Hero Icon */}
+          <div className="mx-auto w-16 h-16 bg-gradient-to-br from-rose-50 to-rose-100 rounded-full flex items-center justify-center shadow-md">
+            <ExclamationTriangleIcon className="w-8 h-8 text-rose-600" />
+          </div>
+          {/* Centered Heading */}
+          <h1 className="mt-4 text-3xl sm:text-4xl font-extrabold text-gray-900 tracking-tight">Member Deletion Requests</h1>
+          <p className="mt-2 text-base text-gray-600 max-w-2xl mx-auto">Review and manage member deletion requests submitted by leaders. Use filters and search to quickly find requests.</p>
+
+          {/* Badges and Mobile Button */}
+          <div className="mt-4 flex items-center justify-center gap-3">
+            {pendingCount > 0 && (
+              <span className="inline-flex items-center px-3 py-1.5 rounded-full bg-yellow-100 text-yellow-800 text-sm font-medium">
+                <span className="font-semibold mr-2">{pendingCount}</span>
+                pending
+              </span>
+            )}
+            {completedCount > 0 && (
               <Button
                 onClick={() => setShowClearConfirmation(true)}
                 variant="secondary"
                 size="sm"
                 disabled={isClearingCompleted}
-                className="flex items-center space-x-2 text-gray-600 hover:text-gray-800"
+                className="sm:hidden inline-flex items-center gap-2 bg-white/80 backdrop-blur-sm border border-gray-200 rounded-full px-4 py-2 shadow-sm hover:bg-white hover:shadow-md text-gray-700 hover:text-gray-900"
               >
                 {isClearingCompleted ? (
                   <>
@@ -232,8 +250,8 @@ const MemberDeletionRequestsView: React.FC<MemberDeletionRequestsViewProps> = ()
                   </>
                 )}
               </Button>
-            );
-          })()}
+            )}
+          </div>
         </div>
       </div>
 
@@ -241,14 +259,13 @@ const MemberDeletionRequestsView: React.FC<MemberDeletionRequestsViewProps> = ()
       <div className="bg-white border-b border-gray-200 px-4 sm:px-6 py-4">
         <div className="flex flex-col space-y-3 sm:flex-row sm:space-y-0 sm:gap-4 sm:items-end">
           <div className="flex-1">
-            <div className="relative">
-              <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+            <div>
               <input
                 type="text"
                 placeholder="Search by member name or requester..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-3 py-3 sm:py-2 border border-gray-300 dark:border-dark-600 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent transition-colors text-base sm:text-sm bg-white dark:bg-dark-700 text-gray-900 dark:text-dark-100 placeholder-gray-500 dark:placeholder-dark-400"
+                className="w-full px-4 pr-3 py-3 sm:py-2 border border-gray-300 dark:border-dark-600 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent transition-colors text-base sm:text-sm bg-white dark:bg-dark-700 text-gray-900 dark:text-dark-100 placeholder-gray-500 dark:placeholder-dark-400"
               />
             </div>
           </div>

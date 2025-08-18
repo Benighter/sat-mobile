@@ -234,54 +234,63 @@ const AdminInviteScreen: React.FC<AdminInviteScreenProps> = ({ isOpen, onClose }
       }}
     >
       {/* Header */}
-      <div className="bg-white/80 backdrop-blur-md border-b border-gray-200/50 px-4 py-4 flex items-center justify-between shadow-sm">
-        <div className="flex items-center space-x-3">
+      <div className="bg-white/80 backdrop-blur-md border-b border-gray-200/50 shadow-sm">
+        <div className="max-w-5xl mx-auto px-4 py-6 relative">
+          {/* Back */}
           <button
             onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-xl transition-colors duration-200"
+            className="absolute left-2 top-1/2 -translate-y-1/2 p-2 hover:bg-gray-100 rounded-xl transition-colors duration-200"
+            aria-label="Go back"
           >
             <ArrowLeftIcon className="w-6 h-6 text-gray-600" />
           </button>
-          <div>
-            <h1 className="text-xl font-bold text-gray-900">Leadership Management</h1>
-            <p className="text-sm text-gray-600">Invite admins to become leaders</p>
+
+          {/* Title */}
+          <div className="text-center">
+            <h1 className="text-3xl sm:text-4xl font-extrabold text-gray-900 tracking-tight">Leadership Management</h1>
+            <p className="text-sm sm:text-base text-gray-600">Invite admins to become leaders</p>
           </div>
-        </div>
-        <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center shadow-lg">
-          <UserGroupIcon className="w-6 h-6 text-white" />
+
+          {/* Icon */}
+          <div className="absolute right-2 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-gradient-to-br from-violet-500 to-fuchsia-600 flex items-center justify-center shadow-lg ring-1 ring-white/60">
+            <UserGroupIcon className="w-6 h-6 text-white" />
+          </div>
         </div>
       </div>
 
       {/* Tab Navigation */}
-      <div className="bg-white/60 backdrop-blur-sm px-4 py-3 border-b border-gray-200/30">
-        <div className="flex space-x-1 bg-gray-100/80 rounded-2xl p-1">
-          <button
-            onClick={() => setActiveTab('search')}
-            className={`flex-1 flex items-center justify-center space-x-2 py-3 px-4 rounded-xl font-medium transition-all duration-300 ${
-              activeTab === 'search'
-                ? 'bg-white text-blue-600 shadow-sm'
-                : 'text-gray-600 hover:text-gray-800'
-            }`}
-          >
-            <SearchIcon className="w-5 h-5" />
-            <span>Search Admin</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('invites')}
-            className={`flex-1 flex items-center justify-center space-x-2 py-3 px-4 rounded-xl font-medium transition-all duration-300 ${
-              activeTab === 'invites'
-                ? 'bg-white text-blue-600 shadow-sm'
-                : 'text-gray-600 hover:text-gray-800'
-            }`}
-          >
-            <ClockIcon className="w-5 h-5" />
-            <span>Sent Invites</span>
-            {invites.length > 0 && (
-              <span className="bg-blue-100 text-blue-600 text-xs font-semibold px-2 py-1 rounded-full">
-                {invites.length}
-              </span>
-            )}
-          </button>
+      <div className="bg-white/60 backdrop-blur-sm border-b border-gray-200/30">
+        <div className="max-w-5xl mx-auto px-4 py-3">
+          <div className="flex items-center justify-center gap-3">
+            <button
+              onClick={() => setActiveTab('search')}
+              className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-full font-medium transition-all duration-300 border ${
+                activeTab === 'search'
+                  ? 'bg-white text-blue-700 shadow-sm border-gray-200'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border-transparent'
+              }`}
+            >
+              <SearchIcon className="w-5 h-5" />
+              <span>Search Admin</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('invites')}
+              className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-full font-medium transition-all duration-300 border ${
+                activeTab === 'invites'
+                  ? 'bg-white text-blue-700 shadow-sm border-gray-200'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border-transparent'
+              }`}
+            >
+              <ClockIcon className="w-5 h-5" />
+              <span>Sent Invites</span>
+              {invites.length > 0 && (
+                <span className="ml-1 bg-blue-100 text-blue-700 text-xs font-semibold px-2 py-0.5 rounded-full">
+                  {invites.length}
+                </span>
+              )}
+            </button>
+          </div>
         </div>
       </div>
 

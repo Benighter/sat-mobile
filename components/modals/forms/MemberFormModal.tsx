@@ -10,6 +10,7 @@ import ImageUpload from '../../ui/ImageUpload';
 // Removed unused formatDateToYYYYMMDD import
 import { canAssignMemberRoles } from '../../../utils/permissionUtils';
 import { User, Phone, Home, Users, Shield } from 'lucide-react';
+import { MINISTRY_OPTIONS } from '../../../constants';
 
 interface MemberFormModalProps {
   isOpen: boolean;
@@ -40,6 +41,7 @@ const MemberFormModal: React.FC<MemberFormModalProps> = ({ isOpen, onClose, memb
   linkedBacentaIds: [],
     role: 'Member' as MemberRole, // Default role is Member
     birthday: '', // Optional birthday field
+  ministry: '',
   };
   const [formData, setFormData] = useState(initialFormData);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -58,6 +60,7 @@ const MemberFormModal: React.FC<MemberFormModalProps> = ({ isOpen, onClose, memb
         linkedBacentaIds: member.linkedBacentaIds || [],
         role: member.role || 'Member', // Default to Member if role is not set (for backward compatibility)
         birthday: member.birthday || '', // Include birthday field
+  ministry: member.ministry || '',
       });
     } else {
       // For new members, default to current bacenta if we're in one
@@ -66,6 +69,7 @@ const MemberFormModal: React.FC<MemberFormModalProps> = ({ isOpen, onClose, memb
         ...initialFormData,
         bacentaId: defaultBacentaId,
         linkedBacentaIds: [],
+  ministry: '',
       });
     }
     setErrors({});
@@ -326,6 +330,24 @@ const MemberFormModal: React.FC<MemberFormModalProps> = ({ isOpen, onClose, memb
             </div>
 
             <div className="space-y-6">
+              {/* Ministry (Optional) */}
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700">
+                  Ministry (Optional)
+                </label>
+                <select
+                  name="ministry"
+                  value={formData.ministry || ''}
+                  onChange={handleChange}
+                  className={`w-full px-4 py-3 border ${errors.ministry ? 'border-red-500' : 'border-gray-300'} rounded-lg shadow-sm focus:outline-none focus:ring-2 ${errors.ministry ? 'focus:ring-red-500' : 'focus:ring-blue-500'} focus:border-transparent transition-colors h-12`}
+                >
+                  <option value="">None</option>
+                  {MINISTRY_OPTIONS.map((m) => (
+                    <option key={m} value={m}>{m}</option>
+                  ))}
+                </select>
+                {errors.ministry && <p className="mt-1 text-xs text-red-600">{errors.ministry}</p>}
+              </div>
               <div className="space-y-2">
                 <label className="block text-sm font-medium text-gray-700">
                   Bacenta

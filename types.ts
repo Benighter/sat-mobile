@@ -10,6 +10,8 @@ export interface Member {
   roomNumber?: string; // Room number for members
   profilePicture?: string; // Base64 encoded image string
   bornAgainStatus: boolean;
+  /** Optional ministry assignment for the member */
+  ministry?: string;
   /** If true, this member is temporarily frozen (excluded from counts/absentees) */
   frozen?: boolean;
   /** If true, this member originated from an Outreach flow (born again from outreach) */
@@ -145,6 +147,7 @@ export enum TabKeys {
   COPY_MEMBERS = 'copy_members',
   COPY_ABSENTEES = 'copy_absentees',
   BACENTA_OUTREACH = 'bacenta_outreach',
+  MINISTRIES = 'ministries',
 }
 
 export interface NavigationHistoryItem {

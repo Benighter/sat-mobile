@@ -15,6 +15,7 @@ export const FIXED_TABS: TabOption[] = [
   { id: TabKeys.OUTREACH, name: 'Outreach' },
   { id: TabKeys.BIRTHDAYS, name: 'Birthdays' },
   { id: TabKeys.PROFILE_SETTINGS, name: 'Profile Settings' },
+  { id: TabKeys.MINISTRIES, name: 'Ministries' },
 ];
 
 export const DEFAULT_TAB_ID = TabKeys.DASHBOARD;
@@ -25,8 +26,15 @@ export const DEFAULT_CHURCH = {
   NAME: 'First Love Church'
 };
 
-// Ministry variant removed – keep empty options for backward compatibility if any component still imports it
-export const MINISTRY_OPTIONS: string[] = [];
+// Ministry options for member assignment (used in forms)
+export const MINISTRY_OPTIONS: string[] = [
+  'Choir',
+  'Dancing Stars',
+  'Ushers',
+  'Airport Stars',
+  'Arrival Stars',
+  'Media',
+];
 
 export const getVariantDisplayNameKey = (): string => {
   // Kept for backward compatibility; returns single unified key

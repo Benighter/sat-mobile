@@ -17,9 +17,14 @@ const MemberListView: React.FC<MemberListViewProps> = ({ bacentaFilter }) => {
     isLoading,
     bacentas,
     openMemberForm,
+    currentTab,
   } = useAppContext();
 
-  const [roleFilter, setRoleFilter] = useState<'all' | 'Bacenta Leader' | 'Fellowship Leader' | 'Member'>('all');
+  // When navigated with ministryOnly flag, keep a local flag to show the filter badge or guide text in future
+  const ministryOnly: boolean = (currentTab?.data as any)?.ministryOnly === true;
+  const ministryName: string | undefined = (currentTab?.data as any)?.ministryName;
+
+  const [roleFilter] = useState<'all' | 'Bacenta Leader' | 'Fellowship Leader' | 'Member'>('all');
   
   // Welcome UI state - moved before any conditional returns
   const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
@@ -72,7 +77,7 @@ const MemberListView: React.FC<MemberListViewProps> = ({ bacentaFilter }) => {
         }
 
         // Then sort by last name, then first name within the same role
-        return a.lastName.localeCompare(b.lastName) || a.firstName.localeCompare(b.firstName);
+  return (a.lastName || '').localeCompare(b.lastName || '') || a.firstName.localeCompare(b.firstName);
       });
   }, [members, bacentaFilter, bacentas, roleFilter]);
 
@@ -152,6 +157,11 @@ const MemberListView: React.FC<MemberListViewProps> = ({ bacentaFilter }) => {
       {/* Member List - Table View Only */}
       <div className="animate-fade-in">
         <MembersTableView bacentaFilter={bacentaFilter} />
+        {ministryOnly && (
+          <div className="mt-2 text-xs text-gray-600">
+            {ministryName ? `Filtered to ${ministryName} ministry.` : 'Filtered to members with a ministry.'}
+          </div>
+        )}
       </div>
 
       {/* Bulk Add Modal mounted locally so it opens within this context */}

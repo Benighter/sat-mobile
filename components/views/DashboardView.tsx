@@ -297,8 +297,8 @@ const DashboardView: React.FC = memo(() => {
   const year = displayedDate.getFullYear();
 
   // Personal card rearranging (excluding Total Members)
-  type CardId = 'confirmations' | 'attendanceRate' | 'weeklyAttendance' | 'outreach' | 'prayerOverall';
-  const defaultOrder: CardId[] = ['confirmations', 'attendanceRate', 'weeklyAttendance', 'outreach', 'prayerOverall'];
+  type CardId = 'confirmations' | 'attendanceRate' | 'weeklyAttendance' | 'outreach' | 'ministries' | 'prayerOverall';
+  const defaultOrder: CardId[] = ['confirmations', 'attendanceRate', 'weeklyAttendance', 'outreach', 'ministries', 'prayerOverall'];
   const [cardOrder, setCardOrder] = useState<CardId[]>(() => defaultOrder);
   const [rearrangeMode, setRearrangeMode] = useState<boolean>(false);
   const dragItemId = useRef<CardId | null>(null);
@@ -404,6 +404,20 @@ const DashboardView: React.FC = memo(() => {
             onClick={() => !rearrangeMode && switchTab({ id: TabKeys.OUTREACH, name: 'Outreach' })}
           />
         );
+      case 'ministries': {
+        const ministriesCount = members.filter(m => !!m.ministry && m.ministry.trim() !== '').length;
+        return (
+          <StatCard
+            key={id}
+            title="Ministries"
+            value={ministriesCount}
+            icon={<PeopleIcon className="w-full h-full" />}
+            accentColor="indigo"
+            description={ministriesCount === 1 ? '1 member in a ministry' : `${ministriesCount} members in ministries`}
+            onClick={() => !rearrangeMode && switchTab({ id: TabKeys.MINISTRIES, name: 'Ministries' })}
+          />
+        );
+      }
   case 'prayerOverall':
         return (
           <StatCard

@@ -5,12 +5,10 @@ import { ThemeProvider } from './contexts/ThemeContext';
 import { AuthScreen } from './components/auth/AuthScreen';
 
 import DashboardView from './components/views/DashboardView';
-import {
-  LazyWrapper,
+import LazyWrapper, {
+  LazyAttendanceAnalyticsView,
   LazyMemberListView,
   LazyBacentaLeadersView,
-
-  LazyAttendanceAnalyticsView,
   LazyWeeklyAttendanceView,
   LazySundayConfirmationsView,
   LazyNewBelieversView,
@@ -19,7 +17,8 @@ import {
   LazyOutreachView,
   LazyBacentaOutreachView,
   LazyPrayerView,
-  LazyPrayerMemberDetailsView
+  LazyPrayerMemberDetailsView,
+  LazyMinistriesView
 } from './components/common/LazyWrapper';
 import ProfileSettingsView from './components/views/ProfileSettingsView';
 import CopyMembersView from './components/views/CopyMembersView';
@@ -248,6 +247,12 @@ const AppContent: React.FC = memo(() => {
         return <CopyMembersView />;
       case TabKeys.COPY_ABSENTEES:
         return <CopyAbsenteesView />;
+      case TabKeys.MINISTRIES:
+        return (
+          <LazyWrapper>
+            <LazyMinistriesView />
+          </LazyWrapper>
+        );
       default:
         return (
           <LazyWrapper>
