@@ -149,6 +149,7 @@ interface AppContextType {
 
   // Member Deletion Request Operations
   createDeletionRequestHandler: (memberId: string, reason?: string) => Promise<void>;
+  createOutreachDeletionRequestHandler: (outreachMemberId: string, reason?: string) => Promise<void>;
   approveDeletionRequestHandler: (requestId: string) => Promise<void>;
   rejectDeletionRequestHandler: (requestId: string, adminNotes?: string) => Promise<void>;
 
@@ -871,6 +872,11 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
   const deleteOutreachBacentaHandler = useCallback(async (id: string) => {
     try {
       setIsLoading(true);
+      // Only original admins may delete outreach bacentas
+      const { hasAdminPrivileges } = await import('../utils/permissionUtils');
+      if (!hasAdminPrivileges(userProfile)) {
+        throw new Error('You do not have permission to delete outreach lists. Only original administrators can perform this action.');
+      }
       await outreachBacentasFirebaseService.delete(id);
       showToast('success', 'Outreach Bacenta deleted');
     } catch (error: any) {
@@ -1025,6 +1031,11 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
   const deleteOutreachMemberHandler = useCallback(async (id: string) => {
     try {
       setIsLoading(true);
+      // Only leaders/admins may delete outreach members; enforce same pattern as member deletion
+      const { hasLeaderPrivileges } = await import('../utils/permissionUtils');
+      if (!hasLeaderPrivileges(userProfile)) {
+        throw new Error('You do not have permission to delete outreach members. Contact an admin to perform this action.');
+      }
       // Find the outreach member to determine cascading actions
       const om = outreachMembers.find(o => o.id === id);
 
@@ -1699,8 +1710,20 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
         reviewedAt: new Date().toISOString()
       });
 
-      // Delete the actual member
-      await deleteMemberHandler(request.memberId);
+      // Delete the actual target depending on request type
+      // If this request targets an outreach member, delete from outreach collection
+      if ((request as any).target === 'outreach') {
+        try {
+          await outreachMembersFirebaseService.delete(request.memberId);
+        } catch (err) {
+          console.warn('Failed to delete outreach member during approve flow, falling back to member delete:', err);
+          // fallback: attempt member delete (no-op if not a member)
+          await deleteMemberHandler(request.memberId);
+        }
+      } else {
+        // Default behavior: delete a regular member
+        await deleteMemberHandler(request.memberId);
+      }
 
       showToast('success', 'Request Approved',
         `Deletion request for ${request.memberName} has been approved and the member has been deleted.`);
@@ -1711,6 +1734,49 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
       throw error;
     }
   }, [memberDeletionRequests, userProfile, showToast, deleteMemberHandler]);
+
+  const createOutreachDeletionRequestHandler = useCallback(async (outreachMemberId: string, reason?: string) => {
+    try {
+      if (!userProfile?.uid) throw new Error('User not authenticated');
+
+      const om = outreachMembers.find(o => o.id === outreachMemberId);
+      if (!om) throw new Error('Outreach member not found');
+
+      const hasPending = await memberDeletionRequestService.hasPendingRequest(outreachMemberId);
+      if (hasPending) {
+        throw new Error('A deletion request for this outreach member is already pending');
+      }
+
+      // Create a deletion request record; include a custom `target` to indicate outreach
+      await memberDeletionRequestService.create({
+        memberId: outreachMemberId,
+        memberName: om.name,
+        requestedBy: userProfile.uid,
+        requestedByName: `${userProfile.firstName || ''} ${userProfile.lastName || ''}`.trim(),
+        reason: reason || '',
+        churchId: userProfile.churchId || '',
+        // custom field to mark this as outreach deletion
+        target: 'outreach'
+      } as any);
+
+      // Send admin notifications to linked admins
+      try {
+        const { createNotificationHelpers } = await import('../services/notificationService');
+        const leaderName = userProfile?.displayName || `${userProfile?.firstName || ''} ${userProfile?.lastName || ''}`.trim() || 'Leader';
+        // Reuse memberDeleted activity to surface the request to admins (admins will review in requests UI)
+        await createNotificationHelpers.memberDeleted(leaderName, om.name);
+      } catch (notifyErr) {
+        console.warn('Failed to notify admins about outreach deletion request:', notifyErr);
+      }
+
+      showToast('success', 'Deletion Request Submitted', `Your request to delete ${om.name} from outreach has been submitted for admin approval.`);
+    } catch (error: any) {
+      console.error('❌ Failed to create outreach deletion request:', error);
+      setError(error.message);
+      showToast('error', 'Failed to request deletion', error.message);
+      throw error;
+    }
+  }, [outreachMembers, memberDeletionRequests, userProfile, showToast]);
 
   const rejectDeletionRequestHandler = useCallback(async (requestId: string, adminNotes?: string) => {
     try {
@@ -2273,6 +2339,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
 
     // Member Deletion Request Operations
     createDeletionRequestHandler,
+  createOutreachDeletionRequestHandler,
     approveDeletionRequestHandler,
     rejectDeletionRequestHandler,
 
