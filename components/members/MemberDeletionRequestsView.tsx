@@ -25,7 +25,7 @@ interface MemberDeletionRequestsViewProps {
 }
 
 const MemberDeletionRequestsView: React.FC<MemberDeletionRequestsViewProps> = () => {
-  const { userProfile, showToast, deleteMemberHandler, showConfirmation } = useAppContext();
+  const { userProfile, showToast, showConfirmation, approveDeletionRequestHandler, rejectDeletionRequestHandler } = useAppContext();
   const [deletionRequests, setDeletionRequests] = useState<MemberDeletionRequest[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -92,16 +92,7 @@ const MemberDeletionRequestsView: React.FC<MemberDeletionRequestsViewProps> = ()
         try {
           setProcessingRequestId(request.id);
           
-          // First update the request status
-          await memberDeletionRequestService.update(request.id, {
-            status: 'approved',
-            reviewedBy: userProfile?.uid || '',
-            reviewedByName: `${userProfile?.firstName || ''} ${userProfile?.lastName || ''}`.trim(),
-            reviewedAt: new Date().toISOString()
-          });
-
-          // Then delete the actual member
-          await deleteMemberHandler(request.memberId);
+          await approveDeletionRequestHandler(request.id);
           
           showToast('success', 'Request Approved', 
             `Deletion request for ${request.memberName} has been approved and the member has been deleted.`);
@@ -126,13 +117,7 @@ const MemberDeletionRequestsView: React.FC<MemberDeletionRequestsViewProps> = ()
     try {
       setProcessingRequestId(request.id);
       
-      await memberDeletionRequestService.update(request.id, {
-        status: 'rejected',
-        reviewedBy: userProfile?.uid || '',
-        reviewedByName: `${userProfile?.firstName || ''} ${userProfile?.lastName || ''}`.trim(),
-        reviewedAt: new Date().toISOString(),
-        adminNotes: adminNotes || 'Request rejected by administrator'
-      });
+  await rejectDeletionRequestHandler(request.id, adminNotes);
       
       showToast('success', 'Request Rejected',
         `Deletion request for ${request.memberName} has been rejected.`);

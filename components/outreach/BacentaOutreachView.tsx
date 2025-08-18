@@ -1,7 +1,5 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { useAppContext } from '../../contexts/FirebaseAppContext';
-import { hasAdminPrivileges } from '../../utils/permissionUtils';
-import { hasLeaderPrivileges } from '../../utils/permissionUtils';
 import { OutreachMember } from '../../types';
 import { formatDateToYYYYMMDD } from '../../utils/dateUtils';
 import Button from '../ui/Button';
@@ -61,13 +59,8 @@ const BacentaOutreachView: React.FC<BacentaOutreachViewProps> = ({ bacentaId }) 
     updateOutreachMemberHandler,
     deleteOutreachMemberHandler,
     convertOutreachMemberToPermanentHandler,
-    showToast,
-    userProfile,
-    showConfirmation,
-    createOutreachDeletionRequestHandler
+    showToast
   } = useAppContext();
-
-  const canDelete = hasLeaderPrivileges(userProfile);
 
   // Monday-based week state (YYYY-MM-DD for Monday)
   const [weekStart, setWeekStart] = useState<string>(() => {
@@ -137,26 +130,13 @@ const BacentaOutreachView: React.FC<BacentaOutreachViewProps> = ({ bacentaId }) 
   };
 
   const handleDelete = async (member: OutreachMember) => {
-    const isAdmin = hasAdminPrivileges(userProfile);
-    if (isAdmin) {
-      if (!confirm(`Delete ${member.name} from outreach list?`)) return;
-      try {
-        await deleteOutreachMemberHandler(member.id);
-        showToast('success', 'Member deleted');
-      } catch (error) {
-        showToast('error', 'Failed to delete member');
-      }
-      return;
+    if (!confirm(`Delete ${member.name} from outreach list?`)) return;
+    try {
+      await deleteOutreachMemberHandler(member.id);
+      showToast('success', 'Member deleted');
+    } catch (error) {
+      showToast('error', 'Failed to delete member');
     }
-
-    // For leaders (non-admin), submit a deletion request instead
-    showConfirmation('createDeletionRequest', { member: { firstName: member.name, lastName: '' } }, async () => {
-      try {
-        await createOutreachDeletionRequestHandler(member.id);
-      } catch (error) {
-        // createOutreachDeletionRequestHandler already shows toast
-      }
-    });
   };
 
   if (!bacenta) {
@@ -303,17 +283,15 @@ const BacentaOutreachView: React.FC<BacentaOutreachViewProps> = ({ bacentaId }) 
                           </Button>
                         )}
 
-                        {canDelete && (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => handleDelete(member)}
-                            title="Delete member"
-                            className="p-1.5"
-                          >
-                            <TrashIcon className="w-4 h-4 text-red-500" />
-                          </Button>
-                        )}
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleDelete(member)}
+                          title="Delete member"
+                          className="p-1.5"
+                        >
+                          <TrashIcon className="w-4 h-4 text-red-500" />
+                        </Button>
                       </div>
                     </td>
                   </tr>

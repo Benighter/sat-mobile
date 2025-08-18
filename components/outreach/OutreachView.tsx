@@ -1,6 +1,5 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { useAppContext } from '../../contexts/FirebaseAppContext';
-import { hasAdminPrivileges } from '../../utils/permissionUtils';
 import { OutreachMember, OutreachBacenta } from '../../types';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
@@ -21,8 +20,7 @@ const BacentaDetail: React.FC<{
   weekStart: string;
   onBack: () => void;
 }> = ({ bacenta, members, weekStart, onBack }) => {
-  const { deleteOutreachMemberHandler, convertOutreachMemberToPermanentHandler, userProfile, showConfirmation, createOutreachDeletionRequestHandler } = useAppContext();
-  const isAdmin = hasAdminPrivileges(userProfile);
+  const { deleteOutreachMemberHandler, convertOutreachMemberToPermanentHandler } = useAppContext();
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [room, setRoom] = useState('');
@@ -214,15 +212,7 @@ const BacentaDetail: React.FC<{
                           <Button
                             size="sm"
                             variant="ghost"
-                            onClick={() => {
-                              if (isAdmin) {
-                                deleteOutreachMemberHandler(m.id);
-                                return;
-                              }
-                              showConfirmation('createDeletionRequest', { member: { firstName: m.name, lastName: '' } }, async () => {
-                                await createOutreachDeletionRequestHandler(m.id);
-                              })
-                            }}
+                            onClick={() => deleteOutreachMemberHandler(m.id)}
                             className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400"
                             title="Delete member"
                           >
