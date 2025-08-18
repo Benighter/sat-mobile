@@ -35,18 +35,8 @@
         // This will be handled by the React app's navigation system
         // The event is prevented in the useNavigation hook
       });
-
-      // Prevent context menu on long press (mobile)
-      document.addEventListener('contextmenu', function(e) {
-        e.preventDefault();
-      });
-
-      // Prevent text selection on mobile
-      document.addEventListener('selectstart', function(e) {
-        if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
-          e.preventDefault();
-        }
-      });
+  // Allow text selection and native context menu for copy/paste
+  // (Previously, global listeners blocked these actions.)
     });
   </script>
   <script>
