@@ -1,22 +1,16 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAppContext } from '../../contexts/FirebaseAppContext';
 import { Bacenta, TabKeys } from '../../types';
-import { hasAdminPrivileges } from '../../utils/permissionUtils';
 import { getUpcomingBirthdays } from '../../utils/birthdayUtils';
 import {
   XMarkIcon,
   SearchIcon,
-  GroupIcon,
   EditIcon,
   TrashIcon,
   PlusCircleIcon,
   UsersIcon,
   ClockIcon,
   ChartBarIcon,
-  WarningIcon,
-  UserIcon,
-  CheckIcon,
-  ExclamationTriangleIcon,
   CakeIcon,
   BuildingOfficeIcon
 } from '../icons';
@@ -36,11 +30,13 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
     deleteBacentaHandler,
     isBacentaFormOpen,
     confirmationModal,
-    userProfile,
-    user,
-    showToast,
+  // userProfile,
+  // user,
+  // showToast,
     showConfirmation,
-    refreshUserProfile
+  // refreshUserProfile,
+    isMinistryContext,
+    activeMinistryName,
   } = useAppContext();
   
   const [searchQuery, setSearchQuery] = useState('');
@@ -168,11 +164,11 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
   return (
     <>
       {/* Backdrop */}
-      <div 
+      <div
         className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 transition-opacity duration-300"
         onClick={onClose}
       />
-      
+
       {/* Drawer */}
       <div className={`fixed top-0 left-0 h-full w-80 max-w-[90vw] sm:max-w-[85vw] md:max-w-[75vw] lg:w-80 bg-white dark:bg-dark-800 shadow-xl z-50 transform transition-all duration-300 ease-out ${
         isOpen ? 'translate-x-0 shadow-xl' : '-translate-x-full shadow-none'
@@ -183,7 +179,7 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
           <div className="flex items-center justify-between mb-3 sm:mb-4">
             <h2 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-dark-100 flex items-center min-w-0">
               <ChartBarIcon className="w-5 h-5 sm:w-6 sm:h-6 mr-2 sm:mr-3 text-slate-500 dark:text-slate-400 flex-shrink-0" />
-              <span className="truncate">Navigation</span>
+              <span className="truncate">{isMinistryContext ? (activeMinistryName || 'Ministry Navigation') : 'Navigation'}</span>
             </h2>
             <button
               onClick={onClose}
@@ -194,16 +190,18 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
             </button>
           </div>
 
-          {/* Search Input */}
-          <div className="relative">
-            <input
-              type="text"
-              placeholder="Search bacentas..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full px-4 py-2 sm:py-2.5 border border-gray-300 dark:border-dark-600 bg-white dark:bg-dark-700 text-gray-900 dark:text-dark-100 rounded-lg focus:ring-2 focus:ring-slate-400 dark:focus:ring-slate-500 focus:border-transparent transition-all duration-200 placeholder-gray-500 dark:placeholder-dark-400 text-sm sm:text-base"
-            />
-          </div>
+          {/* Search Input (hidden in Ministry mode) */}
+          {!isMinistryContext && (
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="Search bacentas..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full px-4 py-2 sm:py-2.5 border border-gray-300 dark:border-dark-600 bg-white dark:bg-dark-700 text-gray-900 dark:text-dark-100 rounded-lg focus:ring-2 focus:ring-slate-400 dark:focus:ring-slate-500 focus:border-transparent transition-all duration-200 placeholder-gray-500 dark:placeholder-dark-400 text-sm sm:text-base"
+              />
+            </div>
+          )}
         </div>
 
         {/* Content */}
@@ -216,55 +214,82 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
               <span className="truncate">Navigation</span>
             </h3>
             <div className="space-y-1.5 sm:space-y-2">
-              <NavigationItem
-                icon={<BuildingOfficeIcon className="w-4 h-4" />}
-                label="All Bacenta Leaders"
-                isActive={currentTab.id === TabKeys.ALL_BACENTAS}
-                onClick={() => {
-                  switchTab({ id: TabKeys.ALL_BACENTAS, name: 'All Bacenta Leaders' });
-                  onClose();
-                }}
-              />
+              {/* Ministry-aware items */}
+              {isMinistryContext ? (
+                <>
+                  <NavigationItem
+                    icon={<UsersIcon className="w-4 h-4" />}
+                    label="Sons of God"
+                    isActive={currentTab.id === TabKeys.NEW_BELIEVERS}
+                    onClick={() => {
+                      switchTab({ id: TabKeys.NEW_BELIEVERS, name: 'New Believers' });
+                      onClose();
+                    }}
+                  />
+                  <NavigationItem
+                    icon={<CakeIcon className="w-4 h-4" />}
+                    label="Birthdays"
+                    isActive={currentTab.id === TabKeys.BIRTHDAYS}
+                    badge={upcomingBirthdaysCount > 0 ? upcomingBirthdaysCount : undefined}
+                    onClick={() => {
+                      switchTab({ id: TabKeys.BIRTHDAYS, name: 'Birthdays' });
+                      onClose();
+                    }}
+                  />
+                </>
+              ) : (
+                <>
+                  <NavigationItem
+                    icon={<BuildingOfficeIcon className="w-4 h-4" />}
+                    label="All Bacenta Leaders"
+                    isActive={currentTab.id === TabKeys.ALL_BACENTAS}
+                    onClick={() => {
+                      switchTab({ id: TabKeys.ALL_BACENTAS, name: 'All Bacenta Leaders' });
+                      onClose();
+                    }}
+                  />
 
-              <NavigationItem
-                icon={<UsersIcon className="w-4 h-4" />}
-                label="Sons of God"
-                isActive={currentTab.id === TabKeys.NEW_BELIEVERS}
-                onClick={() => {
-                  switchTab({ id: TabKeys.NEW_BELIEVERS, name: 'New Believers' });
-                  onClose();
-                }}
-              />
+                  <NavigationItem
+                    icon={<UsersIcon className="w-4 h-4" />}
+                    label="Sons of God"
+                    isActive={currentTab.id === TabKeys.NEW_BELIEVERS}
+                    onClick={() => {
+                      switchTab({ id: TabKeys.NEW_BELIEVERS, name: 'New Believers' });
+                      onClose();
+                    }}
+                  />
 
-              <NavigationItem
-                icon={<CakeIcon className="w-4 h-4" />}
-                label="Birthdays"
-                isActive={currentTab.id === TabKeys.BIRTHDAYS}
-                badge={upcomingBirthdaysCount > 0 ? upcomingBirthdaysCount : undefined}
-                onClick={() => {
-                  switchTab({ id: TabKeys.BIRTHDAYS, name: 'Birthdays' });
-                  onClose();
-                }}
-              />
-
-
+                  <NavigationItem
+                    icon={<CakeIcon className="w-4 h-4" />}
+                    label="Birthdays"
+                    isActive={currentTab.id === TabKeys.BIRTHDAYS}
+                    badge={upcomingBirthdaysCount > 0 ? upcomingBirthdaysCount : undefined}
+                    onClick={() => {
+                      switchTab({ id: TabKeys.BIRTHDAYS, name: 'Birthdays' });
+                      onClose();
+                    }}
+                  />
+                </>
+              )}
             </div>
           </div>
 
           {/* Divider */}
-          <div className="border-t border-gray-200 dark:border-dark-600"></div>
+          {!isMinistryContext && <div className="border-t border-gray-200 dark:border-dark-600"></div>}
 
-          {/* Add New Bacenta Button */}
-          <button
-            onClick={handleAddBacenta}
-            className="w-full flex items-center justify-center space-x-1.5 sm:space-x-2 p-3 sm:p-4 bg-slate-600 dark:bg-slate-700 hover:bg-slate-700 dark:hover:bg-slate-600 text-white rounded-lg transition-all duration-200 shadow-sm hover:shadow-md border border-slate-500 dark:border-slate-600"
-          >
-            <PlusCircleIcon className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" />
-            <span className="font-medium text-sm sm:text-base truncate">Create New Bacenta</span>
-          </button>
+          {/* Add New Bacenta Button (hidden in Ministry mode) */}
+          {!isMinistryContext && (
+            <button
+              onClick={handleAddBacenta}
+              className="w-full flex items-center justify-center space-x-1.5 sm:space-x-2 p-3 sm:p-4 bg-slate-600 dark:bg-slate-700 hover:bg-slate-700 dark:hover:bg-slate-600 text-white rounded-lg transition-all duration-200 shadow-sm hover:shadow-md border border-slate-500 dark:border-slate-600"
+            >
+              <PlusCircleIcon className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" />
+              <span className="font-medium text-sm sm:text-base truncate">Create New Bacenta</span>
+            </button>
+          )}
 
-          {/* Recent Bacentas */}
-          {!searchQuery && validRecentBacentas.length > 0 && (
+          {/* Recent Bacentas (hidden in Ministry mode) */}
+          {!isMinistryContext && !searchQuery && validRecentBacentas.length > 0 && (
             <div>
               <h3 className="text-xs sm:text-sm font-semibold text-gray-500 dark:text-dark-400 mb-2 sm:mb-3 flex items-center">
                 <ClockIcon className="w-3 h-3 sm:w-4 sm:h-4 mr-1.5 sm:mr-2 text-slate-500 dark:text-slate-400 flex-shrink-0" />
@@ -286,69 +311,71 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
             </div>
           )}
 
-          {/* All Bacentas */}
-          <div className="flex-1 flex flex-col min-h-0">
-            <div className="flex items-center justify-between mb-2 sm:mb-3 flex-shrink-0 min-w-0">
-              <h3 className="text-xs sm:text-sm font-semibold text-gray-600 dark:text-dark-400 flex items-center min-w-0">
-                <BuildingOfficeIcon className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-1.5 flex-shrink-0" />
-                <span className="truncate">
-                  {searchQuery ? `Search Results (${filteredBacentas.length})` : `All Bacentas (${bacentas.length})`}
-                </span>
-              </h3>
-              {filteredBacentas.length > 5 && (
-                <div className="text-xs text-gray-400 dark:text-dark-500 flex items-center flex-shrink-0 ml-2">
-                  <span className="hidden sm:inline">Scroll for more</span>
-                  <span className="sm:hidden">More</span>
-                  <svg className="w-3 h-3 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-                  </svg>
+          {/* All Bacentas (hidden in Ministry mode) */}
+          {!isMinistryContext && (
+            <div className="flex-1 flex flex-col min-h-0">
+              <div className="flex items-center justify-between mb-2 sm:mb-3 flex-shrink-0 min-w-0">
+                <h3 className="text-xs sm:text-sm font-semibold text-gray-600 dark:text-dark-400 flex items-center min-w-0">
+                  <BuildingOfficeIcon className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-1.5 flex-shrink-0" />
+                  <span className="truncate">
+                    {searchQuery ? `Search Results (${filteredBacentas.length})` : `All Bacentas (${bacentas.length})`}
+                  </span>
+                </h3>
+                {filteredBacentas.length > 5 && (
+                  <div className="text-xs text-gray-400 dark:text-dark-500 flex items-center flex-shrink-0 ml-2">
+                    <span className="hidden sm:inline">Scroll for more</span>
+                    <span className="sm:hidden">More</span>
+                    <svg className="w-3 h-3 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                    </svg>
+                  </div>
+                )}
+              </div>
+
+              {filteredBacentas.length === 0 ? (
+                <div className="text-center py-8 text-gray-500 dark:text-dark-400 flex-1 flex flex-col justify-center">
+                  {searchQuery ? (
+                    <>
+                      <SearchIcon className="w-12 h-12 mx-auto mb-3 text-gray-300 dark:text-dark-500" />
+                      <p className="font-medium">No bacentas found matching "{searchQuery}"</p>
+                    </>
+                  ) : (
+                    <>
+                      <BuildingOfficeIcon className="w-12 h-12 mx-auto mb-3 text-gray-300 dark:text-dark-500" />
+                      <p className="font-medium">No bacentas created yet</p>
+                      <p className="text-sm mt-1">Create your first bacenta to get started!</p>
+                    </>
+                  )}
+                </div>
+              ) : (
+                <div className="flex-1 overflow-y-auto sidebar-scroll min-h-0 relative bacentas-scroll-container" onScroll={handleScroll}>
+                  {/* Scroll fade indicator - top */}
+                  {canScrollUp && (
+                    <div className="scroll-fade-top absolute top-0 left-0 right-0 z-10" />
+                  )}
+
+                  <div className="space-y-1.5 sm:space-y-2 pb-3 sm:pb-4">
+                    {filteredBacentas.map((bacenta) => (
+                      <BacentaItem
+                        key={bacenta.id}
+                        bacenta={bacenta}
+                        memberCount={getMemberCount(bacenta.id)}
+                        isActive={currentTab.id === bacenta.id}
+                        onClick={() => handleBacentaClick(bacenta)}
+                        onEdit={(e) => handleEditBacenta(e, bacenta)}
+                        onDelete={(e) => handleDeleteBacenta(e, bacenta.id)}
+                      />
+                    ))}
+                  </div>
+
+                  {/* Scroll fade indicator - bottom */}
+                  {canScrollDown && (
+                    <div className="scroll-fade-bottom absolute bottom-0 left-0 right-0 z-10" />
+                  )}
                 </div>
               )}
             </div>
-
-            {filteredBacentas.length === 0 ? (
-              <div className="text-center py-8 text-gray-500 dark:text-dark-400 flex-1 flex flex-col justify-center">
-                {searchQuery ? (
-                  <>
-                    <SearchIcon className="w-12 h-12 mx-auto mb-3 text-gray-300 dark:text-dark-500" />
-                    <p className="font-medium">No bacentas found matching "{searchQuery}"</p>
-                  </>
-                ) : (
-                  <>
-                    <BuildingOfficeIcon className="w-12 h-12 mx-auto mb-3 text-gray-300 dark:text-dark-500" />
-                    <p className="font-medium">No bacentas created yet</p>
-                    <p className="text-sm mt-1">Create your first bacenta to get started!</p>
-                  </>
-                )}
-              </div>
-            ) : (
-              <div className="flex-1 overflow-y-auto sidebar-scroll min-h-0 relative bacentas-scroll-container" onScroll={handleScroll}>
-                {/* Scroll fade indicator - top */}
-                {canScrollUp && (
-                  <div className="scroll-fade-top absolute top-0 left-0 right-0 z-10" />
-                )}
-
-                <div className="space-y-1.5 sm:space-y-2 pb-3 sm:pb-4">
-                  {filteredBacentas.map((bacenta) => (
-                    <BacentaItem
-                      key={bacenta.id}
-                      bacenta={bacenta}
-                      memberCount={getMemberCount(bacenta.id)}
-                      isActive={currentTab.id === bacenta.id}
-                      onClick={() => handleBacentaClick(bacenta)}
-                      onEdit={(e) => handleEditBacenta(e, bacenta)}
-                      onDelete={(e) => handleDeleteBacenta(e, bacenta.id)}
-                    />
-                  ))}
-                </div>
-
-                {/* Scroll fade indicator - bottom */}
-                {canScrollDown && (
-                  <div className="scroll-fade-bottom absolute bottom-0 left-0 right-0 z-10" />
-                )}
-              </div>
-            )}
-          </div>
+          )}
 
 
         </div>

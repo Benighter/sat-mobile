@@ -15,7 +15,7 @@ interface NewBelieverFormModalProps {
 }
 
 const NewBelieverFormModal: React.FC<NewBelieverFormModalProps> = ({ isOpen, onClose, newBeliever }) => {
-  const { addNewBelieverHandler, updateNewBelieverHandler } = useAppContext();
+  const { addNewBelieverHandler, updateNewBelieverHandler, isMinistryContext, activeMinistryName } = useAppContext();
 
   const initialFormData: Omit<NewBeliever, 'id' | 'createdDate' | 'lastUpdated'> = {
     name: '',
@@ -28,7 +28,7 @@ const NewBelieverFormModal: React.FC<NewBelieverFormModalProps> = ({ isOpen, onC
     occupation: '',
     year: '',
     isFirstTime: false,
-    ministry: '',
+  ministry: isMinistryContext ? (activeMinistryName || '') : '',
     joinedDate: formatDateToYYYYMMDD(new Date()), // Default to today
   };
 
@@ -49,14 +49,16 @@ const NewBelieverFormModal: React.FC<NewBelieverFormModalProps> = ({ isOpen, onC
         year: newBeliever.year,
         isFirstTime: newBeliever.isFirstTime,
         ministry: newBeliever.ministry,
+        joinedDate: newBeliever.joinedDate || formatDateToYYYYMMDD(new Date()),
       });
     } else {
       setFormData({
         ...initialFormData,
+        ministry: isMinistryContext ? (activeMinistryName || '') : '',
       });
     }
     setErrors({});
-  }, [newBeliever, isOpen]);
+  }, [newBeliever, isOpen, isMinistryContext, activeMinistryName]);
 
   // Handler for regular HTML elements (select, checkbox, etc.)
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -237,23 +239,33 @@ const NewBelieverFormModal: React.FC<NewBelieverFormModalProps> = ({ isOpen, onC
           />
         </div>
 
-        {/* Ministry Dropdown */}
-        <div>
-          <label htmlFor="ministry" className="block text-sm font-medium text-gray-700 mb-1">Ministry Interest</label>
-          <select
-            id="ministry"
-            name="ministry"
-            value={formData.ministry}
-            onChange={handleChange}
-            className={`w-full px-3 py-2 border ${errors.ministry ? 'border-red-500' : 'border-gray-300'} rounded-md shadow-sm focus:outline-none focus:ring-2 ${errors.ministry ? 'focus:ring-red-500' : 'focus:ring-blue-500'} focus:border-transparent transition-colors`}
-          >
-            <option value="">Select a ministry (optional)</option>
-            {MINISTRY_OPTIONS.map(ministry => (
-              <option key={ministry} value={ministry}>{ministry}</option>
-            ))}
-          </select>
-          {errors.ministry && <p className="mt-1 text-xs text-red-600">{errors.ministry}</p>}
-        </div>
+        {/* Ministry selection hidden in Ministry Mode — auto-assigned */}
+        {!isMinistryContext ? (
+          <div>
+            <label htmlFor="ministry" className="block text-sm font-medium text-gray-700 mb-1">Ministry Interest</label>
+            <select
+              id="ministry"
+              name="ministry"
+              value={formData.ministry}
+              onChange={handleChange}
+              className={`w-full px-3 py-2 border ${errors.ministry ? 'border-red-500' : 'border-gray-300'} rounded-md shadow-sm focus:outline-none focus:ring-2 ${errors.ministry ? 'focus:ring-red-500' : 'focus:ring-blue-500'} focus:border-transparent transition-colors`}
+            >
+              <option value="">Select a ministry (optional)</option>
+              {MINISTRY_OPTIONS.map(ministry => (
+                <option key={ministry} value={ministry}>{ministry}</option>
+              ))}
+            </select>
+            {errors.ministry && <p className="mt-1 text-xs text-red-600">{errors.ministry}</p>}
+          </div>
+        ) : (
+          <div className="w-full px-4 py-3 border border-green-200 rounded-lg shadow-sm bg-green-50 text-green-800">
+            <div className="flex items-center justify-between">
+              <span className="font-medium">Ministry Mode</span>
+              <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full">{activeMinistryName || 'Selected Ministry'}</span>
+            </div>
+            <p className="text-xs mt-1">This new believer will be added to the ministry. No selection required.</p>
+          </div>
+        )}
 
         {/* First Time Checkbox */}
         <Checkbox 

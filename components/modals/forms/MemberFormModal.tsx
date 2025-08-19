@@ -19,7 +19,7 @@ interface MemberFormModalProps {
 }
 
 const MemberFormModal: React.FC<MemberFormModalProps> = ({ isOpen, onClose, member }) => {
-  const { addMemberHandler, updateMemberHandler, bacentas, currentTab, userProfile, members } = useAppContext();
+  const { addMemberHandler, updateMemberHandler, bacentas, currentTab, userProfile, members, isMinistryContext, activeMinistryName } = useAppContext();
 
   // Check if user can assign roles
   const canAssignRoles = canAssignMemberRoles(userProfile);
@@ -37,11 +37,11 @@ const MemberFormModal: React.FC<MemberFormModalProps> = ({ isOpen, onClose, memb
     roomNumber: '',
     profilePicture: '',
     bornAgainStatus: false,
-  bacentaId: currentBacentaId || (bacentas.length > 0 ? bacentas[0].id : ''),
+  bacentaId: isMinistryContext ? '' : (currentBacentaId || (bacentas.length > 0 ? bacentas[0].id : '')),
   linkedBacentaIds: [],
     role: 'Member' as MemberRole, // Default role is Member
     birthday: '', // Optional birthday field
-  ministry: '',
+  ministry: isMinistryContext ? (activeMinistryName || '') : '',
   };
   const [formData, setFormData] = useState(initialFormData);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -64,16 +64,16 @@ const MemberFormModal: React.FC<MemberFormModalProps> = ({ isOpen, onClose, memb
       });
     } else {
       // For new members, default to current bacenta if we're in one
-      const defaultBacentaId = currentBacentaId || (bacentas.length > 0 ? bacentas[0].id : '');
+      const defaultBacentaId = isMinistryContext ? '' : (currentBacentaId || (bacentas.length > 0 ? bacentas[0].id : ''));
       setFormData({
         ...initialFormData,
         bacentaId: defaultBacentaId,
         linkedBacentaIds: [],
-  ministry: '',
+  ministry: isMinistryContext ? (activeMinistryName || '') : '',
       });
     }
     setErrors({});
-  }, [isOpen, member, bacentas, currentBacentaId]); // Added currentBacentaId dependency
+  }, [isOpen, member, bacentas, currentBacentaId, isMinistryContext, activeMinistryName]);
 
   // Set of bacenta IDs that already have a primary leader (a leader whose main bacentaId matches)
   const primaryLedBacentaIds = useMemo(() => {
@@ -200,7 +200,7 @@ const MemberFormModal: React.FC<MemberFormModalProps> = ({ isOpen, onClose, memb
           </div>
 
           {/* Context-aware message for adding members to specific bacenta */}
-          {isInSpecificBacenta && !member && (
+          {!isMinistryContext && isInSpecificBacenta && !member && (
             <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
               <div className="flex items-start space-x-3">
                 <div className="flex-shrink-0">
@@ -330,24 +330,27 @@ const MemberFormModal: React.FC<MemberFormModalProps> = ({ isOpen, onClose, memb
             </div>
 
             <div className="space-y-6">
-              {/* Ministry (Optional) */}
-              <div className="space-y-2">
-                <label className="block text-sm font-medium text-gray-700">
-                  Ministry (Optional)
-                </label>
-                <select
-                  name="ministry"
-                  value={formData.ministry || ''}
-                  onChange={handleChange}
-                  className={`w-full px-4 py-3 border ${errors.ministry ? 'border-red-500' : 'border-gray-300'} rounded-lg shadow-sm focus:outline-none focus:ring-2 ${errors.ministry ? 'focus:ring-red-500' : 'focus:ring-blue-500'} focus:border-transparent transition-colors h-12`}
-                >
-                  <option value="">None</option>
-                  {MINISTRY_OPTIONS.map((m) => (
-                    <option key={m} value={m}>{m}</option>
-                  ))}
-                </select>
-                {errors.ministry && <p className="mt-1 text-xs text-red-600">{errors.ministry}</p>}
-              </div>
+              {/* Ministry selection hidden in Ministry Mode — auto-assigned */}
+              {!isMinistryContext && (
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-gray-700">
+                    Ministry (Optional)
+                  </label>
+                  <select
+                    name="ministry"
+                    value={formData.ministry || ''}
+                    onChange={handleChange}
+                    className={`w-full px-4 py-3 border ${errors.ministry ? 'border-red-500' : 'border-gray-300'} rounded-lg shadow-sm focus:outline-none focus:ring-2 ${errors.ministry ? 'focus:ring-red-500' : 'focus:ring-blue-500'} focus:border-transparent transition-colors h-12`}
+                  >
+                    <option value="">None</option>
+                    {MINISTRY_OPTIONS.map((m) => (
+                      <option key={m} value={m}>{m}</option>
+                    ))}
+                  </select>
+                  {errors.ministry && <p className="mt-1 text-xs text-red-600">{errors.ministry}</p>}
+                </div>
+              )}
+              {!isMinistryContext && (
               <div className="space-y-2">
                 <label className="block text-sm font-medium text-gray-700">
                   Bacenta
@@ -379,6 +382,16 @@ const MemberFormModal: React.FC<MemberFormModalProps> = ({ isOpen, onClose, memb
                 )}
                 {errors.bacentaId && <p className="mt-1 text-xs text-red-600">{errors.bacentaId}</p>}
               </div>
+              )}
+              {isMinistryContext && (
+                <div className="w-full px-4 py-3 border border-green-200 rounded-lg shadow-sm bg-green-50 text-green-800">
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium">Ministry Mode</span>
+                    <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full">{activeMinistryName || 'Selected Ministry'}</span>
+                  </div>
+                  <p className="text-xs mt-1">This member will be added to the ministry. Bacenta selection is not required.</p>
+                </div>
+              )}
 
               {/* Linked Bacentas Selector (leaders only) */}
               {(formData.role === 'Bacenta Leader' || formData.role === 'Fellowship Leader') && (

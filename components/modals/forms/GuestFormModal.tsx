@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../../../contexts/FirebaseAppContext';
 import { Guest } from '../../../types';
-import { XMarkIcon, UserPlusIcon } from '../../icons';
+import { UserPlusIcon } from '../../icons';
 import Modal from '../../ui/Modal';
 import Input from '../../ui/Input';
 import Button from '../../ui/Button';
@@ -18,7 +18,7 @@ const GuestFormModal: React.FC<GuestFormModalProps> = ({
   onClose,
   editingGuest
 }) => {
-  const { addGuestHandler, updateGuestHandler, isLoading, bacentas } = useAppContext();
+  const { addGuestHandler, updateGuestHandler, isLoading, bacentas, isMinistryContext, activeMinistryName } = useAppContext();
 
   // Form state
   const [formData, setFormData] = useState({
@@ -66,8 +66,8 @@ const GuestFormModal: React.FC<GuestFormModalProps> = ({
       newErrors.firstName = 'First name is required';
     }
 
-    // Bacenta is required
-    if (!formData.bacentaId) {
+    // Bacenta is required unless in ministry mode
+    if (!isMinistryContext && !formData.bacentaId) {
       newErrors.bacentaId = 'Bacenta selection is required';
     }
 
@@ -181,25 +181,35 @@ const GuestFormModal: React.FC<GuestFormModalProps> = ({
             placeholder="Enter last name (optional)"
           />
 
-          {/* Bacenta - Required */}
-          <Select
-            label="Bacenta"
-            value={formData.bacentaId}
-            onChange={(value) => handleInputChange('bacentaId', value)}
-            error={errors.bacentaId}
-            required
-          >
-            <option value="">Select a Bacenta</option>
-            {bacentas && bacentas.length > 0 ? (
-              bacentas.map((bacenta) => (
-                <option key={bacenta.id} value={bacenta.id}>
-                  {bacenta.name}
-                </option>
-              ))
-            ) : (
-              <option value="" disabled>No Bacentas available</option>
-            )}
-          </Select>
+          {/* Bacenta - Required unless Ministry Mode */}
+          {!isMinistryContext ? (
+            <Select
+              label="Bacenta"
+              value={formData.bacentaId}
+              onChange={(value) => handleInputChange('bacentaId', value)}
+              error={errors.bacentaId}
+              required
+            >
+              <option value="">Select a Bacenta</option>
+              {bacentas && bacentas.length > 0 ? (
+                bacentas.map((bacenta) => (
+                  <option key={bacenta.id} value={bacenta.id}>
+                    {bacenta.name}
+                  </option>
+                ))
+              ) : (
+                <option value="" disabled>No Bacentas available</option>
+              )}
+            </Select>
+          ) : (
+            <div className="w-full px-3 py-2 border border-green-200 rounded-md shadow-sm bg-green-50 text-green-800">
+              <div className="flex items-center justify-between">
+                <span className="font-medium">Ministry Mode</span>
+                <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full">{activeMinistryName || 'Selected Ministry'}</span>
+              </div>
+              <p className="text-xs mt-1">Guests will be added to the ministry. Bacenta selection is not required.</p>
+            </div>
+          )}
 
           {/* Room Number - Optional */}
           <Input

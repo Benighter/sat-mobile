@@ -111,7 +111,7 @@ const StatCard: React.FC<StatCardProps> = memo(({ title, value, icon, descriptio
 
 
 const DashboardView: React.FC = memo(() => {
-  const { members, attendanceRecords, newBelievers, displayedSundays, displayedDate, sundayConfirmations, guests, switchTab, user, currentChurchId, allOutreachMembers, bacentas, prayerRecords } = useAppContext(); // Use displayedSundays
+  const { members, attendanceRecords, newBelievers, displayedSundays, displayedDate, sundayConfirmations, guests, switchTab, user, currentChurchId, allOutreachMembers, bacentas, prayerRecords, isMinistryContext } = useAppContext(); // Use displayedSundays
 
   const activeMembers = useMemo(() => members.filter(m => !m.frozen).length, [members]);
   
@@ -298,7 +298,10 @@ const DashboardView: React.FC = memo(() => {
 
   // Personal card rearranging (excluding Total Members)
   type CardId = 'confirmations' | 'attendanceRate' | 'weeklyAttendance' | 'outreach' | 'ministries' | 'prayerOverall';
-  const defaultOrder: CardId[] = ['confirmations', 'attendanceRate', 'weeklyAttendance', 'outreach', 'ministries', 'prayerOverall'];
+  const baseDefaultOrder: CardId[] = ['confirmations', 'attendanceRate', 'weeklyAttendance', 'outreach', 'ministries', 'prayerOverall'];
+  const defaultOrder: CardId[] = isMinistryContext
+    ? (baseDefaultOrder.filter((id) => id !== 'ministries') as CardId[])
+    : baseDefaultOrder;
   const [cardOrder, setCardOrder] = useState<CardId[]>(() => defaultOrder);
   const [rearrangeMode, setRearrangeMode] = useState<boolean>(false);
   const dragItemId = useRef<CardId | null>(null);
@@ -306,16 +309,19 @@ const DashboardView: React.FC = memo(() => {
   // Load/save personal order using user ID to keep it per-user and local only
   useEffect(() => {
     const uid = user?.uid ?? null;
-    const loaded = dashboardLayoutStorage.loadOrder(uid, defaultOrder);
-    setCardOrder(loaded as CardId[]);
+    const loaded = dashboardLayoutStorage.loadOrder(uid, defaultOrder) as CardId[];
+    // In ministry mode, ensure 'ministries' card is removed from any previously saved layout
+    const sanitized = isMinistryContext ? (loaded.filter((id) => id !== 'ministries') as CardId[]) : loaded;
+    setCardOrder(sanitized);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.uid]);
+  }, [user?.uid, isMinistryContext]);
 
   const persistOrder = useCallback((next: CardId[]) => {
     const uid = user?.uid ?? null;
-    setCardOrder(next);
-    dashboardLayoutStorage.saveOrder(uid, next);
-  }, [user?.uid]);
+    const sanitized = isMinistryContext ? (next.filter((id) => id !== 'ministries') as CardId[]) : next;
+    setCardOrder(sanitized);
+    dashboardLayoutStorage.saveOrder(uid, sanitized);
+  }, [user?.uid, isMinistryContext]);
 
   const onDragStart = useCallback((e: React.DragEvent, id: CardId) => {
     dragItemId.current = id;
@@ -405,6 +411,7 @@ const DashboardView: React.FC = memo(() => {
           />
         );
       case 'ministries': {
+        if (isMinistryContext) return null; // Hide in ministry mode
         const ministriesCount = members.filter(m => !!m.ministry && m.ministry.trim() !== '').length;
         return (
           <StatCard

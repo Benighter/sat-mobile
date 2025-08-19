@@ -106,6 +106,9 @@ interface AppContextType {
   currentChurchId: string | null;
   isOnline: boolean;
   needsMigration: boolean;
+  // Context flags
+  isMinistryContext: boolean;
+  activeMinistryName?: string;
 
   // Data Operations
   fetchInitialData: () => Promise<void>;
@@ -262,6 +265,15 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
   const [currentChurchId, setCurrentChurchId] = useState<string | null>(null);
   const [isOnline, setIsOnline] = useState<boolean>(true);
   const [needsMigration, setNeedsMigration] = useState<boolean>(false);
+  
+  // Derived flags
+  const isMinistryContext = useMemo(() => {
+    const ministryId = userProfile?.contexts?.ministryChurchId;
+    return Boolean(currentChurchId && ministryId && currentChurchId === ministryId);
+  }, [currentChurchId, userProfile]);
+  const activeMinistryName = useMemo(() => {
+    return (userProfile?.preferences?.ministryName as string) || '';
+  }, [userProfile]);
 
   // Navigation state (stack of previously visited tabs)
   const [navigationStack, setNavigationStack] = useState<TabOption[]>(() => sessionStateStorage.loadNavStack());
@@ -378,17 +390,25 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
       });
       unsubscribers.push(unsubscribeMembers);
 
-      // Listen to bacentas
-      const unsubscribeBacentas = bacentasFirebaseService.onSnapshot((bacentas) => {
-        setBacentas(bacentas);
-      });
-      unsubscribers.push(unsubscribeBacentas);
+      // Listen to bacentas (skip in ministry context)
+      if (!isMinistryContext) {
+        const unsubscribeBacentas = bacentasFirebaseService.onSnapshot((bacentas) => {
+          setBacentas(bacentas);
+        });
+        unsubscribers.push(unsubscribeBacentas);
+      } else {
+        setBacentas([]);
+      }
 
-      // Listen to outreach bacentas
-      const unsubscribeOutreachBacentas = outreachBacentasFirebaseService.onSnapshot((items) => {
-        setOutreachBacentas(items);
-      });
-      unsubscribers.push(unsubscribeOutreachBacentas);
+      // Listen to outreach bacentas (skip in ministry context)
+      if (!isMinistryContext) {
+        const unsubscribeOutreachBacentas = outreachBacentasFirebaseService.onSnapshot((items) => {
+          setOutreachBacentas(items);
+        });
+        unsubscribers.push(unsubscribeOutreachBacentas);
+      } else {
+        setOutreachBacentas([]);
+      }
 
       // Listen to ALL outreach members (for overall totals)
       const unsubscribeAllOutreachMembers = outreachMembersFirebaseService.onSnapshot((items) => {
@@ -492,7 +512,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
 
       const [membersData, bacentasData, attendanceData, newBelieversData, confirmationsData, prayerData] = await Promise.all([
         membersFirebaseService.getAll(),
-        bacentasFirebaseService.getAll(),
+        isMinistryContext ? Promise.resolve([]) : bacentasFirebaseService.getAll(),
         attendanceFirebaseService.getAll(),
         newBelieversFirebaseService.getAll(),
         confirmationFirebaseService.getAll(),
@@ -507,7 +527,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
       setPrayerRecords(prayerData);
       console.log('[fetchInitialData] loaded counts', {
         members: membersData.length,
-        bacentas: bacentasData.length,
+  bacentas: (bacentasData as any).length,
         attendance: attendanceData.length,
         newBelievers: newBelieversData.length,
         confirmations: confirmationsData.length,
@@ -562,7 +582,15 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
   const addMemberHandler = useCallback(async (memberData: Omit<Member, 'id' | 'createdDate' | 'lastUpdated'>): Promise<string> => {
     try {
       setIsLoading(true);
-      const newMemberId = await memberOperationsWithNotifications.add(memberData);
+      // In ministry context, auto-tag to selected ministry and allow no bacenta
+      const payload: Omit<Member, 'id' | 'createdDate' | 'lastUpdated'> = isMinistryContext
+        ? {
+            ...memberData,
+            ministry: memberData.ministry || activeMinistryName || memberData.ministry,
+            bacentaId: memberData.bacentaId || ''
+          }
+        : memberData;
+      const newMemberId = await memberOperationsWithNotifications.add(payload);
       showToast('success', 'Member added successfully');
       return newMemberId;
     } catch (error: any) {
@@ -572,7 +600,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     } finally {
       setIsLoading(false);
     }
-  }, [showToast]);
+  }, [showToast, isMinistryContext, activeMinistryName]);
 
   const addMultipleMembersHandler = useCallback(async (membersData: Omit<Member, 'id' | 'createdDate' | 'lastUpdated'>[]) => {
     const successful: Member[] = [];
@@ -583,7 +611,14 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
 
       for (const memberData of membersData) {
         try {
-          const memberId = await memberOperationsWithNotifications.add(memberData);
+          const payload: Omit<Member, 'id' | 'createdDate' | 'lastUpdated'> = isMinistryContext
+            ? {
+                ...memberData,
+                ministry: memberData.ministry || activeMinistryName || memberData.ministry,
+                bacentaId: memberData.bacentaId || ''
+              }
+            : memberData;
+          const memberId = await memberOperationsWithNotifications.add(payload);
           successful.push({ ...memberData, id: memberId, createdDate: new Date().toISOString(), lastUpdated: new Date().toISOString() });
         } catch (error: any) {
           failed.push({ data: memberData, error: error.message });
@@ -605,7 +640,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     } finally {
       setIsLoading(false);
     }
-  }, [showToast]);
+  }, [showToast, isMinistryContext, activeMinistryName]);
 
   // Add: bulk outreach members handler
   const addMultipleOutreachMembersHandler = useCallback(async (items: Omit<OutreachMember, 'id' | 'createdDate' | 'lastUpdated'>[]) => {
@@ -1397,7 +1432,14 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
       setIsLoading(true);
 
       // Add the guest to the database
-      const guestId = await guestOperationsWithNotifications.add(guestData);
+      const now = new Date().toISOString();
+      const fullGuest: Omit<Guest, 'id'> = {
+        ...guestData,
+        createdDate: now,
+        lastUpdated: now,
+        createdBy: userProfile?.uid || 'system'
+      } as any;
+      const guestId = await guestOperationsWithNotifications.add(fullGuest as any);
 
       // Auto-confirm the guest for the upcoming Sunday
       const { getUpcomingSunday } = await import('../utils/dateUtils');
@@ -2272,6 +2314,8 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     currentChurchId,
     isOnline,
     needsMigration,
+  isMinistryContext,
+  activeMinistryName,
 
     // Data Operations
     fetchInitialData,

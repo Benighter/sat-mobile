@@ -56,6 +56,8 @@ const AppContent: React.FC = memo(() => {
     isLoading,
     error,
     fetchInitialData,
+  isMinistryContext,
+  activeMinistryName,
   isImpersonating,
   stopImpersonation,
     isMemberFormOpen,
@@ -286,7 +288,7 @@ const AppContent: React.FC = memo(() => {
 
             {/* Left Section - Hamburger Menu and Logo */}
             <div className="flex items-center space-x-1 xs:space-x-2 sm:space-x-4 desktop:space-x-6 flex-shrink-0">
-              {/* Hamburger Menu */}
+              {/* Hamburger Menu (shown in all contexts; drawer adapts to context) */}
               <button
                 onClick={openBacentaDrawer}
                 className="group flex items-center space-x-1 xs:space-x-2 px-1 xs:px-2 sm:px-3 desktop:px-4 py-1.5 xs:py-2 desktop:py-3 text-gray-600 dark:text-dark-300 hover:text-gray-900 dark:hover:text-dark-100 transition-all duration-300 rounded-lg desktop:rounded-xl hover:bg-white/50 dark:hover:bg-dark-700/50 desktop:hover:bg-white/70"
@@ -314,21 +316,23 @@ const AppContent: React.FC = memo(() => {
                 </div>
                 <div className="hidden sm:block desktop:block">
                   <h1 className="text-lg sm:text-xl desktop:text-xl desktop-lg:text-2xl font-bold gradient-text font-serif group-hover:text-gray-700 dark:group-hover:text-dark-200 transition-colors duration-300">
-                    {isBacentaTab
-                      ? currentTab.name
-                      : (userProfile?.churchName || getAppDisplayName('SAT Mobile'))}
+                    {isMinistryContext
+                      ? (activeMinistryName || 'Ministry Mode')
+                      : (isBacentaTab ? currentTab.name : (userProfile?.churchName || getAppDisplayName('SAT Mobile')))}
                   </h1>
                   <p className="text-xs desktop:text-sm text-gray-600 dark:text-dark-300 font-medium group-hover:text-gray-700 dark:group-hover:text-dark-200 transition-colors duration-300">
-                    {isBacentaTab ? 'Bacenta Management' : DEFAULT_CHURCH.NAME}
+                    {isMinistryContext
+                      ? 'Ministry Dashboard'
+                      : (isBacentaTab ? 'Bacenta Management' : DEFAULT_CHURCH.NAME)}
                   </p>
                 </div>
               </button>
             </div>
 
             {/* Center Section - Current Tab Indicator (Hidden on very small screens) */}
-            <div className="hidden xs:flex absolute left-1/2 transform -translate-x-1/2 items-center px-2 xs:px-3 py-1.5 xs:py-2 desktop:px-4 desktop:py-3 bg-white/40 dark:bg-dark-700/60 desktop:bg-white/60 desktop:dark:bg-dark-700/80 rounded-lg desktop:rounded-xl border border-gray-300/50 dark:border-dark-500/50 desktop:border-gray-300/70 shadow-sm desktop:shadow-md">
+      <div className="hidden xs:flex absolute left-1/2 transform -translate-x-1/2 items-center px-2 xs:px-3 py-1.5 xs:py-2 desktop:px-4 desktop:py-3 bg-white/40 dark:bg-dark-700/60 desktop:bg-white/60 desktop:dark:bg-dark-700/80 rounded-lg desktop:rounded-xl border border-gray-300/50 dark:border-dark-500/50 desktop:border-gray-300/70 shadow-sm desktop:shadow-md">
               <span className="text-gray-800 dark:text-dark-100 font-medium text-xs xs:text-sm desktop:text-base truncate max-w-[60px] xs:max-w-[80px] sm:max-w-[120px] md:max-w-[150px] desktop:max-w-[200px] desktop-lg:max-w-[250px]">
-                {currentTab.name}
+        {isMinistryContext ? 'Ministry Mode' : currentTab.name}
               </span>
             </div>
 
@@ -388,7 +392,7 @@ const AppContent: React.FC = memo(() => {
       {/* Swipe Indicator */}
       <SwipeIndicator />
 
-      {isMemberFormOpen && (
+  {isMemberFormOpen && (
         <MemberFormModal
           isOpen={isMemberFormOpen}
           onClose={closeMemberForm}
@@ -405,7 +409,7 @@ const AppContent: React.FC = memo(() => {
         />
       )}
 
-      {isBacentaFormOpen && (
+  {!isMinistryContext && isBacentaFormOpen && (
         <BacentaFormModal
           isOpen={isBacentaFormOpen}
           onClose={closeBacentaForm}
@@ -422,13 +426,14 @@ const AppContent: React.FC = memo(() => {
       )}
 
       {/* Hierarchy Modal */}
-      <HierarchyModal
+  {!isMinistryContext && (
+  <HierarchyModal
         isOpen={isHierarchyModalOpen}
         bacentaLeader={hierarchyBacentaLeader}
         onClose={closeHierarchyModal}
-      />
+  />)}
 
-      {/* Bacenta Drawer */}
+      {/* Navigation Drawer (context-aware) */}
       <BacentaDrawer
         isOpen={isBacentaDrawerOpen}
         onClose={closeBacentaDrawer}

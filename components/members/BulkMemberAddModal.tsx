@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../../contexts/FirebaseAppContext';
-import { SmartTextParser, ParsedMemberData, ParseResult } from '../../utils/smartTextParser';
+import { SmartTextParser, ParseResult } from '../../utils/smartTextParser';
 import Modal from '../ui/Modal';
 import Button from '../ui/Button';
 import { ClipboardIcon, CheckCircleIcon, AlertTriangleIcon as ExclamationTriangleIcon, XCircleIcon } from 'lucide-react';
@@ -18,11 +18,10 @@ const BulkMemberAddModal: React.FC<BulkMemberAddModalProps> = ({
   bacentaId,
   bacentaName 
 }) => {
-  const { addMultipleMembersHandler, bacentas } = useAppContext();
+  const { addMultipleMembersHandler, bacentas, isMinistryContext, activeMinistryName } = useAppContext();
   const [pastedText, setPastedText] = useState('');
   const [parseResult, setParseResult] = useState<ParseResult | null>(null);
   const [selectedBacentaId, setSelectedBacentaId] = useState(bacentaId || '');
-  const [isProcessing, setIsProcessing] = useState(false);
   const [step, setStep] = useState<'input' | 'preview' | 'processing' | 'complete'>('input');
   const [addedCount, setAddedCount] = useState(0);
   const [errors, setErrors] = useState<string[]>([]);
@@ -36,7 +35,7 @@ const BulkMemberAddModal: React.FC<BulkMemberAddModalProps> = ({
       setStep('input');
       setAddedCount(0);
       setErrors([]);
-      setIsProcessing(false);
+  // no-op
     }
   }, [isOpen, bacentaId, bacentas]);
 
@@ -74,15 +73,16 @@ const BulkMemberAddModal: React.FC<BulkMemberAddModalProps> = ({
   };
 
   const handleAddMembers = async () => {
-    if (!parseResult || !selectedBacentaId) return;
+  if (!parseResult) return;
+  if (!isMinistryContext && !selectedBacentaId) return;
 
-    setIsProcessing(true);
     setStep('processing');
 
     try {
-      const membersData = parseResult.members.map(parsedMember =>
-        SmartTextParser.convertToMember(parsedMember, selectedBacentaId)
-      );
+      const membersData = parseResult.members.map(parsedMember => {
+        const base = SmartTextParser.convertToMember(parsedMember, selectedBacentaId || '');
+        return isMinistryContext ? { ...base, bacentaId: '', ministry: activeMinistryName || base.ministry } : base;
+      });
 
       const result = await addMultipleMembersHandler(membersData);
 
@@ -92,7 +92,6 @@ const BulkMemberAddModal: React.FC<BulkMemberAddModalProps> = ({
       setAddedCount(0);
       setErrors([`Bulk operation failed: ${error instanceof Error ? error.message : 'Unknown error'}`]);
     } finally {
-      setIsProcessing(false);
       setStep('complete');
     }
   };
@@ -172,6 +171,7 @@ const BulkMemberAddModal: React.FC<BulkMemberAddModalProps> = ({
               </div>
 
               <div>
+                {!isMinistryContext && (<>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Bacenta
                 </label>
@@ -195,6 +195,18 @@ const BulkMemberAddModal: React.FC<BulkMemberAddModalProps> = ({
                       <option key={b.id} value={b.id}>{b.name}</option>
                     ))}
                   </select>
+                )}
+                </>)}
+                {isMinistryContext && (
+                  <div className="w-full px-3 py-2 border border-green-200 rounded-md shadow-sm bg-green-50 text-green-800">
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium">Ministry Mode</span>
+                      <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full">
+                        {activeMinistryName || 'Selected Ministry'}
+                      </span>
+                    </div>
+                    <p className="text-xs mt-1">Members will be added to the ministry (no Bacenta required).</p>
+                  </div>
                 )}
               </div>
             </div>
@@ -241,7 +253,7 @@ const BulkMemberAddModal: React.FC<BulkMemberAddModalProps> = ({
                 type="button"
                 variant="primary"
                 onClick={handlePreview}
-                disabled={!parseResult || parseResult.members.length === 0 || !selectedBacentaId}
+                disabled={!parseResult || parseResult.members.length === 0 || (!isMinistryContext && !selectedBacentaId)}
               >
                 Preview Members ({parseResult?.members.length || 0})
               </Button>
@@ -250,7 +262,7 @@ const BulkMemberAddModal: React.FC<BulkMemberAddModalProps> = ({
                   No valid member data detected. Please check the format and try again.
                 </p>
               )}
-              {!selectedBacentaId && (
+              {!isMinistryContext && !selectedBacentaId && (
                 <p className="text-sm text-red-600 mt-2">
                   Please select a Bacenta before proceeding.
                 </p>
