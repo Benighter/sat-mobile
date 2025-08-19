@@ -15,11 +15,7 @@ import {
   writeBatch,
   enableNetwork,
   disableNetwork,
-  connectFirestoreEmulator,
   Timestamp,
-  DocumentReference,
-  QuerySnapshot,
-  DocumentSnapshot,
   Unsubscribe
 } from 'firebase/firestore';
 import {
@@ -31,7 +27,7 @@ import {
   updatePassword,
   reauthenticateWithCredential,
   EmailAuthProvider,
-  User
+  fetchSignInMethodsForEmail
 } from 'firebase/auth';
 import { db, auth } from '../firebase.config';
 import { Member, Bacenta, AttendanceRecord, NewBeliever, SundayConfirmation, Guest, MemberDeletionRequest, DeletionRequestStatus, OutreachBacenta, OutreachMember, PrayerRecord } from '../types';
@@ -42,6 +38,13 @@ export interface FirebaseUser {
   email: string | null;
   displayName: string | null;
   churchId?: string;
+  // Indicates this user registered when Ministry Mode was enabled
+  isMinistryAccount?: boolean;
+  // Multi-context support: map of context church IDs
+  contexts?: {
+    defaultChurchId?: string;
+    ministryChurchId?: string;
+  };
 }
 
 export interface FirebaseError {
@@ -53,12 +56,27 @@ export interface FirebaseError {
 let currentUser: FirebaseUser | null = null;
 let currentChurchId: string | null = null;
 
+// Helper: map a real email to a ministry-only Auth email alias (same inbox for providers that support plus-addressing)
+const toMinistryAuthEmail = (email: string): string => {
+  const trimmed = (email || '').trim();
+  const [local, domain] = trimmed.split('@');
+  if (!local || !domain) return trimmed;
+  if (local.includes('+ministry')) return trimmed.toLowerCase();
+  // If local already has a plus tag, prepend ministry.
+  if (local.includes('+')) {
+    const [name, tag] = local.split('+', 2);
+    return `${name}+ministry.${tag}@${domain}`.toLowerCase();
+  }
+  return `${local}+ministry@${domain}`.toLowerCase();
+};
+
 // Authentication Service
 export const authService = {
   // Sign in with email and password
   signIn: async (email: string, password: string): Promise<FirebaseUser> => {
     try {
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+  const trimmedEmail = (email || '').trim().toLowerCase();
+  const userCredential = await signInWithEmailAndPassword(auth, trimmedEmail, password);
       const user = userCredential.user;
 
       // Get user data from Firestore - first try direct lookup by UID
@@ -82,17 +100,57 @@ export const authService = {
         }
       }
 
+      // Prefer Firestore profile values for display name and email (Auth may not have a name; email may be aliased)
       currentUser = {
         uid: user.uid,
-        email: user.email,
-        displayName: user.displayName,
-        churchId: userData?.churchId
+        email: (userData?.email as string | null) || user.email,
+        displayName: (userData?.displayName as string | null) || user.displayName,
+        churchId: userData?.churchId,
+        isMinistryAccount: userData?.isMinistryAccount === true,
+        contexts: userData?.contexts
       };
 
       currentChurchId = userData?.churchId || null;
       return currentUser;
     } catch (error: any) {
       // Pass through the original Firebase error code for better error handling
+      throw error;
+    }
+  },
+
+  // Sign in to ministry account (uses aliased email under the hood)
+  signInMinistry: async (email: string, password: string): Promise<FirebaseUser> => {
+    try {
+      const ministryEmail = toMinistryAuthEmail(email);
+      const userCredential = await signInWithEmailAndPassword(auth, ministryEmail, password);
+      const user = userCredential.user;
+
+      // Load Firestore profile using this UID
+      let userDoc = await getDoc(doc(db, 'users', user.uid));
+      let userData = userDoc.data();
+      if (!userData) {
+        const usersRef = collection(db, 'users');
+        const q = query(usersRef, where('uid', '==', user.uid));
+        const querySnapshot = await getDocs(q);
+        if (!querySnapshot.empty) {
+          const legacyUserDoc = querySnapshot.docs[0];
+          userData = legacyUserDoc.data();
+          await setDoc(doc(db, 'users', user.uid), userData);
+          await deleteDoc(legacyUserDoc.ref);
+        }
+      }
+
+      currentUser = {
+        uid: user.uid,
+        email: (userData?.email as string | null) || email.trim().toLowerCase(),
+        displayName: (userData?.displayName as string | null) || user.displayName,
+        churchId: userData?.churchId,
+        isMinistryAccount: true,
+        contexts: userData?.contexts
+      };
+      currentChurchId = userData?.churchId || null;
+      return currentUser;
+    } catch (error: any) {
       throw error;
     }
   },
@@ -139,59 +197,138 @@ export const authService = {
     churchName: string;
     phoneNumber: string;
     role: string;
+    ministry?: string; // optional selected ministry during signup
+  // when true, this account is restricted to "Ministry mode" logins
+  isMinistryAccount?: boolean;
   }): Promise<FirebaseUser> => {
     try {
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      const user = userCredential.user;
-
+      const trimmedEmail = email.trim().toLowerCase();
       const displayName = `${profile.firstName} ${profile.lastName}`;
+      let userAuth = null as any;
+      let userUid = '';
 
-      // SECURITY FIX: Generate unique church ID using user UID to prevent data leakage
-      // Each user gets their own isolated church context
-      const churchId = `church-${user.uid}`;
+      // Pre-check if email exists in Firebase Auth to avoid sign-up 400s
+      const methods = await fetchSignInMethodsForEmail(auth, trimmedEmail);
+      if (methods && methods.length > 0) {
+        // Email already in Auth; verify password by signing in
+        try {
+          const cred = await signInWithEmailAndPassword(auth, trimmedEmail, password);
+          userAuth = cred.user;
+        } catch (err: any) {
+          if (err?.code === 'auth/wrong-password' || err?.code === 'auth/invalid-credential') {
+            throw new Error('auth/wrong-password');
+          }
+          throw err;
+        }
+      } else {
+        // Not in Auth; create new (guard for late email-in-use)
+        try {
+          const cred = await createUserWithEmailAndPassword(auth, trimmedEmail, password);
+          userAuth = cred.user;
+        } catch (createErr: any) {
+          if (createErr?.code === 'auth/email-already-in-use') {
+            // Fallback to sign-in verification
+            try {
+              const cred = await signInWithEmailAndPassword(auth, trimmedEmail, password);
+              userAuth = cred.user;
+            } catch (err: any) {
+              if (err?.code === 'auth/wrong-password' || err?.code === 'auth/invalid-credential') {
+                throw new Error('auth/wrong-password');
+              }
+              throw err;
+            }
+          } else {
+            throw createErr;
+          }
+        }
+      }
 
-      // Create user document in Firestore with user UID as document ID
-      await setDoc(doc(db, 'users', user.uid), {
-        uid: user.uid,
-        email: user.email,
+      userUid = userAuth.uid;
+      const usersDocRef = doc(db, 'users', userUid);
+      const usersDocSnap = await getDoc(usersDocRef);
+
+      // Resolve contexts
+      let defaultChurchId: string | undefined;
+      let ministryChurchId: string | undefined;
+      const isMinistryFlow = profile.isMinistryAccount === true;
+
+      if (usersDocSnap.exists()) {
+        const data: any = usersDocSnap.data() || {};
+        defaultChurchId = data?.contexts?.defaultChurchId || data?.churchId;
+        ministryChurchId = data?.contexts?.ministryChurchId;
+      }
+
+      if (isMinistryFlow) {
+        if (!ministryChurchId) {
+          ministryChurchId = `church-ministry-${userUid}`;
+          await setDoc(doc(db, 'churches', ministryChurchId), {
+            name: profile.churchName,
+            address: '',
+            contactInfo: { phone: profile.phoneNumber, email: userAuth.email, website: '' },
+            settings: {
+              timezone: 'America/New_York',
+              defaultMinistries: ['Choir', 'Dancing Stars', 'Ushers', 'Arrival Stars', 'Airport Stars', 'Media']
+            },
+            createdAt: Timestamp.now(),
+            lastUpdated: Timestamp.now(),
+            ownerId: userUid
+          });
+        }
+      } else {
+        if (!defaultChurchId) {
+          defaultChurchId = `church-${userUid}`;
+          await setDoc(doc(db, 'churches', defaultChurchId), {
+            name: profile.churchName,
+            address: '',
+            contactInfo: { phone: profile.phoneNumber, email: userAuth.email, website: '' },
+            settings: {
+              timezone: 'America/New_York',
+              defaultMinistries: ['Choir', 'Dancing Stars', 'Ushers', 'Arrival Stars', 'Airport Stars', 'Media']
+            },
+            createdAt: Timestamp.now(),
+            lastUpdated: Timestamp.now(),
+            ownerId: userUid
+          });
+        }
+      }
+
+      const mergedUser: any = {
+        uid: userUid,
+        email: userAuth.email,
         displayName,
         firstName: profile.firstName,
         lastName: profile.lastName,
-        churchId,
+        churchId: (defaultChurchId || ministryChurchId),
         churchName: profile.churchName,
         phoneNumber: profile.phoneNumber,
         role: profile.role,
-        createdAt: Timestamp.now(),
+        preferences: profile.ministry ? { ministryName: profile.ministry } : {},
+        isMinistryAccount: isMinistryFlow || false,
+        contexts: {
+          ...(defaultChurchId ? { defaultChurchId } : {}),
+          ...(ministryChurchId ? { ministryChurchId } : {})
+        },
         lastLoginAt: Timestamp.now(),
         isActive: true
-      });
-
-      // Create the church document for this user
-      await setDoc(doc(db, 'churches', churchId), {
-        name: profile.churchName,
-        address: '',
-        contactInfo: {
-          phone: profile.phoneNumber,
-          email: user.email,
-          website: ''
-        },
-        settings: {
-          timezone: 'America/New_York',
-          defaultMinistries: ['Choir', 'Dancing Stars', 'Ushers', 'Arrival Stars', 'Airport Stars', 'Media']
-        },
-        createdAt: Timestamp.now(),
-        lastUpdated: Timestamp.now(),
-        ownerId: user.uid // Track who owns this church
-      });
-
-      currentUser = {
-        uid: user.uid,
-        email: user.email,
-        displayName,
-        churchId
       };
 
-      currentChurchId = churchId;
+      if (usersDocSnap.exists()) {
+        await setDoc(usersDocRef, mergedUser, { merge: true });
+      } else {
+        mergedUser.createdAt = Timestamp.now();
+        await setDoc(usersDocRef, mergedUser);
+      }
+
+      currentUser = {
+        uid: userUid,
+        email: userAuth.email,
+        displayName,
+        churchId: isMinistryFlow ? (ministryChurchId as string) : (defaultChurchId as string),
+        isMinistryAccount: isMinistryFlow,
+        contexts: mergedUser.contexts
+      };
+
+      currentChurchId = currentUser.churchId || null;
       return currentUser;
     } catch (error: any) {
       throw new Error(`Registration failed: ${error.message}`);
@@ -210,9 +347,10 @@ export const authService = {
   },
 
   // Reset password
-  resetPassword: async (email: string): Promise<void> => {
+  resetPassword: async (email: string, opts?: { ministry?: boolean }): Promise<void> => {
     try {
-      await sendPasswordResetEmail(auth, email);
+      const target = opts?.ministry ? toMinistryAuthEmail(email) : email;
+      await sendPasswordResetEmail(auth, target);
     } catch (error: any) {
       // Pass through the original Firebase error for better error handling
       throw error;
@@ -271,9 +409,11 @@ export const authService = {
 
         currentUser = {
           uid: user.uid,
-          email: user.email,
-          displayName: user.displayName,
-          churchId: userData?.churchId
+          email: (userData?.email as string | null) || user.email,
+          displayName: (userData?.displayName as string | null) || user.displayName,
+          churchId: userData?.churchId,
+          isMinistryAccount: userData?.isMinistryAccount === true,
+          contexts: userData?.contexts
         };
 
         currentChurchId = userData?.churchId || null;
@@ -293,11 +433,13 @@ export const authService = {
       const userDoc = await getDoc(doc(db, 'users', user.uid));
       const userData = userDoc.data();
 
-      currentUser = {
+    currentUser = {
         uid: user.uid,
-        email: user.email,
-        displayName: user.displayName,
-        churchId: userData?.churchId
+        email: (userData?.email as string | null) || user.email,
+        displayName: (userData?.displayName as string | null) || user.displayName,
+        churchId: userData?.churchId,
+        isMinistryAccount: userData?.isMinistryAccount === true,
+        contexts: userData?.contexts
       };
 
       currentChurchId = userData?.churchId || null;
@@ -307,30 +449,44 @@ export const authService = {
   },
 
   // Check if email already exists in the system
-  checkEmailExists: async (email: string): Promise<boolean> => {
+  checkEmailExists: async (email: string, opts?: { ministry?: boolean }): Promise<boolean> => {
     try {
       const trimmedEmail = email.trim().toLowerCase();
+      if (!trimmedEmail) return false;
 
-      if (!trimmedEmail) {
-        return false;
+      // 1) Check via Firebase Auth (handles case-insensitivity and aliasing)
+      if (opts?.ministry) {
+        const alias = toMinistryAuthEmail(trimmedEmail);
+        const methods = await fetchSignInMethodsForEmail(auth, alias);
+        if (methods && methods.length > 0) return true;
+      } else {
+        const methods = await fetchSignInMethodsForEmail(auth, trimmedEmail);
+        if (methods && methods.length > 0) return true;
       }
 
-      // Search for users with the exact email (across all users)
-      const usersQuery = query(
-        collection(db, 'users'),
-        where('email', '==', trimmedEmail),
-        where('isActive', '==', true)
-      );
+      // 2) Fallback to Firestore by exact email (case-sensitive). No isActive filter here.
+      const usersQuery = query(collection(db, 'users'), where('email', '==', trimmedEmail));
+      const snap = await getDocs(usersQuery);
+      if (snap.empty) return false;
 
-      const usersSnapshot = await getDocs(usersQuery);
-      return !usersSnapshot.empty;
+      if (typeof opts?.ministry !== 'boolean') return true;
+
+      const wantsMinistry = opts.ministry === true;
+      const anyMatch = snap.docs.some((d) => {
+        const data: any = d.data() || {};
+        const isMinistry = data?.isMinistryAccount === true;
+        return wantsMinistry ? isMinistry : !isMinistry; // undefined => normal
+      });
+      return anyMatch;
     } catch (error: any) {
       console.error('Error checking email existence:', error);
-      // Return false on error to avoid blocking registration
       return false;
     }
   }
 };
+
+// Switch the active data context (default vs ministry) after sign-in
+// (moved to bottom) setActiveContext
 
 // REMOVED: ensureDefaultChurchExists function - no longer needed since each user gets their own church
 
@@ -340,6 +496,110 @@ const getChurchCollectionPath = (collectionName: string): string => {
     throw new Error('No church context available. User must be signed in.');
   }
   return `churches/${currentChurchId}/${collectionName}`;
+};
+
+// Expose helpers for ministry context and active context switching
+export const contextService = {
+  registerOrAttachMinistryAccount: async (
+    email: string,
+    password: string,
+    profile: { firstName: string; lastName: string; churchName: string; phoneNumber: string; role: string; ministry?: string; }
+  ): Promise<FirebaseUser> => {
+    const trimmed = email.trim().toLowerCase();
+    const ministryEmail = toMinistryAuthEmail(trimmed);
+    let authUser: any;
+    // Always use the aliased ministry email for Auth so it can have a distinct password
+    try {
+      const created = await createUserWithEmailAndPassword(auth, ministryEmail, password);
+      authUser = created.user;
+    } catch (createErr: any) {
+      if (createErr?.code === 'auth/email-already-in-use') {
+        // Ministry account already exists for this email alias; sign in to proceed
+        const cred = await signInWithEmailAndPassword(auth, ministryEmail, password);
+        authUser = cred.user;
+      } else {
+        throw createErr;
+      }
+    }
+
+    const uid = authUser.uid;
+    const usersDocRef = doc(db, 'users', uid);
+    const snap = await getDoc(usersDocRef);
+    const now = Timestamp.now();
+
+    let defaultChurchId: string | undefined = undefined;
+    let ministryChurchId: string | undefined = undefined;
+    if (snap.exists()) {
+      const data: any = snap.data() || {};
+      defaultChurchId = data?.contexts?.defaultChurchId || data?.churchId;
+      ministryChurchId = data?.contexts?.ministryChurchId;
+    }
+
+    if (!ministryChurchId) {
+      ministryChurchId = `church-ministry-${uid}`;
+      await setDoc(doc(db, 'churches', ministryChurchId), {
+        name: profile.churchName,
+        address: '',
+        contactInfo: { phone: profile.phoneNumber, email: authUser.email, website: '' },
+        settings: { timezone: 'America/New_York', defaultMinistries: ['Choir', 'Dancing Stars', 'Ushers', 'Arrival Stars', 'Airport Stars', 'Media'] },
+        createdAt: now,
+        lastUpdated: now,
+        ownerId: uid
+      });
+    }
+
+    const merged: any = {
+      uid,
+  email: trimmed, // keep original email for contact/UX
+  authEmail: ministryEmail, // internal reference to ministry auth email
+      displayName: `${profile.firstName} ${profile.lastName}`.trim() || authUser.email,
+      firstName: profile.firstName,
+      lastName: profile.lastName,
+      churchId: ministryChurchId,
+      churchName: profile.churchName,
+      phoneNumber: profile.phoneNumber,
+      role: 'admin',
+      preferences: profile.ministry ? { ministryName: profile.ministry } : {},
+      isMinistryAccount: true,
+      contexts: { ...(defaultChurchId ? { defaultChurchId } : {}), ministryChurchId },
+      lastLoginAt: now,
+      isActive: true
+    };
+    if (snap.exists()) {
+      await setDoc(usersDocRef, merged, { merge: true });
+    } else {
+      merged.createdAt = now;
+      await setDoc(usersDocRef, merged);
+    }
+
+    currentUser = {
+      uid,
+      email: (merged.email as string) || authUser.email,
+      displayName: merged.displayName,
+      churchId: ministryChurchId,
+      isMinistryAccount: true,
+      contexts: merged.contexts
+    };
+    currentChurchId = ministryChurchId;
+    return currentUser;
+  }
+};
+
+export const setActiveContext = async (mode: 'default' | 'ministry'): Promise<void> => {
+  const user = auth.currentUser;
+  if (!user) throw new Error('No authenticated user');
+  const userDocRef = doc(db, 'users', user.uid);
+  const snap = await getDoc(userDocRef);
+  const data: any = snap.data() || {};
+  const ctx = data?.contexts || {};
+  if (mode === 'ministry') {
+    if (!ctx.ministryChurchId) throw new Error('No ministry account found for this email.');
+    currentChurchId = ctx.ministryChurchId;
+  } else {
+    const cid = ctx.defaultChurchId || data.churchId;
+    if (!cid) throw new Error('No default account context found for this email.');
+    currentChurchId = cid;
+  }
 };
 
 // Members Service
@@ -1078,7 +1338,7 @@ export const memberDeletionRequestService = {
   },
 
   // Get pending deletion requests for a specific admin
-  getPendingForAdmin: async (adminId: string): Promise<MemberDeletionRequest[]> => {
+  getPendingForAdmin: async (_adminId: string): Promise<MemberDeletionRequest[]> => {
     try {
       const requestsRef = collection(db, getChurchCollectionPath('memberDeletionRequests'));
       const q = query(

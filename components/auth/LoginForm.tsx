@@ -8,43 +8,47 @@ interface LoginFormProps {
   error: string | null;
   loading: boolean;
   showToast: (type: 'success' | 'error' | 'warning' | 'info', title: string, message?: string) => void;
+  ministryMode?: boolean;
 }
 
-// Utility function to convert Firebase errors to user-friendly messages
+// Utility: map Firebase codes to friendly messages, otherwise pass through the given text
 const getErrorMessage = (error: string): string => {
-  if (error.includes('auth/invalid-credential') || error.includes('auth/wrong-password')) {
+  const raw = error || '';
+  const err = raw.toLowerCase();
+
+  if (err.includes('auth/invalid-credential') || err.includes('auth/wrong-password')) {
     return 'Invalid email or password. Please check your credentials and try again.';
   }
-  if (error.includes('auth/user-not-found')) {
+  if (err.includes('auth/user-not-found')) {
     return 'No account found with this email address. Please check your email or create a new account.';
   }
-  if (error.includes('auth/invalid-email')) {
+  if (err.includes('auth/invalid-email')) {
     return 'Please enter a valid email address.';
   }
-  if (error.includes('auth/user-disabled')) {
+  if (err.includes('auth/user-disabled')) {
     return 'This account has been disabled. Please contact support for assistance.';
   }
-  if (error.includes('auth/too-many-requests')) {
+  if (err.includes('auth/too-many-requests')) {
     return 'Too many failed attempts. Please wait a few minutes before trying again.';
   }
-  if (error.includes('auth/network-request-failed')) {
+  if (err.includes('auth/network-request-failed')) {
     return 'Network error. Please check your internet connection and try again.';
   }
-  if (error.includes('auth/operation-not-allowed')) {
+  if (err.includes('auth/operation-not-allowed')) {
     return 'Email/password sign-in is not enabled. Please contact support.';
   }
-  if (error.includes('auth/weak-password')) {
+  if (err.includes('auth/weak-password')) {
     return 'Password is too weak. Please choose a stronger password.';
   }
-  if (error.includes('auth/email-already-in-use')) {
+  if (err.includes('auth/email-already-in-use')) {
     return 'An account with this email already exists. Please sign in instead.';
   }
 
-  // Default fallback for unknown errors
-  return 'Sign in failed. Please try again or contact support if the problem persists.';
+  // If it's not a known Firebase code, assume it's already user-friendly
+  return raw;
 };
 
-export const LoginForm: React.FC<LoginFormProps> = ({ onSignIn, error, loading, showToast }) => {
+export const LoginForm: React.FC<LoginFormProps> = ({ onSignIn, error, loading, showToast, ministryMode = false }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -199,21 +203,21 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSignIn, error, loading, 
 
   return (
     <div className="w-full max-w-sm mx-auto px-4">
-      <div className="bg-white/90 backdrop-blur-xl rounded-3xl shadow-2xl p-8 border border-white/30">
+      <div className={`backdrop-blur-xl rounded-3xl shadow-2xl p-8 border ${ministryMode ? 'bg-white/95 border-rose-100' : 'bg-white/90 border-white/30'}`}>
         {/* Single Logo Header */}
         <div className="text-center mb-8">
-          <div className="mx-auto w-20 h-20 bg-white rounded-2xl flex items-center justify-center mb-4 shadow-lg transform hover:scale-105 transition-transform duration-200 p-1">
+          <div className={`mx-auto w-20 h-20 rounded-2xl flex items-center justify-center mb-4 shadow-lg transform hover:scale-105 transition-transform duration-200 p-1 ${ministryMode ? 'bg-rose-50 ring-2 ring-rose-100' : 'bg-white'}`}>
             <img src="/logo.png" alt="First Love Church" className="w-full h-full object-contain" />
           </div>
-          <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-1">
+          <h1 className={`text-2xl font-bold bg-clip-text text-transparent mb-1 ${ministryMode ? 'bg-gradient-to-r from-rose-600 to-fuchsia-600' : 'bg-gradient-to-r from-blue-600 to-indigo-600'}`}>
             SAT Mobile
           </h1>
-          <p className="text-gray-500 text-sm">Welcome to First Love Church</p>
+          <p className="text-gray-500 text-sm">{ministryMode ? 'Ministry mode is ON' : 'Welcome to First Love Church'}</p>
         </div>
 
         {/* Error Message */}
         {error && (
-          <div className="mb-6 p-3 bg-red-50 border border-red-200 rounded-xl">
+          <div role="alert" className="mb-6 p-3 bg-red-50 border border-red-200 rounded-xl">
             <p className="text-sm text-red-600 text-center">{getErrorMessage(error)}</p>
           </div>
         )}
@@ -221,7 +225,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSignIn, error, loading, 
 
 
         {/* Email/Password Form */}
-        <form onSubmit={handleSubmit} className="space-y-4">
+  <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <div className="relative">
               <input
@@ -284,7 +288,11 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSignIn, error, loading, 
           <button
             type="submit"
             disabled={loading || !email || !password}
-            className="w-full py-3.5 bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-[1.01] transition-all duration-200 mt-6"
+            className={`w-full py-3.5 text-white font-semibold rounded-xl transition-colors duration-200 mt-5 border ${
+              ministryMode
+                ? 'bg-gradient-to-r from-rose-500/95 to-fuchsia-600/95 border-white/50 focus:ring-rose-400/60'
+                : 'bg-gradient-to-r from-blue-600/95 to-indigo-600/95 border-white/50 focus:ring-blue-400/60'
+            } focus:outline-none focus:ring-2 focus:ring-offset-0 disabled:opacity-50 disabled:cursor-not-allowed hover:brightness-[1.05]`}
           >
             {loading ? (
               <div className="flex items-center justify-center">
@@ -298,11 +306,11 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSignIn, error, loading, 
         </form>
 
         {/* Forgot Password */}
-        <div className="mt-4 text-center">
+    <div className="mt-4 text-center">
           <button
             type="button"
             onClick={() => setIsForgotPasswordOpen(true)}
-            className="text-sm text-blue-600 hover:text-blue-700 font-medium transition-colors"
+      className={`text-sm font-medium transition-colors ${ministryMode ? 'text-rose-600 hover:text-rose-700' : 'text-blue-600 hover:text-blue-700'}`}
           >
             Forgot password?
           </button>
@@ -310,9 +318,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSignIn, error, loading, 
 
         {/* Footer */}
         <div className="mt-6 text-center">
-          <p className="text-xs text-gray-400">
-            Secure church management platform
-          </p>
+          <p className="text-xs text-gray-400">Secure church management platform</p>
         </div>
       </div>
 

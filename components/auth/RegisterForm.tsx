@@ -1,36 +1,48 @@
 import React, { useState } from 'react';
 import { authService } from '../../services/firebaseService';
+// contextService methods are embedded in service as helpers; we'll call through authService.register for normal mode
+import { contextService } from '../../services/firebaseService';
 import { EyeIcon, EyeSlashIcon } from '../icons/index';
+import { MINISTRY_OPTIONS } from '../../constants';
 
-// Utility function to convert Firebase errors to user-friendly messages
-const getErrorMessage = (error: string): string => {
-  if (error.includes('auth/email-already-in-use')) {
+// Utility: map Firebase registration errors to friendly messages; otherwise pass through
+const getErrorMessage = (error: string, ministryMode: boolean): string => {
+  const raw = error || '';
+  const err = raw.toLowerCase();
+
+  if (err.includes('auth/email-already-in-use')) {
     return 'An account with this email already exists. Please sign in instead.';
   }
-  if (error.includes('auth/weak-password')) {
-    return 'Password is too weak. Please choose a stronger password (at least 6 characters).';
+  if (err.includes('auth/weak-password')) {
+    return 'Password is too weak. Please choose a stronger password (at least 8 characters, with a mix of letters and numbers).';
   }
-  if (error.includes('auth/invalid-email')) {
+  if (err.includes('auth/wrong-password') || err.includes('auth/invalid-credential')) {
+    if (ministryMode) {
+      return 'This email already has an account. Enter the existing password to attach your ministry account, or reset your password.';
+    }
+    return 'Invalid email or password. Please check your credentials and try again.';
+  }
+  if (err.includes('auth/invalid-email')) {
     return 'Please enter a valid email address.';
   }
-  if (error.includes('auth/operation-not-allowed')) {
+  if (err.includes('auth/operation-not-allowed')) {
     return 'Account creation is not enabled. Please contact support.';
   }
-  if (error.includes('auth/network-request-failed')) {
+  if (err.includes('auth/network-request-failed')) {
     return 'Network error. Please check your internet connection and try again.';
   }
-  if (error.includes('auth/too-many-requests')) {
+  if (err.includes('auth/too-many-requests')) {
     return 'Too many attempts. Please wait a few minutes before trying again.';
   }
 
-  // Default fallback for unknown errors
-  return 'Registration failed. Please try again or contact support if the problem persists.';
+  return raw;
 };
 
 interface RegisterFormProps {
   onSuccess: () => void;
   onSwitchToLogin: () => void;
   showToast: (type: 'success' | 'error' | 'warning' | 'info', title: string, message?: string) => void;
+  ministryMode?: boolean;
 }
 
 interface RegisterFormData {
@@ -41,9 +53,10 @@ interface RegisterFormData {
   confirmPassword: string;
   churchName: string;
   phoneNumber: string;
+  ministry?: string;
 }
 
-const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, onSwitchToLogin, showToast }) => {
+const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, onSwitchToLogin: _onSwitchToLogin, showToast, ministryMode = false }) => {
   const [formData, setFormData] = useState<RegisterFormData>({
     firstName: '',
     lastName: '',
@@ -51,7 +64,8 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, onSwitchToLogin,
     password: '',
     confirmPassword: '',
     churchName: 'First Love Church', // Default church name
-  phoneNumber: ''
+  phoneNumber: '',
+  ministry: ''
   });
   
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -59,12 +73,21 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, onSwitchToLogin,
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isCheckingEmail, setIsCheckingEmail] = useState(false);
+  const [showResetHint, setShowResetHint] = useState(false);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
 
     // Clear error when user starts typing
+    if (errors[name]) {
+      setErrors(prev => ({ ...prev, [name]: '' }));
+    }
+  };
+
+  const handleSelectChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
     if (errors[name]) {
       setErrors(prev => ({ ...prev, [name]: '' }));
     }
@@ -86,8 +109,10 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, onSwitchToLogin,
         if (error) {
           setErrors(prev => ({ ...prev, [fieldName]: error }));
         } else {
-          // If basic validation passes, check if email exists
-          await checkEmailExists(formData.email);
+          // In ministry mode we allow reusing an existing email, so skip existence check
+          if (!ministryMode) {
+            await checkEmailExists(formData.email);
+          }
         }
         return; // Early return to avoid setting error again below
       case 'password':
@@ -110,6 +135,11 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, onSwitchToLogin,
         break;
       case 'churchName':
         error = validateChurchName(formData.churchName);
+        break;
+      case 'ministry':
+        if (ministryMode) {
+          error = validateMinistry(formData.ministry || '');
+        }
         break;
   // no ministry field in SAT variant
     }
@@ -306,6 +336,14 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, onSwitchToLogin,
     return '';
   };
 
+  const validateMinistry = (value: string): string => {
+    if (!ministryMode) return '';
+    const trimmed = value.trim();
+    if (!trimmed) return 'Please select your ministry';
+    if (!MINISTRY_OPTIONS.includes(trimmed)) return 'Select a valid ministry';
+    return '';
+  };
+
   const validatePhoneNumber = (value: string): string => {
     const trimmed = value.trim();
     if (!trimmed) {
@@ -344,8 +382,8 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, onSwitchToLogin,
     const emailError = validateEmail(formData.email);
     if (emailError) {
       newErrors.email = emailError;
-    } else {
-      // Check if email exists only if basic validation passes
+    } else if (!ministryMode) {
+      // Only block duplicates in normal mode; ministry mode can attach to existing email
       try {
         const emailExists = await authService.checkEmailExists(formData.email);
         if (emailExists) {
@@ -353,7 +391,6 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, onSwitchToLogin,
         }
       } catch (error) {
         console.error('Error checking email existence during form validation:', error);
-        // Don't block form submission on email check error
       }
     }
 
@@ -365,6 +402,10 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, onSwitchToLogin,
 
     const churchNameError = validateChurchName(formData.churchName);
     if (churchNameError) newErrors.churchName = churchNameError;
+
+  // Ministry required in ministry mode
+  const ministryError = validateMinistry(formData.ministry || '');
+  if (ministryError) newErrors.ministry = ministryError;
 
     const phoneError = validatePhoneNumber(formData.phoneNumber);
     if (phoneError) newErrors.phoneNumber = phoneError;
@@ -385,22 +426,41 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, onSwitchToLogin,
       return;
     }
 
-    try {
+  try {
       const churchName = formData.churchName.trim() || 'First Love Church';
 
-      await authService.register(formData.email, formData.password, {
+      // In ministry mode, allow reusing the same email by attaching a ministry context
+      if (ministryMode) {
+        await contextService.registerOrAttachMinistryAccount(formData.email, formData.password, {
+          firstName: formData.firstName.trim(),
+          lastName: formData.lastName.trim(),
+          churchName: churchName,
+          phoneNumber: formData.phoneNumber.trim(),
+          role: 'admin',
+          ministry: formData.ministry || ''
+        });
+      } else {
+        await authService.register(formData.email, formData.password, {
         firstName: formData.firstName.trim(),
         lastName: formData.lastName.trim(),
         churchName: churchName,
         phoneNumber: formData.phoneNumber.trim(),
-        role: 'admin' // First user becomes admin
+        role: 'admin', // First user becomes admin
+        // Store ministry preference if in ministry mode; backend may ignore otherwise
+        ministry: '',
+        isMinistryAccount: false
       });
+      }
 
       showToast('success', 'Registration Successful!',
         'Welcome! Your account has been created successfully.');
       onSuccess();
     } catch (error: any) {
-      showToast('error', 'Registration Failed', getErrorMessage(error.message || error.code || error.toString()));
+      const msg = getErrorMessage(error.message || error.code || error.toString(), ministryMode);
+      showToast('error', 'Registration Failed', msg);
+      if (ministryMode && (String(error?.code || '').includes('auth/wrong-password') || String(error?.code || '').includes('auth/invalid-credential'))) {
+        setShowResetHint(true);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -458,7 +518,7 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, onSwitchToLogin,
           </div>
         </div>
 
-        {/* Email */}
+  {/* Email */}
         <div>
           <div className="relative">
             <input
@@ -489,6 +549,29 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, onSwitchToLogin,
           )}
         </div>
 
+        {/* Ministry selector (only in ministry mode) */}
+        {ministryMode && (
+          <div>
+            <div className="relative">
+              <select
+                name="ministry"
+                value={formData.ministry}
+                onChange={handleSelectChange}
+                onBlur={() => handleFieldBlur('ministry')}
+                className={`w-full px-4 py-3.5 bg-rose-50/40 border rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-rose-500 focus:bg-white transition-all duration-200 ${errors.ministry ? 'border-red-300 bg-red-50' : 'border-rose-200'}`}
+              >
+                <option value="">Select your ministry</option>
+                {MINISTRY_OPTIONS.map((m) => (
+                  <option key={m} value={m}>{m}</option>
+                ))}
+              </select>
+            </div>
+            {errors.ministry && (
+              <p className="text-red-500 text-xs mt-1">{errors.ministry}</p>
+            )}
+          </div>
+        )}
+
   {/* Phone Number */}
         <div>
           <div className="relative">
@@ -510,7 +593,7 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, onSwitchToLogin,
           )}
         </div>
 
-        {/* Password */}
+  {/* Password */}
         <div>
           <div className="relative">
             <input
@@ -540,6 +623,24 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, onSwitchToLogin,
           </div>
           {errors.password && (
             <p className="text-red-500 text-xs mt-1">{errors.password}</p>
+          )}
+          {ministryMode && showResetHint && !errors.password && (
+            <div className="text-xs mt-2 text-rose-700">
+              Forgot your existing password?{' '}
+              <button
+                type="button"
+                className="text-rose-600 underline hover:text-rose-700"
+                onClick={async () => {
+                  try {
+                    await authService.resetPassword(formData.email.trim());
+                    showToast('info', 'Password Reset Sent', 'Check your inbox for a password reset link. After resetting, come back to attach your ministry account.');
+                  } catch (e: any) {
+                    showToast('error', 'Reset Failed', 'We could not send a reset email. Please verify the address.');
+                  }
+                }}
+              >Reset it</button>
+              .
+            </div>
           )}
         </div>
 
@@ -580,7 +681,11 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, onSwitchToLogin,
         <button
           type="submit"
           disabled={isLoading}
-          className="w-full py-3.5 bg-gradient-to-r from-green-500 to-emerald-600 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-[1.01] transition-all duration-200 mt-6"
+          className={`w-full py-3.5 text-white font-semibold rounded-xl transition-colors duration-200 mt-5 border ${
+            ministryMode
+              ? 'bg-gradient-to-r from-rose-500/95 to-fuchsia-600/95 border-white/50 focus:ring-rose-400/60'
+              : 'bg-gradient-to-r from-green-600/95 to-emerald-600/95 border-white/50 focus:ring-emerald-400/60'
+          } focus:outline-none focus:ring-2 focus:ring-offset-0 disabled:opacity-50 disabled:cursor-not-allowed hover:brightness-[1.05]`}
         >
           {isLoading ? (
             <div className="flex items-center justify-center">
