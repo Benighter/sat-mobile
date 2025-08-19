@@ -4,14 +4,12 @@ import { Member } from '../../types';
 import { useAppContext } from '../../contexts/FirebaseAppContext';
 import AttendanceMarker from '../attendance/AttendanceMarker';
 import ConfirmationMarker from '../attendance/ConfirmationMarker';
-import { formatDisplayDate, formatFullDate, formatDateToYYYYMMDD, getUpcomingSunday } from '../../utils/dateUtils';
+import { formatDisplayDate, formatDateToYYYYMMDD, getUpcomingSunday } from '../../utils/dateUtils';
 import { isDateEditable } from '../../utils/attendanceUtils';
 import { canDeleteMemberWithRole } from '../../utils/permissionUtils';
 import { SmartTextParser } from '../../utils/smartTextParser';
 import { calculateAge, formatBirthdayDisplay, isBirthdayToday } from '../../utils/birthdayUtils';
-import { UserIcon, EditIcon, TrashIcon, WarningIcon, PhoneIcon, HomeIcon, CalendarIcon, CakeIcon } from '../icons';
-import Button from '../ui/Button';
-import Badge from '../ui/Badge';
+import { UserIcon, EditIcon, TrashIcon, PhoneIcon, HomeIcon, CakeIcon } from '../icons';
 
 interface MemberCardProps {
   member: Member;
@@ -102,9 +100,14 @@ const MemberCard: React.FC<MemberCardProps> = ({ member }) => {
           </div>
           <div className="flex-1">
             <div className="flex items-center space-x-2 mb-2">
-              <h3 className="text-xl desktop:text-lg desktop-lg:text-xl font-bold text-gray-800 dark:text-dark-100 group-hover:text-gray-900 dark:group-hover:text-white transition-colors">
-                {member.firstName} {member.lastName || ''}
-              </h3>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-xl desktop:text-lg desktop-lg:text-xl font-bold text-gray-800 dark:text-dark-100 group-hover:text-gray-900 dark:group-hover:text-white transition-colors truncate">
+                  {member.firstName} {member.lastName || ''}
+                </h3>
+                {member.ministry && member.ministry.trim() !== '' && (
+                  <p className="text-sm text-gray-500 dark:text-dark-300 mt-1 truncate">{member.ministry}</p>
+                )}
+              </div>
 
             </div>
 

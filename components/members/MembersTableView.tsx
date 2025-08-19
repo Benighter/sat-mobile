@@ -216,22 +216,29 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-center space-x-1">
-                <span className={`font-semibold text-sm truncate ${
-                  member.bornAgainStatus ? 'text-green-900' : 'text-gray-900'
-                }`}>
-                  {member.firstName}
-                </span>
-                <span className="text-xs flex-shrink-0" title={member.role || 'Member'}>
-                  {roleIcon}
-                </span>
-                {member.bornAgainStatus && (
-                  <span className="text-xs text-green-600 flex-shrink-0" title="Born Again">
-                    ⭐
-                  </span>
-                )}
-                {member.frozen && (
-                  <span className="ml-1 text-[10px] px-1.5 py-0.5 rounded bg-sky-100 text-sky-700 border border-sky-200" title="Frozen – excluded from counts and absentees">Frozen</span>
-                )}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center space-x-1">
+                    <span className={`font-semibold text-sm truncate ${
+                      member.bornAgainStatus ? 'text-green-900' : 'text-gray-900'
+                    }`}>
+                      {member.firstName} {member.lastName || ''}
+                    </span>
+                    <span className="text-xs flex-shrink-0" title={member.role || 'Member'}>
+                      {roleIcon}
+                    </span>
+                    {member.bornAgainStatus && (
+                      <span className="text-xs text-green-600 flex-shrink-0" title="Born Again">
+                        ⭐
+                      </span>
+                    )}
+                    {member.frozen && (
+                      <span className="ml-1 text-[10px] px-1.5 py-0.5 rounded bg-sky-100 text-sky-700 border border-sky-200" title="Frozen – excluded from counts and absentees">Frozen</span>
+                    )}
+                  </div>
+                  {member.ministry && member.ministry.trim() !== '' && (
+                    <p className="text-xs text-gray-500 truncate mt-0.5">{member.ministry}</p>
+                  )}
+                </div>
               </div>
             </div>
           </div>

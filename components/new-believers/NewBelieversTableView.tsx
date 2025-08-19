@@ -92,12 +92,19 @@ const NewBelieversTableView: React.FC = () => {
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex items-center space-x-2">
-              <span className="font-semibold text-sm truncate text-gray-900">{m.firstName}</span>
-              {m.outreachOrigin && (
-                <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-orange-100 text-orange-800 border border-orange-200">
-                  Outreach
-                </span>
-              )}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center space-x-2">
+                  <span className="font-semibold text-sm truncate text-gray-900">{m.firstName} {m.lastName || ''}</span>
+                  {m.outreachOrigin && (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-orange-100 text-orange-800 border border-orange-200">
+                      Outreach
+                    </span>
+                  )}
+                </div>
+                {m.ministry && m.ministry.trim() !== '' && (
+                  <p className="text-xs text-gray-500 truncate mt-0.5">{m.ministry}</p>
+                )}
+              </div>
             </div>
           </div>
         </div>

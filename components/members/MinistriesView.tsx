@@ -2,49 +2,29 @@ import React, { useMemo, useState } from 'react';
 import { useAppContext } from '../../contexts/FirebaseAppContext';
 import { MINISTRY_OPTIONS } from '../../constants';
 import { Member } from '../../types';
-import { ClipboardIcon, UserIcon } from '../icons';
+import { UserIcon } from '../icons';
 
 const MinistriesView: React.FC = () => {
-  const { members, switchTab } = useAppContext();
+  const { members, bacentas } = useAppContext();
   const [selectedMinistry, setSelectedMinistry] = useState<string>(''); // '' means all ministries
+  const [selectedBacenta, setSelectedBacenta] = useState<string>(''); // '' means all bacentas
 
   const membersWithMinistry = useMemo(() => members.filter(m => !!m.ministry && m.ministry.trim() !== ''), [members]);
 
   const filtered = useMemo(() => {
-    if (!selectedMinistry) return membersWithMinistry;
-    return membersWithMinistry.filter(m => (m.ministry || '').toLowerCase() === selectedMinistry.toLowerCase());
-  }, [membersWithMinistry, selectedMinistry]);
+    return membersWithMinistry
+      .filter(m => {
+        // Bacenta filter
+        if (selectedBacenta && m.bacentaId !== selectedBacenta) return false;
+        // Ministry filter
+        if (selectedMinistry && (m.ministry || '').toLowerCase() !== selectedMinistry.toLowerCase()) return false;
+        return true;
+      });
+  }, [membersWithMinistry, selectedMinistry, selectedBacenta]);
 
   const totalCount = filtered.filter(m => !m.frozen).length;
 
-  const handleCopyMembers = () => {
-    switchTab({
-      id: 'copy_members',
-      name: 'Copy Members',
-      data: {
-        ministryOnly: true,
-        ministryName: selectedMinistry || null,
-        // Defaults for copy views
-        searchTerm: '',
-        roleFilter: 'all',
-        showFrozen: false
-      }
-    });
-  };
-
-  const handleCopyAbsentees = () => {
-    switchTab({
-      id: 'copy_absentees',
-      name: 'Copy Absentees',
-      data: {
-        ministryOnly: true,
-        ministryName: selectedMinistry || null,
-        searchTerm: '',
-        roleFilter: 'all',
-        showFrozen: false
-      }
-    });
-  };
+  // No copy actions on this screen by request; we still keep navigation available via switchTab if needed elsewhere.
 
   return (
     <div className="space-y-4">
@@ -57,6 +37,19 @@ const MinistriesView: React.FC = () => {
         <div className="mt-4 flex flex-col sm:flex-row items-center justify-center gap-3">
           <div className="w-full sm:w-72">
             <select
+              value={selectedBacenta}
+              onChange={(e) => setSelectedBacenta(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm bg-white text-gray-900 text-center cursor-pointer"
+            >
+              <option value="">All Bacentas</option>
+              {bacentas.map(b => (
+                <option key={b.id} value={b.id}>{b.name}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="w-full sm:w-72">
+            <select
               value={selectedMinistry}
               onChange={(e) => setSelectedMinistry(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm bg-white text-gray-900 text-center cursor-pointer"
@@ -67,6 +60,7 @@ const MinistriesView: React.FC = () => {
               ))}
             </select>
           </div>
+
           <div className="text-sm text-gray-700">
             {selectedMinistry ? (
               <span>
@@ -79,28 +73,6 @@ const MinistriesView: React.FC = () => {
             )}
           </div>
         </div>
-
-        {/* Copy buttons */}
-        <div className="mt-4 flex flex-col sm:flex-row gap-2 justify-center">
-          <button
-            onClick={handleCopyMembers}
-            disabled={totalCount === 0}
-            className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg shadow-sm text-sm"
-            title="Copy ministry members"
-          >
-            <ClipboardIcon className="w-4 h-4" />
-            <span>Copy Members ({totalCount})</span>
-          </button>
-          <button
-            onClick={handleCopyAbsentees}
-            disabled={totalCount === 0}
-            className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 bg-orange-600 hover:bg-orange-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg shadow-sm text-sm"
-            title="Copy absentees for ministry"
-          >
-            <ClipboardIcon className="w-4 h-4" />
-            <span>Copy Absentees</span>
-          </button>
-        </div>
       </div>
 
       {/* Simple list for now (name and ministry) */}
@@ -111,6 +83,7 @@ const MinistriesView: React.FC = () => {
           <ul className="divide-y divide-gray-200">
             {filtered.map((m: Member, idx: number) => (
               <li key={m.id} className={`flex items-center gap-3 px-4 py-3 ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}>
+                <div className="w-8 flex items-center justify-center text-sm font-semibold text-gray-700">{idx + 1}</div>
                 <div className={`w-8 h-8 rounded-full flex items-center justify-center overflow-hidden ${m.bornAgainStatus ? 'bg-green-100 ring-2 ring-green-300' : 'bg-gray-100'}`}>
                   {m.profilePicture ? (
                     <img src={m.profilePicture} alt={m.firstName} className="w-full h-full object-cover" />
