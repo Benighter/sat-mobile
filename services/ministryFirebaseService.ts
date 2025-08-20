@@ -34,19 +34,42 @@ export const ministryMembersService = {
   add: async (member: Omit<Member, 'id' | 'createdDate' | 'lastUpdated'>, userProfile: any): Promise<string> => {
     try {
       console.log('🔄 [Ministry Service] Adding new member with bidirectional sync');
-      
+
+      // Check if this should be a native ministry member
+      const isNative = !member.targetConstituencyId; // If no target constituency specified, it's native
+
+      // Prepare member data with native flag
+      const memberData = {
+        ...member,
+        isNativeMinistryMember: isNative
+      };
+
+      console.log('📝 [Ministry Service] Member data being added:', {
+        isNative,
+        memberData: {
+          firstName: memberData.firstName,
+          lastName: memberData.lastName,
+          ministry: memberData.ministry,
+          isNativeMinistryMember: memberData.isNativeMinistryMember,
+          frozen: memberData.frozen
+        }
+      });
+
       // Add to ministry church (current context)
-      const memberId = await membersFirebaseService.add(member);
-      
-      // Determine source church for sync
-      const sourceChurchId = await determineSourceChurchForNewRecord(member.ministry || '', userProfile);
-      
-      if (sourceChurchId && sourceChurchId !== userProfile?.churchId) {
-        // Sync to source church
-        const memberWithId = { ...member, id: memberId } as Member;
-        await syncMemberToSourceChurch(memberWithId, member, userProfile?.uid || '');
+      const memberId = await membersFirebaseService.add(memberData);
+
+      if (isNative) {
+        console.log('✨ [Ministry Service] Added native ministry member - no constituency sync');
+      } else {
+        // Sync to specified constituency
+        const targetChurchId = member.targetConstituencyId;
+        if (targetChurchId && targetChurchId !== userProfile?.churchId) {
+          console.log(`🔄 [Ministry Service] Syncing to target constituency: ${targetChurchId}`);
+          const memberWithId = { ...memberData, id: memberId } as Member;
+          await syncMemberToSourceChurch(memberWithId, memberData, userProfile?.uid || '');
+        }
       }
-      
+
       return memberId;
     } catch (error) {
       console.error('Failed to add member with sync:', error);
@@ -97,6 +120,42 @@ export const ministryMembersService = {
       console.error('Failed to delete member with sync:', error);
       throw error;
     }
+  },
+
+  // Transfer native ministry member to a constituency
+  transferToConstituency: async (memberId: string, targetConstituencyId: string, userProfile: any): Promise<void> => {
+    try {
+      console.log(`🔄 [Ministry Service] Transferring native member ${memberId} to constituency ${targetConstituencyId}`);
+
+      // Get current member
+      const currentMember = await membersFirebaseService.getById(memberId);
+      if (!currentMember) {
+        throw new Error('Member not found');
+      }
+
+      // Verify this is a native ministry member
+      if (!currentMember.isNativeMinistryMember) {
+        throw new Error('Only native ministry members can be transferred to constituencies');
+      }
+
+      // Update member to mark as transferred
+      const updates = {
+        isNativeMinistryMember: false,
+        targetConstituencyId: targetConstituencyId
+      };
+
+      // Update in ministry church
+      await membersFirebaseService.update(memberId, updates);
+
+      // Sync to target constituency
+      const memberWithUpdates = { ...currentMember, ...updates };
+      await syncMemberToSourceChurch(memberWithUpdates, updates, userProfile?.uid || '');
+
+      console.log(`✅ [Ministry Service] Successfully transferred member to constituency ${targetConstituencyId}`);
+    } catch (error) {
+      console.error('Failed to transfer member to constituency:', error);
+      throw error;
+    }
   }
 };
 
@@ -137,12 +196,24 @@ export const ministryAttendanceService = {
   addOrUpdate: async (attendance: AttendanceRecord, userProfile: any, members: any[]): Promise<string> => {
     try {
       console.log('🔄 [Ministry Service] Adding/updating attendance with bidirectional sync');
+      console.log('📋 Attendance record:', attendance);
+      console.log('👥 Available members:', members.length);
 
       // Find the member to get their source church
       const member = members.find(m => m.id === attendance.memberId);
       const sourceChurchId = (member as any)?.sourceChurchId;
+      const isNativeMember = member?.isNativeMinistryMember;
 
-      if (sourceChurchId && sourceChurchId !== userProfile?.churchId) {
+      console.log('👤 Member details:', {
+        memberId: attendance.memberId,
+        memberFound: !!member,
+        memberName: member ? `${member.firstName} ${member.lastName}` : 'Unknown',
+        sourceChurchId,
+        isNativeMember,
+        currentChurchId: userProfile?.churchId
+      });
+
+      if (sourceChurchId && sourceChurchId !== userProfile?.churchId && !isNativeMember) {
         console.log(`🔄 [Ministry Service] Syncing attendance to source church: ${sourceChurchId}`);
 
         // Sync to source church in parallel with ministry church for faster operation
@@ -151,11 +222,20 @@ export const ministryAttendanceService = {
           syncAttendanceToSourceChurch(attendance, sourceChurchId, userProfile?.uid || '')
         ]);
 
+        console.log(`✅ [Ministry Service] Attendance synced to both ministry and source church`);
         return attendanceId;
       } else {
-        console.log('No source church sync needed - member belongs to current church or no source church found');
+        const reason = isNativeMember
+          ? 'member is native to ministry'
+          : sourceChurchId === userProfile?.churchId
+            ? 'member belongs to current church'
+            : 'no source church found';
+        console.log(`📝 [Ministry Service] No source church sync needed - ${reason}`);
+
         // Add/update in ministry church only
-        return await attendanceFirebaseService.addOrUpdate(attendance);
+        const attendanceId = await attendanceFirebaseService.addOrUpdate(attendance);
+        console.log(`✅ [Ministry Service] Attendance saved to ministry church only`);
+        return attendanceId;
       }
     } catch (error) {
       console.error('Failed to add/update attendance with sync:', error);

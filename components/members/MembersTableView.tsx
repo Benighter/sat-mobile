@@ -7,7 +7,8 @@ import { isDateEditable } from '../../utils/attendanceUtils';
 import { canDeleteMemberWithRole, hasAdminPrivileges } from '../../utils/permissionUtils';
 import { SmartTextParser } from '../../utils/smartTextParser';
 import { memberDeletionRequestService } from '../../services/firebaseService';
-import { UserIcon, TrashIcon, PhoneIcon, CalendarIcon, ChevronLeftIcon, ChevronRightIcon, EllipsisVerticalIcon, CheckIcon, ClockIcon, ClipboardIcon } from '../icons';
+import { UserIcon, TrashIcon, PhoneIcon, CalendarIcon, ChevronLeftIcon, ChevronRightIcon, EllipsisVerticalIcon, CheckIcon, ClockIcon, ClipboardIcon, ArrowRightIcon } from '../icons';
+import ConstituencyTransferModal from '../modals/ConstituencyTransferModal';
 // Removed unused UI imports
 
 interface MembersTableViewProps {
@@ -30,8 +31,10 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
     userProfile,
     showConfirmation,
     showToast,
-  switchTab,
-  currentTab,
+    switchTab,
+    currentTab,
+    isMinistryContext,
+    transferMemberToConstituencyHandler,
   } = useAppContext();
 
   // Get user preference for editing previous Sundays
@@ -363,6 +366,8 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
             members={members}
             showToast={showToast}
             updateMemberHandler={updateMemberHandler}
+            isMinistryContext={isMinistryContext}
+            transferMemberToConstituencyHandler={transferMemberToConstituencyHandler}
           />
         );
       },
@@ -682,6 +687,8 @@ interface MemberActionsDropdownProps {
   members: Member[];
   showToast: (type: 'error' | 'success' | 'warning' | 'info', title: string, message?: string) => void;
   updateMemberHandler: (member: Member) => Promise<void>;
+  isMinistryContext: boolean;
+  transferMemberToConstituencyHandler: (memberId: string, targetConstituencyId: string) => Promise<void>;
 }
 
 const MemberActionsDropdown: React.FC<MemberActionsDropdownProps> = ({
@@ -694,9 +701,12 @@ const MemberActionsDropdown: React.FC<MemberActionsDropdownProps> = ({
   userProfile,
   members,
   showToast,
-  updateMemberHandler
+  updateMemberHandler,
+  isMinistryContext,
+  transferMemberToConstituencyHandler
 }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -915,6 +925,23 @@ const MemberActionsDropdown: React.FC<MemberActionsDropdownProps> = ({
               </div>
             </button>
 
+            {/* Transfer to Constituency (only for native ministry members) */}
+            {isMinistryContext && member.isNativeMinistryMember && (
+              <button
+                onClick={() => {
+                  setIsTransferModalOpen(true);
+                  setIsOpen(false);
+                }}
+                className="w-full px-3 py-2.5 text-left hover:bg-blue-50 rounded-lg transition-colors duration-150 flex items-start gap-3 text-blue-700"
+              >
+                <ArrowRightIcon className="w-4 h-4 mt-0.5 text-blue-600" />
+                <div className="flex-1">
+                  <div className="text-sm font-medium">Transfer to Constituency</div>
+                  <div className="text-xs text-gray-500">Move to a specific constituency</div>
+                </div>
+              </button>
+            )}
+
             {/* Danger zone */}
             <div className="my-1 border-t border-gray-100"></div>
             {canDelete ? (
@@ -948,6 +975,13 @@ const MemberActionsDropdown: React.FC<MemberActionsDropdownProps> = ({
         </div>,
         document.body
       )}
+
+      {/* Transfer Modal */}
+      <ConstituencyTransferModal
+        isOpen={isTransferModalOpen}
+        onClose={() => setIsTransferModalOpen(false)}
+        member={member}
+      />
     </div>
   );
 };

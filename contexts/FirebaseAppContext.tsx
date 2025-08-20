@@ -1,5 +1,5 @@
 // Firebase-enabled App Context
-import React, { createContext, useState, useEffect, useCallback, ReactNode, useMemo } from 'react';
+import React, { createContext, useState, useEffect, useCallback, ReactNode, useMemo, useRef } from 'react';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../firebase.config';
 import { Member, AttendanceRecord, Bacenta, TabOption, AttendanceStatus, NewBeliever, SundayConfirmation, ConfirmationStatus, Guest, MemberDeletionRequest, OutreachBacenta, OutreachMember, PrayerRecord, PrayerStatus } from '../types';
@@ -116,6 +116,7 @@ interface AppContextType {
   addMultipleMembersHandler: (membersData: Omit<Member, 'id' | 'createdDate' | 'lastUpdated'>[]) => Promise<{ successful: Member[], failed: { data: Omit<Member, 'id' | 'createdDate' | 'lastUpdated'>, error: string }[] }>;
   updateMemberHandler: (memberData: Member) => Promise<void>;
   deleteMemberHandler: (memberId: string) => Promise<void>;
+  transferMemberToConstituencyHandler: (memberId: string, targetConstituencyId: string) => Promise<void>;
 
   // Bacenta Operations
   addBacentaHandler: (bacentaData: Omit<Bacenta, 'id'>) => Promise<string>;
@@ -271,6 +272,10 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
   const [currentChurchId, setCurrentChurchId] = useState<string | null>(null);
   const [isOnline, setIsOnline] = useState<boolean>(true);
   const [needsMigration, setNeedsMigration] = useState<boolean>(false);
+
+  // Optimistic update tracking to prevent listener conflicts
+  const optimisticUpdatesRef = useRef<Set<string>>(new Set());
+  const optimisticTimeoutsRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
 
   
   // Derived flags
@@ -445,11 +450,36 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
 
           setMembers(data.members);
           setBacentas(data.bacentas);
-          setAttendanceRecords(data.attendanceRecords);
+
+          // Smart merge for attendance records to preserve optimistic updates
+          setAttendanceRecords(prev => {
+            // Get optimistically updated records
+            const optimisticRecords = prev.filter(record =>
+              optimisticUpdatesRef.current.has(record.id)
+            );
+
+            // Get new records that aren't optimistically updated
+            const newRecords = data.attendanceRecords.filter(record =>
+              !optimisticUpdatesRef.current.has(record.id)
+            );
+
+            // Combine optimistic and new records
+            const combined = [...optimisticRecords, ...newRecords];
+
+            console.log('🔄 Smart attendance merge:', {
+              optimistic: optimisticRecords.length,
+              new: newRecords.length,
+              total: combined.length,
+              optimisticIds: Array.from(optimisticUpdatesRef.current)
+            });
+
+            return combined;
+          });
+
           setNewBelievers(data.newBelievers);
           setSundayConfirmations(data.sundayConfirmations);
           setGuests(data.guests);
-        });
+        }, optimisticUpdatesRef, userProfile?.churchId);
         unsubscribers.push(unsubscribeMinistryData);
       } else {
         // Normal mode or ministry mode without specific ministry
@@ -616,7 +646,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
       if (isMinistryContext && (activeMinistryName || '').trim() !== '') {
         console.log('🔄 [Ministry Mode] Fetching cross-church data like SuperAdmin for:', activeMinistryName);
         try {
-          const ministryData = await getMinistryAggregatedData(activeMinistryName);
+          const ministryData = await getMinistryAggregatedData(activeMinistryName, userProfile?.churchId);
 
           setMembers(ministryData.members);
           setBacentas(ministryData.bacentas);
@@ -1411,16 +1441,34 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
 
       console.log('📝 Marking attendance:', recordId, status);
 
-      // Optimistic update: Update local state immediately to prevent flickering
-      const optimisticUpdate = () => {
+      // Enhanced optimistic update with conflict prevention
+      const applyOptimisticUpdate = () => {
+        // Mark this record as optimistically updated
+        optimisticUpdatesRef.current.add(recordId);
+
+        // Clear any existing timeout for this record
+        const existingTimeout = optimisticTimeoutsRef.current.get(recordId);
+        if (existingTimeout) {
+          clearTimeout(existingTimeout);
+        }
+
+        // Update local state immediately
         setAttendanceRecords(prev => {
           const filtered = prev.filter(a => a.id !== recordId);
           return [...filtered, record];
         });
+
+        // Set timeout to clear optimistic flag (prevents permanent blocking)
+        const timeout = setTimeout(() => {
+          optimisticUpdatesRef.current.delete(recordId);
+          optimisticTimeoutsRef.current.delete(recordId);
+        }, 3000); // 3 second safety timeout
+
+        optimisticTimeoutsRef.current.set(recordId, timeout);
       };
 
       // Apply optimistic update immediately
-      optimisticUpdate();
+      applyOptimisticUpdate();
 
       try {
         // Use ministry service for bidirectional sync in ministry mode
@@ -1432,9 +1480,26 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
           await attendanceFirebaseService.addOrUpdate(record);
           showToast('success', 'Attendance marked successfully');
         }
+
+        // Clear optimistic flag after successful sync
+        setTimeout(() => {
+          optimisticUpdatesRef.current.delete(recordId);
+          const timeout = optimisticTimeoutsRef.current.get(recordId);
+          if (timeout) {
+            clearTimeout(timeout);
+            optimisticTimeoutsRef.current.delete(recordId);
+          }
+        }, 500); // Allow listeners to settle
+
       } catch (syncError) {
         // Revert optimistic update on error
         console.error('Failed to sync attendance, reverting optimistic update:', syncError);
+        optimisticUpdatesRef.current.delete(recordId);
+        const timeout = optimisticTimeoutsRef.current.get(recordId);
+        if (timeout) {
+          clearTimeout(timeout);
+          optimisticTimeoutsRef.current.delete(recordId);
+        }
         setAttendanceRecords(prev => prev.filter(a => a.id !== recordId));
         throw syncError;
       }
@@ -1473,13 +1538,31 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
       // Store original record for potential rollback
       const originalRecord = attendanceRecords.find(a => a.id === recordId);
 
-      // Optimistic update: Remove from local state immediately to prevent flickering
-      const optimisticUpdate = () => {
+      // Enhanced optimistic update with conflict prevention
+      const applyOptimisticClear = () => {
+        // Mark this record as optimistically updated
+        optimisticUpdatesRef.current.add(recordId);
+
+        // Clear any existing timeout for this record
+        const existingTimeout = optimisticTimeoutsRef.current.get(recordId);
+        if (existingTimeout) {
+          clearTimeout(existingTimeout);
+        }
+
+        // Remove from local state immediately
         setAttendanceRecords(prev => prev.filter(a => a.id !== recordId));
+
+        // Set timeout to clear optimistic flag (prevents permanent blocking)
+        const timeout = setTimeout(() => {
+          optimisticUpdatesRef.current.delete(recordId);
+          optimisticTimeoutsRef.current.delete(recordId);
+        }, 3000); // 3 second safety timeout
+
+        optimisticTimeoutsRef.current.set(recordId, timeout);
       };
 
       // Apply optimistic update immediately
-      optimisticUpdate();
+      applyOptimisticClear();
 
       try {
         // Use ministry service for bidirectional sync in ministry mode
@@ -1502,9 +1585,26 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
           await attendanceFirebaseService.delete(recordId);
           showToast('success', 'Attendance cleared successfully');
         }
+
+        // Clear optimistic flag after successful sync
+        setTimeout(() => {
+          optimisticUpdatesRef.current.delete(recordId);
+          const timeout = optimisticTimeoutsRef.current.get(recordId);
+          if (timeout) {
+            clearTimeout(timeout);
+            optimisticTimeoutsRef.current.delete(recordId);
+          }
+        }, 500); // Allow listeners to settle
+
       } catch (syncError) {
         // Revert optimistic update on error
         console.error('Failed to clear attendance, reverting optimistic update:', syncError);
+        optimisticUpdatesRef.current.delete(recordId);
+        const timeout = optimisticTimeoutsRef.current.get(recordId);
+        if (timeout) {
+          clearTimeout(timeout);
+          optimisticTimeoutsRef.current.delete(recordId);
+        }
         if (originalRecord) {
           setAttendanceRecords(prev => [...prev, originalRecord]);
         }
@@ -1515,6 +1615,37 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
       setError(error.message);
       showToast('error', 'Failed to clear attendance', error.message);
       throw error;
+    }
+  }, [showToast, isMinistryContext, userProfile, members]);
+
+  // Transfer member to constituency handler
+  const transferMemberToConstituencyHandler = useCallback(async (memberId: string, targetConstituencyId: string) => {
+    try {
+      setIsLoading(true);
+
+      if (!isMinistryContext) {
+        throw new Error('Member transfer is only available in ministry mode');
+      }
+
+      // Find the member to get their name for the toast
+      const member = members.find(m => m.id === memberId);
+      const memberName = member ? `${member.firstName} ${member.lastName || ''}`.trim() : 'Member';
+
+      console.log(`🔄 [Transfer] Transferring ${memberName} to constituency ${targetConstituencyId}`);
+
+      // Use ministry service to transfer the member
+      await ministryMembersService.transferToConstituency(memberId, targetConstituencyId, userProfile);
+
+      showToast('success', 'Member Transferred Successfully',
+        `${memberName} has been transferred to the selected constituency and will now appear in both ministry mode and normal mode.`);
+
+    } catch (error: any) {
+      console.error('❌ Failed to transfer member:', error);
+      setError(error.message);
+      showToast('error', 'Failed to Transfer Member', error.message);
+      throw error;
+    } finally {
+      setIsLoading(false);
     }
   }, [showToast, isMinistryContext, userProfile, members]);
 
@@ -2574,6 +2705,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     addMultipleMembersHandler,
     updateMemberHandler,
     deleteMemberHandler,
+    transferMemberToConstituencyHandler,
 
     // Bacenta Operations
     addBacentaHandler,

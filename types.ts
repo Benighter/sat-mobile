@@ -16,6 +16,10 @@ export interface Member {
   frozen?: boolean;
   /** If true, this member originated from an Outreach flow (born again from outreach) */
   outreachOrigin?: boolean;
+  /** If true, this member is native to the ministry (not synced from any constituency) */
+  isNativeMinistryMember?: boolean;
+  /** Target constituency for transfer (when transferring native members to constituencies) */
+  targetConstituencyId?: string;
   bacentaId: string; // Renamed from congregationGroup, stores Bacenta.id, empty if unassigned
   /**
    * Additional bacentas this leader is linked to. The member officially belongs

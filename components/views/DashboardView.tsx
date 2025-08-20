@@ -113,7 +113,23 @@ const StatCard: React.FC<StatCardProps> = memo(({ title, value, icon, descriptio
 const DashboardView: React.FC = memo(() => {
   const { members, attendanceRecords, newBelievers, displayedSundays, displayedDate, sundayConfirmations, guests, switchTab, user, currentChurchId, allOutreachMembers, bacentas, prayerRecords, isMinistryContext } = useAppContext(); // Use displayedSundays
 
-  const activeMembers = useMemo(() => members.filter(m => !m.frozen).length, [members]);
+  const activeMembers = useMemo(() => {
+    const filtered = members.filter(m => !m.frozen);
+    console.log('🔍 [Dashboard] Member count calculation:', {
+      totalMembers: members.length,
+      activeMembers: filtered.length,
+      frozenMembers: members.filter(m => m.frozen).length,
+      isMinistryContext,
+      nativeMembers: members.filter(m => m.isNativeMinistryMember).length,
+      memberSample: members.slice(0, 3).map(m => ({
+        name: `${m.firstName} ${m.lastName}`,
+        frozen: m.frozen,
+        isNative: m.isNativeMinistryMember,
+        ministry: m.ministry
+      }))
+    });
+    return filtered.length;
+  }, [members, isMinistryContext]);
   
   // Filter out orphaned outreach members whose bacentaId doesn't exist anymore
   const validOutreachMembers = useMemo(() => {

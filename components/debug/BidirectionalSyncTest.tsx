@@ -17,6 +17,7 @@ const BidirectionalSyncTest: React.FC = () => {
     updateMemberHandler,
     addNewBelieverHandler,
     markAttendanceHandler,
+    clearAttendanceHandler,
     userProfile
   } = useAppContext();
   
@@ -85,6 +86,70 @@ const BidirectionalSyncTest: React.FC = () => {
     }
   };
 
+  const runAttendanceFlickerTest = async () => {
+    if (!isMinistryContext || !activeMinistryName) {
+      showToast('error', 'Test Error', 'This test only works in ministry mode with an active ministry');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      console.log('🧪 [Flicker Test] Starting attendance flicker test...');
+
+      // Find multiple Dancing Stars members to test with
+      const dancingStarsMembers = members.filter(m => m.ministry === activeMinistryName).slice(0, 3);
+      if (dancingStarsMembers.length < 2) {
+        throw new Error('Need at least 2 Dancing Stars members to test flickering');
+      }
+
+      const testDate = new Date().toISOString().split('T')[0];
+
+      console.log(`📝 Testing flicker-free attendance marking for ${dancingStarsMembers.length} members`);
+
+      // Mark attendance for first member - others should not flicker
+      console.log('🎯 Marking attendance for first member...');
+      await markAttendanceHandler(dancingStarsMembers[0].id, testDate, 'Present');
+
+      // Wait a moment
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // Mark attendance for second member - others should not flicker
+      console.log('🎯 Marking attendance for second member...');
+      await markAttendanceHandler(dancingStarsMembers[1].id, testDate, 'Present');
+
+      // Wait a moment
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // Clear attendance for first member - others should not flicker
+      console.log('🎯 Clearing attendance for first member...');
+      await clearAttendanceHandler(dancingStarsMembers[0].id, testDate);
+
+      setTestResults({
+        success: true,
+        message: 'Attendance flicker test completed successfully',
+        details: {
+          testedMembers: dancingStarsMembers.length,
+          operations: ['mark', 'mark', 'clear'],
+          date: testDate,
+          ministry: activeMinistryName,
+          note: 'Check console for flicker detection logs'
+        }
+      });
+
+      showToast('success', 'Flicker Test Complete', 'Check console for detailed flicker analysis');
+
+    } catch (error: any) {
+      console.error('❌ [Flicker Test] Test failed:', error);
+      setTestResults({
+        success: false,
+        error: error.message
+      });
+      showToast('error', 'Flicker Test Failed', error.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const runAttendanceSyncTest = async () => {
     if (!isMinistryContext || !activeMinistryName) {
       showToast('error', 'Test Error', 'This test only works in ministry mode with an active ministry');
@@ -129,6 +194,72 @@ const BidirectionalSyncTest: React.FC = () => {
         error: error.message
       });
       showToast('error', 'Attendance Sync Test Failed', error.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const runNativeMemberTest = async () => {
+    if (!isMinistryContext || !activeMinistryName) {
+      showToast('error', 'Test Error', 'This test only works in ministry mode with an active ministry');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      console.log('🧪 [Native Member Test] Starting native ministry member test...');
+
+      // Create a native ministry member
+      const nativeMemberData = {
+        firstName: 'Native',
+        lastName: 'TestMember',
+        phoneNumber: '+1234567890',
+        buildingAddress: '123 Test Street',
+        bornAgainStatus: true,
+        ministry: activeMinistryName,
+        bacentaId: '', // No bacenta in ministry mode
+        role: 'Member' as const,
+        isNativeMinistryMember: true // Mark as native
+      };
+
+      console.log('📝 Adding native ministry member...');
+      const memberId = await addMemberHandler(nativeMemberData);
+
+      // Wait a moment for the member to appear in the list
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      // Check if the member appears in the members list
+      const addedMember = members.find(m => m.id === memberId);
+      const memberVisible = !!addedMember;
+
+      setTestResults({
+        success: true,
+        message: 'Native ministry member test completed successfully',
+        details: {
+          memberId,
+          memberName: `${nativeMemberData.firstName} ${nativeMemberData.lastName}`,
+          ministry: activeMinistryName,
+          isNative: true,
+          memberVisible,
+          totalMembers: members.length,
+          note: memberVisible
+            ? 'Member is visible in ministry mode ✅'
+            : 'Member not visible - check console for debugging info ❌'
+        }
+      });
+
+      showToast('success', 'Native Member Test Complete',
+        memberVisible
+          ? 'Native ministry member created and is visible in the list!'
+          : 'Native ministry member created but not visible - check console logs.');
+
+    } catch (error: any) {
+      console.error('❌ [Native Member Test] Test failed:', error);
+      setTestResults({
+        success: false,
+        error: error.message
+      });
+      showToast('error', 'Native Member Test Failed', error.message);
     } finally {
       setIsLoading(false);
     }
@@ -213,13 +344,29 @@ const BidirectionalSyncTest: React.FC = () => {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
             <button
               onClick={runMemberSyncTest}
               disabled={isLoading || !activeMinistryName}
               className="px-4 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               {isLoading ? 'Testing...' : 'Test Member Sync'}
+            </button>
+
+            <button
+              onClick={runNativeMemberTest}
+              disabled={isLoading || !activeMinistryName}
+              className="px-4 py-3 bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {isLoading ? 'Testing...' : 'Test Native Member'}
+            </button>
+
+            <button
+              onClick={runAttendanceFlickerTest}
+              disabled={isLoading || !activeMinistryName || members.filter(m => m.ministry === activeMinistryName).length < 2}
+              className="px-4 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {isLoading ? 'Testing...' : 'Test Flicker Fix'}
             </button>
 
             <button

@@ -175,7 +175,7 @@ const fetchMinistryMembersFromChurch = async (churchId: string, ministryName: st
 };
 
 // Get aggregated data for a specific ministry across all churches (SuperAdmin style)
-export const getMinistryAggregatedData = async (ministryName: string): Promise<MinistryAggregatedData> => {
+export const getMinistryAggregatedData = async (ministryName: string, currentChurchId?: string): Promise<MinistryAggregatedData> => {
   try {
     console.log(`🔍 [SuperAdmin Style] Fetching cross-church data for ministry: ${ministryName}`);
 
@@ -251,15 +251,44 @@ export const getMinistryAggregatedData = async (ministryName: string): Promise<M
       aggregatedData.guests.push(...churchData.guests);
     });
 
+    // Step 4: Add native ministry members from the current ministry church
+    if (currentChurchId) {
+      console.log('📥 Fetching native ministry members from current ministry church...');
+      try {
+        // Fetch native ministry members (those with isNativeMinistryMember: true)
+        const nativeMembersQuery = query(
+          collection(db, `churches/${currentChurchId}/members`),
+          where('ministry', '==', ministryName),
+          where('isNativeMinistryMember', '==', true)
+        );
+        const nativeSnapshot = await getDocs(nativeMembersQuery);
+        const nativeMembers = nativeSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data(),
+          sourceChurchId: currentChurchId // Mark as coming from ministry church
+        } as any as Member)).filter(m => m.isActive !== false);
+
+        console.log(`✅ Found ${nativeMembers.length} native ministry members`);
+        aggregatedData.members.push(...nativeMembers);
+      } catch (e) {
+        console.warn('Failed to fetch native ministry members:', e);
+      }
+    } else {
+      console.log('📥 No current church ID provided - skipping native members fetch');
+    }
+
     console.log(`🎉 [SuperAdmin Style] Successfully aggregated data for ${ministryName}:`, {
       members: aggregatedData.members.length,
+      nativeMembers: aggregatedData.members.filter(m => m.isNativeMinistryMember).length,
+      syncedMembers: aggregatedData.members.filter(m => !m.isNativeMinistryMember).length,
       bacentas: aggregatedData.bacentas.length,
       attendance: aggregatedData.attendanceRecords.length,
       newBelievers: aggregatedData.newBelievers.length,
       confirmations: aggregatedData.sundayConfirmations.length,
       guests: aggregatedData.guests.length,
       churches: churchIds.length,
-      sourceChurches: aggregatedData.sourceChurches
+      sourceChurches: aggregatedData.sourceChurches,
+      currentChurchId: currentChurchId || 'not provided'
     });
 
     return aggregatedData;
@@ -280,7 +309,9 @@ export const getMinistryAggregatedData = async (ministryName: string): Promise<M
 // Set up real-time listeners for ministry data across multiple churches
 export const setupMinistryDataListeners = (
   ministryName: string,
-  onDataUpdate: (data: MinistryAggregatedData) => void
+  onDataUpdate: (data: MinistryAggregatedData) => void,
+  optimisticUpdatesRef?: React.MutableRefObject<Set<string>>,
+  currentChurchId?: string
 ): (() => void) => {
   const unsubscribers: Unsubscribe[] = [];
   let currentData: MinistryAggregatedData = {
@@ -323,8 +354,13 @@ export const setupMinistryDataListeners = (
           // Sort same as existing service
           filtered.sort((a, b) => (a.lastName || '').localeCompare(b.lastName || ''));
 
-          // Update members for this church
-          currentData.members = currentData.members.filter(m => (m as any).sourceChurchId !== churchId);
+          // Update members for this church, but preserve native ministry members
+          currentData.members = currentData.members.filter(m => {
+            const isFromThisChurch = (m as any).sourceChurchId === churchId;
+            const isNative = m.isNativeMinistryMember;
+            // Keep members that are NOT from this church OR are native ministry members
+            return !isFromThisChurch || isNative;
+          });
           currentData.members.push(...filtered);
           updateAggregatedData();
         });
@@ -349,9 +385,62 @@ export const setupMinistryDataListeners = (
               sourceChurchId: churchId
             } as any as AttendanceRecord));
 
-            // Update attendance for this church
-            currentData.attendanceRecords = currentData.attendanceRecords.filter(a => (a as any).sourceChurchId !== churchId);
-            currentData.attendanceRecords.push(...items);
+            // Filter out items that are currently being optimistically updated
+            const filteredItems = optimisticUpdatesRef
+              ? items.filter(item => !optimisticUpdatesRef.current.has(item.id))
+              : items;
+
+            console.log(`📊 [Ministry Data] Attendance update for church ${churchId}:`, {
+              totalItems: items.length,
+              filteredItems: filteredItems.length,
+              optimisticUpdates: Array.from(optimisticUpdatesRef?.current || []),
+              beforeUpdate: currentData.attendanceRecords.length,
+              beforeFromThisChurch: currentData.attendanceRecords.filter(a => (a as any).sourceChurchId === churchId).length
+            });
+
+            // Update attendance for this church, preserving optimistic updates
+            const beforeFilter = currentData.attendanceRecords.length;
+            const removedRecords: AttendanceRecord[] = [];
+
+            currentData.attendanceRecords = currentData.attendanceRecords.filter(a => {
+              const isFromThisChurch = (a as any).sourceChurchId === churchId;
+              const isOptimistic = optimisticUpdatesRef?.current.has(a.id);
+              const shouldKeep = !isFromThisChurch || isOptimistic;
+
+              if (!shouldKeep) {
+                removedRecords.push(a);
+              }
+
+              // Keep records that are NOT from this church OR are optimistically updated
+              return shouldKeep;
+            });
+            const afterFilter = currentData.attendanceRecords.length;
+
+            console.log(`📊 [Ministry Data] Filtering details:`, {
+              removedRecords: removedRecords.map(r => ({
+                id: r.id,
+                memberId: r.memberId,
+                date: r.date,
+                status: r.status,
+                sourceChurchId: (r as any).sourceChurchId
+              }))
+            });
+
+            // Add new records that aren't optimistically updated
+            currentData.attendanceRecords.push(...filteredItems);
+
+            console.log(`📊 [Ministry Data] After attendance update:`, {
+              beforeFilter,
+              afterFilter,
+              addedItems: filteredItems.length,
+              finalTotal: currentData.attendanceRecords.length,
+              attendanceByChurch: currentData.attendanceRecords.reduce((acc, a) => {
+                const church = (a as any).sourceChurchId || 'unknown';
+                acc[church] = (acc[church] || 0) + 1;
+                return acc;
+              }, {} as Record<string, number>)
+            });
+
             updateAggregatedData();
           }, 100); // 100ms debounce to allow optimistic updates to settle
         });
@@ -361,6 +450,47 @@ export const setupMinistryDataListeners = (
         console.warn(`Failed to set up listeners for church ${churchId}:`, e);
       }
     });
+
+    // Set up listener for native ministry members in the current ministry church
+    if (currentChurchId && !data.sourceChurches.includes(currentChurchId)) {
+      try {
+        console.log(`🔄 Setting up native members listener for ministry church: ${currentChurchId}`);
+
+        // Listen to native ministry members
+        const nativeMembersQuery = query(
+          collection(db, `churches/${currentChurchId}/members`),
+          where('ministry', '==', ministryName),
+          where('isNativeMinistryMember', '==', true)
+        );
+
+        const unsubNativeMembers = onSnapshot(nativeMembersQuery, (snapshot) => {
+          const items = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+            sourceChurchId: currentChurchId
+          } as any as Member));
+
+          const filtered = items.filter(m => m.isActive !== false);
+          filtered.sort((a, b) => (a.lastName || '').localeCompare(b.lastName || ''));
+
+          // Update native members for ministry church
+          currentData.members = currentData.members.filter(m => {
+            const isFromMinistryChurch = (m as any).sourceChurchId === currentChurchId;
+            const isNative = m.isNativeMinistryMember;
+            // Keep members that are NOT native from ministry church
+            return !(isFromMinistryChurch && isNative);
+          });
+          currentData.members.push(...filtered);
+          updateAggregatedData();
+        });
+
+        unsubscribers.push(unsubNativeMembers);
+      } catch (e) {
+        console.warn('Failed to set up native members listener:', e);
+      }
+    } else {
+      console.log('🔄 Native members listener not needed - no current church ID or already included in source churches');
+    }
   });
 
   // Return cleanup function

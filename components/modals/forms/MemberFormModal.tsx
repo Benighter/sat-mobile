@@ -37,11 +37,12 @@ const MemberFormModal: React.FC<MemberFormModalProps> = ({ isOpen, onClose, memb
     roomNumber: '',
     profilePicture: '',
     bornAgainStatus: false,
-  bacentaId: isMinistryContext ? '' : (currentBacentaId || (bacentas.length > 0 ? bacentas[0].id : '')),
-  linkedBacentaIds: [],
+    bacentaId: isMinistryContext ? '' : (currentBacentaId || (bacentas.length > 0 ? bacentas[0].id : '')),
+    linkedBacentaIds: [],
     role: 'Member' as MemberRole, // Default role is Member
     birthday: '', // Optional birthday field
-  ministry: isMinistryContext ? (activeMinistryName || '') : '',
+    ministry: isMinistryContext ? (activeMinistryName || '') : '',
+    isNativeMinistryMember: isMinistryContext, // Mark as native if added in ministry mode
   };
   const [formData, setFormData] = useState(initialFormData);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -60,7 +61,8 @@ const MemberFormModal: React.FC<MemberFormModalProps> = ({ isOpen, onClose, memb
         linkedBacentaIds: member.linkedBacentaIds || [],
         role: member.role || 'Member', // Default to Member if role is not set (for backward compatibility)
         birthday: member.birthday || '', // Include birthday field
-  ministry: member.ministry || '',
+        ministry: member.ministry || '',
+        isNativeMinistryMember: member.isNativeMinistryMember || false,
       });
     } else {
       // For new members, default to current bacenta if we're in one
