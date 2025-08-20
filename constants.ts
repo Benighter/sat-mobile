@@ -17,6 +17,7 @@ export const FIXED_TABS: TabOption[] = [
   { id: TabKeys.PROFILE_SETTINGS, name: 'Profile Settings' },
   { id: TabKeys.MINISTRIES, name: 'Ministries' },
   { id: TabKeys.MINISTRY_SYNC_TEST, name: 'Ministry Sync Test' },
+  { id: TabKeys.BIDIRECTIONAL_SYNC_TEST, name: 'Bidirectional Sync Test' },
 ];
 
 export const DEFAULT_TAB_ID = TabKeys.DASHBOARD;

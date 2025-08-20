@@ -33,6 +33,12 @@ import {
 } from '../services/notificationIntegration';
 import { setEnhancedNotificationContext } from '../services/enhancedNotificationIntegration';
 import { getMinistryAggregatedData, setupMinistryDataListeners } from '../services/ministryDataService';
+import {
+  ministryMembersService,
+  ministryAttendanceService,
+  ministryNewBelieversService,
+  ministryConfirmationService
+} from '../services/ministryFirebaseService';
 
 interface AppContextType {
   // Data
@@ -265,6 +271,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
   const [currentChurchId, setCurrentChurchId] = useState<string | null>(null);
   const [isOnline, setIsOnline] = useState<boolean>(true);
   const [needsMigration, setNeedsMigration] = useState<boolean>(false);
+
   
   // Derived flags
   const isMinistryContext = useMemo(() => {
@@ -732,8 +739,14 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
             bacentaId: memberData.bacentaId || ''
           }
         : memberData;
-      const newMemberId = await memberOperationsWithNotifications.add(payload);
-      showToast('success', 'Member added successfully');
+      // Use ministry service for bidirectional sync in ministry mode
+      const newMemberId = isMinistryContext
+        ? await ministryMembersService.add(payload, userProfile)
+        : await memberOperationsWithNotifications.add(payload);
+
+      showToast('success', isMinistryContext
+        ? 'Member added successfully (synced to source church)'
+        : 'Member added successfully');
       return newMemberId;
     } catch (error: any) {
       setError(error.message);
@@ -818,8 +831,24 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     try {
       setIsLoading(true);
       const original = members.find(m => m.id === memberData.id);
-      await memberOperationsWithNotifications.update(memberData.id, memberData, original || undefined);
-      showToast('success', 'Member updated successfully');
+
+      // Use ministry service for bidirectional sync in ministry mode
+      if (isMinistryContext) {
+        // Calculate the updates (difference between original and new)
+        const updates: Partial<Member> = {};
+        Object.keys(memberData).forEach(key => {
+          const typedKey = key as keyof Member;
+          if (original && memberData[typedKey] !== original[typedKey]) {
+            (updates as any)[typedKey] = memberData[typedKey];
+          }
+        });
+
+        await ministryMembersService.update(memberData.id, updates, userProfile);
+        showToast('success', 'Member updated successfully (synced to source church)');
+      } else {
+        await memberOperationsWithNotifications.update(memberData.id, memberData, original || undefined);
+        showToast('success', 'Member updated successfully');
+      }
     } catch (error: any) {
       setError(error.message);
       showToast('error', 'Failed to update member', error.message);
@@ -857,9 +886,16 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
         }
       }
 
-      // Use notification-enabled delete operation
+      // Use ministry service for bidirectional sync in ministry mode
       const memberName = `${memberToDelete.firstName} ${memberToDelete.lastName || ''}`.trim();
-      await memberOperationsWithNotifications.delete(memberId, memberName);
+
+      if (isMinistryContext) {
+        await ministryMembersService.delete(memberId, userProfile);
+        showToast('success', 'Member removed from ministry (preserved in source church)');
+      } else {
+        await memberOperationsWithNotifications.delete(memberId, memberName);
+        showToast('success', 'Member deleted successfully');
+      }
 
       // Unconvert behavior: If this member was the conversion target for any outreach member,
       // clear the conversion link so the outreach record remains as not converted
@@ -936,8 +972,14 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
   const addNewBelieverHandler = useCallback(async (newBelieverData: Omit<NewBeliever, 'id' | 'createdDate' | 'lastUpdated'>) => {
     try {
       setIsLoading(true);
-      await newBelieverOperationsWithNotifications.add(newBelieverData);
-      showToast('success', 'New believer added successfully');
+      // Use ministry service for bidirectional sync in ministry mode
+      if (isMinistryContext) {
+        await ministryNewBelieversService.add(newBelieverData, userProfile);
+        showToast('success', 'New believer added successfully (synced to source church)');
+      } else {
+        await newBelieverOperationsWithNotifications.add(newBelieverData);
+        showToast('success', 'New believer added successfully');
+      }
     } catch (error: any) {
       setError(error.message);
       showToast('error', 'Failed to add new believer', error.message);
@@ -1368,15 +1410,41 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
       };
 
       console.log('📝 Marking attendance:', recordId, status);
-      await attendanceFirebaseService.addOrUpdate(record);
-      showToast('success', 'Attendance marked successfully');
+
+      // Optimistic update: Update local state immediately to prevent flickering
+      const optimisticUpdate = () => {
+        setAttendanceRecords(prev => {
+          const filtered = prev.filter(a => a.id !== recordId);
+          return [...filtered, record];
+        });
+      };
+
+      // Apply optimistic update immediately
+      optimisticUpdate();
+
+      try {
+        // Use ministry service for bidirectional sync in ministry mode
+        if (isMinistryContext) {
+          console.log(`🔄 [Ministry Mode] Marking attendance with bidirectional sync`);
+          await ministryAttendanceService.addOrUpdate(record, userProfile, members);
+          showToast('success', 'Attendance marked successfully');
+        } else {
+          await attendanceFirebaseService.addOrUpdate(record);
+          showToast('success', 'Attendance marked successfully');
+        }
+      } catch (syncError) {
+        // Revert optimistic update on error
+        console.error('Failed to sync attendance, reverting optimistic update:', syncError);
+        setAttendanceRecords(prev => prev.filter(a => a.id !== recordId));
+        throw syncError;
+      }
     } catch (error: any) {
       console.error('❌ Failed to mark attendance:', error);
       setError(error.message);
       showToast('error', 'Failed to mark attendance', error.message);
       throw error;
     }
-  }, [showToast]);
+  }, [showToast, isMinistryContext, userProfile, members]);
 
   const markNewBelieverAttendanceHandler = useCallback(async (newBelieverId: string, date: string, status: AttendanceStatus) => {
     try {
@@ -1401,15 +1469,54 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     try {
       const recordId = `${memberId}_${date}`;
       console.log('🗑️ Clearing attendance record:', recordId);
-      await attendanceFirebaseService.delete(recordId);
-      showToast('success', 'Attendance cleared successfully');
+
+      // Store original record for potential rollback
+      const originalRecord = attendanceRecords.find(a => a.id === recordId);
+
+      // Optimistic update: Remove from local state immediately to prevent flickering
+      const optimisticUpdate = () => {
+        setAttendanceRecords(prev => prev.filter(a => a.id !== recordId));
+      };
+
+      // Apply optimistic update immediately
+      optimisticUpdate();
+
+      try {
+        // Use ministry service for bidirectional sync in ministry mode
+        if (isMinistryContext) {
+          // In ministry mode, we need to clear attendance from both ministry church and source church
+          const member = members.find(m => m.id === memberId);
+          const sourceChurchId = (member as any)?.sourceChurchId;
+
+          // Clear from ministry church
+          await attendanceFirebaseService.delete(recordId);
+
+          // Clear from source church if different
+          if (sourceChurchId && sourceChurchId !== userProfile?.churchId) {
+            console.log(`🔄 [Ministry Mode] Clearing attendance from source church: ${sourceChurchId}`);
+            await ministryAttendanceService.clearFromSourceChurch(recordId, sourceChurchId, userProfile?.uid || '');
+          }
+
+          showToast('success', 'Attendance cleared successfully');
+        } else {
+          await attendanceFirebaseService.delete(recordId);
+          showToast('success', 'Attendance cleared successfully');
+        }
+      } catch (syncError) {
+        // Revert optimistic update on error
+        console.error('Failed to clear attendance, reverting optimistic update:', syncError);
+        if (originalRecord) {
+          setAttendanceRecords(prev => [...prev, originalRecord]);
+        }
+        throw syncError;
+      }
     } catch (error: any) {
       console.error('❌ Failed to clear attendance:', error);
       setError(error.message);
       showToast('error', 'Failed to clear attendance', error.message);
       throw error;
     }
-  }, [showToast]);
+  }, [showToast, isMinistryContext, userProfile, members]);
 
   // Prayer handlers
   const markPrayerHandler = useCallback(async (memberId: string, date: string, status: PrayerStatus) => {

@@ -328,8 +328,35 @@ export const setupMinistryDataListeners = (
           currentData.members.push(...filtered);
           updateAggregatedData();
         });
-        
+
         unsubscribers.push(unsubMembers);
+
+        // Listen to attendance records from this church with debouncing to reduce conflicts
+        const attendanceQuery = query(collection(db, `churches/${churchId}/attendance`));
+        let attendanceUpdateTimeout: NodeJS.Timeout;
+
+        const unsubAttendance = onSnapshot(attendanceQuery, (snapshot) => {
+          // Clear previous timeout to debounce rapid updates
+          if (attendanceUpdateTimeout) {
+            clearTimeout(attendanceUpdateTimeout);
+          }
+
+          // Debounce attendance updates to prevent conflicts with optimistic updates
+          attendanceUpdateTimeout = setTimeout(() => {
+            const items = snapshot.docs.map(doc => ({
+              id: doc.id,
+              ...doc.data(),
+              sourceChurchId: churchId
+            } as any as AttendanceRecord));
+
+            // Update attendance for this church
+            currentData.attendanceRecords = currentData.attendanceRecords.filter(a => (a as any).sourceChurchId !== churchId);
+            currentData.attendanceRecords.push(...items);
+            updateAggregatedData();
+          }, 100); // 100ms debounce to allow optimistic updates to settle
+        });
+
+        unsubscribers.push(unsubAttendance);
       } catch (e) {
         console.warn(`Failed to set up listeners for church ${churchId}:`, e);
       }

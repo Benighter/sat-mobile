@@ -25,6 +25,7 @@ import CopyMembersView from './components/views/CopyMembersView';
 import CopyAbsenteesView from './components/views/CopyAbsenteesView';
 import BirthdaysView from './components/views/BirthdaysView';
 import MinistrySyncTest from './components/debug/MinistrySyncTest';
+import BidirectionalSyncTest from './components/debug/BidirectionalSyncTest';
 import GestureWrapper from './components/layout/GestureWrapper';
 import SwipeIndicator from './components/layout/SwipeIndicator';
 import BackButton from './components/layout/BackButton';
@@ -260,6 +261,12 @@ const AppContent: React.FC = memo(() => {
         return (
           <LazyWrapper>
             <MinistrySyncTest />
+          </LazyWrapper>
+        );
+      case TabKeys.BIDIRECTIONAL_SYNC_TEST:
+        return (
+          <LazyWrapper>
+            <BidirectionalSyncTest />
           </LazyWrapper>
         );
       default:
