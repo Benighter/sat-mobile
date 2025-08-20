@@ -97,8 +97,18 @@ const MinistriesView: React.FC = () => {
                     {m.frozen && (
                       <span className="text-[10px] px-1.5 py-0.5 rounded bg-sky-100 text-sky-700 border border-sky-200">Frozen</span>
                     )}
+                    {(m as any).syncedFrom && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 border border-purple-200">
+                        Cross-Church
+                      </span>
+                    )}
                   </div>
-                  <div className="text-xs text-gray-600 truncate">{m.ministry || '-'}</div>
+                  <div className="text-xs text-gray-600 truncate">
+                    {m.ministry || '-'}
+                    {(m as any).syncedFrom && (
+                      <span className="ml-2 text-purple-600">• From other constituency</span>
+                    )}
+                  </div>
                 </div>
               </li>
             ))}

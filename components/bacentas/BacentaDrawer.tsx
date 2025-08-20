@@ -12,7 +12,8 @@ import {
   ClockIcon,
   ChartBarIcon,
   CakeIcon,
-  BuildingOfficeIcon
+  BuildingOfficeIcon,
+  CogIcon
 } from '../icons';
 
 interface BacentaDrawerProps {
@@ -233,6 +234,15 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
                     badge={upcomingBirthdaysCount > 0 ? upcomingBirthdaysCount : undefined}
                     onClick={() => {
                       switchTab({ id: TabKeys.BIRTHDAYS, name: 'Birthdays' });
+                      onClose();
+                    }}
+                  />
+                  <NavigationItem
+                    icon={<CogIcon className="w-4 h-4" />}
+                    label="Ministry Sync Test"
+                    isActive={currentTab.id === TabKeys.MINISTRY_SYNC_TEST}
+                    onClick={() => {
+                      switchTab({ id: TabKeys.MINISTRY_SYNC_TEST, name: 'Ministry Sync Test' });
                       onClose();
                     }}
                   />

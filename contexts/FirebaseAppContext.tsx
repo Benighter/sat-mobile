@@ -16,10 +16,10 @@ import {
   memberDeletionRequestService,
   authService,
   firebaseUtils,
-  FirebaseUser,
   outreachBacentasFirebaseService,
   outreachMembersFirebaseService,
-  prayerFirebaseService
+  prayerFirebaseService,
+  FirebaseUser
 } from '../services/firebaseService';
 import { dataMigrationService } from '../utils/dataMigration';
 import { userService } from '../services/userService';
@@ -32,6 +32,7 @@ import {
   setNotificationIntegrationContext
 } from '../services/notificationIntegration';
 import { setEnhancedNotificationContext } from '../services/enhancedNotificationIntegration';
+import { getMinistryAggregatedData, setupMinistryDataListeners } from '../services/ministryDataService';
 
 interface AppContextType {
   // Data
@@ -49,11 +50,7 @@ interface AppContextType {
   isLoading: boolean;
   error: string | null;
   displayedSundays: string[];
-  // Outreach Data
-  outreachBacentas: OutreachBacenta[];
-  outreachMembers: OutreachMember[]; // filtered by selected outreachMonth
-  allOutreachMembers: OutreachMember[]; // all outreach members across all time periods
-  outreachMonth: string; // YYYY-MM
+  displayedDate: Date;
 
   // Outreach Operations
   addOutreachBacentaHandler: (data: Omit<OutreachBacenta, 'id'>) => Promise<string>;
@@ -67,9 +64,6 @@ interface AppContextType {
   addMultipleOutreachMembersHandler: (items: Omit<OutreachMember, 'id' | 'createdDate' | 'lastUpdated'>[]) => Promise<{ successful: OutreachMember[]; failed: { data: Omit<OutreachMember, 'id' | 'createdDate' | 'lastUpdated'>; error: string }[] }>;
 
   setOutreachMonth: (yyyymm: string) => void;
-
-  displayedDate: Date;
-
 
   // Modal States
   isMemberFormOpen: boolean;
@@ -198,6 +192,12 @@ interface AppContextType {
   stopImpersonation: () => Promise<void>;
   // Force data reload while impersonating (raw fetch bypassing listeners)
   forceImpersonatedDataReload?: () => Promise<void>;
+
+  // Outreach data/state
+  outreachBacentas: OutreachBacenta[];
+  outreachMembers: OutreachMember[];
+  allOutreachMembers: OutreachMember[];
+  outreachMonth: string;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -269,10 +269,31 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
   // Derived flags
   const isMinistryContext = useMemo(() => {
     const ministryId = userProfile?.contexts?.ministryChurchId;
-    return Boolean(currentChurchId && ministryId && currentChurchId === ministryId);
+    // Also check if current church ID looks like a ministry church
+    const currentChurchIdFromUtils = firebaseUtils.getCurrentChurchId();
+    const isMinistryChurch = currentChurchIdFromUtils?.includes('ministry') || currentChurchId?.includes('ministry');
+
+    const result = Boolean(
+      (currentChurchId && ministryId && currentChurchId === ministryId) ||
+      (currentChurchIdFromUtils && ministryId && currentChurchIdFromUtils === ministryId) ||
+      (isMinistryChurch && userProfile?.preferences?.ministryName)
+    );
+
+    console.log('🔍 [Debug] Ministry context calculation:', {
+      currentChurchId,
+      currentChurchIdFromUtils,
+      ministryId,
+      isMinistryChurch,
+      hasMinistryName: !!userProfile?.preferences?.ministryName,
+      isMinistryContext: result,
+      userProfile: userProfile ? 'loaded' : 'null'
+    });
+    return result;
   }, [currentChurchId, userProfile]);
   const activeMinistryName = useMemo(() => {
-    return (userProfile?.preferences?.ministryName as string) || '';
+    const ministryName = (userProfile?.preferences?.ministryName as string) || '';
+    console.log('🔍 [Debug] Active ministry name:', ministryName, 'from userProfile:', userProfile);
+    return ministryName;
   }, [userProfile]);
 
   // Navigation state (stack of previously visited tabs)
@@ -384,31 +405,69 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     const unsubscribers: (() => void)[] = [];
 
     try {
-      // Listen to members
-      const unsubscribeMembers = membersFirebaseService.onSnapshot((members) => {
-        setMembers(members);
+      // If we are in ministry context, temporarily target the default church for read listeners
+      const originalChurchId = firebaseUtils.getCurrentChurchId();
+      let switchedForReads = false;
+      if (isMinistryContext) {
+        const defaultChurchId = userProfile?.contexts?.defaultChurchId || userProfile?.churchId;
+        if (defaultChurchId && originalChurchId !== defaultChurchId) {
+          firebaseUtils.setChurchContext(defaultChurchId);
+          switchedForReads = true;
+        }
+      }
+      // In ministry mode with specific ministry, use cross-church aggregation
+      console.log('🔍 [Debug] Listener setup check:', {
+        isMinistryContext,
+        activeMinistryName,
+        trimmedMinistryName: (activeMinistryName || '').trim(),
+        willUseMinistryListeners: isMinistryContext && (activeMinistryName || '').trim() !== ''
       });
-      unsubscribers.push(unsubscribeMembers);
 
-      // Listen to bacentas (skip in ministry context)
-      if (!isMinistryContext) {
-        const unsubscribeBacentas = bacentasFirebaseService.onSnapshot((bacentas) => {
-          setBacentas(bacentas);
+      if (isMinistryContext && (activeMinistryName || '').trim() !== '') {
+        console.log('🔄 Setting up ministry data listeners for:', activeMinistryName);
+        const unsubscribeMinistryData = setupMinistryDataListeners(activeMinistryName, (data) => {
+          console.log('📊 Ministry listener data received:', {
+            members: data.members.length,
+            bacentas: data.bacentas.length,
+            attendance: data.attendanceRecords.length,
+            newBelievers: data.newBelievers.length,
+            confirmations: data.sundayConfirmations.length,
+            guests: data.guests.length,
+            sourceChurches: data.sourceChurches.length
+          });
+
+          setMembers(data.members);
+          setBacentas(data.bacentas);
+          setAttendanceRecords(data.attendanceRecords);
+          setNewBelievers(data.newBelievers);
+          setSundayConfirmations(data.sundayConfirmations);
+          setGuests(data.guests);
         });
-        unsubscribers.push(unsubscribeBacentas);
+        unsubscribers.push(unsubscribeMinistryData);
       } else {
-        setBacentas([]);
+        // Normal mode or ministry mode without specific ministry
+        const unsubscribeMembers = membersFirebaseService.onSnapshot((members) => {
+          if (isMinistryContext) {
+            // If ministry mode but no explicit ministry selected, limit to those with any ministry
+            setMembers(members.filter(m => (m.ministry || '').trim() !== ''));
+          } else {
+            setMembers(members);
+          }
+        });
+        unsubscribers.push(unsubscribeMembers);
       }
 
-      // Listen to outreach bacentas (skip in ministry context)
-      if (!isMinistryContext) {
-        const unsubscribeOutreachBacentas = outreachBacentasFirebaseService.onSnapshot((items) => {
-          setOutreachBacentas(items);
-        });
-        unsubscribers.push(unsubscribeOutreachBacentas);
-      } else {
-        setOutreachBacentas([]);
-      }
+      // Listen to bacentas (always; in ministry mode reads from default church due to switch above)
+      const unsubscribeBacentas = bacentasFirebaseService.onSnapshot((bacentas) => {
+        setBacentas(bacentas);
+      });
+      unsubscribers.push(unsubscribeBacentas);
+
+      // Listen to outreach bacentas (always)
+      const unsubscribeOutreachBacentas = outreachBacentasFirebaseService.onSnapshot((items) => {
+        setOutreachBacentas(items);
+      });
+      unsubscribers.push(unsubscribeOutreachBacentas);
 
       // Listen to ALL outreach members (for overall totals)
       const unsubscribeAllOutreachMembers = outreachMembersFirebaseService.onSnapshot((items) => {
@@ -428,10 +487,16 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
       });
       unsubscribers.push(unsubscribePrayer);
 
-      // Listen to new believers
-      const unsubscribeNewBelievers = newBelieversFirebaseService.onSnapshot((newBelievers) => {
-        setNewBelievers(newBelievers);
-      });
+      // Listen to new believers (filter by ministry in ministry mode)
+      const unsubscribeNewBelievers = isMinistryContext && (activeMinistryName || '').trim() !== ''
+        ? newBelieversFirebaseService.onSnapshotByMinistry(activeMinistryName, (items) => setNewBelievers(items))
+        : newBelieversFirebaseService.onSnapshot((items) => {
+            if (isMinistryContext) {
+              setNewBelievers(items.filter(n => (n.ministry || '').trim() !== ''));
+            } else {
+              setNewBelievers(items);
+            }
+          });
       unsubscribers.push(unsubscribeNewBelievers);
       // Listen to outreach members for current outreachMonth
       const subscribeOutreachMembers = () => outreachMembersFirebaseService.onSnapshotByMonth(
@@ -465,6 +530,11 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
       });
       unsubscribers.push(unsubscribeGuests);
 
+      // Restore original church context after attaching read listeners
+      if (switchedForReads) {
+        firebaseUtils.setChurchContext(originalChurchId);
+      }
+
 
       // Listen to member deletion requests
 
@@ -487,10 +557,16 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
       });
     console.log('[Listeners] Cleaned up listeners for church', firebaseUtils.getCurrentChurchId());
     };
-  }, [isImpersonating]);
+  }, [isImpersonating, isMinistryContext, activeMinistryName]);
 
   // Re-establish listeners when church context changes (impersonation or restore)
   useEffect(() => {
+    console.log('🔄 [Debug] Listener effect triggered:', {
+      isReady: firebaseUtils.isReady(),
+      currentChurchId,
+      isMinistryContext,
+      activeMinistryName
+    });
     if (firebaseUtils.isReady()) {
       setupDataListeners();
     }
@@ -498,7 +574,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
       // only cleanup on unmount; next effect run handles previous cleanup
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentChurchId]);
+  }, [currentChurchId, isMinistryContext, activeMinistryName]);
 
   // Fetch initial data (for manual refresh)
   const fetchInitialData = useCallback(async () => {
@@ -510,29 +586,95 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
       setIsLoading(true);
       setError(null);
 
-      const [membersData, bacentasData, attendanceData, newBelieversData, confirmationsData, prayerData] = await Promise.all([
-        membersFirebaseService.getAll(),
-        isMinistryContext ? Promise.resolve([]) : bacentasFirebaseService.getAll(),
-        attendanceFirebaseService.getAll(),
-        newBelieversFirebaseService.getAll(),
-        confirmationFirebaseService.getAll(),
-        prayerFirebaseService.getAll()
-      ]);
+      // If in ministry context, temporarily read from default church for initial fetch
+      const originalChurchId = firebaseUtils.getCurrentChurchId();
+      let switchedForReads = false;
+      if (isMinistryContext) {
+        const defaultChurchId = userProfile?.contexts?.defaultChurchId || userProfile?.churchId;
+        if (defaultChurchId && originalChurchId !== defaultChurchId) {
+          firebaseUtils.setChurchContext(defaultChurchId);
+          switchedForReads = true;
+        }
+      }
 
-      setMembers(membersData);
-      setBacentas(bacentasData);
-      setAttendanceRecords(attendanceData);
-      setNewBelievers(newBelieversData);
-      setSundayConfirmations(confirmationsData);
-      setPrayerRecords(prayerData);
-      console.log('[fetchInitialData] loaded counts', {
-        members: membersData.length,
-  bacentas: (bacentasData as any).length,
-        attendance: attendanceData.length,
-        newBelievers: newBelieversData.length,
-        confirmations: confirmationsData.length,
-        prayers: prayerData.length
+      // Use ministry data service for cross-church aggregation in ministry mode (like SuperAdmin)
+      console.log('🔍 [Debug] Ministry context check:', {
+        isMinistryContext,
+        activeMinistryName,
+        trimmedMinistryName: (activeMinistryName || '').trim(),
+        userProfile,
+        currentChurchId
       });
+
+      if (isMinistryContext && (activeMinistryName || '').trim() !== '') {
+        console.log('🔄 [Ministry Mode] Fetching cross-church data like SuperAdmin for:', activeMinistryName);
+        try {
+          const ministryData = await getMinistryAggregatedData(activeMinistryName);
+
+          setMembers(ministryData.members);
+          setBacentas(ministryData.bacentas);
+          setAttendanceRecords(ministryData.attendanceRecords);
+          setNewBelievers(ministryData.newBelievers);
+          setSundayConfirmations(ministryData.sundayConfirmations);
+          setGuests(ministryData.guests);
+
+          // Still fetch prayer data from current church
+          const prayerData = await prayerFirebaseService.getAll();
+          setPrayerRecords(prayerData);
+
+          console.log('✅ [Ministry Mode] Cross-church data loaded (SuperAdmin style):', {
+            members: ministryData.members.length,
+            bacentas: ministryData.bacentas.length,
+            attendance: ministryData.attendanceRecords.length,
+            newBelievers: ministryData.newBelievers.length,
+            confirmations: ministryData.sundayConfirmations.length,
+            guests: ministryData.guests.length,
+            sourceChurches: ministryData.sourceChurches.length
+          });
+        } catch (error) {
+          console.error('❌ [Ministry Mode] Failed to fetch cross-church data:', error);
+          // Fallback to normal data fetching
+          const [membersData, bacentasData, attendanceData, newBelieversData, confirmationsData, prayerData] = await Promise.all([
+            membersFirebaseService.getAll(),
+            bacentasFirebaseService.getAll(),
+            attendanceFirebaseService.getAll(),
+            newBelieversFirebaseService.getAll(),
+            confirmationFirebaseService.getAll(),
+            prayerFirebaseService.getAll()
+          ]);
+
+          setMembers(membersData);
+          setBacentas(bacentasData);
+          setAttendanceRecords(attendanceData);
+          setNewBelievers(newBelieversData);
+          setSundayConfirmations(confirmationsData);
+          setPrayerRecords(prayerData);
+        }
+      } else {
+        // Normal mode - fetch from current church only
+        const [membersData, bacentasData, attendanceData, newBelieversData, confirmationsData, prayerData] = await Promise.all([
+          membersFirebaseService.getAll(),
+          bacentasFirebaseService.getAll(),
+          attendanceFirebaseService.getAll(),
+          newBelieversFirebaseService.getAll(),
+          confirmationFirebaseService.getAll(),
+          prayerFirebaseService.getAll()
+        ]);
+
+        setMembers(membersData);
+        setBacentas(bacentasData);
+        setAttendanceRecords(attendanceData);
+        setNewBelievers(newBelieversData);
+        setSundayConfirmations(confirmationsData);
+        setPrayerRecords(prayerData);
+      }
+
+      // Restore original context after reads
+      if (switchedForReads) {
+        firebaseUtils.setChurchContext(originalChurchId);
+      }
+
+      // Data is already set above in the ministry/normal mode blocks
     } catch (error: any) {
       setError(error.message);
       showToast('error', 'Failed to fetch data', error.message);
@@ -2114,6 +2256,8 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
       return () => clearTimeout(timeout);
     }
   }, [members.length, guests.length, sundayConfirmations.length, cleanupOrphanedConfirmations]);
+
+  // Ministry mode now uses direct Firestore queries like SuperAdmin - no sync needed
 
   // Auto-refresh user profile when constituency (churchName) updates via Super Admin dashboard
   useEffect(() => {

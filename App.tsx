@@ -24,6 +24,7 @@ import ProfileSettingsView from './components/views/ProfileSettingsView';
 import CopyMembersView from './components/views/CopyMembersView';
 import CopyAbsenteesView from './components/views/CopyAbsenteesView';
 import BirthdaysView from './components/views/BirthdaysView';
+import MinistrySyncTest from './components/debug/MinistrySyncTest';
 import GestureWrapper from './components/layout/GestureWrapper';
 import SwipeIndicator from './components/layout/SwipeIndicator';
 import BackButton from './components/layout/BackButton';
@@ -253,6 +254,12 @@ const AppContent: React.FC = memo(() => {
         return (
           <LazyWrapper>
             <LazyMinistriesView />
+          </LazyWrapper>
+        );
+      case TabKeys.MINISTRY_SYNC_TEST:
+        return (
+          <LazyWrapper>
+            <MinistrySyncTest />
           </LazyWrapper>
         );
       default:

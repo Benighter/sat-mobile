@@ -28,6 +28,8 @@ export interface Member {
   birthday?: string; // Optional birthday field in YYYY-MM-DD format
   createdDate: string; // ISO string
   lastUpdated: string; // ISO string
+  /** Active flag; when false, member is hidden. Optional for legacy docs. */
+  isActive?: boolean;
 }
 
 export interface NewBeliever {
@@ -46,6 +48,8 @@ export interface NewBeliever {
   joinedDate: string; // ISO string, YYYY-MM-DD - when they joined
   createdDate: string; // ISO string
   lastUpdated: string; // ISO string
+  /** Active flag; when false, record is hidden. Optional for legacy docs. */
+  isActive?: boolean;
 }
 
 export type AttendanceStatus = 'Present' | 'Absent';
@@ -148,6 +152,7 @@ export enum TabKeys {
   COPY_ABSENTEES = 'copy_absentees',
   BACENTA_OUTREACH = 'bacenta_outreach',
   MINISTRIES = 'ministries',
+  MINISTRY_SYNC_TEST = 'ministry_sync_test',
 }
 
 export interface NavigationHistoryItem {

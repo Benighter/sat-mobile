@@ -602,6 +602,126 @@ export const setActiveContext = async (mode: 'default' | 'ministry'): Promise<vo
   }
 };
 
+// One-off backfill to sync default members-with-ministry into ministry church
+export const runBackfillMinistrySync = async (): Promise<{ success: boolean; synced?: number }> => {
+  try {
+  const { getFunctions, httpsCallable } = await import('firebase/functions');
+  // Use explicit region to avoid CORS/404 preflight issues in dev
+  const appFunctions = getFunctions(undefined as any, 'us-central1');
+    const fn = httpsCallable(appFunctions, 'backfillMinistrySync');
+    const res: any = await fn({});
+    return (res && res.data) ? res.data : { success: true };
+  } catch (e: any) {
+    console.warn('[runBackfillMinistrySync] callable failed, attempting HTTP fallback', e?.message || String(e));
+    try {
+      const user = auth.currentUser;
+      if (!user) return { success: false };
+      const idToken = await user.getIdToken();
+      const endpoint = 'https://us-central1-sat-mobile-de6f1.cloudfunctions.net/backfillMinistrySyncHttp';
+      const resp = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${idToken}`
+        },
+        body: JSON.stringify({})
+      });
+      if (!resp.ok) {
+        const text = await resp.text();
+        console.warn('[runBackfillMinistrySync] http failed', resp.status, text);
+        return { success: false };
+      }
+      const data = await resp.json();
+      return data && typeof data === 'object' ? data : { success: true };
+    } catch (httpErr: any) {
+      console.warn('[runBackfillMinistrySync] http fallback failed, attempting simulation', httpErr?.message || String(httpErr));
+      // Fallback to client-side simulation
+      try {
+        const { simulateBackfillMinistrySync } = await import('./ministrySimulationService');
+        const user = auth.currentUser;
+        if (!user) return { success: false };
+
+        // Get user profile to find church contexts
+        const userDoc = await getDoc(doc(db, 'users', user.uid));
+        if (!userDoc.exists()) return { success: false };
+
+        const userData = userDoc.data();
+        const contexts = userData.contexts || {};
+        const defaultChurchId = contexts.defaultChurchId || userData.churchId;
+        const ministryChurchId = contexts.ministryChurchId;
+
+        if (!defaultChurchId || !ministryChurchId) {
+          return { success: false };
+        }
+
+        return await simulateBackfillMinistrySync(defaultChurchId, ministryChurchId);
+      } catch (simErr: any) {
+        console.error('[runBackfillMinistrySync] simulation failed', simErr?.message || String(simErr));
+        return { success: false };
+      }
+    }
+  }
+};
+
+// Force sync all members with ministry assignments across all churches
+export const runCrossMinistrySync = async (ministryName?: string): Promise<{ success: boolean; synced?: number }> => {
+  try {
+    const { getFunctions, httpsCallable } = await import('firebase/functions');
+    const appFunctions = getFunctions(undefined as any, 'us-central1');
+    const fn = httpsCallable(appFunctions, 'crossMinistrySync');
+    const res: any = await fn({ ministryName });
+    return (res && res.data) ? res.data : { success: true };
+  } catch (e: any) {
+    console.warn('[runCrossMinistrySync] callable failed, attempting HTTP fallback', e?.message || String(e));
+    try {
+      const user = auth.currentUser;
+      if (!user) return { success: false };
+      const idToken = await user.getIdToken();
+      const endpoint = 'https://us-central1-sat-mobile-de6f1.cloudfunctions.net/crossMinistrySyncHttp';
+      const resp = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${idToken}`
+        },
+        body: JSON.stringify({ ministryName })
+      });
+      if (!resp.ok) {
+        const text = await resp.text();
+        console.warn('[runCrossMinistrySync] http failed', resp.status, text);
+        return { success: false };
+      }
+      const data = await resp.json();
+      return data && typeof data === 'object' ? data : { success: true };
+    } catch (httpErr: any) {
+      console.warn('[runCrossMinistrySync] http fallback failed, attempting simulation', httpErr?.message || String(httpErr));
+      // Fallback to client-side simulation
+      try {
+        const { simulateCrossMinistrySync } = await import('./ministrySimulationService');
+        const user = auth.currentUser;
+        if (!user) return { success: false };
+
+        // Get user profile to find ministry church
+        const userDoc = await getDoc(doc(db, 'users', user.uid));
+        if (!userDoc.exists()) return { success: false };
+
+        const userData = userDoc.data();
+        const targetMinistry = ministryName || userData.preferences?.ministryName;
+        const ministryChurchId = userData.contexts?.ministryChurchId || userData.churchId;
+
+        if (!targetMinistry || !ministryChurchId) {
+          return { success: false };
+        }
+
+        return await simulateCrossMinistrySync(targetMinistry, ministryChurchId);
+      } catch (simErr: any) {
+        console.error('[runCrossMinistrySync] simulation failed', simErr?.message || String(simErr));
+        return { success: false };
+      }
+    }
+  }
+};
+
 // Members Service
 export const membersFirebaseService = {
   // Get all members
@@ -619,6 +739,23 @@ export const membersFirebaseService = {
       });
     } catch (error: any) {
       throw firebaseUtils.handleOfflineError('Fetch members', error);
+    }
+  },
+  // Get members by ministry (server-side filter by ministry; isActive filtered client-side to avoid composite index)
+  getAllByMinistry: async (ministryName: string): Promise<Member[]> => {
+    try {
+      return await firebaseUtils.retryOperation(async () => {
+        const membersRef = collection(db, getChurchCollectionPath('members'));
+        const qMembers = query(membersRef, where('ministry', '==', ministryName));
+        const querySnapshot = await getDocs(qMembers);
+        const items = querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as Member[];
+        // Apply isActive filter client-side
+        const filtered = items.filter(m => m.isActive !== false);
+        filtered.sort((a, b) => (a.lastName || '').localeCompare(b.lastName || ''));
+        return filtered;
+      });
+    } catch (error: any) {
+      throw firebaseUtils.handleOfflineError('Fetch members by ministry', error);
     }
   },
 
@@ -689,6 +826,17 @@ export const membersFirebaseService = {
       // Sort in memory for now
       members.sort((a, b) => (a.lastName || '').localeCompare(b.lastName || ''));
       callback(members);
+    });
+  },
+  // Listen to members by ministry (server-side filter by ministry; isActive filtered client-side)
+  onSnapshotByMinistry: (ministryName: string, callback: (members: Member[]) => void): Unsubscribe => {
+    const membersRef = collection(db, getChurchCollectionPath('members'));
+    const qMembers = query(membersRef, where('ministry', '==', ministryName));
+    return onSnapshot(qMembers, (querySnapshot) => {
+      const items = querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as Member[];
+      const filtered = items.filter(m => m.isActive !== false);
+      filtered.sort((a, b) => (a.lastName || '').localeCompare(b.lastName || ''));
+      callback(filtered);
     });
   }
 };
@@ -899,6 +1047,20 @@ export const newBelieversFirebaseService = {
       throw new Error(`Failed to fetch new believers: ${error.message}`);
     }
   },
+  // Get all new believers by ministry (filter by ministry on server, isActive client-side)
+  getAllByMinistry: async (ministryName: string): Promise<NewBeliever[]> => {
+    try {
+      const ref = collection(db, getChurchCollectionPath('newBelievers'));
+      const qNb = query(ref, where('ministry', '==', ministryName));
+      const snap = await getDocs(qNb);
+      const items = snap.docs.map(doc => ({ ...doc.data(), id: doc.id })) as NewBeliever[];
+      const filtered = items.filter(n => n.isActive !== false);
+      filtered.sort((a, b) => new Date(b.joinedDate || 0).getTime() - new Date(a.joinedDate || 0).getTime());
+      return filtered;
+    } catch (error: any) {
+      throw new Error(`Failed to fetch new believers by ministry: ${error.message}`);
+    }
+  },
 
   // Add new believer
   add: async (newBeliever: Omit<NewBeliever, 'id' | 'createdDate' | 'lastUpdated'>): Promise<string> => {
@@ -959,6 +1121,17 @@ export const newBelieversFirebaseService = {
       // Sort in memory for now
       newBelievers.sort((a, b) => new Date(b.joinedDate || 0).getTime() - new Date(a.joinedDate || 0).getTime());
       callback(newBelievers);
+    });
+  },
+  // Listen to new believers by ministry
+  onSnapshotByMinistry: (ministryName: string, callback: (newBelievers: NewBeliever[]) => void): Unsubscribe => {
+    const ref = collection(db, getChurchCollectionPath('newBelievers'));
+    const qNb = query(ref, where('ministry', '==', ministryName));
+    return onSnapshot(qNb, (snap) => {
+      const items = snap.docs.map(doc => ({ ...doc.data(), id: doc.id })) as NewBeliever[];
+      const filtered = items.filter(n => n.isActive !== false);
+      filtered.sort((a, b) => new Date(b.joinedDate || 0).getTime() - new Date(a.joinedDate || 0).getTime());
+      callback(filtered);
     });
   }
 };

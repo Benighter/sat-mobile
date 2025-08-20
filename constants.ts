@@ -16,6 +16,7 @@ export const FIXED_TABS: TabOption[] = [
   { id: TabKeys.BIRTHDAYS, name: 'Birthdays' },
   { id: TabKeys.PROFILE_SETTINGS, name: 'Profile Settings' },
   { id: TabKeys.MINISTRIES, name: 'Ministries' },
+  { id: TabKeys.MINISTRY_SYNC_TEST, name: 'Ministry Sync Test' },
 ];
 
 export const DEFAULT_TAB_ID = TabKeys.DASHBOARD;

@@ -1,7 +1,7 @@
 // Enhanced Authentication Screen with Login and Register
 import React, { useState, useEffect, ReactNode } from 'react';
 import { useAppContext } from '../../contexts/FirebaseAppContext';
-import { authService, FirebaseUser, setActiveContext } from '../../services/firebaseService';
+import { authService, FirebaseUser, setActiveContext, runBackfillMinistrySync } from '../../services/firebaseService';
 import { LoginForm } from './LoginForm';
 import RegisterForm from './RegisterForm';
 // Ministry variant removed – use standard forms only
@@ -68,6 +68,11 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ children, showToast }) =
       // Select data context based on toggle
   // Fire and forget; no await in non-async callback
   setActiveContext(ministryMode ? 'ministry' : 'default').catch(() => {});
+      // Ministry mode now uses direct Firestore queries like SuperAdmin - no sync needed
+      if (user && ministryMode) {
+        console.log('🔄 [Ministry Mode] User switched to ministry mode - will use cross-church aggregation');
+        // The FirebaseAppContext will automatically handle cross-church data fetching
+      }
       setUser(user);
       setLoading(false);
     });
@@ -123,6 +128,12 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ children, showToast }) =
       try {
         await setActiveContext(ministryMode ? 'ministry' : 'default').catch(() => {});
       } catch {}
+
+      // Ministry mode now uses direct Firestore queries like SuperAdmin - no sync needed
+      if (ministryMode) {
+        console.log('🔄 [Ministry Mode] Switching to cross-church data aggregation (SuperAdmin style)');
+        // The FirebaseAppContext will automatically handle cross-church data fetching
+      }
 
       setUser(user);
       showToast('success', 'Welcome Back!', `Signed in as ${user.displayName || user.email}`);
