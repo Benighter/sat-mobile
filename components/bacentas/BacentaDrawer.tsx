@@ -71,9 +71,9 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
     }
   }, [currentTab, bacentas]);
 
-  // Get member count for each bacenta
+  // Get member count for each bacenta (only active members)
   const getMemberCount = (bacentaId: string) => {
-    return members.filter(m => m.bacentaId === bacentaId).length;
+    return members.filter(m => m.bacentaId === bacentaId && !m.frozen).length;
   };
 
   // Get upcoming birthdays count

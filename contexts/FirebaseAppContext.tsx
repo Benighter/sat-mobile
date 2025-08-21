@@ -28,7 +28,6 @@ import { setNotificationContext } from '../services/notificationService';
 import {
   memberOperationsWithNotifications,
   newBelieverOperationsWithNotifications,
-  guestOperationsWithNotifications,
   confirmationOperationsWithNotifications,
   setNotificationIntegrationContext
 } from '../services/notificationIntegration';
@@ -158,6 +157,7 @@ interface AppContextType {
   markGuestConfirmationHandler: (guestId: string, date: string, status: ConfirmationStatus) => Promise<void>;
   removeGuestConfirmationHandler: (guestId: string, date: string) => Promise<void>;
   convertGuestToMemberHandler: (guestId: string) => Promise<void>;
+  cleanupDuplicateGuests: () => Promise<void>;
 
   // Member Deletion Request Operations
   createDeletionRequestHandler: (memberId: string, reason?: string) => Promise<void>;
@@ -1142,6 +1142,101 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     }
   }, [showToast]);
 
+  // Helper function to find or create guest with deduplication
+  const findOrCreateGuest = useCallback(async (guestData: Omit<Guest, 'id' | 'createdDate' | 'lastUpdated' | 'createdBy'>): Promise<string> => {
+    // Check for existing guest with same name in same bacenta to prevent duplicates
+    const existingGuest = guests.find(g =>
+      g.bacentaId === guestData.bacentaId &&
+      g.firstName.toLowerCase().trim() === guestData.firstName.toLowerCase().trim() &&
+      (g.lastName || '').toLowerCase().trim() === (guestData.lastName || '').toLowerCase().trim()
+    );
+
+    if (existingGuest) {
+      console.log(`Using existing guest: ${existingGuest.firstName} ${existingGuest.lastName || ''} (ID: ${existingGuest.id})`);
+      return existingGuest.id;
+    } else {
+      // Create new guest
+      const now = new Date().toISOString();
+      const fullGuest: Omit<Guest, 'id'> = {
+        ...guestData,
+        createdDate: now,
+        lastUpdated: now,
+        createdBy: userProfile?.uid || 'system'
+      } as any;
+      const guestId = await guestFirebaseService.add(fullGuest as any);
+      console.log(`Created new guest: ${guestData.firstName} ${guestData.lastName || ''} (ID: ${guestId})`);
+      return guestId;
+    }
+  }, [guests, userProfile]);
+
+  // Helper function to clean up duplicate guests
+  const cleanupDuplicateGuests = useCallback(async () => {
+    try {
+      console.log('🧹 Starting duplicate guest cleanup...');
+
+      // Group guests by bacenta and name combination
+      const guestGroups = new Map<string, Guest[]>();
+
+      guests.forEach(guest => {
+        const key = `${guest.bacentaId}_${guest.firstName.toLowerCase().trim()}_${(guest.lastName || '').toLowerCase().trim()}`;
+        if (!guestGroups.has(key)) {
+          guestGroups.set(key, []);
+        }
+        guestGroups.get(key)!.push(guest);
+      });
+
+      // Find and process duplicate groups
+      let duplicatesFound = 0;
+      let duplicatesRemoved = 0;
+
+      for (const [key, guestGroup] of guestGroups) {
+        if (guestGroup.length > 1) {
+          duplicatesFound += guestGroup.length - 1;
+          console.log(`Found ${guestGroup.length} duplicates for: ${key}`);
+
+          // Keep the oldest guest (first created) and remove the rest
+          const sortedGuests = guestGroup.sort((a, b) =>
+            new Date(a.createdDate).getTime() - new Date(b.createdDate).getTime()
+          );
+          const keepGuest = sortedGuests[0];
+          const duplicatesToRemove = sortedGuests.slice(1);
+
+          console.log(`Keeping guest ${keepGuest.id}, removing ${duplicatesToRemove.length} duplicates`);
+
+          // Remove duplicate guests and their confirmations
+          for (const duplicate of duplicatesToRemove) {
+            try {
+              // Remove any confirmations for this duplicate guest
+              const duplicateConfirmations = sundayConfirmations.filter(c => c.guestId === duplicate.id);
+              for (const confirmation of duplicateConfirmations) {
+                await confirmationFirebaseService.delete(confirmation.id);
+                console.log(`Removed confirmation ${confirmation.id} for duplicate guest ${duplicate.id}`);
+              }
+
+              // Remove the duplicate guest
+              await guestFirebaseService.delete(duplicate.id);
+              duplicatesRemoved++;
+              console.log(`Removed duplicate guest ${duplicate.id}: ${duplicate.firstName} ${duplicate.lastName || ''}`);
+            } catch (error) {
+              console.error(`Failed to remove duplicate guest ${duplicate.id}:`, error);
+            }
+          }
+        }
+      }
+
+      if (duplicatesFound > 0) {
+        showToast('success', 'Duplicate Cleanup Complete', `Removed ${duplicatesRemoved} duplicate guests`);
+        console.log(`🧹 Cleanup complete: Found ${duplicatesFound} duplicates, removed ${duplicatesRemoved}`);
+      } else {
+        console.log('🧹 No duplicate guests found');
+      }
+
+    } catch (error) {
+      console.error('Failed to cleanup duplicate guests:', error);
+      showToast('error', 'Cleanup Failed', 'Failed to remove duplicate guests');
+    }
+  }, [guests, sundayConfirmations, showToast]);
+
   const addOutreachMemberHandler = useCallback(async (data: Omit<OutreachMember, 'id' | 'createdDate' | 'lastUpdated'>): Promise<string> => {
     try {
       setIsLoading(true);
@@ -1159,7 +1254,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
           bacentaId: data.bacentaId,
           phoneNumber: (data.phoneNumbers && data.phoneNumbers[0]) || ''
         };
-        const guestId = await guestFirebaseService.add(guestPayload as any); // createdBy is auto in service
+        const guestId = await findOrCreateGuest(guestPayload);
 
         // Save link back to outreach member for possible conversion flow
   await outreachMembersFirebaseService.update(outreachMemberId, { guestId });
@@ -1185,7 +1280,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     } finally {
       setIsLoading(false);
     }
-  }, [showToast, userProfile]);
+  }, [findOrCreateGuest, showToast, userProfile]);
 
   const updateOutreachMemberHandler = useCallback(async (id: string, updates: Partial<OutreachMember>) => {
     try {
@@ -1248,7 +1343,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
                   roomNumber: existing.roomNumber,
                   phoneNumber: existing.phoneNumbers?.[0]
                 };
-                guestId = await guestFirebaseService.add(guestPayload as any);
+                guestId = await findOrCreateGuest(guestPayload);
                 await outreachMembersFirebaseService.update(id, { guestId });
               }
               const recordId = `guest_${guestId}_${upcomingSunday}`;
@@ -1280,7 +1375,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     } finally {
       setIsLoading(false);
     }
-  }, [showToast, outreachMembers, userProfile]);
+  }, [findOrCreateGuest, showToast, outreachMembers, userProfile]);
 
   const deleteOutreachMemberHandler = useCallback(async (id: string) => {
     try {
@@ -1896,15 +1991,13 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     try {
       setIsLoading(true);
 
-      // Add the guest to the database
-      const now = new Date().toISOString();
-      const fullGuest: Omit<Guest, 'id'> = {
-        ...guestData,
-        createdDate: now,
-        lastUpdated: now,
-        createdBy: userProfile?.uid || 'system'
-      } as any;
-      const guestId = await guestOperationsWithNotifications.add(fullGuest as any);
+      // Use helper function to find or create guest with deduplication
+      const existingGuest = guests.find(g =>
+        g.bacentaId === guestData.bacentaId &&
+        g.firstName.toLowerCase().trim() === guestData.firstName.toLowerCase().trim() &&
+        (g.lastName || '').toLowerCase().trim() === (guestData.lastName || '').toLowerCase().trim()
+      );
+      const guestId = await findOrCreateGuest(guestData);
 
       // Auto-confirm the guest for the upcoming Sunday
       const { getUpcomingSunday } = await import('../utils/dateUtils');
@@ -1922,7 +2015,13 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
       };
 
       await confirmationFirebaseService.addOrUpdate(record);
-      showToast('success', 'Guest added and confirmed for upcoming Sunday');
+
+      const guestName = `${guestData.firstName} ${guestData.lastName || ''}`.trim();
+      if (existingGuest) {
+        showToast('success', `${guestName} confirmed for upcoming Sunday (existing guest)`);
+      } else {
+        showToast('success', `${guestName} added and confirmed for upcoming Sunday`);
+      }
     } catch (error: any) {
       setError(error.message);
       showToast('error', 'Failed to add guest', error.message);
@@ -1930,7 +2029,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     } finally {
       setIsLoading(false);
     }
-  }, [showToast, userProfile]);
+  }, [findOrCreateGuest, guests, showToast, userProfile]);
 
   const updateGuestHandler = useCallback(async (guestData: Guest) => {
     try {
@@ -2831,6 +2930,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     markGuestConfirmationHandler,
     removeGuestConfirmationHandler,
     convertGuestToMemberHandler,
+    cleanupDuplicateGuests,
 
     // Member Deletion Request Operations
     createDeletionRequestHandler,

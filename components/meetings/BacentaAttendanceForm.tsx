@@ -53,7 +53,6 @@ const BacentaAttendanceForm: React.FC<BacentaAttendanceFormProps> = ({
   const [discussionLedBy, setDiscussionLedBy] = useState(existingRecord?.discussionLedBy || '');
   const [bacentaLeaderName, setBacentaLeaderName] = useState(existingRecord?.bacentaLeaderName || '');
   const [attendees, setAttendees] = useState<string[]>([]);
-  const [guestNames, setGuestNames] = useState('');
 
   // Spiritual tracking - specific attendees
   const [firstTimerAttendees, setFirstTimerAttendees] = useState<string[]>([]);
@@ -146,15 +145,16 @@ const BacentaAttendanceForm: React.FC<BacentaAttendanceFormProps> = ({
     if (existingRecord && existingRecord.attendees && Array.isArray(existingRecord.attendees)) {
       setAttendees(existingRecord.attendees);
 
-      // Separate guest names from member names
-      const memberNames = bacentaMembers.map(m => `${m.firstName} ${m.lastName || ''}`.trim());
-      const guestNamesList = existingRecord.attendees.filter(name => !memberNames.includes(name));
-      setGuestNames(guestNamesList.join('\n'));
-
       // Initialize detailed spiritual tracking if available
       if (existingRecord.firstTimerAttendees && Array.isArray(existingRecord.firstTimerAttendees)) {
         setFirstTimerAttendees(existingRecord.firstTimerAttendees);
+      } else {
+        // If no firstTimerAttendees data exists, automatically mark guests as first timers
+        const memberNames = bacentaMembers.map(m => `${m.firstName} ${m.lastName || ''}`.trim());
+        const guestNames = existingRecord.attendees.filter(name => !memberNames.includes(name));
+        setFirstTimerAttendees(guestNames);
       }
+
       if (existingRecord.convertAttendees && Array.isArray(existingRecord.convertAttendees)) {
         setConvertAttendees(existingRecord.convertAttendees);
       }
@@ -307,7 +307,7 @@ const BacentaAttendanceForm: React.FC<BacentaAttendanceFormProps> = ({
           // Mark existing member as present
           await markAttendanceHandler(existingMember.id, meetingDate, 'Present');
         } else {
-          // Add as guest if not found in members
+          // Add as guest if not found in members (deduplication handled in addGuestHandler)
           const [firstName, ...lastNameParts] = attendeeName.trim().split(' ');
           const lastName = lastNameParts.join(' ');
 
@@ -316,8 +316,7 @@ const BacentaAttendanceForm: React.FC<BacentaAttendanceFormProps> = ({
             lastName: lastName || '',
             phoneNumber: '',
             buildingAddress: '',
-            bacentaId: bacentaId,
-            meetingDate: meetingDate
+            bacentaId: bacentaId
           });
         }
       });
@@ -705,203 +704,189 @@ const BacentaAttendanceForm: React.FC<BacentaAttendanceFormProps> = ({
               Attendance Tracking
             </h3>
 
-            {/* Bacenta Members Section */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
-              <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                <UserIcon className="w-5 h-5 mr-2 text-blue-600" />
-                Bacenta Members
-              </h4>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-h-64 overflow-y-auto">
-                {bacentaMembers.map((member) => {
-                  const fullName = `${member.firstName} ${member.lastName || ''}`.trim();
-                  const isSelected = attendees.includes(fullName);
+            {!isViewMode && (
+              <div className="space-y-6 mb-6">
+                {/* Bacenta Members Section */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                  <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                    <UserIcon className="w-5 h-5 mr-2 text-blue-600" />
+                    Bacenta Members
+                  </h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-h-64 overflow-y-auto">
+                    {bacentaMembers.map((member) => {
+                      const fullName = `${member.firstName} ${member.lastName || ''}`.trim();
+                      const isSelected = attendees.includes(fullName);
 
-                  return (
-                    <label
-                      key={member.id}
-                      className={`flex items-center space-x-3 p-3 rounded-lg border cursor-pointer transition-all ${
-                        isSelected
-                          ? 'border-blue-500 bg-blue-50'
-                          : 'border-gray-200 hover:border-blue-300'
-                      } ${isViewMode ? 'opacity-50 cursor-not-allowed' : ''}`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={isSelected}
-                        onChange={(e) => {
-                          if (!isViewMode) {
-                            if (e.target.checked) {
-                              setAttendees(prev => [...prev, fullName]);
-                            } else {
-                              setAttendees(prev => prev.filter(name => name !== fullName));
-                            }
-                          }
-                        }}
-                        disabled={isViewMode}
-                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                      />
-                      <div className="flex-1 min-w-0">
-                        <span className="text-sm font-medium text-gray-900 truncate">
-                          {fullName}
-                        </span>
-                        {member.role !== 'Member' && (
-                          <span className="ml-2 px-2 py-1 text-xs bg-blue-100 text-blue-600 rounded">
-                            {member.role}
-                          </span>
-                        )}
-                      </div>
-                    </label>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Guest Attendees Section */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
-              <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                <UsersIcon className="w-5 h-5 mr-2 text-orange-600" />
-                Guest Attendees
-              </h4>
-              <div className="space-y-4">
-                <textarea
-                  value={guestNames}
-                  onChange={(e) => {
-                    if (!isViewMode) {
-                      setGuestNames(e.target.value);
-                      // Parse guest names and add to attendees
-                      const names = e.target.value
-                        .split('\n')
-                        .map(name => name.trim())
-                        .filter(name => name.length > 0);
-
-                      // Remove old guest names and add new ones
-                      const memberNames = bacentaMembers.map(m => `${m.firstName} ${m.lastName || ''}`.trim());
-                      const nonGuestAttendees = attendees.filter(name => memberNames.includes(name));
-                      setAttendees([...nonGuestAttendees, ...names]);
-                    }
-                  }}
-                  placeholder="Enter guest names, one per line..."
-                  disabled={isViewMode}
-                  className={`w-full h-32 px-4 py-3 border border-gray-300 rounded-lg resize-none text-sm ${
-                    isViewMode
-                      ? 'bg-gray-50 text-gray-600'
-                      : 'focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500'
-                  }`}
-                />
-                <p className="text-xs text-gray-500">
-                  💡 Tip: Enter one name per line for guests and visitors
-                </p>
-              </div>
-            </div>
-
-            {/* Attendance Summary */}
-            <div className="bg-blue-50 rounded-lg p-4 mt-4">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-                <div>
-                  <div className="text-2xl font-bold text-blue-900">{bacentaMembers.length}</div>
-                  <div className="text-sm text-blue-600">Total Members</div>
-                </div>
-                <div>
-                  <div className="text-2xl font-bold text-green-900">{attendees.length}</div>
-                  <div className="text-sm text-green-600">Total Attendees</div>
-                </div>
-                <div>
-                  <div className="text-2xl font-bold text-orange-900">{isViewMode ? (parseInt(firstTimers) || 0) : firstTimerAttendees.length}</div>
-                  <div className="text-sm text-orange-600">First Timers</div>
-                </div>
-                <div>
-                  <div className="text-2xl font-bold text-purple-900">{isViewMode ? (parseInt(converts) || 0) : convertAttendees.length}</div>
-                  <div className="text-sm text-purple-600">Converts</div>
-                </div>
-              </div>
-            </div>
-
-            {/* Detailed Spiritual Tracking */}
-            {attendees.length > 0 && !isViewMode && (
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mt-6">
-                <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                  <HeartIcon className="w-5 h-5 mr-2 text-purple-600" />
-                  Mark Spiritual Status
-                </h4>
-                <p className="text-sm text-gray-600 mb-4">
-                  Select attendees who are first timers, converts, or gave testimonies today
-                </p>
-
-                <div className="space-y-4">
-                  {/* First Timers Selection */}
-                  <div className="border border-orange-200 rounded-lg p-4 bg-orange-50">
-                    <h5 className="font-medium text-orange-800 mb-2">First Timers (New Visitors)</h5>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                      {attendees.map((attendeeName, index) => (
-                        <label key={`firsttimer-${index}`} className="flex items-center space-x-2 text-sm">
+                      return (
+                        <label
+                          key={member.id}
+                          className={`flex items-center space-x-3 p-3 rounded-lg border cursor-pointer transition-all ${
+                            isSelected
+                              ? 'border-blue-500 bg-blue-50'
+                              : 'border-gray-200 hover:border-blue-300'
+                          }`}
+                        >
                           <input
                             type="checkbox"
-                            checked={firstTimerAttendees.includes(attendeeName)}
+                            checked={isSelected}
                             onChange={(e) => {
-                              if (e.target.checked) {
-                                setFirstTimerAttendees(prev => [...prev, attendeeName]);
-                              } else {
-                                setFirstTimerAttendees(prev => prev.filter(name => name !== attendeeName));
-                              }
-                            }}
-                            className="w-4 h-4 text-orange-600 border-gray-300 rounded focus:ring-orange-500"
-                          />
-                          <span className="text-gray-700">{attendeeName}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
+                              const memberNames = bacentaMembers.map(m => `${m.firstName} ${m.lastName || ''}`.trim());
+                              const guestNames = attendees.filter(name => !memberNames.includes(name));
 
-                  {/* Converts Selection */}
-                  <div className="border border-green-200 rounded-lg p-4 bg-green-50">
-                    <h5 className="font-medium text-green-800 mb-2">Converts (Gave Life to Christ)</h5>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                      {attendees.map((attendeeName, index) => (
-                        <label key={`convert-${index}`} className="flex items-center space-x-2 text-sm">
-                          <input
-                            type="checkbox"
-                            checked={convertAttendees.includes(attendeeName)}
-                            onChange={(e) => {
                               if (e.target.checked) {
-                                setConvertAttendees(prev => [...prev, attendeeName]);
-                              } else {
-                                setConvertAttendees(prev => prev.filter(name => name !== attendeeName));
-                              }
-                            }}
-                            className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
-                          />
-                          <span className="text-gray-700">{attendeeName}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
+                                // Add member to attendees
+                                const newAttendees = [...attendees, fullName];
+                                setAttendees(newAttendees);
 
-                  {/* Testimonies Selection */}
-                  <div className="border border-blue-200 rounded-lg p-4 bg-blue-50">
-                    <h5 className="font-medium text-blue-800 mb-2">Testimonies (Shared Testimony)</h5>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                      {attendees.map((attendeeName, index) => (
-                        <label key={`testimony-${index}`} className="flex items-center space-x-2 text-sm">
-                          <input
-                            type="checkbox"
-                            checked={testimonyAttendees.includes(attendeeName)}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                setTestimonyAttendees(prev => [...prev, attendeeName]);
+                                // Update first timers: keep existing guests as first timers, don't auto-add members
+                                setFirstTimerAttendees(prev => {
+                                  const currentGuestFirstTimers = prev.filter(name => guestNames.includes(name));
+                                  return currentGuestFirstTimers;
+                                });
                               } else {
-                                setTestimonyAttendees(prev => prev.filter(name => name !== attendeeName));
+                                // Remove member from attendees
+                                const newAttendees = attendees.filter(name => name !== fullName);
+                                setAttendees(newAttendees);
+
+                                // Also remove from spiritual tracking
+                                setFirstTimerAttendees(prev => prev.filter(name => name !== fullName));
+                                setConvertAttendees(prev => prev.filter(name => name !== fullName));
+                                setTestimonyAttendees(prev => prev.filter(name => name !== fullName));
                               }
                             }}
                             className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                           />
-                          <span className="text-gray-700">{attendeeName}</span>
+                          <div className="flex-1 min-w-0">
+                            <span className="text-sm font-medium text-gray-900 truncate">
+                              {fullName}
+                            </span>
+                            {member.role !== 'Member' && (
+                              <span className="ml-2 px-2 py-1 text-xs bg-blue-100 text-blue-600 rounded">
+                                {member.role}
+                              </span>
+                            )}
+                          </div>
                         </label>
-                      ))}
-                    </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Guest Attendees Section */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                  <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                    <UsersIcon className="w-5 h-5 mr-2 text-orange-600" />
+                    Guest Attendees
+                  </h4>
+                  <div>
+                    <textarea
+                      value={(() => {
+                        const memberNames = bacentaMembers.map(m => `${m.firstName} ${m.lastName || ''}`.trim());
+                        const guestNames = attendees.filter(name => !memberNames.includes(name));
+                        return guestNames.join('\n');
+                      })()}
+                      onChange={(e) => {
+                        const guestNames = e.target.value
+                          .split('\n')
+                          .map(name => name.trim())
+                          .filter(name => name.length > 0);
+
+                        // Get currently selected members
+                        const memberNames = bacentaMembers.map(m => `${m.firstName} ${m.lastName || ''}`.trim());
+                        const selectedMembers = attendees.filter(name => memberNames.includes(name));
+
+                        // Combine selected members with new guest names
+                        const newAttendees = [...selectedMembers, ...guestNames];
+                        setAttendees(newAttendees);
+
+                        // Automatically mark all guests as first timers
+                        const currentMemberFirstTimers = firstTimerAttendees.filter(name => memberNames.includes(name));
+                        setFirstTimerAttendees([...currentMemberFirstTimers, ...guestNames]);
+                      }}
+                      placeholder="Enter guest names, one per line..."
+                      className="w-full h-32 px-4 py-3 border border-gray-300 rounded-lg resize-none text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                    />
+                    <p className="text-xs text-gray-500 mt-2">
+                      💡 Enter guest names, one per line. All guests are automatically marked as first timers.
+                    </p>
                   </div>
                 </div>
               </div>
             )}
+
+
+
+            {/* Attendance Summary */}
+            <div className="bg-blue-50 rounded-lg p-4 mt-4">
+              <div className="grid grid-cols-1 gap-4 text-center">
+                <div>
+                  <div className="text-2xl font-bold text-green-900">{attendees.length}</div>
+                  <div className="text-sm text-green-600">Total Attendance</div>
+                </div>
+              </div>
+
+              {/* Show First Timers and New Believers only if there are any */}
+              {((isViewMode ? (parseInt(firstTimers) || 0) : firstTimerAttendees.length) > 0 ||
+                (isViewMode ? (parseInt(converts) || 0) : convertAttendees.length) > 0) && (
+                <div className="grid grid-cols-2 gap-4 text-center mt-4 pt-4 border-t border-blue-200">
+                  {((isViewMode ? (parseInt(firstTimers) || 0) : firstTimerAttendees.length) > 0) && (
+                    <div>
+                      <div className="text-2xl font-bold text-orange-900">{isViewMode ? (parseInt(firstTimers) || 0) : firstTimerAttendees.length}</div>
+                      <div className="text-sm text-orange-600">First Timers</div>
+                    </div>
+                  )}
+                  {((isViewMode ? (parseInt(converts) || 0) : convertAttendees.length) > 0) && (
+                    <div>
+                      <div className="text-2xl font-bold text-purple-900">{isViewMode ? (parseInt(converts) || 0) : convertAttendees.length}</div>
+                      <div className="text-sm text-purple-600">New Believers</div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Attendance List - View Mode Only */}
+            {isViewMode && attendees.length > 0 && (
+              <div className="mt-6">
+                <div className="bg-white rounded-xl border border-gray-200 p-6">
+                  <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                    <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center mr-3">
+                      <UsersIcon className="w-4 h-4 text-blue-600" />
+                    </div>
+                    Attendees ({attendees.length})
+                  </h4>
+                  <div className="space-y-2">
+                    {attendees.map((name, index) => {
+                      const isFirstTimer = firstTimerAttendees.includes(name);
+                      const isConvert = convertAttendees.includes(name);
+                      const hasTestimony = testimonyAttendees.includes(name);
+
+                      return (
+                        <div key={name} className="flex items-center justify-between py-2 px-3 hover:bg-gray-50 rounded-lg">
+                          <div className="flex items-center space-x-3">
+                            <span className="text-sm font-medium text-gray-500 w-6">{index + 1}.</span>
+                            <span className="font-medium text-gray-900">{name}</span>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            {isFirstTimer && (
+                              <span className="text-xs px-2 py-1 bg-yellow-100 text-yellow-700 rounded-full">First Timer</span>
+                            )}
+                            {isConvert && (
+                              <span className="text-xs px-2 py-1 bg-green-100 text-green-700 rounded-full">New Believer</span>
+                            )}
+                            {hasTestimony && (
+                              <span className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded-full">Testimony</span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
+
+
           </div>
 
           {/* Spiritual Tracking */}

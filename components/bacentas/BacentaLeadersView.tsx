@@ -60,14 +60,16 @@ const BacentaLeadersView: React.FC = () => {
   };
 
   const getFellowshipLeadersCount = (bacentaLeaderId: string) => {
-    return members.filter(m => m.role === 'Fellowship Leader' && m.bacentaLeaderId === bacentaLeaderId).length;
+    return members.filter(m => m.role === 'Fellowship Leader' && m.bacentaLeaderId === bacentaLeaderId && !m.frozen).length;
   };
 
   const getTotalMembersUnderLeader = (bacentaLeaderId: string) => {
-    // Count fellowship leaders + regular members under this bacenta leader
-    return members.filter(m => 
-      (m.role === 'Fellowship Leader' && m.bacentaLeaderId === bacentaLeaderId) ||
-      (m.role === 'Member' && m.bacentaId === members.find(bl => bl.id === bacentaLeaderId)?.bacentaId)
+    // Count fellowship leaders + regular members under this bacenta leader (only active members)
+    return members.filter(m =>
+      !m.frozen && (
+        (m.role === 'Fellowship Leader' && m.bacentaLeaderId === bacentaLeaderId) ||
+        (m.role === 'Member' && m.bacentaId === members.find(bl => bl.id === bacentaLeaderId)?.bacentaId)
+      )
     ).length;
   };
 

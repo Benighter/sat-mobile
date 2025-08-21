@@ -336,7 +336,19 @@ const SundayConfirmationsView: React.FC = () => {
     confirmedGuests.forEach(g => {
       const key = g.bacentaId || 'unassigned';
       if (!guestsByBacenta.has(key)) guestsByBacenta.set(key, []);
-      guestsByBacenta.get(key)!.push(g);
+
+      // Check for duplicates before adding - deduplicate by name within the same bacenta
+      const existingGuests = guestsByBacenta.get(key)!;
+      const isDuplicate = existingGuests.some(existing =>
+        existing.firstName.toLowerCase().trim() === g.firstName.toLowerCase().trim() &&
+        (existing.lastName || '').toLowerCase().trim() === (g.lastName || '').toLowerCase().trim()
+      );
+
+      if (!isDuplicate) {
+        guestsByBacenta.get(key)!.push(g);
+      } else {
+        console.log(`Skipping duplicate guest in display: ${g.firstName} ${g.lastName || ''} (ID: ${g.id})`);
+      }
     });
 
     // Include all bacenta leaders (like WeeklyAttendance) to keep structure, then filter empty groups

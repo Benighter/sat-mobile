@@ -109,6 +109,28 @@ const BacentaMeetingsView: React.FC = () => {
   // Get attendance for a specific bacenta on the current date
   const getBacentaAttendance = (bacentaId: string) => {
     const bacentaMembers = members.filter(m => m.bacentaId === bacentaId && !m.frozen);
+
+    // Check if there's a meeting record for this bacenta and date
+    const meetingRecord = getMeetingRecord(bacentaId, currentDate);
+
+    if (meetingRecord && meetingRecord.attendees && Array.isArray(meetingRecord.attendees)) {
+      // Use the meeting record's attendees list (includes both members and guests)
+      const totalAttendees = meetingRecord.attendees.length;
+
+      // Separate members from guests for display purposes
+      const memberNames = bacentaMembers.map(m => `${m.firstName} ${m.lastName || ''}`.trim());
+      const presentMembers = meetingRecord.attendees.filter(name => memberNames.includes(name));
+      const presentGuests = meetingRecord.attendees.filter(name => !memberNames.includes(name));
+
+      return {
+        totalMembers: bacentaMembers.length,
+        presentMembers: presentMembers.length,
+        presentGuests: presentGuests.length,
+        totalPresent: totalAttendees
+      };
+    }
+
+    // Fallback to old system if no meeting record exists
     const presentMembers = bacentaMembers.filter(member => {
       const attendanceRecord = attendanceRecords.find(
         ar => ar.memberId === member.id && ar.date === currentDate && ar.status === 'Present'
@@ -116,7 +138,6 @@ const BacentaMeetingsView: React.FC = () => {
       return !!attendanceRecord;
     });
 
-    // Also count guests for this bacenta on this date
     const bacentaGuests = guests.filter(g =>
       g.bacentaId === bacentaId &&
       g.date === currentDate &&
@@ -236,16 +257,7 @@ const BacentaMeetingsView: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Attendance Rate */}
-                {dayStatistics.totalMembers > 0 && (
-                  <div className="mt-3 text-center">
-                    <div className="text-sm text-gray-600">
-                      Attendance Rate: <span className="font-semibold text-blue-700">
-                        {Math.round((dayStatistics.totalPresent / dayStatistics.totalMembers) * 100)}%
-                      </span>
-                    </div>
-                  </div>
-                )}
+
               </div>
             )}
           </div>
@@ -256,7 +268,6 @@ const BacentaMeetingsView: React.FC = () => {
               const memberCount = getMemberCount(bacenta.id);
               const attendance = getBacentaAttendance(bacenta.id);
               const hasSchedule = bacenta.meetingDay || bacenta.meetingTime;
-              const attendanceRate = memberCount > 0 ? Math.round((attendance.totalPresent / memberCount) * 100) : 0;
               const existingMeetingRecord = getMeetingRecord(bacenta.id, currentDate);
               const hasExistingRecord = !!existingMeetingRecord;
 
@@ -303,7 +314,7 @@ const BacentaMeetingsView: React.FC = () => {
                             : 'bg-gray-100 text-gray-600'
                         }`}>
                           <UsersIcon className="w-3 h-3 mr-1" />
-                          {attendance.totalPresent > 0 ? `${attendanceRate}%` : 'No data'}
+                          {attendance.totalPresent > 0 ? `${attendance.totalPresent} present` : 'No data'}
                         </div>
                       </div>
                     </div>
@@ -318,11 +329,13 @@ const BacentaMeetingsView: React.FC = () => {
                         <div className="text-right">
                           <div className="text-lg font-bold text-gray-900">
                             {attendance.totalPresent}
-                            <span className="text-sm font-normal text-gray-500">/{memberCount}</span>
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            Total Attendance
                           </div>
                           {attendance.presentGuests > 0 && (
                             <div className="text-xs text-green-600">
-                              +{attendance.presentGuests} guest{attendance.presentGuests !== 1 ? 's' : ''}
+                              {attendance.presentGuests} guest{attendance.presentGuests !== 1 ? 's' : ''}
                             </div>
                           )}
                         </div>

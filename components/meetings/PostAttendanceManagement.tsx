@@ -13,7 +13,8 @@ import {
   HeartIcon,
   StarIcon,
   UserPlusIcon,
-  TrashIcon
+  TrashIcon,
+  ChatBubbleLeftRightIcon
 } from '../icons';
 import Button from '../ui/Button';
 import AttendeeDetailModal from './AttendeeDetailModal';
@@ -92,6 +93,9 @@ const PostAttendanceManagement: React.FC<PostAttendanceManagementProps> = ({
         const [firstName, ...lastNameParts] = attendeeName.trim().split(' ');
         const lastName = lastNameParts.join(' ');
 
+        const isMember = !!existingMember;
+        const isFirstTimer = firstTimerAttendees.includes(attendeeName);
+
         return {
           id: `attendee-${index}`,
           firstName: existingMember?.firstName || firstName || '',
@@ -99,10 +103,10 @@ const PostAttendanceManagement: React.FC<PostAttendanceManagementProps> = ({
           fullName: attendeeName,
           phoneNumber: existingMember?.phoneNumber || '',
           address: existingMember?.buildingAddress || '',
-          isMember: !!existingMember,
+          isMember,
           memberId: existingMember?.id,
           isBornAgain: false,
-          isFirstTimer: firstTimerAttendees.includes(attendeeName),
+          isFirstTimer,
           isConvert: convertAttendees.includes(attendeeName),
           confirmForService: false,
           notes: '',
@@ -185,19 +189,45 @@ const PostAttendanceManagement: React.FC<PostAttendanceManagementProps> = ({
     try {
       switch (action) {
         case 'mark_born_again':
+          // Update local state
           setAttendeeDetails(prev =>
-            prev.map(a => a.id === attendeeId ? { ...a, isBornAgain: true } : a)
+            prev.map(a => a.id === attendeeId ? { ...a, isBornAgain: true, isConvert: true } : a)
           );
-          showToast('success', `${attendee.fullName} marked as born again`);
+
+          // Add to new believers (sons of God) if not already a member
+          if (!attendee.isMember) {
+            try {
+              await addNewBelieverHandler({
+                name: attendee.firstName,
+                surname: attendee.lastName || '',
+                contact: attendee.phoneNumber || '',
+                dateOfBirth: '',
+                residence: attendee.address || '',
+                studies: '',
+                campus: '',
+                occupation: '',
+                year: '',
+                isFirstTime: attendee.isFirstTimer,
+                ministry: '',
+                joinedDate: meetingDate
+              });
+              showToast('success', `${attendee.fullName} marked as born again and added to Sons of God!`);
+            } catch (error) {
+              console.error('Failed to add to new believers:', error);
+              showToast('warning', `${attendee.fullName} marked as born again, but failed to add to Sons of God. Please add manually.`);
+            }
+          } else {
+            showToast('success', `${attendee.fullName} marked as born again`);
+          }
           break;
-        
+
         case 'mark_first_timer':
           setAttendeeDetails(prev =>
             prev.map(a => a.id === attendeeId ? { ...a, isFirstTimer: true } : a)
           );
           showToast('success', `${attendee.fullName} marked as first timer`);
           break;
-        
+
         case 'convert_to_member':
           if (attendee.firstName && attendee.lastName && attendee.phoneNumber) {
             await convertToMember(attendee);
@@ -205,7 +235,18 @@ const PostAttendanceManagement: React.FC<PostAttendanceManagementProps> = ({
             showToast('error', 'Please complete all required fields (name and phone) before converting to member.');
           }
           break;
-        
+
+        case 'mark_testimony':
+          // Toggle testimony status
+          if (testimonyAttendees.includes(attendee.fullName)) {
+            setTestimonyAttendees(prev => prev.filter(name => name !== attendee.fullName));
+            showToast('success', `${attendee.fullName} removed from testimonies`);
+          } else {
+            setTestimonyAttendees(prev => [...prev, attendee.fullName]);
+            showToast('success', `${attendee.fullName} marked as gave testimony`);
+          }
+          break;
+
         case 'remove':
           setAttendeeDetails(prev => prev.filter(a => a.id !== attendeeId));
           showToast('success', `${attendee.fullName} removed from attendance`);
@@ -216,6 +257,7 @@ const PostAttendanceManagement: React.FC<PostAttendanceManagementProps> = ({
     } finally {
       setLoading(false);
       setActionMenuOpen(null);
+      setMenuPosition(null);
     }
   };
 
@@ -276,61 +318,79 @@ const PostAttendanceManagement: React.FC<PostAttendanceManagementProps> = ({
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div
+      className="min-h-screen bg-gray-50"
+      onClick={() => {
+        setActionMenuOpen(null);
+        setMenuPosition(null);
+      }}
+    >
       <div className="max-w-2xl mx-auto px-4 py-8">
         {/* Header */}
-        <div className="text-center mb-12">
+        <div className="text-center mb-8">
           <h1 className="text-2xl font-semibold text-gray-900 mb-2">
-            Attendee Management
+            Attendance Summary
           </h1>
           <p className="text-sm text-gray-500">
-            Click on any name to edit details or use the actions menu
+            Review attendance and manage attendee details
           </p>
         </div>
 
-        {/* Summary Stats - Simple and Clean */}
-        {(firstTimerAttendees.length > 0 || convertAttendees.length > 0 || testimonyAttendees.length > 0) && (
-          <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-8">
-            <div className="text-center">
-              <div className="text-sm font-medium text-green-800 mb-2">✓ Actions Completed</div>
-              <div className="flex justify-center space-x-6 text-xs text-green-700">
-                {firstTimerAttendees.length > 0 && (
-                  <span>{firstTimerAttendees.length} First Timers</span>
-                )}
-                {convertAttendees.length > 0 && (
-                  <span>{convertAttendees.length} Converts</span>
-                )}
-                {testimonyAttendees.length > 0 && (
-                  <span>{testimonyAttendees.length} Testimonies</span>
-                )}
-              </div>
+        {/* Attendance Summary Cards */}
+        <div className="mb-8">
+          {/* Always show Total Attendees */}
+          <div className="grid grid-cols-1 gap-4 mb-4">
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center">
+              <div className="text-2xl font-bold text-blue-900">{attendeeDetails.length}</div>
+              <div className="text-sm text-blue-600">Total Attendees</div>
             </div>
           </div>
-        )}
 
-        {/* Attendees List - Clean and Minimal */}
-        <div className="space-y-3 mb-8">
-          {attendeeDetails.map((attendee, index) => (
-            <div
-              key={attendee.id}
-              className="bg-white rounded-lg border border-gray-200 p-4 hover:border-gray-300 transition-colors"
-            >
-              <div className="flex items-center justify-between">
-                {/* Left - Avatar and Name */}
-                <div className="flex items-center space-x-3">
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-medium ${
-                    attendee.isMember ? 'bg-green-500' : 'bg-orange-500'
-                  }`}>
-                    {attendee.fullName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
-                  </div>
+          {/* Show spiritual categories only if there are attendees in them */}
+          {(firstTimerAttendees.length > 0 || convertAttendees.length > 0 || testimonyAttendees.length > 0) && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {firstTimerAttendees.length > 0 && (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-center">
+                  <div className="text-2xl font-bold text-yellow-900">{firstTimerAttendees.length}</div>
+                  <div className="text-sm text-yellow-600">First Timers</div>
+                </div>
+              )}
+              {convertAttendees.length > 0 && (
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-center">
+                  <div className="text-2xl font-bold text-green-900">{convertAttendees.length}</div>
+                  <div className="text-sm text-green-600">New Believers</div>
+                </div>
+              )}
+              {testimonyAttendees.length > 0 && (
+                <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 text-center">
+                  <div className="text-2xl font-bold text-purple-900">{testimonyAttendees.length}</div>
+                  <div className="text-sm text-purple-600">Testimonies</div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
 
-                  <div>
+        {/* Numbered Attendance List */}
+        <div className="mb-8">
+          <div className="bg-white rounded-xl border border-gray-200 p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+              <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center mr-3">
+                <UsersIcon className="w-4 h-4 text-blue-600" />
+              </div>
+              Attendees ({attendeeDetails.length})
+            </h3>
+            <div className="space-y-2">
+              {attendeeDetails.map((attendee, index) => (
+                <div key={attendee.id} className="flex items-center justify-between py-2 px-3 hover:bg-gray-50 rounded-lg transition-colors">
+                  <div className="flex items-center space-x-3">
+                    <span className="text-sm font-medium text-gray-500 w-6">{index + 1}.</span>
                     <button
                       onClick={() => handleAttendeeClick(attendee)}
                       className="text-left hover:text-blue-600 transition-colors"
                     >
-                      <div className="font-medium text-gray-900">{attendee.fullName}</div>
-                      <div className="flex items-center space-x-2 mt-1">
+                      <div className="flex items-center space-x-2">
+                        <span className="font-medium text-gray-900">{attendee.fullName}</span>
                         <span className={`text-xs px-2 py-0.5 rounded-full ${
                           attendee.isMember
                             ? 'bg-green-100 text-green-700'
@@ -338,35 +398,31 @@ const PostAttendanceManagement: React.FC<PostAttendanceManagementProps> = ({
                         }`}>
                           {attendee.isMember ? 'Member' : 'Guest'}
                         </span>
-                        {attendee.phoneNumber && (
-                          <span className="text-xs text-gray-500">{attendee.phoneNumber}</span>
-                        )}
                       </div>
+                      {attendee.phoneNumber && (
+                        <span className="text-xs text-gray-500">({attendee.phoneNumber})</span>
+                      )}
                     </button>
                   </div>
-                </div>
-
-                {/* Right - Categories and Actions */}
-                <div className="flex items-center space-x-3">
-                  {/* Categories */}
-                  <div className="flex space-x-1">
+                  <div className="flex items-center space-x-2">
                     {attendee.isFirstTimer && (
-                      <span className="text-xs px-2 py-1 bg-yellow-100 text-yellow-700 rounded">First Timer</span>
+                      <span className="text-xs px-2 py-1 bg-yellow-100 text-yellow-700 rounded-full">First Timer</span>
+                    )}
+                    {attendee.isBornAgain && (
+                      <span className="text-xs px-2 py-1 bg-red-100 text-red-700 rounded-full">Born Again</span>
                     )}
                     {attendee.isConvert && (
-                      <span className="text-xs px-2 py-1 bg-green-100 text-green-700 rounded">Convert</span>
+                      <span className="text-xs px-2 py-1 bg-green-100 text-green-700 rounded-full">New Believer</span>
                     )}
                     {testimonyAttendees.includes(attendee.fullName) && (
-                      <span className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded">Testimony</span>
+                      <span className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded-full">Testimony</span>
                     )}
+                    {getActionButtons(attendee)}
                   </div>
-
-                  {/* Action Button */}
-                  {getActionButtons(attendee)}
                 </div>
-              </div>
+              ))}
             </div>
-          ))}
+          </div>
         </div>
 
         {/* Action Buttons - Clean and Simple */}
@@ -445,6 +501,16 @@ const PostAttendanceManagement: React.FC<PostAttendanceManagementProps> = ({
                       <span>Convert to Member</span>
                     </button>
                   )}
+
+                  <button
+                    onClick={() => handleQuickAction(attendee.id, 'mark_testimony')}
+                    className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center space-x-2"
+                  >
+                    <ChatBubbleLeftRightIcon className="w-4 h-4 text-blue-500" />
+                    <span>
+                      {testimonyAttendees.includes(attendee.fullName) ? 'Remove Testimony' : 'Mark Testimony'}
+                    </span>
+                  </button>
 
                   <div className="border-t border-gray-100 my-1"></div>
 
