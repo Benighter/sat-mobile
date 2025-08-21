@@ -17,10 +17,16 @@ interface AspectRatioPreset {
 
 const aspectRatioPresets: AspectRatioPreset[] = [
   {
-    name: 'Free',
+    name: 'Full Image',
     ratio: undefined,
     icon: <Square className="w-5 h-5" />,
-    description: 'Any size'
+    description: 'Use entire image without cropping'
+  },
+  {
+    name: 'Free Crop',
+    ratio: undefined,
+    icon: <Square className="w-5 h-5" />,
+    description: 'Custom crop area'
   },
   {
     name: 'Square',
@@ -58,6 +64,13 @@ const ImageCropperWithPresets: React.FC<ImageCropperWithPresetsProps> = ({
 
   const handlePresetSelect = (preset: AspectRatioPreset) => {
     setSelectedPreset(preset);
+
+    // If "Full Image" is selected, use the original image without cropping
+    if (preset.name === 'Full Image') {
+      onCropComplete(image);
+      return;
+    }
+
     setShowCropper(true);
   };
 

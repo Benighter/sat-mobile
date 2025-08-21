@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { X, Check, ZoomIn, ZoomOut } from 'lucide-react';
+import { X, Check, ZoomIn, ZoomOut, Square } from 'lucide-react';
 
 interface ImageCropperProps {
   image: string;
@@ -161,37 +161,58 @@ const ImageCropper: React.FC<ImageCropperProps> = ({
 
   const cropImage = useCallback(() => {
     if (!imageRef.current || !canvasRef.current) return;
-    
+
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
     const img = imageRef.current;
-    
+
     if (!ctx) return;
-    
+
     // Calculate the crop area relative to the original image
     const scaleX = img.naturalWidth / imageSize.width;
     const scaleY = img.naturalHeight / imageSize.height;
-    
+
     const cropX = (cropArea.x - imagePosition.x) * scaleX;
     const cropY = (cropArea.y - imagePosition.y) * scaleY;
     const cropWidth = cropArea.width * scaleX;
     const cropHeight = cropArea.height * scaleY;
-    
+
     // Set canvas size to crop area size
     canvas.width = cropWidth;
     canvas.height = cropHeight;
-    
+
     // Draw the cropped image
     ctx.drawImage(
       img,
       cropX, cropY, cropWidth, cropHeight,
       0, 0, cropWidth, cropHeight
     );
-    
+
     // Convert to base64
     const croppedImage = canvas.toDataURL('image/jpeg', 0.9);
     onCropComplete(croppedImage);
   }, [cropArea, imagePosition, imageSize, onCropComplete]);
+
+  const useFullImage = useCallback(() => {
+    if (!imageRef.current || !canvasRef.current) return;
+
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+    const img = imageRef.current;
+
+    if (!ctx) return;
+
+    // Set canvas size to original image size
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+
+    // Draw the full image
+    ctx.drawImage(img, 0, 0);
+
+    // Convert to base64
+    const fullImage = canvas.toDataURL('image/jpeg', 0.9);
+    onCropComplete(fullImage);
+  }, [onCropComplete]);
 
   return (
     <div className="fixed inset-0 bg-gradient-to-br from-slate-900 via-gray-900 to-slate-800 z-50 flex flex-col max-h-screen">
@@ -301,16 +322,23 @@ const ImageCropper: React.FC<ImageCropperProps> = ({
       {/* Footer */}
       <div className="bg-white/5 backdrop-blur-xl border-t border-white/10 flex-shrink-0">
         <div className="p-6">
-          <div className="flex flex-col sm:flex-row gap-3 max-w-2xl mx-auto">
+          <div className="flex flex-col sm:flex-row gap-3 max-w-3xl mx-auto">
             <button
               onClick={onCancel}
-              className="flex-1 sm:flex-none px-8 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl transition-all duration-200 font-medium border border-white/20 hover:border-white/30"
+              className="flex-1 sm:flex-none px-6 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl transition-all duration-200 font-medium border border-white/20 hover:border-white/30"
             >
               Cancel
             </button>
             <button
+              onClick={useFullImage}
+              className="flex-1 sm:flex-none px-6 py-3 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white rounded-xl transition-all duration-200 font-medium shadow-lg hover:shadow-xl transform hover:scale-105 flex items-center justify-center space-x-2"
+            >
+              <Square className="w-5 h-5" />
+              <span>Use Full Image</span>
+            </button>
+            <button
               onClick={cropImage}
-              className="flex-1 sm:flex-none px-8 py-3 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white rounded-xl transition-all duration-200 font-medium shadow-lg hover:shadow-xl transform hover:scale-105 flex items-center justify-center space-x-2"
+              className="flex-1 sm:flex-none px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white rounded-xl transition-all duration-200 font-medium shadow-lg hover:shadow-xl transform hover:scale-105 flex items-center justify-center space-x-2"
             >
               <Check className="w-5 h-5" />
               <span>Apply Crop</span>

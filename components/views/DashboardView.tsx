@@ -3,7 +3,7 @@ import React, { memo, useState, useEffect, useMemo, useRef, useCallback } from '
 import { useAppContext } from '../../contexts/FirebaseAppContext';
 // import { hasAdminPrivileges } from '../../utils/permissionUtils';
 import { PeopleIcon, AttendanceIcon, CalendarIcon, ChartBarIcon, PrayerIcon } from '../icons';
-import { getMonthName, getCurrentOrMostRecentSunday, formatFullDate, getUpcomingSunday } from '../../utils/dateUtils';
+import { getMonthName, getCurrentOrMostRecentSunday, formatFullDate, getUpcomingSunday, getCurrentMeetingWeek, getMeetingWeekRange } from '../../utils/dateUtils';
 import { db } from '../../firebase.config';
 import { doc, getDoc } from 'firebase/firestore';
 import { firebaseUtils } from '../../services/firebaseService';
@@ -111,7 +111,7 @@ const StatCard: React.FC<StatCardProps> = memo(({ title, value, icon, descriptio
 
 
 const DashboardView: React.FC = memo(() => {
-  const { members, attendanceRecords, newBelievers, displayedSundays, displayedDate, sundayConfirmations, guests, switchTab, user, currentChurchId, allOutreachMembers, bacentas, prayerRecords, isMinistryContext } = useAppContext(); // Use displayedSundays
+  const { members, attendanceRecords, newBelievers, displayedSundays, displayedDate, sundayConfirmations, guests, switchTab, user, currentChurchId, allOutreachMembers, bacentas, prayerRecords, meetingRecords, isMinistryContext } = useAppContext(); // Use displayedSundays
 
   const activeMembers = useMemo(() => {
     const filtered = members.filter(m => !m.frozen);
@@ -297,6 +297,31 @@ const DashboardView: React.FC = memo(() => {
   const weeklyAttendance = getCurrentWeekAttendance();
   const upcomingConfirmations = getUpcomingSundayConfirmations();
 
+  // Calculate current week's bacenta meeting attendance
+  const getCurrentWeekBacentaMeetingAttendance = () => {
+    const currentWeekWednesday = getCurrentMeetingWeek();
+    const meetingDates = getMeetingWeekRange(currentWeekWednesday);
+
+    let totalAttendance = 0;
+
+    meetingDates.forEach(date => {
+      const dayMeetingRecords = meetingRecords.filter(record => record.date === date);
+      dayMeetingRecords.forEach(record => {
+        if (record.attendees && Array.isArray(record.attendees)) {
+          totalAttendance += record.attendees.length;
+        }
+      });
+    });
+
+    return {
+      total: totalAttendance,
+      dates: meetingDates,
+      formattedWeek: `${formatFullDate(meetingDates[0]).split(',')[0]} - ${formatFullDate(meetingDates[1]).split(',')[0]}`
+    };
+  };
+
+  const bacentaMeetingAttendance = getCurrentWeekBacentaMeetingAttendance();
+
   // Overall prayer totals (all-time)
   const overallPrayerMarks = useMemo(() => {
     return prayerRecords.reduce((acc, r) => acc + (r.status === 'Prayed' ? 1 : 0), 0);
@@ -431,10 +456,10 @@ const DashboardView: React.FC = memo(() => {
           <StatCard
             key={id}
             title="Bacenta Meetings"
-            value="Wed • Thu"
+            value={bacentaMeetingAttendance.total}
             icon={<CalendarIcon className="w-full h-full" />}
             accentColor="blue"
-            description="Weekly meeting attendance"
+            description={`Total attendance this week`}
             onClick={() => !rearrangeMode && switchTab({ id: TabKeys.BACENTA_MEETINGS, name: 'Bacenta Meetings' })}
           />
         );
