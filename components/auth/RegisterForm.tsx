@@ -527,7 +527,7 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, onSwitchToLogin:
               value={formData.email}
               onChange={handleInputChange}
               onBlur={() => handleFieldBlur('email')}
-              className={`w-full px-4 py-3.5 bg-gray-50/50 border rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 focus:bg-white transition-all duration-200 placeholder-gray-400 ${
+              className={`w-full px-4 pr-12 sm:pr-14 py-3.5 bg-gray-50/50 border rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 focus:bg-white transition-all duration-200 placeholder-gray-400 input-with-right-icon ${
                 errors.email ? 'border-red-300 bg-red-50' : 'border-gray-200'
               }`}
               placeholder="Email address"
@@ -536,7 +536,7 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, onSwitchToLogin:
               spellCheck="false"
             />
             {isCheckingEmail && (
-              <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+              <div className="absolute right-3 sm:right-4 top-1/2 transform -translate-y-1/2">
                 <div className="w-4 h-4 border-2 border-green-500 border-t-transparent rounded-full animate-spin"></div>
               </div>
             )}

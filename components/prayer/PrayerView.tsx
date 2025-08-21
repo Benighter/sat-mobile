@@ -3,7 +3,7 @@ import { useAppContext } from '../../contexts/FirebaseAppContext';
 import { getTuesdayToSundayRange, getPreviousPrayerWeekAnchor, getNextPrayerWeekAnchor, formatFullDate } from '../../utils/dateUtils';
 import { isDateEditable } from '../../utils/attendanceUtils';
 import { hasAdminPrivileges } from '../../utils/permissionUtils';
-import { CheckIcon, XMarkIcon, ChevronLeftIcon, ChevronRightIcon, CalendarIcon, ClipboardIcon } from '../icons';
+import { CheckIcon, XMarkIcon, ChevronLeftIcon, ChevronRightIcon, CalendarIcon, ClipboardIcon, SearchIcon } from '../icons';
 import { Member, PrayerStatus, TabKeys } from '../../types';
 
 const PrayerView: React.FC = () => {
@@ -332,13 +332,16 @@ const PrayerView: React.FC = () => {
           {/* Search, Bacenta Filter, Role Filter */}
           <div className="flex flex-col md:flex-row md:flex-wrap items-stretch md:items-center justify-center md:justify-between gap-3">
             <div className="sm:w-64 w-full">
-              <input
-                type="text"
-                placeholder="Search members..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full px-3 py-3 sm:py-2 border border-gray-300 dark:border-dark-600 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent bg-white dark:bg-dark-700 text-gray-900 dark:text-dark-100 placeholder-gray-500 dark:placeholder-dark-400 text-center"
-              />
+              <div className="relative">
+                <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Search members..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-10 sm:pl-12 pr-4 py-3 sm:py-2 border border-gray-300 dark:border-dark-600 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent bg-white dark:bg-dark-700 text-gray-900 dark:text-dark-100 placeholder-gray-500 dark:placeholder-dark-400 text-center search-input"
+                />
+              </div>
             </div>
             <div className="sm:w-64 w-full">
               <select

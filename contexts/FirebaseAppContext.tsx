@@ -2,7 +2,7 @@
 import React, { createContext, useState, useEffect, useCallback, ReactNode, useMemo, useRef } from 'react';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../firebase.config';
-import { Member, AttendanceRecord, Bacenta, TabOption, AttendanceStatus, NewBeliever, SundayConfirmation, ConfirmationStatus, Guest, MemberDeletionRequest, OutreachBacenta, OutreachMember, PrayerRecord, PrayerStatus } from '../types';
+import { Member, AttendanceRecord, Bacenta, TabOption, AttendanceStatus, NewBeliever, SundayConfirmation, ConfirmationStatus, Guest, MemberDeletionRequest, OutreachBacenta, OutreachMember, PrayerRecord, PrayerStatus, MeetingRecord } from '../types';
 import { FIXED_TABS, DEFAULT_TAB_ID } from '../constants';
 import { sessionStateStorage } from '../utils/localStorage';
 import { getSundaysOfMonth } from '../utils/dateUtils';
@@ -19,6 +19,7 @@ import {
   outreachBacentasFirebaseService,
   outreachMembersFirebaseService,
   prayerFirebaseService,
+  meetingRecordsFirebaseService,
   FirebaseUser
 } from '../services/firebaseService';
 import { dataMigrationService } from '../utils/dataMigration';
@@ -50,6 +51,7 @@ interface AppContextType {
   sundayConfirmations: SundayConfirmation[];
   guests: Guest[];
   memberDeletionRequests: MemberDeletionRequest[];
+  meetingRecords: MeetingRecord[];
 
   // UI State
   currentTab: TabOption;
@@ -138,6 +140,12 @@ interface AppContextType {
   markPrayerHandler: (memberId: string, date: string, status: PrayerStatus) => Promise<void>;
   clearPrayerHandler: (memberId: string, date: string) => Promise<void>;
 
+  // Meeting Record Operations
+  saveMeetingRecordHandler: (record: MeetingRecord) => Promise<void>;
+  updateMeetingRecordHandler: (record: MeetingRecord) => Promise<void>;
+  deleteMeetingRecordHandler: (id: string) => Promise<void>;
+  getMeetingRecordHandler: (bacentaId: string, date: string) => Promise<MeetingRecord | null>;
+
   // Confirmation Operations
   markConfirmationHandler: (memberId: string, date: string, status: ConfirmationStatus) => Promise<void>;
   removeConfirmationHandler: (confirmationId: string) => Promise<void>;
@@ -219,6 +227,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
   const [sundayConfirmations, setSundayConfirmations] = useState<SundayConfirmation[]>([]);
   const [guests, setGuests] = useState<Guest[]>([]);
   const [memberDeletionRequests, setMemberDeletionRequests] = useState<MemberDeletionRequest[]>([]);
+  const [meetingRecords, setMeetingRecords] = useState<MeetingRecord[]>([]);
 
   // UI state
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -689,13 +698,14 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
         }
       } else {
         // Normal mode - fetch from current church only
-        const [membersData, bacentasData, attendanceData, newBelieversData, confirmationsData, prayerData] = await Promise.all([
+        const [membersData, bacentasData, attendanceData, newBelieversData, confirmationsData, prayerData, meetingData] = await Promise.all([
           membersFirebaseService.getAll(),
           bacentasFirebaseService.getAll(),
           attendanceFirebaseService.getAll(),
           newBelieversFirebaseService.getAll(),
           confirmationFirebaseService.getAll(),
-          prayerFirebaseService.getAll()
+          prayerFirebaseService.getAll(),
+          meetingRecordsFirebaseService.getAll()
         ]);
 
         setMembers(membersData);
@@ -704,6 +714,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
         setNewBelievers(newBelieversData);
         setSundayConfirmations(confirmationsData);
         setPrayerRecords(prayerData);
+        setMeetingRecords(meetingData);
       }
 
       // Restore original context after reads
@@ -1427,6 +1438,80 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     }
   }, [outreachMembers, sundayConfirmations, showToast]);
 
+  // Meeting Record handlers
+  const saveMeetingRecordHandler = useCallback(async (record: MeetingRecord) => {
+    try {
+      setIsLoading(true);
+      await meetingRecordsFirebaseService.addOrUpdate(record);
+
+      // Update local state
+      setMeetingRecords(prev => {
+        const existingIndex = prev.findIndex(r => r.id === record.id);
+        if (existingIndex >= 0) {
+          const updated = [...prev];
+          updated[existingIndex] = record;
+          return updated;
+        } else {
+          return [record, ...prev];
+        }
+      });
+
+      showToast('success', 'Meeting record saved successfully');
+    } catch (error: any) {
+      setError(error.message);
+      showToast('error', 'Failed to save meeting record', error.message);
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [showToast]);
+
+  const updateMeetingRecordHandler = useCallback(async (record: MeetingRecord) => {
+    try {
+      setIsLoading(true);
+      await meetingRecordsFirebaseService.addOrUpdate(record);
+
+      // Update local state
+      setMeetingRecords(prev =>
+        prev.map(r => r.id === record.id ? record : r)
+      );
+
+      showToast('success', 'Meeting record updated successfully');
+    } catch (error: any) {
+      setError(error.message);
+      showToast('error', 'Failed to update meeting record', error.message);
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [showToast]);
+
+  const deleteMeetingRecordHandler = useCallback(async (id: string) => {
+    try {
+      setIsLoading(true);
+      await meetingRecordsFirebaseService.delete(id);
+
+      // Update local state
+      setMeetingRecords(prev => prev.filter(r => r.id !== id));
+
+      showToast('success', 'Meeting record deleted successfully');
+    } catch (error: any) {
+      setError(error.message);
+      showToast('error', 'Failed to delete meeting record', error.message);
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [showToast]);
+
+  const getMeetingRecordHandler = useCallback(async (bacentaId: string, date: string): Promise<MeetingRecord | null> => {
+    try {
+      return await meetingRecordsFirebaseService.getByBacentaAndDate(bacentaId, date);
+    } catch (error: any) {
+      console.error('Failed to get meeting record:', error.message);
+      return null;
+    }
+  }, []);
 
   // Attendance handlers
   const markAttendanceHandler = useCallback(async (memberId: string, date: string, status: AttendanceStatus) => {
@@ -2663,6 +2748,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     sundayConfirmations,
     guests,
     memberDeletionRequests,
+    meetingRecords,
 
     // UI State
     currentTab,
@@ -2726,6 +2812,12 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
   // Prayer Operations
   markPrayerHandler,
   clearPrayerHandler,
+
+    // Meeting Record Operations
+    saveMeetingRecordHandler,
+    updateMeetingRecordHandler,
+    deleteMeetingRecordHandler,
+    getMeetingRecordHandler,
 
     // Confirmation Operations
     markConfirmationHandler,

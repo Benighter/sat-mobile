@@ -7,7 +7,7 @@ import { isDateEditable } from '../../utils/attendanceUtils';
 import { canDeleteMemberWithRole, hasAdminPrivileges } from '../../utils/permissionUtils';
 import { SmartTextParser } from '../../utils/smartTextParser';
 import { memberDeletionRequestService } from '../../services/firebaseService';
-import { UserIcon, TrashIcon, PhoneIcon, CalendarIcon, ChevronLeftIcon, ChevronRightIcon, EllipsisVerticalIcon, CheckIcon, ClockIcon, ClipboardIcon, ArrowRightIcon } from '../icons';
+import { UserIcon, TrashIcon, PhoneIcon, CalendarIcon, ChevronLeftIcon, ChevronRightIcon, EllipsisVerticalIcon, CheckIcon, ClockIcon, ClipboardIcon, ArrowRightIcon, CogIcon, SearchIcon } from '../icons';
 import ConstituencyTransferModal from '../modals/ConstituencyTransferModal';
 // Removed unused UI imports
 
@@ -21,6 +21,7 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
     bacentas,
     sundayConfirmations,
     openMemberForm,
+    openBacentaForm,
     deleteMemberHandler,
     attendanceRecords,
     markAttendanceHandler,
@@ -393,7 +394,23 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
     <div className="space-y-3 desktop:space-y-4">
       {/* Bacenta Name Header - Only show when filtering by bacenta */}
       {currentBacentaName && (
-        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg desktop:rounded-xl shadow-sm border border-blue-200 p-3 desktop:p-4">
+        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg desktop:rounded-xl shadow-sm border border-blue-200 p-3 desktop:p-4 relative">
+          {/* Settings Button - Positioned absolutely to not affect centering */}
+          <button
+            onClick={() => {
+              const currentBacenta = bacentas.find(b => b.id === bacentaFilter);
+              if (currentBacenta) {
+                openBacentaForm(currentBacenta);
+              }
+            }}
+            className="absolute top-3 right-3 desktop:top-4 desktop:right-4 flex items-center justify-center w-8 h-8 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-lg transition-colors duration-200 shadow-sm"
+            title="Configure Bacenta Settings"
+            aria-label="Configure Bacenta Settings"
+          >
+            <CogIcon className="w-4 h-4" />
+          </button>
+
+          {/* Centered Content */}
           <div className="text-center">
             <h1 className="text-lg desktop:text-xl desktop-lg:text-2xl font-bold text-blue-900">
               {currentBacentaName}
@@ -401,6 +418,26 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
             <p className="text-sm desktop:text-base text-blue-700 font-medium">
               Bacenta
             </p>
+            {/* Meeting Schedule Display */}
+            {(() => {
+              const currentBacenta = bacentas.find(b => b.id === bacentaFilter);
+              if (currentBacenta && (currentBacenta.meetingDay || currentBacenta.meetingTime)) {
+                return (
+                  <div className="flex items-center justify-center mt-1 text-xs text-blue-600">
+                    <CalendarIcon className="w-3 h-3 mr-1" />
+                    <span>
+                      {currentBacenta.meetingDay && currentBacenta.meetingTime
+                        ? `${currentBacenta.meetingDay} ${currentBacenta.meetingTime}`
+                        : currentBacenta.meetingDay
+                          ? currentBacenta.meetingDay
+                          : currentBacenta.meetingTime
+                      }
+                    </span>
+                  </div>
+                );
+              }
+              return null;
+            })()}
           </div>
         </div>
       )}
@@ -468,13 +505,16 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
           {/* Search, Filter, Frozen Toggle, and Copy */}
           <div className="flex flex-col space-y-3 sm:flex-row sm:space-y-0 sm:space-x-3 sm:items-end justify-center">
             <div className="w-full sm:w-64">
-              <input
-                type="text"
-                placeholder="Search members..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full px-3 py-3 sm:py-2 border border-gray-300 dark:border-dark-600 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent transition-colors text-base sm:text-sm bg-white dark:bg-dark-700 text-gray-900 dark:text-dark-100 placeholder-gray-500 dark:placeholder-dark-400 text-center"
-              />
+              <div className="relative">
+                <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Search members..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-10 sm:pl-12 pr-4 py-3 sm:py-2 border border-gray-300 dark:border-dark-600 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent transition-colors text-base sm:text-sm bg-white dark:bg-dark-700 text-gray-900 dark:text-dark-100 placeholder-gray-500 dark:placeholder-dark-400 text-center search-input"
+                />
+              </div>
             </div>
             <div className="w-full sm:w-48">
               <select

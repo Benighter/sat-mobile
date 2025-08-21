@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useAppContext } from '../../contexts/FirebaseAppContext';
 import { Member } from '../../types';
 import Table from '../ui/Table';
-import { UserIcon, EditIcon, TrashIcon, UsersIcon, CalendarIcon, TrendingUpIcon, PhoneIcon, MapPinIcon } from '../icons';
+import { UserIcon, EditIcon, TrashIcon, UsersIcon, CalendarIcon, TrendingUpIcon, PhoneIcon, MapPinIcon, SearchIcon } from '../icons';
 import Button from '../ui/Button';
 import Badge from '../ui/Badge';
 import Input from '../ui/Input';
@@ -263,6 +263,9 @@ const BacentaLeadersView: React.FC = () => {
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="border-0 bg-white/50 focus:bg-white/80 transition-colors"
+              leftIcon={<SearchIcon className="w-4 h-4 sm:w-5 sm:h-5" />}
+              iconType="search"
+              wrapperClassName="mb-0"
             />
           </div>
         </div>

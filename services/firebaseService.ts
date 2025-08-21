@@ -30,7 +30,7 @@ import {
   fetchSignInMethodsForEmail
 } from 'firebase/auth';
 import { db, auth } from '../firebase.config';
-import { Member, Bacenta, AttendanceRecord, NewBeliever, SundayConfirmation, Guest, MemberDeletionRequest, DeletionRequestStatus, OutreachBacenta, OutreachMember, PrayerRecord } from '../types';
+import { Member, Bacenta, AttendanceRecord, NewBeliever, SundayConfirmation, Guest, MemberDeletionRequest, DeletionRequestStatus, OutreachBacenta, OutreachMember, PrayerRecord, MeetingRecord } from '../types';
 
 // Types for Firebase operations
 export interface FirebaseUser {
@@ -1913,6 +1913,89 @@ export const firebaseUtils = {
     } catch (error: any) {
       throw new Error(`Failed to import church data: ${error.message}`);
     }
+  }
+};
+
+// Meeting Records Service
+export const meetingRecordsFirebaseService = {
+  // Get all meeting records
+  getAll: async (): Promise<MeetingRecord[]> => {
+    try {
+      const meetingsRef = collection(db, getChurchCollectionPath('meetings'));
+      const querySnapshot = await getDocs(query(meetingsRef, orderBy('date', 'desc')));
+
+      return querySnapshot.docs.map(doc => ({
+        ...doc.data(),
+        id: doc.id
+      })) as MeetingRecord[];
+    } catch (error: any) {
+      throw new Error(`Failed to fetch meeting records: ${error.message}`);
+    }
+  },
+
+  // Get meeting record by ID
+  getById: async (id: string): Promise<MeetingRecord | null> => {
+    try {
+      const meetingRef = doc(db, getChurchCollectionPath('meetings'), id);
+      const docSnap = await getDoc(meetingRef);
+
+      if (docSnap.exists()) {
+        return { ...docSnap.data(), id: docSnap.id } as MeetingRecord;
+      }
+      return null;
+    } catch (error: any) {
+      throw new Error(`Failed to fetch meeting record: ${error.message}`);
+    }
+  },
+
+  // Add or update meeting record
+  addOrUpdate: async (record: MeetingRecord): Promise<void> => {
+    try {
+      const meetingsRef = collection(db, getChurchCollectionPath('meetings'));
+      const docRef = doc(meetingsRef, record.id);
+
+      await setDoc(docRef, {
+        ...record,
+        updatedAt: new Date().toISOString(),
+        recordedBy: currentUser?.uid || 'unknown'
+      }, { merge: true });
+    } catch (error: any) {
+      throw new Error(`Failed to save meeting record: ${error.message}`);
+    }
+  },
+
+  // Delete meeting record
+  delete: async (id: string): Promise<void> => {
+    try {
+      const meetingRef = doc(db, getChurchCollectionPath('meetings'), id);
+      await deleteDoc(meetingRef);
+    } catch (error: any) {
+      throw new Error(`Failed to delete meeting record: ${error.message}`);
+    }
+  },
+
+  // Get meeting record for specific bacenta and date
+  getByBacentaAndDate: async (bacentaId: string, date: string): Promise<MeetingRecord | null> => {
+    try {
+      const meetingId = `${bacentaId}_${date}`;
+      return await meetingRecordsFirebaseService.getById(meetingId);
+    } catch (error: any) {
+      throw new Error(`Failed to fetch meeting record for bacenta and date: ${error.message}`);
+    }
+  },
+
+  // Listen to meeting records changes
+  onSnapshot: (callback: (records: MeetingRecord[]) => void): Unsubscribe => {
+    const meetingsRef = collection(db, getChurchCollectionPath('meetings'));
+    const q = query(meetingsRef, orderBy('date', 'desc'));
+
+    return onSnapshot(q, (querySnapshot) => {
+      const records = querySnapshot.docs.map(doc => ({
+        ...doc.data(),
+        id: doc.id
+      })) as MeetingRecord[];
+      callback(records);
+    });
   }
 };
 

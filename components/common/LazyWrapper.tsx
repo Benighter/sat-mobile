@@ -22,7 +22,8 @@ export const LazyOutreachView = lazy(() => import('../outreach/OutreachView'));
 export const LazyBacentaOutreachView = lazy(() => import('../outreach/BacentaOutreachView'));
 export const LazyPrayerView = lazy(() => import('../prayer/PrayerView'));
 export const LazyPrayerMemberDetailsView = lazy(() => import('../prayer/PrayerMemberDetailsView'));
-export const LazyMinistriesView = lazy(() => import('../members/MinistriesView.tsx'));
+export const LazyMinistriesView = lazy(() => import('../members/MinistriesView'));
+export const LazyBacentaMeetingsView = lazy(() => import('../meetings/BacentaMeetingsView'));
 
 // Wrapper component for lazy loading
 interface LazyWrapperProps {

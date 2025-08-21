@@ -106,6 +106,9 @@ export interface Guest {
 export interface Bacenta { // Renamed from CongregationGroup
   id: string;
   name: string;
+  // Meeting schedule configuration
+  meetingDay?: 'Wednesday' | 'Thursday'; // Day of the week for bible study
+  meetingTime?: string; // Time in HH:MM format (24-hour)
 }
 
 
@@ -131,6 +134,40 @@ export interface OutreachMember {
   bornAgainMemberId?: string;
 }
 
+// Bacenta Meetings types
+export type MeetingAttendanceStatus = 'Present' | 'Absent';
+
+export interface BacentaMeetingRecord {
+  id: string; // memberId_date (YYYY-MM-DD)
+  memberId: string;
+  date: string; // Meeting date (Wednesday or Thursday) as YYYY-MM-DD
+  status: MeetingAttendanceStatus;
+  notes?: string; // Optional notes about the meeting attendance
+  createdDate: string; // ISO
+  lastUpdated: string; // ISO
+}
+
+// Meeting Record for storing complete meeting information
+export interface MeetingRecord {
+  id: string; // bacentaId_date (YYYY-MM-DD)
+  bacentaId: string;
+  date: string; // Meeting date as YYYY-MM-DD
+  meetingImage?: string; // Base64 image string
+  bacentaLeaderName: string;
+  messagePreached: string;
+  discussionLedBy: string;
+  cashOffering: number;
+  onlineOffering: number;
+  totalOffering: number;
+  converts: number;
+  firstTimers: number;
+  testimonies: number;
+  guests: string[]; // Array of guest names
+  createdAt: string; // ISO string
+  updatedAt: string; // ISO string
+  createdBy?: string; // User ID who created the record
+}
+
 export interface TabOption {
   id: string;
   name: string;
@@ -148,6 +185,7 @@ export enum TabKeys {
   OUTREACH = 'outreach',
   PRAYER = 'prayer',
   PRAYER_MEMBER_DETAILS = 'prayer_member_details',
+  BACENTA_MEETINGS = 'bacenta_meetings',
   BIRTHDAYS = 'birthdays',
   PROFILE_SETTINGS = 'profile_settings',
   MY_DELETION_REQUESTS = 'my_deletion_requests',

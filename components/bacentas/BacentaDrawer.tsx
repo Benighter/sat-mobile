@@ -13,7 +13,8 @@ import {
   ChartBarIcon,
   CakeIcon,
   BuildingOfficeIcon,
-  CogIcon
+  CogIcon,
+  CalendarIcon
 } from '../icons';
 
 interface BacentaDrawerProps {
@@ -194,12 +195,13 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
           {/* Search Input (hidden in Ministry mode) */}
           {!isMinistryContext && (
             <div className="relative">
+              <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-gray-400" />
               <input
                 type="text"
                 placeholder="Search bacentas..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full px-4 py-2 sm:py-2.5 border border-gray-300 dark:border-dark-600 bg-white dark:bg-dark-700 text-gray-900 dark:text-dark-100 rounded-lg focus:ring-2 focus:ring-slate-400 dark:focus:ring-slate-500 focus:border-transparent transition-all duration-200 placeholder-gray-500 dark:placeholder-dark-400 text-sm sm:text-base"
+                className="w-full pl-10 sm:pl-12 pr-4 py-3 sm:py-2.5 border border-gray-300 dark:border-dark-600 bg-white dark:bg-dark-700 text-gray-900 dark:text-dark-100 rounded-lg focus:ring-2 focus:ring-slate-400 dark:focus:ring-slate-500 focus:border-transparent transition-all duration-200 placeholder-gray-500 dark:placeholder-dark-400 text-base sm:text-sm search-input"
               />
             </div>
           )}
@@ -224,6 +226,15 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
                     isActive={currentTab.id === TabKeys.NEW_BELIEVERS}
                     onClick={() => {
                       switchTab({ id: TabKeys.NEW_BELIEVERS, name: 'New Believers' });
+                      onClose();
+                    }}
+                  />
+                  <NavigationItem
+                    icon={<CalendarIcon className="w-4 h-4" />}
+                    label="Bacenta Meetings"
+                    isActive={currentTab.id === TabKeys.BACENTA_MEETINGS}
+                    onClick={() => {
+                      switchTab({ id: TabKeys.BACENTA_MEETINGS, name: 'Bacenta Meetings' });
                       onClose();
                     }}
                   />
@@ -265,6 +276,16 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
                     isActive={currentTab.id === TabKeys.NEW_BELIEVERS}
                     onClick={() => {
                       switchTab({ id: TabKeys.NEW_BELIEVERS, name: 'New Believers' });
+                      onClose();
+                    }}
+                  />
+
+                  <NavigationItem
+                    icon={<CalendarIcon className="w-4 h-4" />}
+                    label="Bacenta Meetings"
+                    isActive={currentTab.id === TabKeys.BACENTA_MEETINGS}
+                    onClick={() => {
+                      switchTab({ id: TabKeys.BACENTA_MEETINGS, name: 'Bacenta Meetings' });
                       onClose();
                     }}
                   />
@@ -539,6 +560,20 @@ const BacentaItem: React.FC<BacentaItemProps> = ({
             <UsersIcon className="w-3 h-3 mr-1 flex-shrink-0" />
             <span className="truncate">{memberCount} member{memberCount !== 1 ? 's' : ''}</span>
           </div>
+          {/* Meeting Schedule Indicator */}
+          {(bacenta.meetingDay || bacenta.meetingTime) && (
+            <div className={`flex items-center mt-0.5 text-xs ${isActive ? 'text-amber-600 dark:text-amber-300' : 'text-gray-500 dark:text-dark-400'} transition-colors duration-200`}>
+              <CalendarIcon className="w-3 h-3 mr-1 flex-shrink-0" />
+              <span className="truncate">
+                {bacenta.meetingDay && bacenta.meetingTime
+                  ? `${bacenta.meetingDay} ${bacenta.meetingTime}`
+                  : bacenta.meetingDay
+                    ? bacenta.meetingDay
+                    : bacenta.meetingTime
+                }
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Long Press Indicator */}

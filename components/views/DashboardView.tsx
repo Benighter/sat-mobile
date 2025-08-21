@@ -313,8 +313,8 @@ const DashboardView: React.FC = memo(() => {
   const year = displayedDate.getFullYear();
 
   // Personal card rearranging (excluding Total Members)
-  type CardId = 'confirmations' | 'attendanceRate' | 'weeklyAttendance' | 'outreach' | 'ministries' | 'prayerOverall';
-  const baseDefaultOrder: CardId[] = ['confirmations', 'attendanceRate', 'weeklyAttendance', 'outreach', 'ministries', 'prayerOverall'];
+  type CardId = 'confirmations' | 'attendanceRate' | 'weeklyAttendance' | 'outreach' | 'bacentaMeetings' | 'ministries' | 'prayerOverall';
+  const baseDefaultOrder: CardId[] = ['confirmations', 'attendanceRate', 'weeklyAttendance', 'outreach', 'bacentaMeetings', 'ministries', 'prayerOverall'];
   const defaultOrder: CardId[] = isMinistryContext
     ? (baseDefaultOrder.filter((id) => id !== 'ministries') as CardId[])
     : baseDefaultOrder;
@@ -424,6 +424,18 @@ const DashboardView: React.FC = memo(() => {
             accentColor="rose"
             description="Community outreach programs"
             onClick={() => !rearrangeMode && switchTab({ id: TabKeys.OUTREACH, name: 'Outreach' })}
+          />
+        );
+      case 'bacentaMeetings':
+        return (
+          <StatCard
+            key={id}
+            title="Bacenta Meetings"
+            value="Wed • Thu"
+            icon={<CalendarIcon className="w-full h-full" />}
+            accentColor="blue"
+            description="Weekly meeting attendance"
+            onClick={() => !rearrangeMode && switchTab({ id: TabKeys.BACENTA_MEETINGS, name: 'Bacenta Meetings' })}
           />
         );
       case 'ministries': {

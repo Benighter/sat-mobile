@@ -181,3 +181,101 @@ export const getNextPrayerWeekAnchor = (anchor: string): string => {
   a.setDate(a.getDate() + 7);
   return formatDateToYYYYMMDD(a);
 };
+
+// BACENTA MEETINGS DATE UTILITIES - Wednesday/Thursday focused
+// These functions handle the specific logic for Bacenta Meetings which occur on Wed/Thu
+
+// Get the current meeting week's Wednesday date
+// Meeting weeks run Wednesday to Thursday
+export const getCurrentMeetingWeek = (): string => {
+  const today = new Date();
+  const dayOfWeek = today.getDay(); // 0=Sunday, 1=Monday, ..., 6=Saturday
+
+  // Calculate days to get to this week's Wednesday
+  let daysToWednesday: number;
+
+  switch (dayOfWeek) {
+    case 0: // Sunday - go forward 3 days to Wednesday
+      daysToWednesday = 3;
+      break;
+    case 1: // Monday - go forward 2 days to Wednesday
+      daysToWednesday = 2;
+      break;
+    case 2: // Tuesday - go forward 1 day to Wednesday
+      daysToWednesday = 1;
+      break;
+    case 3: // Wednesday - today is Wednesday
+      daysToWednesday = 0;
+      break;
+    case 4: // Thursday - go back 1 day to Wednesday
+      daysToWednesday = -1;
+      break;
+    case 5: // Friday - go back 2 days to Wednesday
+      daysToWednesday = -2;
+      break;
+    case 6: // Saturday - go back 3 days to Wednesday
+      daysToWednesday = -3;
+      break;
+    default:
+      daysToWednesday = 0;
+  }
+
+  const wednesday = new Date(today);
+  wednesday.setDate(today.getDate() + daysToWednesday);
+  wednesday.setHours(0, 0, 0, 0);
+
+  return formatDateToYYYYMMDD(wednesday);
+};
+
+// Get Wednesday and Thursday dates for a given Wednesday date
+export const getMeetingWeekDates = (wednesdayDate: string): { wednesday: string; thursday: string } => {
+  const wed = new Date(wednesdayDate + 'T00:00:00');
+  const thu = new Date(wed);
+  thu.setDate(wed.getDate() + 1);
+
+  return {
+    wednesday: formatDateToYYYYMMDD(wed),
+    thursday: formatDateToYYYYMMDD(thu)
+  };
+};
+
+// Get array of [Wednesday, Thursday] dates for a given Wednesday
+export const getMeetingWeekRange = (wednesdayDate: string): string[] => {
+  const dates = getMeetingWeekDates(wednesdayDate);
+  return [dates.wednesday, dates.thursday];
+};
+
+// Navigate to next meeting week (next Wednesday)
+export const getNextMeetingWeek = (currentWednesday: string): string => {
+  const wed = new Date(currentWednesday + 'T00:00:00');
+  wed.setDate(wed.getDate() + 7); // Add 7 days to get next Wednesday
+  return formatDateToYYYYMMDD(wed);
+};
+
+// Navigate to previous meeting week (previous Wednesday)
+export const getPreviousMeetingWeek = (currentWednesday: string): string => {
+  const wed = new Date(currentWednesday + 'T00:00:00');
+  wed.setDate(wed.getDate() - 7); // Subtract 7 days to get previous Wednesday
+  return formatDateToYYYYMMDD(wed);
+};
+
+// Legacy functions for backward compatibility (redirecting to new functions)
+export const getWednesdayOfWeek = (anchor: string | Date = new Date()): string => {
+  if (typeof anchor === 'string') {
+    // If given a specific date, find that week's Wednesday
+    const date = new Date(anchor + 'T00:00:00');
+    const dayOfWeek = date.getDay();
+    const daysToWednesday = 3 - dayOfWeek; // Wednesday is day 3
+    const wednesday = new Date(date);
+    wednesday.setDate(date.getDate() + daysToWednesday);
+    return formatDateToYYYYMMDD(wednesday);
+  } else {
+    // If no anchor provided, get current meeting week
+    return getCurrentMeetingWeek();
+  }
+};
+
+export const getWednesdayToThursdayRange = (anchor: string | Date = new Date()): string[] => {
+  const wednesday = getWednesdayOfWeek(anchor);
+  return getMeetingWeekRange(wednesday);
+};

@@ -258,7 +258,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSignIn, error, loading, 
                 value={password}
                 onChange={handlePasswordChange}
                 onBlur={handlePasswordBlur}
-                className={`w-full px-4 pr-12 py-3.5 bg-gray-50/50 border rounded-xl focus:outline-none focus:ring-2 focus:bg-white transition-all duration-200 placeholder-gray-400 ${
+                className={`w-full px-4 pr-12 sm:pr-14 py-3.5 bg-gray-50/50 border rounded-xl focus:outline-none focus:ring-2 focus:bg-white transition-all duration-200 placeholder-gray-400 input-with-right-icon ${
                   validationErrors.password
                     ? 'border-red-300 focus:ring-red-500 focus:border-red-500'
                     : 'border-gray-200 focus:ring-blue-500 focus:border-blue-500'
@@ -270,7 +270,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSignIn, error, loading, 
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors p-1"
+                className="absolute right-3 sm:right-4 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors p-1"
                 disabled={loading}
               >
                 {showPassword ? (

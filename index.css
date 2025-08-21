@@ -497,6 +497,25 @@ body.modal-open {
     padding: 0.875rem !important;
   }
 
+  /* Fix input icon overlap on mobile */
+  .input-with-left-icon {
+    padding-left: 2.75rem !important; /* Increased from 2rem (pl-8) */
+  }
+
+  .input-with-right-icon {
+    padding-right: 2.75rem !important; /* Increased from 2rem (pr-8) */
+  }
+
+  /* Currency symbol spacing fix */
+  .currency-input {
+    padding-left: 2.5rem !important;
+  }
+
+  /* Search icon spacing fix */
+  .search-input {
+    padding-left: 2.75rem !important;
+  }
+
   /* Mobile button optimizations */
   .btn-gradient {
     padding: 0.875rem 1.5rem !important;
@@ -514,6 +533,23 @@ body.modal-open {
   .container {
     padding-left: 0.25rem;
     padding-right: 0.25rem;
+  }
+
+  /* Extra spacing for inputs with icons on very small screens */
+  .input-with-left-icon {
+    padding-left: 3rem !important; /* Even more space on tiny screens */
+  }
+
+  .input-with-right-icon {
+    padding-right: 3rem !important;
+  }
+
+  .currency-input {
+    padding-left: 2.75rem !important;
+  }
+
+  .search-input {
+    padding-left: 3rem !important;
   }
 
   /* Extra compact layout for small screens */

@@ -18,7 +18,8 @@ import LazyWrapper, {
   LazyBacentaOutreachView,
   LazyPrayerView,
   LazyPrayerMemberDetailsView,
-  LazyMinistriesView
+  LazyMinistriesView,
+  LazyBacentaMeetingsView
 } from './components/common/LazyWrapper';
 import ProfileSettingsView from './components/views/ProfileSettingsView';
 import CopyMembersView from './components/views/CopyMembersView';
@@ -222,6 +223,13 @@ const AppContent: React.FC = memo(() => {
         return (
           <LazyWrapper>
             <LazyPrayerMemberDetailsView />
+          </LazyWrapper>
+        );
+
+      case TabKeys.BACENTA_MEETINGS:
+        return (
+          <LazyWrapper>
+            <LazyBacentaMeetingsView />
           </LazyWrapper>
         );
 

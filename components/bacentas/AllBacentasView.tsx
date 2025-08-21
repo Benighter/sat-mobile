@@ -76,7 +76,9 @@ const AllBacentasView: React.FC = () => {
                       value={query}
                       onChange={(v) => setQuery(v)}
                       wrapperClassName="mb-0"
-                      className="px-4 bg-white border-gray-300 focus:ring-blue-600 text-base py-3"
+                      className="bg-white border-gray-300 focus:ring-blue-600 text-base py-3"
+                      leftIcon={<SearchIcon className="w-4 h-4 sm:w-5 sm:h-5" />}
+                      iconType="search"
                     />
                   </div>
                 </div>

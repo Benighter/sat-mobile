@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useAppContext } from '../../contexts/FirebaseAppContext';
 import { Member } from '../../types';
 import { SmartTextParser } from '../../utils/smartTextParser';
-import { UserIcon, PhoneIcon, CalendarIcon, ChevronLeftIcon, ChevronRightIcon } from '../icons';
+import { UserIcon, PhoneIcon, CalendarIcon, ChevronLeftIcon, ChevronRightIcon, SearchIcon } from '../icons';
 import { formatDisplayDate } from '../../utils/dateUtils';
 
 interface Column {
@@ -219,13 +219,16 @@ const NewBelieversTableView: React.FC = () => {
           {/* Search and Filters */}
           <div className="flex flex-col space-y-3 sm:flex-row sm:space-y-0 sm:space-x-3 sm:items-end justify-center">
             <div className="w-full sm:w-64">
-              <input
-                type="text"
-                placeholder="Search born again..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full px-3 py-3 sm:py-2 border border-gray-300 dark:border-dark-600 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent transition-colors text-base sm:text-sm bg-white dark:bg-dark-700 text-gray-900 dark:text-dark-100 placeholder-gray-500 dark:placeholder-dark-400 text-center"
-              />
+              <div className="relative">
+                <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Search born again..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-10 sm:pl-12 pr-4 py-3 sm:py-2 border border-gray-300 dark:border-dark-600 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent transition-colors text-base sm:text-sm bg-white dark:bg-dark-700 text-gray-900 dark:text-dark-100 placeholder-gray-500 dark:placeholder-dark-400 text-center search-input"
+                />
+              </div>
             </div>
             <div className="w-full sm:w-48">
               <select
