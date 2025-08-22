@@ -2,7 +2,7 @@ import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useAppContext } from '../../contexts/FirebaseAppContext';
 import { Member, ConfirmationStatus } from '../../types';
-import { formatDisplayDate, getSundaysOfMonth, getMonthName, getUpcomingSunday } from '../../utils/dateUtils';
+import { formatDisplayDate, getMonthName, getUpcomingSunday } from '../../utils/dateUtils';
 import { isDateEditable } from '../../utils/attendanceUtils';
 import { canDeleteMemberWithRole, hasAdminPrivileges } from '../../utils/permissionUtils';
 import { SmartTextParser } from '../../utils/smartTextParser';
@@ -38,18 +38,24 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
     transferMemberToConstituencyHandler,
   titheRecords,
   markTitheHandler,
+  // Global month navigation/state from context (unifies month across views)
+  displayedDate,
+  displayedSundays,
+  navigateToPreviousMonth,
+  navigateToNextMonth,
   } = useAppContext();
 
   // Get user preference for editing previous Sundays
   const allowEditPreviousSundays = userProfile?.preferences?.allowEditPreviousSundays ?? false;
 
   const [searchTerm, setSearchTerm] = useState('');
-  const [displayedDate, setDisplayedDate] = useState(new Date());
+  // Use global displayedDate from context for consistent month across the app
   const [roleFilter, setRoleFilter] = useState<'all' | 'Bacenta Leader' | 'Fellowship Leader' | 'Member'>('all');
   const [showFrozen, setShowFrozen] = useState(false);
   // Tithe-only UI state
   const [showPaidOnly, setShowPaidOnly] = useState(false);
-  const [titheSort, setTitheSort] = useState<'none' | 'paid' | 'amount_desc' | 'amount_asc'>('none');
+  // Default to 'paid' so Tithe view shows paid members first
+  const [titheSort, setTitheSort] = useState<'none' | 'paid' | 'amount_desc' | 'amount_asc'>('paid');
 
   // Tithe context flag (passed from Dashboard Tithe card)
   const isTithe = (currentTab?.data as any)?.isTithe === true;
@@ -66,27 +72,16 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
   // Get upcoming Sunday for confirmation
   const upcomingSunday = useMemo(() => getUpcomingSunday(), []);
 
-  // Get displayed month's Sundays
-  const currentMonthSundays = useMemo(() => {
-    return getSundaysOfMonth(displayedDate.getFullYear(), displayedDate.getMonth());
+  // Use context-provided Sundays for the displayed month
+  const currentMonthSundays = useMemo(() => displayedSundays, [displayedSundays]);
+
+  // Lock tithe editing when not on the current (real) month
+  const isCurrentCalendarMonth = useMemo(() => {
+    const now = new Date();
+    return now.getFullYear() === displayedDate.getFullYear() && now.getMonth() === displayedDate.getMonth();
   }, [displayedDate]);
 
-  // Month navigation
-  const navigateToPreviousMonth = () => {
-    setDisplayedDate(prevDate => {
-      const newDate = new Date(prevDate);
-      newDate.setMonth(newDate.getMonth() - 1);
-      return newDate;
-    });
-  };
-
-  const navigateToNextMonth = () => {
-    setDisplayedDate(prevDate => {
-      const newDate = new Date(prevDate);
-      newDate.setMonth(newDate.getMonth() + 1);
-      return newDate;
-    });
-  };
+  // Month navigation is provided by context
 
   const handlePhoneClick = async (phoneNumber: string) => {
     await SmartTextParser.copyPhoneToClipboard(phoneNumber, showToast);
@@ -304,17 +299,18 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
               const rec = titheByMember.get(member.id);
               const checked = !!rec?.paid;
               const amount = Number(rec?.amount || 0);
-              return (
+      return (
                 <div className="flex justify-center">
                   <input
                     type="checkbox"
                     className="h-4 w-4 text-emerald-600"
                     checked={checked}
+        disabled={!isCurrentCalendarMonth}
                     onChange={(e) => {
                       const nextPaid = e.target.checked;
                       markTitheHandler(member.id, nextPaid, amount);
                     }}
-                    title={checked ? 'Mark as not paid' : 'Mark as paid'}
+        title={!isCurrentCalendarMonth ? 'Past months are locked' : (checked ? 'Mark as not paid' : 'Mark as paid')}
                   />
                 </div>
               );
@@ -328,13 +324,14 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
             render: (member: Member) => {
               const rec = titheByMember.get(member.id);
               const value = rec ? String(rec.amount ?? 0) : '';
-              return (
+      return (
                 <div className="flex justify-center">
                   <input
                     key={`tithe_amount_${member.id}_${rec?.amount ?? 0}`}
                     type="text"
                     inputMode="decimal"
                     defaultValue={value ? formatCurrency(Number(value)) : ''}
+        disabled={!isCurrentCalendarMonth}
                     onFocus={(e) => {
                       // Show raw number on focus
                       const raw = (rec?.amount ?? 0).toString();
@@ -358,7 +355,7 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
                     }}
                     className="w-28 px-2 py-1 border border-gray-300 rounded-md text-sm text-gray-900"
                     placeholder="0.00"
-                    title={rec?.lastUpdated ? `Last updated: ${new Date(rec.lastUpdated).toLocaleString()}` : 'Enter tithe amount'}
+                    title={!isCurrentCalendarMonth ? 'Past months are locked' : (rec?.lastUpdated ? `Last updated: ${new Date(rec.lastUpdated).toLocaleString()}` : 'Enter tithe amount')}
                   />
                 </div>
               );
@@ -592,6 +589,9 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
             <div className="text-center text-sm text-gray-800 font-semibold mb-2">
               Total Tithe: {formatCurrency(totalTithe)}
               <div className="text-xs text-gray-600 font-normal mt-1">Paid: {paidCount} / {activeCount}</div>
+              {!isCurrentCalendarMonth && (
+                <div className="mt-1 text-[11px] text-gray-500">Past months are view-only. Navigate to the current month to edit.</div>
+              )}
             </div>
           )}
 

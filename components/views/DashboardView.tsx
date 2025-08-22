@@ -2,7 +2,7 @@
 import React, { memo, useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useAppContext } from '../../contexts/FirebaseAppContext';
 // import { hasAdminPrivileges } from '../../utils/permissionUtils';
-import { PeopleIcon, AttendanceIcon, CalendarIcon, ChartBarIcon, PrayerIcon, TableIcon } from '../icons';
+import { PeopleIcon, AttendanceIcon, CalendarIcon, ChartBarIcon, PrayerIcon, CurrencyDollarIcon } from '../icons';
 import { getMonthName, getCurrentOrMostRecentSunday, formatFullDate, getUpcomingSunday, getCurrentMeetingWeek, getMeetingWeekRange } from '../../utils/dateUtils';
 import { db } from '../../firebase.config';
 import { doc, getDoc } from 'firebase/firestore';
@@ -112,7 +112,7 @@ const StatCard: React.FC<StatCardProps> = memo(({ title, value, icon, descriptio
 
 
 const DashboardView: React.FC = memo(() => {
-  const { members, attendanceRecords, newBelievers, displayedSundays, displayedDate, sundayConfirmations, guests, switchTab, user, userProfile, currentChurchId, allOutreachMembers, bacentas, prayerRecords, meetingRecords, isMinistryContext } = useAppContext(); // Use displayedSundays
+  const { members, attendanceRecords, newBelievers, displayedSundays, displayedDate, sundayConfirmations, guests, switchTab, user, userProfile, currentChurchId, allOutreachMembers, bacentas, prayerRecords, meetingRecords, isMinistryContext, titheRecords } = useAppContext(); // Use displayedSundays
 
   const activeMembers = useMemo(() => {
     const filtered = members.filter(m => !m.frozen);
@@ -355,6 +355,13 @@ const DashboardView: React.FC = memo(() => {
   const monthName = getMonthName(displayedDate.getMonth());
   const year = displayedDate.getFullYear();
 
+  // Tithe card counts: paid vs total (active members) for the selected month
+  const paidTithesCount = useMemo(() => {
+    if (!titheRecords?.length || !members?.length) return 0;
+    const activeIds = new Set(members.filter(m => !m.frozen).map(m => m.id));
+    return titheRecords.reduce((acc, r) => acc + (r.paid && activeIds.has(r.memberId) ? 1 : 0), 0);
+  }, [titheRecords, members]);
+
   // Personal card rearranging (excluding Total Members)
   type CardId = 'confirmations' | 'attendanceRate' | 'weeklyAttendance' | 'outreach' | 'bacentaMeetings' | 'ministries' | 'prayerOverall' | 'tithe';
   const baseDefaultOrder: CardId[] = [
@@ -450,10 +457,10 @@ const DashboardView: React.FC = memo(() => {
           <StatCard
             key={id}
             title="Tithe"
-            value={activeMembers}
-            icon={<TableIcon className="w-full h-full" />}
-            accentColor="indigo"
-            description={`All members`}
+            value={`${paidTithesCount}/${activeMembers}`}
+            icon={<CurrencyDollarIcon className="w-full h-full" />}
+            accentColor="emerald"
+            description={`For ${monthName}`}
             onClick={() => !rearrangeMode && switchTab({ id: 'all_members', name: 'Tithe', data: { isTithe: true } })}
           />
         );
