@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { getLatestMeetingDay, formatFullDate, formatDateToYYYYMMDD } from '../../utils/dateUtils';
+import { getLatestMeetingDay, formatDateToYYYYMMDD } from '../../utils/dateUtils';
 import { CalendarIcon, ChevronLeftIcon, ChevronRightIcon, ClockIcon, BuildingOfficeIcon, CheckCircleIcon } from '../icons';
 import { useAppContext } from '../../contexts/FirebaseAppContext';
 import BacentaAttendanceForm from './BacentaAttendanceForm';
@@ -40,31 +40,40 @@ const MeetingDatePicker: React.FC<{
     }
   };
 
-  const dayName = new Date(currentDate + 'T00:00:00').getDay() === 3 ? 'Wednesday' : 'Thursday';
+  const dateObj = new Date(currentDate + 'T00:00:00');
+  const dayName = dateObj.getDay() === 3 ? 'Wednesday' : 'Thursday';
+  // Friendly full date without weekday to avoid duplication like "Thursday · Thursday, Aug ..."
+  const fullDateNoWeekday = dateObj.toLocaleDateString(undefined, {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  });
 
   return (
-    <div className="inline-flex items-center gap-2 bg-white/70 dark:bg-dark-700/60 rounded-full px-2 py-1.5 border border-gray-200 dark:border-dark-600 shadow-sm relative z-20 pointer-events-auto">
+    <div className="w-full max-w-md mx-auto flex items-center justify-between gap-2 bg-white rounded-full px-3 py-2 border border-gray-200 shadow-sm relative z-20 pointer-events-auto text-gray-800">
       <button
         type="button"
-        className="p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-dark-600 text-gray-600 pointer-events-auto relative z-30"
+        className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-dark-600 text-gray-700 dark:text-gray-300 pointer-events-auto relative z-30"
         onClick={handlePrevious}
         aria-label="Previous meeting date"
       >
-        <ChevronLeftIcon className="w-4 h-4" />
+        <ChevronLeftIcon className="w-5 h-5" />
       </button>
-      <div className="flex items-center gap-2 px-2">
-        <CalendarIcon className="w-4 h-4 text-gray-600" />
-        <span className="font-semibold tracking-wide">
-          {dayName} · {formatFullDate(currentDate)}
+      <div className="flex items-center gap-2 px-1 sm:px-2 mx-auto text-center">
+        <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center">
+          <CalendarIcon className="w-3.5 h-3.5 text-gray-700" />
+        </div>
+        <span className="font-semibold tracking-wide text-gray-800 text-sm sm:text-base whitespace-normal">
+          {dayName} · {fullDateNoWeekday}
         </span>
       </div>
       <button
         type="button"
-        className="p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-dark-600 text-gray-600 pointer-events-auto relative z-30"
+        className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-dark-600 text-gray-700 dark:text-gray-300 pointer-events-auto relative z-30"
         onClick={handleNext}
         aria-label="Next meeting date"
       >
-        <ChevronRightIcon className="w-4 h-4" />
+        <ChevronRightIcon className="w-5 h-5" />
       </button>
     </div>
   );
@@ -148,15 +157,13 @@ const BacentaMeetingsView: React.FC = () => {
 
             {/* Day Summary: Meetings only */}
             {bacentasForCurrentDay.length > 0 && (
-              <div className="mt-6 bg-white/80 backdrop-blur-sm rounded-xl border border-blue-200 p-4 shadow-sm">
-                <div className="flex items-center justify-center space-x-2">
-                  <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                    <BuildingOfficeIcon className="w-4 h-4 text-blue-600" />
+              <div className="mt-6 w-full max-w-[320px] mx-auto">
+                <div className="relative rounded-2xl border border-blue-200 bg-white shadow-sm px-6 py-5 text-center">
+                  <div className="w-10 h-10 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-2.5">
+                    <BuildingOfficeIcon className="w-5 h-5 text-blue-600" />
                   </div>
-                  <div className="text-center">
-                    <div className="text-lg font-bold text-blue-900">{bacentasForCurrentDay.length}</div>
-                    <div className="text-xs text-blue-600">Bacenta{bacentasForCurrentDay.length !== 1 ? 's' : ''} Meeting</div>
-                  </div>
+                  <div className="text-2xl font-extrabold leading-none text-blue-900">{bacentasForCurrentDay.length}</div>
+                  <div className="text-[11px] uppercase tracking-wider text-blue-700 mt-1">Bacentas Meeting</div>
                 </div>
               </div>
             )}

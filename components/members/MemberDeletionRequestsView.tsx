@@ -14,6 +14,7 @@ import {
   ClockIcon,
   ExclamationTriangleIcon,
   CalendarIcon,
+  SearchIcon,
   UserGroupIcon,
   InformationCircleIcon
 } from '../icons';
@@ -266,7 +267,7 @@ const MemberDeletionRequestsView: React.FC<MemberDeletionRequestsViewProps> = ()
                 placeholder="Search by member name or requester..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 sm:pl-12 pr-4 py-3 sm:py-2 border border-gray-300 dark:border-dark-600 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent transition-colors text-base sm:text-sm bg-white dark:bg-dark-700 text-gray-900 dark:text-dark-100 placeholder-gray-500 dark:placeholder-dark-400 search-input"
+                className="w-full pl-10 sm:pl-12 pr-10 sm:pr-12 py-3 sm:py-2 border border-gray-300 dark:border-dark-600 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent transition-colors text-base sm:text-sm bg-white dark:bg-dark-700 text-gray-900 dark:text-dark-100 placeholder-gray-500 dark:placeholder-dark-400 text-center search-input"
               />
             </div>
           </div>

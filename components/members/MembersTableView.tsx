@@ -167,6 +167,12 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
     return filteredMembers.filter(m => (showFrozen ? true : !m.frozen));
   }, [filteredMembers, showFrozen]);
 
+  // Memoized counts for cleaner UI rendering
+  const activeCount = useMemo(() => filteredMembers.filter(m => !m.frozen).length, [filteredMembers]);
+  const countBL = useMemo(() => filteredMembers.filter(m => !m.frozen && (m.role || 'Member') === 'Bacenta Leader').length, [filteredMembers]);
+  const countFL = useMemo(() => filteredMembers.filter(m => !m.frozen && (m.role || 'Member') === 'Fellowship Leader').length, [filteredMembers]);
+  const countM = useMemo(() => filteredMembers.filter(m => !m.frozen && (m.role || 'Member') === 'Member').length, [filteredMembers]);
+
 
 
   // Define fixed columns (numbering and name)
@@ -445,61 +451,57 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
       {/* Clean Header */}
       <div className="bg-white rounded-lg desktop:rounded-xl shadow-sm desktop:shadow-md border border-gray-200 p-4 desktop:p-5 desktop-lg:p-6">
         <div className="text-center">
-          {/* Title */}
-          <div className="flex items-center justify-center space-x-2 mb-3">
-            <CalendarIcon className="w-5 h-5 desktop:w-6 desktop:h-6 text-blue-600" />
-            <h2 className="text-xl desktop:text-2xl desktop-lg:text-3xl font-semibold text-gray-900">
-              Attendance for {currentMonthName} {currentYear}
-            </h2>
-          </div>
+          {/* Title (centered, no icon) */}
+          <h2 className="text-xl desktop:text-2xl desktop-lg:text-3xl font-semibold text-gray-900 mb-3">
+            Attendance for {currentMonthName} {currentYear}
+          </h2>
           
           {/* Summary */}
           <div className="flex items-center justify-center space-x-2 text-sm text-gray-600 mb-3">
             <span>{currentMonthSundays.length} Sunday{currentMonthSundays.length !== 1 ? 's' : ''} in {currentMonthName}</span>
             <span>•</span>
-            <span>{filteredMembers.filter(m => !m.frozen).length} active member{filteredMembers.filter(m => !m.frozen).length !== 1 ? 's' : ''}</span>
+            <span>{activeCount} active member{activeCount !== 1 ? 's' : ''}</span>
           </div>
 
           {/* Role Statistics */}
-          <div className="flex items-center justify-center space-x-8 text-sm mb-4">
-            <div className="flex items-center justify-center space-x-2 min-w-0">
-              <span className="w-3 h-3 bg-green-500 rounded-full flex-shrink-0"></span>
-              <span className="text-gray-700 font-medium whitespace-nowrap">
-                {filteredMembers.filter(m => !m.frozen && (m.role || 'Member') === 'Bacenta Leader').length} BL
-              </span>
+          <div className="flex items-center justify-center gap-5 text-sm mb-4">
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-green-50 border border-green-200">
+              <span className="w-2.5 h-2.5 bg-green-500 rounded-full"></span>
+              <span className="text-green-800 font-semibold">{countBL}</span>
+              <span className="text-green-700 text-xs font-medium">BL</span>
             </div>
-            <div className="flex items-center justify-center space-x-2 min-w-0">
-              <span className="w-3 h-3 bg-red-500 rounded-full flex-shrink-0"></span>
-              <span className="text-gray-700 font-medium whitespace-nowrap">
-                {filteredMembers.filter(m => !m.frozen && (m.role || 'Member') === 'Fellowship Leader').length} FL
-              </span>
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-50 border border-red-200">
+              <span className="w-2.5 h-2.5 bg-red-500 rounded-full"></span>
+              <span className="text-red-800 font-semibold">{countFL}</span>
+              <span className="text-red-700 text-xs font-medium">FL</span>
             </div>
-            <div className="flex items-center justify-center space-x-2 min-w-0">
-              <span className="w-3 h-3 bg-blue-500 rounded-full flex-shrink-0"></span>
-              <span className="text-gray-700 font-medium whitespace-nowrap">
-                {filteredMembers.filter(m => !m.frozen && (m.role || 'Member') === 'Member').length} M
-              </span>
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-50 border border-blue-200">
+              <span className="w-2.5 h-2.5 bg-blue-500 rounded-full"></span>
+              <span className="text-blue-800 font-semibold">{countM}</span>
+              <span className="text-blue-700 text-xs font-medium">M</span>
             </div>
           </div>
 
           {/* Navigation */}
-          <div className="flex items-center justify-center space-x-4 mb-4">
-            <button
-              onClick={navigateToPreviousMonth}
-              className="flex items-center justify-center w-10 h-10 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-lg transition-colors duration-200 shadow-sm"
-              aria-label="Previous month"
-              title="Previous month"
-            >
-              <ChevronLeftIcon className="w-5 h-5" />
-            </button>
-            <button
-              onClick={navigateToNextMonth}
-              className="flex items-center justify-center w-10 h-10 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-lg transition-colors duration-200 shadow-sm"
-              aria-label="Next month"
-              title="Next month"
-            >
-              <ChevronRightIcon className="w-5 h-5" />
-            </button>
+          <div className="flex items-center justify-center mb-4">
+            <div className="inline-flex items-center bg-white border border-gray-300 rounded-xl shadow-sm overflow-hidden">
+              <button
+                onClick={navigateToPreviousMonth}
+                className="flex items-center justify-center w-10 h-10 hover:bg-gray-50 text-gray-700 transition-colors duration-200 border-r border-gray-300"
+                aria-label="Previous month"
+                title="Previous month"
+              >
+                <ChevronLeftIcon className="w-5 h-5" />
+              </button>
+              <button
+                onClick={navigateToNextMonth}
+                className="flex items-center justify-center w-10 h-10 hover:bg-gray-50 text-gray-700 transition-colors duration-200"
+                aria-label="Next month"
+                title="Next month"
+              >
+                <ChevronRightIcon className="w-5 h-5" />
+              </button>
+            </div>
           </div>
 
           {/* Search, Filter, Frozen Toggle, and Copy */}
@@ -512,7 +514,7 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
                   placeholder="Search members..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 sm:pl-12 pr-4 py-3 sm:py-2 border border-gray-300 dark:border-dark-600 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent transition-colors text-base sm:text-sm bg-white dark:bg-dark-700 text-gray-900 dark:text-dark-100 placeholder-gray-500 dark:placeholder-dark-400 text-center search-input"
+                  className="w-full pl-10 sm:pl-12 pr-10 sm:pr-12 py-3 sm:py-2 border border-gray-300 dark:border-dark-600 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent transition-colors text-base sm:text-sm bg-white dark:bg-dark-700 text-gray-900 dark:text-dark-100 placeholder-gray-500 dark:placeholder-dark-400 text-center search-input"
                 />
               </div>
             </div>
@@ -743,7 +745,7 @@ const MemberActionsDropdown: React.FC<MemberActionsDropdownProps> = ({
   showToast,
   updateMemberHandler,
   isMinistryContext,
-  transferMemberToConstituencyHandler
+  // transferMemberToConstituencyHandler
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);

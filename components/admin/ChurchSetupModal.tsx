@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
-import { X, Building2, Users, MapPin, Phone, Mail, Globe } from 'lucide-react';
-import { userService } from '../services/userService';
-import { authService } from '../services/firebaseService';
+import { Building2, MapPin, Phone, Mail, Globe } from 'lucide-react';
+import { userService } from '../../services/userService';
 
 interface ChurchSetupModalProps {
   isOpen: boolean;
@@ -127,7 +126,7 @@ const ChurchSetupModal: React.FC<ChurchSetupModalProps> = ({ isOpen, onComplete,
                 type="text"
                 value={formData.name}
                 onChange={(e) => handleInputChange('name', e.target.value)}
-                className={`w-full pl-10 pr-4 py-3 bg-white/10 border rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors ${
+                className={`w-full pl-10 pr-10 sm:pr-12 py-3 text-center bg-white/10 border rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors ${
                   errors.name ? 'border-red-400' : 'border-white/20'
                 }`}
                 placeholder="Enter your church name"
@@ -147,7 +146,7 @@ const ChurchSetupModal: React.FC<ChurchSetupModalProps> = ({ isOpen, onComplete,
                 value={formData.address}
                 onChange={(e) => handleInputChange('address', e.target.value)}
                 rows={3}
-                className={`w-full pl-10 pr-4 py-3 bg-white/10 border rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors resize-none ${
+                className={`w-full pl-10 pr-10 sm:pr-12 py-3 text-center bg-white/10 border rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors resize-none ${
                   errors.address ? 'border-red-400' : 'border-white/20'
                 }`}
                 placeholder="Enter your church address"
@@ -169,7 +168,7 @@ const ChurchSetupModal: React.FC<ChurchSetupModalProps> = ({ isOpen, onComplete,
                   type="tel"
                   value={formData.phone}
                   onChange={(e) => handleInputChange('phone', e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+                  className="w-full pl-10 pr-10 sm:pr-12 py-3 text-center bg-white/10 border border-white/20 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
                   placeholder="+1 (555) 123-4567"
                 />
               </div>
@@ -186,7 +185,7 @@ const ChurchSetupModal: React.FC<ChurchSetupModalProps> = ({ isOpen, onComplete,
                   type="email"
                   value={formData.email}
                   onChange={(e) => handleInputChange('email', e.target.value)}
-                  className={`w-full pl-10 pr-4 py-3 bg-white/10 border rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors ${
+                  className={`w-full pl-10 pr-10 sm:pr-12 py-3 text-center bg-white/10 border rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors ${
                     errors.email ? 'border-red-400' : 'border-white/20'
                   }`}
                   placeholder="contact@yourchurch.com"
@@ -207,7 +206,7 @@ const ChurchSetupModal: React.FC<ChurchSetupModalProps> = ({ isOpen, onComplete,
                 type="url"
                 value={formData.website}
                 onChange={(e) => handleInputChange('website', e.target.value)}
-                className={`w-full pl-10 pr-4 py-3 bg-white/10 border rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors ${
+                className={`w-full pl-10 pr-10 sm:pr-12 py-3 text-center bg-white/10 border rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors ${
                   errors.website ? 'border-red-400' : 'border-white/20'
                 }`}
                 placeholder="https://www.yourchurch.com"
@@ -249,7 +248,9 @@ const ChurchSetupModal: React.FC<ChurchSetupModalProps> = ({ isOpen, onComplete,
                 </>
               ) : (
                 <>
-                  <Users className="w-5 h-5" />
+                  <svg className="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128v-2.88a3 3 0 00-3-3H6a3 3 0 00-3 3v2.88M8.25 9.75A3.75 3.75 0 108.25 2.25a3.75 3.75 0 000 7.5zM20.25 19.128V17.25a3 3 0 00-2.25-2.904M18.75 8.25a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z" />
+                  </svg>
                   <span>Complete Church Setup</span>
                 </>
               )}

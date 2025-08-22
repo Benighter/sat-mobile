@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useAppContext } from '../../contexts/FirebaseAppContext';
 import { getTuesdayToSundayRange, getPreviousPrayerWeekAnchor, getNextPrayerWeekAnchor, formatFullDate } from '../../utils/dateUtils';
-import { isDateEditable } from '../../utils/attendanceUtils';
 import { hasAdminPrivileges } from '../../utils/permissionUtils';
 import { CheckIcon, XMarkIcon, ChevronLeftIcon, ChevronRightIcon, CalendarIcon, ClipboardIcon, SearchIcon } from '../icons';
 import { Member, PrayerStatus, TabKeys } from '../../types';
@@ -18,7 +17,7 @@ const PrayerView: React.FC = () => {
     return 'all';
   };
 
-  const allowEditPreviousSundays = userProfile?.preferences?.allowEditPreviousSundays ?? false;
+  // const allowEditPreviousSundays = userProfile?.preferences?.allowEditPreviousSundays ?? false;
   const isAdmin = hasAdminPrivileges(userProfile);
 
   const weekDates = useMemo(() => getTuesdayToSundayRange(anchorDate), [anchorDate]);
@@ -339,7 +338,7 @@ const PrayerView: React.FC = () => {
                   placeholder="Search members..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 sm:pl-12 pr-4 py-3 sm:py-2 border border-gray-300 dark:border-dark-600 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent bg-white dark:bg-dark-700 text-gray-900 dark:text-dark-100 placeholder-gray-500 dark:placeholder-dark-400 text-center search-input"
+                  className="w-full pl-10 sm:pl-12 pr-10 sm:pr-12 py-3 sm:py-2 border border-gray-300 dark:border-dark-600 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent bg-white dark:bg-dark-700 text-gray-900 dark:text-dark-100 placeholder-gray-500 dark:placeholder-dark-400 text-center search-input"
                 />
               </div>
             </div>
@@ -401,7 +400,6 @@ const PrayerView: React.FC = () => {
                 const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
                 const target = new Date(selectedDay + 'T00:00:00');
                 const isFuture = target.getTime() > startOfToday.getTime();
-                const isPast = target.getTime() < startOfToday.getTime();
                 const title = editable
                   ? 'Mark all not-present members as Missed for the selected day'
                   : (isFuture
@@ -512,7 +510,6 @@ const PrayerView: React.FC = () => {
                   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
                   const target = new Date(date + 'T00:00:00');
                   const isFuture = target.getTime() > startOfToday.getTime();
-                  const isPast = target.getTime() < startOfToday.getTime();
 
                   const baseClasses = 'w-6 h-6 md:w-7 md:h-7 rounded border-2 flex items-center justify-center transition-all duration-200';
                   const classes = !editable

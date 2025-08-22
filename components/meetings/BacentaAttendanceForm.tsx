@@ -39,6 +39,10 @@ const BacentaAttendanceForm: React.FC<BacentaAttendanceFormProps> = ({
   const [converts, setConverts] = useState<number>(existingRecord?.converts ?? 0);
   const [testimonies, setTestimonies] = useState<number>(existingRecord?.testimonies ?? 0);
 
+  // Track present members (manually ticked) – keep this near other state to avoid use-before-declare
+  const [presentMemberIds, setPresentMemberIds] = useState<string[]>(existingRecord?.presentMemberIds || []);
+  const [memberQuery, setMemberQuery] = useState('');
+
   // Refs
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -242,14 +246,27 @@ const BacentaAttendanceForm: React.FC<BacentaAttendanceFormProps> = ({
     return <div>Bacenta not found</div>;
   }
 
+  // Friendly date helpers for header
+  const meetingDateObj = useMemo(() => new Date(meetingDate), [meetingDate]);
+  const weekday = useMemo(
+    () => meetingDateObj.toLocaleDateString(undefined, { weekday: 'long' }),
+    [meetingDateObj]
+  );
+  const longDate = useMemo(
+    () => meetingDateObj.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }),
+    [meetingDateObj]
+  );
+
   const sortedBacentaMembers = useMemo(() => {
-    return [...bacentaMembers].sort((a, b) => (
+    const sorted = [...bacentaMembers].sort((a, b) => (
       `${a.firstName} ${a.lastName || ''}`.localeCompare(`${b.firstName} ${b.lastName || ''}`)
     ));
-  }, [bacentaMembers]);
+    if (!memberQuery.trim()) return sorted;
+    const q = memberQuery.trim().toLowerCase();
+    return sorted.filter(m => `${m.firstName} ${m.lastName || ''}`.toLowerCase().includes(q));
+  }, [bacentaMembers, memberQuery]);
 
-  // Track present members (manually ticked)
-  const [presentMemberIds, setPresentMemberIds] = useState<string[]>(existingRecord?.presentMemberIds || []);
+  // Toggle present members
   const toggleMemberPresent = (id: string) => {
     if (isViewMode) return;
     setPresentMemberIds(prev => (prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]));
@@ -257,6 +274,11 @@ const BacentaAttendanceForm: React.FC<BacentaAttendanceFormProps> = ({
 
   const totalOffering = (cashOffering || 0) + (onlineOffering || 0);
   const totalCount = presentMemberIds.length + firstTimerNames.length;
+  const attendeeMembers = useMemo(() => {
+    return bacentaMembers
+      .filter(m => presentMemberIds.includes(m.id))
+      .sort((a, b) => (`${a.firstName} ${a.lastName || ''}`).localeCompare(`${b.firstName} ${b.lastName || ''}`));
+  }, [bacentaMembers, presentMemberIds]);
 
   const addFirstTimer = () => {
     const name = firstTimerInput.trim();
@@ -265,122 +287,151 @@ const BacentaAttendanceForm: React.FC<BacentaAttendanceFormProps> = ({
     setFirstTimerInput('');
   };
 
+  const markAllPresent = () => {
+    if (isViewMode) return;
+    const allIds = sortedBacentaMembers.map(m => m.id);
+    setPresentMemberIds(allIds);
+  };
+
+  const clearAllPresent = () => {
+    if (isViewMode) return;
+    setPresentMemberIds([]);
+  };
+
   const removeFirstTimer = (index: number) => {
     setFirstTimerNames(prev => prev.filter((_, i) => i !== index));
   };
 
+  // Lightweight Zoom/Pan for fullscreen image
+  const [zoom, setZoom] = useState(1);
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const isPanningRef = useRef(false);
+  const panStartRef = useRef({ x: 0, y: 0 });
+  const lastOffsetRef = useRef({ x: 0, y: 0 });
+  const pinchStartDistRef = useRef<number | null>(null);
+  const pinchStartZoomRef = useRef(1);
+
+  const clamp = (val: number, min: number, max: number) => Math.min(Math.max(val, min), max);
+  const resetZoomPan = () => { setZoom(1); setOffset({ x: 0, y: 0 }); };
+
+  React.useEffect(() => {
+    if (showImageModal) resetZoomPan();
+  }, [showImageModal]);
+
+  const handleWheelZoom = (e: React.WheelEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const delta = -e.deltaY; // up to zoom in
+    const next = clamp(zoom + (delta > 0 ? 0.15 : -0.15), 1, 4);
+    setZoom(next);
+    if (next === 1) setOffset({ x: 0, y: 0 });
+  };
+
+  const onMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (zoom === 1) return;
+    isPanningRef.current = true;
+    panStartRef.current = { x: e.clientX, y: e.clientY };
+    lastOffsetRef.current = { ...offset };
+  };
+
+  const onMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!isPanningRef.current) return;
+    const dx = e.clientX - panStartRef.current.x;
+    const dy = e.clientY - panStartRef.current.y;
+    setOffset({ x: lastOffsetRef.current.x + dx, y: lastOffsetRef.current.y + dy });
+  };
+
+  const onMouseUp = () => {
+    isPanningRef.current = false;
+  };
+
+  const distance = (
+    a: { clientX: number; clientY: number },
+    b: { clientX: number; clientY: number }
+  ) => Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+
+  const onTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (e.touches.length === 2) {
+      pinchStartDistRef.current = distance(e.touches[0], e.touches[1]);
+      pinchStartZoomRef.current = zoom;
+    } else if (e.touches.length === 1 && zoom > 1) {
+      isPanningRef.current = true;
+      panStartRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      lastOffsetRef.current = { ...offset };
+    }
+  };
+
+  const onTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (e.touches.length === 2 && pinchStartDistRef.current) {
+      const dist = distance(e.touches[0], e.touches[1]);
+      const ratio = dist / pinchStartDistRef.current;
+      const next = clamp(pinchStartZoomRef.current * ratio, 1, 4);
+      setZoom(next);
+      if (next === 1) setOffset({ x: 0, y: 0 });
+    } else if (e.touches.length === 1 && isPanningRef.current) {
+      const dx = e.touches[0].clientX - panStartRef.current.x;
+      const dy = e.touches[0].clientY - panStartRef.current.y;
+      setOffset({ x: lastOffsetRef.current.x + dx, y: lastOffsetRef.current.y + dy });
+    }
+  };
+
+  const onTouchEnd = () => {
+    if (pinchStartDistRef.current) {
+      pinchStartDistRef.current = null;
+    }
+    isPanningRef.current = false;
+  };
+
+  const onDoubleClick = () => {
+    if (zoom > 1) {
+      setZoom(1);
+      setOffset({ x: 0, y: 0 });
+    } else {
+      setZoom(2);
+    }
+  };
+
   return (
     <>
-      {/* Image Cropper Modal */}
-      {showImageCropper && tempImageUrl && (
-        <ImageCropper
-          image={tempImageUrl}
-          onCropComplete={handleImageCrop}
-          onCancel={handleCropCancel}
-          aspectRatio={16/9} // Landscape aspect ratio for meeting photos
-        />
-      )}
-
-      {/* Image View Modal */}
-      {showImageModal && meetingImageBase64 && (
-        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50" onClick={() => setShowImageModal(false)}>
-          <div className="relative max-w-4xl max-h-[90vh] p-4">
-            <button
-              onClick={() => setShowImageModal(false)}
-              className="absolute top-2 right-2 bg-white bg-opacity-20 hover:bg-opacity-30 text-white p-2 rounded-full transition-all duration-200"
-            >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-            <img
-              src={meetingImageBase64}
-              alt="Meeting photo - full size"
-              className="max-w-full max-h-full object-contain rounded-lg"
-              onClick={(e) => e.stopPropagation()}
-            />
-          </div>
-        </div>
-      )}
-
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-
-        {/* Enhanced Header */}
-        <div className="text-center py-8 mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-r from-blue-500 to-purple-600 rounded-2xl mb-4 shadow-lg">
-            <CalendarIcon className="w-8 h-8 text-white" />
+        {/* Centered Header & Actions */}
+        <div className="mb-8 text-center">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow mb-3">
+            <CalendarIcon className="w-8 h-8" />
           </div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Meeting Details</h1>
-          <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-            {isViewMode ? 'View and manage saved meeting details' : 'Capture your bacenta meeting details'}
-          </p>
-
-          {/* Action Buttons for View Mode */}
+          <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-slate-900">Meeting Details</h1>
+          <div className="mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-full border border-gray-200 bg-white text-sm text-gray-700">
+            <CalendarIcon className="w-4 h-4 text-blue-600" />
+            <span>{weekday} · {longDate}</span>
+          </div>
           {isViewMode && existingRecord && (
-            <div className="flex items-center justify-center space-x-4 mt-6">
-              <button
-                onClick={handleEdit}
-                className="group relative inline-flex items-center justify-center px-8 py-3 text-base font-semibold text-white bg-gradient-to-r from-blue-500 to-blue-600 rounded-xl shadow-lg hover:shadow-blue-500/25 transform hover:scale-105 transition-all duration-300"
-              >
-                <div className="absolute inset-0 bg-gradient-to-r from-blue-400 to-blue-500 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-                <div className="relative flex items-center space-x-2">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                  </svg>
-                  <span>Edit</span>
-                </div>
-              </button>
-              <button
-                onClick={handleDelete}
-                className="group relative inline-flex items-center justify-center px-8 py-3 text-base font-semibold text-white bg-gradient-to-r from-red-500 to-red-600 rounded-xl shadow-lg hover:shadow-red-500/25 transform hover:scale-105 transition-all duration-300"
-              >
-                <div className="absolute inset-0 bg-gradient-to-r from-red-400 to-red-500 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-                <div className="relative flex items-center space-x-2">
-                  <TrashIcon className="w-5 h-5" />
-                  <span>Delete</span>
-                </div>
-              </button>
+            <div className="mt-5 flex items-center justify-center gap-3">
+              <button onClick={handleEdit} className="px-5 py-2.5 rounded-xl bg-blue-600 text-white hover:bg-blue-700">Edit</button>
+              <button onClick={handleDelete} className="px-5 py-2.5 rounded-xl bg-red-600 text-white hover:bg-red-700">Delete</button>
             </div>
           )}
         </div>
 
-        {/* Meeting Info Card */}
-        <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-8 mb-8">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="flex items-center space-x-4">
-              <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
-                <CalendarIcon className="w-6 h-6 text-blue-600" />
-              </div>
-              <div>
-                <p className="text-sm font-medium text-gray-500">Meeting Date</p>
-                <p className="text-lg font-semibold text-gray-900">{formatDisplayDate(meetingDate)}</p>
-              </div>
-            </div>
-            <div className="flex items-center space-x-4">
-              <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
-                <UserIcon className="w-6 h-6 text-green-600" />
-              </div>
-              <div>
-                <p className="text-sm font-medium text-gray-500">Bacenta</p>
-                <p className="text-lg font-semibold text-gray-900">{bacenta.name}</p>
-              </div>
-            </div>
-            {(bacentaLeader || bacentaLeaderName) && (
-              <div className="flex items-center space-x-4">
-                <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center">
-                  <UsersIcon className="w-6 h-6 text-purple-600" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-500">Leader</p>
-                  <p className="text-lg font-semibold text-gray-900">
-                    {bacentaLeader ? `${bacentaLeader.firstName} ${bacentaLeader.lastName}` : bacentaLeaderName}
-                  </p>
-                </div>
-              </div>
-            )}
+        {/* Quick Stats */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
+          <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+            <div className="text-xs text-gray-500">Total Present</div>
+            <div className="mt-1 text-2xl font-extrabold text-slate-900">{String(totalCount).padStart(2,'0')}</div>
+          </div>
+          <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+            <div className="text-xs text-gray-500">First Timers</div>
+            <div className="mt-1 text-2xl font-extrabold text-slate-900">{String(firstTimerNames.length).padStart(2,'0')}</div>
+          </div>
+          <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+            <div className="text-xs text-gray-500">Converts</div>
+            <div className="mt-1 text-2xl font-extrabold text-slate-900">{String(converts).padStart(2,'0')}</div>
+          </div>
+          <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+            <div className="text-xs text-gray-500">Offering</div>
+            <div className="mt-1 text-xl font-extrabold text-slate-900">R{(totalOffering||0).toFixed(2)}</div>
           </div>
         </div>
+
+  {/* Meeting Info Card removed as requested */}
 
   <form onSubmit={isViewMode ? (e) => e.preventDefault() : handleSubmit} className="space-y-8">
           {/* Enhanced Meeting Photo Section */}
@@ -416,7 +467,7 @@ const BacentaAttendanceForm: React.FC<BacentaAttendanceFormProps> = ({
                     onClick={() => setShowImageModal(true)}
                   />
                   {!isViewMode && (
-                    <div className="absolute inset-0 bg-black bg-opacity-0 hover:bg-opacity-30 transition-all duration-300 flex items-center justify-center opacity-0 hover:opacity-100">
+                    <div className="absolute inset-0 bg-black bg-opacity-0 hover:bg-opacity-30 transition-all duration-300 flex items-center justify-center opacity-0 hover:opacity-100 pointer-events-none group-hover:pointer-events-auto">
                       <div className="flex space-x-3">
                         <button
                           type="button"
@@ -443,9 +494,29 @@ const BacentaAttendanceForm: React.FC<BacentaAttendanceFormProps> = ({
                 </div>
                 <div className="mt-4 text-center">
                   <p className="text-sm text-gray-600 font-medium">
-                    {isViewMode ? '✨ Click image to view full size' : '📸 Meeting photo uploaded successfully'}
+                    {isViewMode ? '✨ Click image to view full size' : '📸 Tap image to preview • Use buttons below to replace/remove'}
                   </p>
                 </div>
+                {!isViewMode && (
+                  <div className="mt-3 flex items-center justify-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 shadow-sm"
+                    >
+                      <PhotoIcon className="w-4 h-4" />
+                      <span>Replace</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={removeImage}
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-red-600 text-white hover:bg-red-700 shadow-sm"
+                    >
+                      <TrashIcon className="w-4 h-4" />
+                      <span>Remove</span>
+                    </button>
+                  </div>
+                )}
               </div>
             ) : isViewMode ? (
               /* Enhanced No Image State */
@@ -478,6 +549,51 @@ const BacentaAttendanceForm: React.FC<BacentaAttendanceFormProps> = ({
               </div>
             )}
           </div>
+
+          {/* Fullscreen Image Modal with Zoom/Pan */}
+          {showImageModal && meetingImageBase64 && (
+            <div className="fixed inset-0 z-50 bg-black/90 flex flex-col">
+              <div className="flex items-center justify-between p-4">
+                <span className="text-white text-sm">Tap/scroll to zoom, drag to pan</span>
+                <button
+                  type="button"
+                  onClick={() => setShowImageModal(false)}
+                  className="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white"
+                >
+                  Close
+                </button>
+              </div>
+              <div
+                className="flex-1 overflow-hidden touch-none select-none flex items-center justify-center"
+                onWheel={handleWheelZoom}
+                onMouseDown={onMouseDown}
+                onMouseMove={onMouseMove}
+                onMouseUp={onMouseUp}
+                onMouseLeave={onMouseUp}
+                onTouchStart={onTouchStart}
+                onTouchMove={onTouchMove}
+                onTouchEnd={onTouchEnd}
+                onDoubleClick={onDoubleClick}
+              >
+                <img
+                  src={meetingImageBase64}
+                  alt="Full size meeting"
+                  className="max-w-none will-change-transform"
+                  style={{ transform: `translate(${offset.x}px, ${offset.y}px) scale(${zoom})` }}
+                  draggable={false}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Image Cropper Overlay */}
+          {showImageCropper && tempImageUrl && (
+            <ImageCropper
+              image={tempImageUrl}
+              onCropComplete={handleImageCrop}
+              onCancel={handleCropCancel}
+            />
+          )}
 
     {/* Meeting Details */}
           <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-8">
@@ -599,117 +715,167 @@ const BacentaAttendanceForm: React.FC<BacentaAttendanceFormProps> = ({
             </div>
           </div>
 
-          {/* Name List & First Timers */}
-          <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-8">
-            <div className="text-center mb-6">
-              <div className="inline-flex items-center justify-center w-12 h-12 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-xl mb-3 shadow-lg">
-                <UsersIcon className="w-6 h-6 text-white" />
-              </div>
-              <h2 className="text-xl font-semibold text-gray-900">Name List</h2>
-              <p className="text-sm text-gray-600 mt-1">Show existing members of this bacenta</p>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              {/* Existing members */}
-              <div>
-                <ul className="space-y-2">
-                  {sortedBacentaMembers.map((m, idx) => {
-                    const checked = presentMemberIds.includes(m.id);
-                    return (
-                      <li key={m.id} className="flex items-center">
-                        <input
-                          type="checkbox"
-                          className="h-4 w-4 text-blue-600 border-gray-300 rounded"
-                          checked={checked}
-                          onChange={() => toggleMemberPresent(m.id)}
-                          disabled={isViewMode}
-                        />
-                        <span className="ml-3 text-gray-800">{idx + 1}. {m.firstName} {m.lastName}</span>
-                      </li>
-                    );
-                  })}
-                  {sortedBacentaMembers.length === 0 && (
-                    <li className="text-gray-500">No members found for this bacenta</li>
-                  )}
-                </ul>
-                {!isViewMode && sortedBacentaMembers.length > 0 && (
-                  <div className="mt-3 text-sm text-gray-600">Checked: <span className="font-semibold">{presentMemberIds.length}</span> of {sortedBacentaMembers.length}</div>
+          {/* Name List & First Timers (edit) / Attendees (view) */}
+          <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6">
+            {isViewMode ? (
+              <>
+                <div className="text-center mb-6">
+                  <div className="inline-flex items-center justify-center w-12 h-12 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-xl mb-3 shadow-lg">
+                    <UsersIcon className="w-6 h-6 text-white" />
+                  </div>
+                  <h2 className="text-xl font-semibold text-gray-900">Attendees</h2>
+                  <p className="text-sm text-gray-600 mt-1">Only people who attended this meeting</p>
+                </div>
+                {(attendeeMembers.length > 0 || firstTimerNames.length > 0) ? (
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    {attendeeMembers.length > 0 && (
+                      <div>
+                        <h3 className="text-sm font-semibold text-gray-700 mb-2">Members</h3>
+                        <ul className="space-y-2">
+                          {attendeeMembers.map((m, idx) => (
+                            <li key={m.id} className="flex items-center rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+                              <span className="text-gray-800">{idx + 1}. {m.firstName} {m.lastName}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    {firstTimerNames.length > 0 && (
+                      <div>
+                        <h3 className="text-sm font-semibold text-gray-700 mb-2">First Timers</h3>
+                        <div className="flex flex-wrap gap-2">
+                          {firstTimerNames.map((name, idx) => (
+                            <span key={`${name}-${idx}`} className="inline-flex items-center px-3 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                              {idx + 1}. {name}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-center text-gray-600">No attendees recorded.</p>
                 )}
-              </div>
-
-              {/* First timers input and list */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Add people not in the bacenta (first timers)
-                </label>
-                <div className="flex items-center space-x-2">
-                  <input
-                    type="text"
-                    value={firstTimerInput}
-                    onChange={(e) => setFirstTimerInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (isViewMode) return;
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        addFirstTimer();
-                      }
-                    }}
-                    readOnly={isViewMode}
-                    placeholder="Type a name and press Enter"
-                    className={`flex-1 px-3 py-2 border rounded-lg ${isViewMode ? 'bg-gray-50 text-gray-600 border-gray-200' : 'border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500'}`}
-                  />
-                  {!isViewMode && (
-                    <button type="button" onClick={addFirstTimer} className="inline-flex items-center px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg">
-                      <PlusIcon className="w-5 h-5" />
-                    </button>
-                  )}
+              </>
+            ) : (
+              <>
+                <div className="text-center mb-6">
+                  <div className="inline-flex items-center justify-center w-12 h-12 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-xl mb-3 shadow-lg">
+                    <UsersIcon className="w-6 h-6 text-white" />
+                  </div>
+                  <h2 className="text-xl font-semibold text-gray-900">Name List</h2>
+                  <p className="text-sm text-gray-600 mt-1">Show existing members of this bacenta</p>
                 </div>
 
-                {firstTimerNames.length > 0 && (
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {firstTimerNames.map((name, idx) => (
-                      <span key={`${name}-${idx}`} className="inline-flex items-center px-3 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
-                        {idx + 1}. {name}
-                        {!isViewMode && (
-                          <button type="button" onClick={() => removeFirstTimer(idx)} className="ml-2 text-blue-600 hover:text-blue-800">
-                            <XMarkIcon className="w-4 h-4" />
-                          </button>
-                        )}
-                      </span>
-                    ))}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                  <div>
+                    <div className="flex items-center gap-2 mb-3">
+                      <input
+                        type="text"
+                        value={memberQuery}
+                        onChange={(e)=>setMemberQuery(e.target.value)}
+                        placeholder="Search members..."
+                        className="flex-1 px-3 py-2 border rounded-lg border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      />
+                      <button type="button" onClick={markAllPresent} className="px-3 py-2 text-sm rounded-lg bg-gray-100 hover:bg-gray-200">Select all</button>
+                      <button type="button" onClick={clearAllPresent} className="px-3 py-2 text-sm rounded-lg bg-gray-100 hover:bg-gray-200">Clear</button>
+                    </div>
+                    <ul className="space-y-2 max-h-[420px] overflow-auto pr-2">
+                      {sortedBacentaMembers.map((m, idx) => {
+                        const checked = presentMemberIds.includes(m.id);
+                        return (
+                          <li key={m.id} className={`flex items-center rounded-lg border px-3 py-2 ${checked ? 'bg-blue-50 border-blue-200' : 'bg-white border-gray-200'} transition-colors`}>
+                            <input
+                              type="checkbox"
+                              className="h-4 w-4 text-blue-600 border-gray-300 rounded"
+                              checked={checked}
+                              onChange={() => toggleMemberPresent(m.id)}
+                              aria-label={`Mark ${m.firstName} ${m.lastName} present`}
+                            />
+                            <span className="ml-3 text-gray-800 flex-1">{idx + 1}. {m.firstName} {m.lastName}</span>
+                            {checked && (
+                              <span className="ml-2 inline-flex items-center text-xs font-medium text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full">Present</span>
+                            )}
+                          </li>
+                        );
+                      })}
+                      {sortedBacentaMembers.length === 0 && (
+                        <li className="text-gray-500">No members found for this bacenta</li>
+                      )}
+                    </ul>
+                    {sortedBacentaMembers.length > 0 && (
+                      <div className="mt-3 text-sm text-gray-600">Checked: <span className="font-semibold">{presentMemberIds.length}</span> of {sortedBacentaMembers.length}</div>
+                    )}
                   </div>
-                )}
 
-                {/* Totals */}
-                <div className="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  <div className="p-3 rounded-xl bg-gray-50 border border-gray-200 text-center">
-                    <p className="text-xs text-gray-500">Total</p>
-                    <p className="text-lg font-semibold">{String(totalCount).padStart(2, '0')}</p>
-                  </div>
-                  <div className="p-3 rounded-xl bg-gray-50 border border-gray-200 text-center">
-                    <p className="text-xs text-gray-500">Total cash offering</p>
-                    <p className="text-lg font-semibold">R{(cashOffering || 0).toFixed(2)}</p>
-                  </div>
-                  <div className="p-3 rounded-xl bg-gray-50 border border-gray-200 text-center">
-                    <p className="text-xs text-gray-500">Total online offering</p>
-                    <p className="text-lg font-semibold">R{(onlineOffering || 0).toFixed(2)}</p>
-                  </div>
-                  <div className="p-3 rounded-xl bg-gray-50 border border-gray-200 text-center">
-                    <p className="text-xs text-gray-500">Total offering</p>
-                    <p className="text-lg font-semibold">R{(totalOffering || 0).toFixed(2)}</p>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Add people not in the bacenta (first timers)
+                    </label>
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="text"
+                        value={firstTimerInput}
+                        onChange={(e) => setFirstTimerInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            addFirstTimer();
+                          }
+                        }}
+                        placeholder="Type a name and press Enter"
+                        className="flex-1 px-3 py-2 border rounded-lg border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                      <button type="button" onClick={addFirstTimer} className="inline-flex items-center px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg">
+                        <PlusIcon className="w-5 h-5" />
+                      </button>
+                    </div>
+
+                    {firstTimerNames.length > 0 && (
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {firstTimerNames.map((name, idx) => (
+                          <span key={`${name}-${idx}`} className="inline-flex items-center px-3 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                            {idx + 1}. {name}
+                            <button type="button" onClick={() => removeFirstTimer(idx)} className="ml-2 text-blue-600 hover:text-blue-800">
+                              <XMarkIcon className="w-4 h-4" />
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      <div className="p-3 rounded-xl bg-gray-50 border border-gray-200 text-center">
+                        <p className="text-xs text-gray-500">Total</p>
+                        <p className="text-lg font-semibold">{String(totalCount).padStart(2, '0')}</p>
+                      </div>
+                      <div className="p-3 rounded-xl bg-gray-50 border border-gray-200 text-center">
+                        <p className="text-xs text-gray-500">Total cash offering</p>
+                        <p className="text-lg font-semibold">R{(cashOffering || 0).toFixed(2)}</p>
+                      </div>
+                      <div className="p-3 rounded-xl bg-gray-50 border border-gray-200 text-center">
+                        <p className="text-xs text-gray-500">Total online offering</p>
+                        <p className="text-lg font-semibold">R{(onlineOffering || 0).toFixed(2)}</p>
+                      </div>
+                      <div className="p-3 rounded-xl bg-gray-50 border border-gray-200 text-center">
+                        <p className="text-xs text-gray-500">Total offering</p>
+                        <p className="text-lg font-semibold">R{(totalOffering || 0).toFixed(2)}</p>
+                      </div>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </div>
+              </>
+            )}
+          </div>
 
-            {/* Divider */}
-            <div className="my-8 flex items-center" aria-hidden>
-              <div className="flex-1 border-t border-dashed border-gray-300"></div>
-              <div className="px-4 text-gray-400">•••••</div>
-              <div className="flex-1 border-t border-dashed border-gray-300"></div>
-            </div>
+          {/* Divider */}
+          <div className="my-8 flex items-center" aria-hidden>
+            <div className="flex-1 border-t border-dashed border-gray-300"></div>
+            <div className="px-4 text-gray-400">•••••</div>
+            <div className="flex-1 border-t border-dashed border-gray-300"></div>
+          </div>
 
-            {/* Stats & Offerings Inputs */}
+          {/* Stats & Offerings Inputs */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <div className="p-4 rounded-xl bg-white border border-gray-200 shadow-sm">
                 <p className="text-sm font-medium text-gray-700 mb-2">Converts</p>
@@ -744,7 +910,6 @@ const BacentaAttendanceForm: React.FC<BacentaAttendanceFormProps> = ({
                 <p className="mt-2 text-sm text-gray-600">Total: <span className="font-semibold">R{(totalOffering || 0).toFixed(2)}</span></p>
               </div>
             </div>
-          </div>
 
           {/* Additional sections removed for redesign */}
 
@@ -774,7 +939,6 @@ const BacentaAttendanceForm: React.FC<BacentaAttendanceFormProps> = ({
             )}
           </div>
         </form>
-        </div>
       </div>
     </>
   );

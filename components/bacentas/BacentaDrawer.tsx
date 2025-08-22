@@ -201,7 +201,7 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
                 placeholder="Search bacentas..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 sm:pl-12 pr-4 py-3 sm:py-2.5 border border-gray-300 dark:border-dark-600 bg-white dark:bg-dark-700 text-gray-900 dark:text-dark-100 rounded-lg focus:ring-2 focus:ring-slate-400 dark:focus:ring-slate-500 focus:border-transparent transition-all duration-200 placeholder-gray-500 dark:placeholder-dark-400 text-base sm:text-sm search-input"
+                className="w-full pl-10 sm:pl-12 pr-10 sm:pr-12 py-3 sm:py-2.5 border border-gray-300 dark:border-dark-600 bg-white dark:bg-dark-700 text-gray-900 dark:text-dark-100 rounded-lg focus:ring-2 focus:ring-slate-400 dark:focus:ring-slate-500 focus:border-transparent transition-all duration-200 placeholder-gray-500 dark:placeholder-dark-400 text-base sm:text-sm text-center search-input"
               />
             </div>
           )}

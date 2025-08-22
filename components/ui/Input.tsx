@@ -24,31 +24,42 @@ const Input: React.FC<InputProps> = ({
   ...props
 }) => {
   const inputId = id || (label ? label.toLowerCase().replace(/\s+/g, '-') : undefined);
+  const hasIcon = !!(leftIcon || rightIcon);
 
   // Determine padding classes based on icons
   const getPaddingClasses = () => {
-    let paddingClass = 'px-3';
+    // Build padding symmetrically to keep centered text truly centered when icons exist
+    let leftPadding = 'pl-3';
+    let rightPadding = 'pr-3';
 
     if (leftIcon) {
       switch (iconType) {
         case 'search':
-          paddingClass = 'pl-10 sm:pl-12 pr-3 search-input';
+          leftPadding = 'pl-10 sm:pl-12 search-input';
+          // symmetric right padding when only left icon
+          rightPadding = 'pr-10 sm:pr-12';
           break;
         case 'currency':
-          paddingClass = 'pl-8 sm:pl-10 pr-3 currency-input';
+          leftPadding = 'pl-8 sm:pl-10 currency-input';
+          rightPadding = 'pr-8 sm:pr-10';
           break;
         default:
-          paddingClass = 'pl-10 sm:pl-12 pr-3 input-with-left-icon';
+          leftPadding = 'pl-10 sm:pl-12 input-with-left-icon';
+          rightPadding = 'pr-10 sm:pr-12';
       }
     }
 
     if (rightIcon) {
-      paddingClass = paddingClass.replace('pr-3', 'pr-12 sm:pr-14 input-with-right-icon');
+      // when right icon exists, ensure sufficient right padding regardless
+      rightPadding = 'pr-12 sm:pr-14 input-with-right-icon';
+      // if no left icon, keep default left padding as is
+      if (!leftIcon) {
+        leftPadding = 'pl-3';
+      }
     }
 
-    return paddingClass;
+    return `${leftPadding} ${rightPadding}`.trim();
   };
-
   return (
     <div className={`mb-3 sm:mb-4 ${wrapperClassName}`}>
       {label && <label htmlFor={inputId} className="block text-sm font-medium text-gray-700 dark:text-dark-200 mb-1 sm:mb-2">{label}</label>}
@@ -60,7 +71,7 @@ const Input: React.FC<InputProps> = ({
         )}
         <input
           id={inputId}
-          className={`w-full ${getPaddingClasses()} py-2.5 sm:py-2 border ${error ? 'border-red-500 dark:border-red-400' : 'border-gray-300 dark:border-dark-600'} rounded-lg shadow-sm focus:outline-none focus:ring-2 ${error ? 'focus:ring-red-500 dark:focus:ring-red-400' : 'focus:ring-blue-500 dark:focus:ring-blue-400'} focus:border-transparent transition-colors text-base sm:text-sm bg-white dark:bg-dark-700 text-gray-900 dark:text-dark-100 placeholder-gray-500 dark:placeholder-dark-400 ${className}`}
+          className={`w-full ${getPaddingClasses()} ${hasIcon ? 'text-center' : ''} py-2.5 sm:py-2 border ${error ? 'border-red-500 dark:border-red-400' : 'border-gray-300 dark:border-dark-600'} rounded-lg shadow-sm focus:outline-none focus:ring-2 ${error ? 'focus:ring-red-500 dark:focus:ring-red-400' : 'focus:ring-blue-500 dark:focus:ring-blue-400'} focus:border-transparent transition-colors text-base sm:text-sm bg-white dark:bg-dark-700 text-gray-900 dark:text-dark-100 placeholder-gray-500 dark:placeholder-dark-400 ${className}`}
           onChange={(e) => onChange?.(e.target.value)}
           {...props}
         />
