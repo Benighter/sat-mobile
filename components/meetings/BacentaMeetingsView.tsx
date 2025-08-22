@@ -166,8 +166,15 @@ const BacentaMeetingsView: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {bacentasForCurrentDay.map((bacenta) => {
               const memberCount = getMemberCount(bacenta.id);
-              const existingMeetingRecord = getMeetingRecord(bacenta.id, currentDate);
+              const existingMeetingRecord: any = getMeetingRecord(bacenta.id, currentDate);
               const hasExistingRecord = !!existingMeetingRecord;
+              const totals = hasExistingRecord ? {
+                attendance: (existingMeetingRecord.presentMemberIds?.length || 0) + (existingMeetingRecord.firstTimers || 0),
+                offering: (existingMeetingRecord.totalOffering ?? ((existingMeetingRecord.cashOffering || 0) + (existingMeetingRecord.onlineOffering || 0))),
+                converts: existingMeetingRecord.converts || 0,
+                firstTimers: existingMeetingRecord.firstTimers || 0,
+                testimonies: existingMeetingRecord.testimonies || 0,
+              } : null;
 
               return (
                 <button
@@ -193,7 +200,9 @@ const BacentaMeetingsView: React.FC = () => {
                             {bacenta.name}
                           </h3>
                           <p className="text-sm text-gray-500">
-                            {memberCount} member{memberCount !== 1 ? 's' : ''}
+                            {hasExistingRecord
+                              ? <>Total: <span className="font-semibold">{String(totals!.attendance).padStart(2, '0')}</span> · Offering: <span className="font-semibold">R{(totals!.offering || 0).toFixed(2)}</span></>
+                              : <>{memberCount} member{memberCount !== 1 ? 's' : ''}</>}
                           </p>
                         </div>
                       </div>

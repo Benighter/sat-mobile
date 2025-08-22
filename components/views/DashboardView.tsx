@@ -9,6 +9,7 @@ import { doc, getDoc } from 'firebase/firestore';
 import { firebaseUtils } from '../../services/firebaseService';
 import { TabKeys } from '../../types';
 import { dashboardLayoutStorage } from '../../utils/localStorage';
+import { hasAdminPrivileges } from '../../utils/permissionUtils';
 
 interface StatCardProps {
   title: string;
@@ -111,7 +112,7 @@ const StatCard: React.FC<StatCardProps> = memo(({ title, value, icon, descriptio
 
 
 const DashboardView: React.FC = memo(() => {
-  const { members, attendanceRecords, newBelievers, displayedSundays, displayedDate, sundayConfirmations, guests, switchTab, user, currentChurchId, allOutreachMembers, bacentas, prayerRecords, meetingRecords, isMinistryContext } = useAppContext(); // Use displayedSundays
+  const { members, attendanceRecords, newBelievers, displayedSundays, displayedDate, sundayConfirmations, guests, switchTab, user, userProfile, currentChurchId, allOutreachMembers, bacentas, prayerRecords, meetingRecords, isMinistryContext } = useAppContext(); // Use displayedSundays
 
   const activeMembers = useMemo(() => {
     const filtered = members.filter(m => !m.frozen);
@@ -297,30 +298,47 @@ const DashboardView: React.FC = memo(() => {
   const weeklyAttendance = getCurrentWeekAttendance();
   const upcomingConfirmations = getUpcomingSundayConfirmations();
 
-  // Calculate current week's bacenta meeting attendance
+  // Calculate current week's bacenta meeting attendance and income (Wed + Thu)
   const getCurrentWeekBacentaMeetingAttendance = () => {
     const currentWeekWednesday = getCurrentMeetingWeek();
     const meetingDates = getMeetingWeekRange(currentWeekWednesday);
 
     let totalAttendance = 0;
+    let totalIncome = 0;
 
     meetingDates.forEach(date => {
       const dayMeetingRecords = meetingRecords.filter(record => record.date === date);
       dayMeetingRecords.forEach(record => {
-        if (record.attendees && Array.isArray(record.attendees)) {
-          totalAttendance += record.attendees.length;
-        }
+        // Attendance: presentMemberIds + firstTimers (fallbacks for legacy data)
+        const presentCount = Array.isArray(record.presentMemberIds) ? record.presentMemberIds.length : (Array.isArray((record as any).attendees) ? (record as any).attendees.length : 0);
+        const firstTimers = typeof record.firstTimers === 'number' ? record.firstTimers : (Array.isArray(record.guests) ? record.guests.length : 0);
+        totalAttendance += (presentCount + firstTimers);
+
+        // Income: prefer totalOffering, else cash + online
+        const offering = typeof record.totalOffering === 'number' && !isNaN(record.totalOffering)
+          ? record.totalOffering
+          : ((record.cashOffering || 0) + (record.onlineOffering || 0));
+        totalIncome += offering;
       });
     });
 
     return {
       total: totalAttendance,
       dates: meetingDates,
-      formattedWeek: `${formatFullDate(meetingDates[0]).split(',')[0]} - ${formatFullDate(meetingDates[1]).split(',')[0]}`
+      formattedWeek: `${formatFullDate(meetingDates[0]).split(',')[0]} - ${formatFullDate(meetingDates[1]).split(',')[0]}`,
+      totalIncome
     };
   };
 
   const bacentaMeetingAttendance = getCurrentWeekBacentaMeetingAttendance();
+  const isAdmin = hasAdminPrivileges(userProfile);
+  const formatZAR = useCallback((n: number) => {
+    try {
+      return new Intl.NumberFormat('en-ZA', { style: 'currency', currency: 'ZAR', maximumFractionDigits: 2 }).format(n);
+    } catch {
+      return `R${(n || 0).toFixed(2)}`;
+    }
+  }, []);
 
   // Overall prayer totals (all-time)
   const overallPrayerMarks = useMemo(() => {
@@ -459,7 +477,9 @@ const DashboardView: React.FC = memo(() => {
             value={bacentaMeetingAttendance.total}
             icon={<CalendarIcon className="w-full h-full" />}
             accentColor="blue"
-            description={`Total attendance this week`}
+            description={isAdmin
+              ? `For ${bacentaMeetingAttendance.formattedWeek} • Income: ${formatZAR(bacentaMeetingAttendance.totalIncome)}`
+              : `For ${bacentaMeetingAttendance.formattedWeek}`}
             onClick={() => !rearrangeMode && switchTab({ id: TabKeys.BACENTA_MEETINGS, name: 'Bacenta Meetings' })}
           />
         );

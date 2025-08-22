@@ -180,6 +180,7 @@ const BacentaAttendanceForm: React.FC<BacentaAttendanceFormProps> = ({
   setOnlineOffering(existingRecord.onlineOffering ?? 0);
   setConverts(existingRecord.converts ?? 0);
   setTestimonies(existingRecord.testimonies ?? 0);
+  setPresentMemberIds(existingRecord.presentMemberIds || []);
       setIsViewMode(true);
     } else {
       onBack();
@@ -211,6 +212,7 @@ const BacentaAttendanceForm: React.FC<BacentaAttendanceFormProps> = ({
         bacentaLeaderName: bacentaLeader ? `${bacentaLeader.firstName} ${bacentaLeader.lastName}` : bacentaLeaderName,
         messagePreached,
         discussionLedBy,
+  presentMemberIds,
   // Updated lightweight sections
   cashOffering,
   onlineOffering,
@@ -247,7 +249,7 @@ const BacentaAttendanceForm: React.FC<BacentaAttendanceFormProps> = ({
   }, [bacentaMembers]);
 
   // Track present members (manually ticked)
-  const [presentMemberIds, setPresentMemberIds] = useState<string[]>([]);
+  const [presentMemberIds, setPresentMemberIds] = useState<string[]>(existingRecord?.presentMemberIds || []);
   const toggleMemberPresent = (id: string) => {
     if (isViewMode) return;
     setPresentMemberIds(prev => (prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]));
@@ -393,6 +395,16 @@ const BacentaAttendanceForm: React.FC<BacentaAttendanceFormProps> = ({
               </p>
             </div>
 
+              {/* Hidden input always present for Replace/Upload actions */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/jpeg,image/jpg,image/png,image/webp"
+                onChange={handleImageUpload}
+                className="hidden"
+                id="meeting-image-input"
+              />
+
             {meetingImageBase64 ? (
               /* Enhanced Image Preview */
               <div className="relative">
@@ -400,19 +412,15 @@ const BacentaAttendanceForm: React.FC<BacentaAttendanceFormProps> = ({
                   <img
                     src={meetingImageBase64}
                     alt="Meeting photo"
-                    className={`w-full h-64 object-cover transition-all duration-300 ${isViewMode ? 'cursor-pointer hover:scale-105' : ''}`}
-                    onClick={isViewMode ? () => setShowImageModal(true) : undefined}
+                    className={`w-full h-64 object-cover transition-all duration-300 cursor-pointer ${isViewMode ? 'hover:scale-105' : ''}`}
+                    onClick={() => setShowImageModal(true)}
                   />
                   {!isViewMode && (
                     <div className="absolute inset-0 bg-black bg-opacity-0 hover:bg-opacity-30 transition-all duration-300 flex items-center justify-center opacity-0 hover:opacity-100">
                       <div className="flex space-x-3">
                         <button
                           type="button"
-                          onClick={() => {
-                            if (fileInputRef.current) {
-                              fileInputRef.current.click();
-                            }
-                          }}
+                          onClick={() => fileInputRef.current?.click()}
                           className="bg-white/90 backdrop-blur-sm hover:bg-white text-gray-700 px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200 flex items-center space-x-2 shadow-lg"
                         >
                           <PhotoIcon className="w-4 h-4" />
@@ -451,15 +459,7 @@ const BacentaAttendanceForm: React.FC<BacentaAttendanceFormProps> = ({
             ) : (
               /* Enhanced Upload Interface */
               <div className="border-2 border-dashed border-blue-300 hover:border-blue-500 rounded-2xl p-12 text-center transition-all duration-300 hover:bg-gradient-to-br hover:from-blue-50 hover:to-purple-50 group cursor-pointer">
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/jpeg,image/jpg,image/png,image/webp"
-                  onChange={handleImageUpload}
-                  className="hidden"
-                  id="meeting-image"
-                />
-                <label htmlFor="meeting-image" className="cursor-pointer block">
+                <label htmlFor="meeting-image-input" className="cursor-pointer block">
                   <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform duration-300 shadow-lg">
                     <CameraIcon className="w-10 h-10 text-white" />
                   </div>

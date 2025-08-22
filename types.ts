@@ -156,6 +156,8 @@ export interface MeetingRecord {
   bacentaLeaderName: string;
   messagePreached: string;
   discussionLedBy: string;
+  /** IDs of members marked present in the Name List */
+  presentMemberIds?: string[];
   cashOffering: number;
   onlineOffering: number;
   totalOffering: number;
