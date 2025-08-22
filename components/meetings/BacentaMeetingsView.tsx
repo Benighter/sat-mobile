@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
-import { getCurrentMeetingWeek, formatFullDate, formatDateToYYYYMMDD } from '../../utils/dateUtils';
-import { CalendarIcon, ChevronLeftIcon, ChevronRightIcon, ClockIcon, BuildingOfficeIcon, UsersIcon, CheckCircleIcon } from '../icons';
+import { getLatestMeetingDay, formatFullDate, formatDateToYYYYMMDD } from '../../utils/dateUtils';
+import { CalendarIcon, ChevronLeftIcon, ChevronRightIcon, ClockIcon, BuildingOfficeIcon, CheckCircleIcon } from '../icons';
 import { useAppContext } from '../../contexts/FirebaseAppContext';
 import BacentaAttendanceForm from './BacentaAttendanceForm';
 
@@ -71,14 +71,14 @@ const MeetingDatePicker: React.FC<{
 };
 
 const BacentaMeetingsView: React.FC = () => {
-  const { bacentas, members, attendanceRecords, guests, meetingRecords, switchTab } = useAppContext();
+  const { bacentas, members, meetingRecords } = useAppContext();
 
-  // Initialize with current Wednesday
+  // Initialize with the latest meeting day (Wed/Thu). If it's Fri–Tue, we want last Thursday.
   const [currentDate, setCurrentDate] = useState<string>(() => {
-    return getCurrentMeetingWeek(); // This returns the current week's Wednesday
+    return getLatestMeetingDay();
   });
 
-  // State for attendance form
+  // State for meeting details view
   const [selectedBacentaId, setSelectedBacentaId] = useState<string | null>(null);
   const [selectedMeetingRecord, setSelectedMeetingRecord] = useState<any>(null);
 
@@ -106,72 +106,11 @@ const BacentaMeetingsView: React.FC = () => {
     return meetingRecords.find(record => record.id === meetingId);
   };
 
-  // Get attendance for a specific bacenta on the current date
-  const getBacentaAttendance = (bacentaId: string) => {
-    const bacentaMembers = members.filter(m => m.bacentaId === bacentaId && !m.frozen);
+  // Attendance removed in redesign
 
-    // Check if there's a meeting record for this bacenta and date
-    const meetingRecord = getMeetingRecord(bacentaId, currentDate);
+  // No attendance summary in redesigned view
 
-    if (meetingRecord && meetingRecord.attendees && Array.isArray(meetingRecord.attendees)) {
-      // Use the meeting record's attendees list (includes both members and guests)
-      const totalAttendees = meetingRecord.attendees.length;
-
-      // Separate members from guests for display purposes
-      const memberNames = bacentaMembers.map(m => `${m.firstName} ${m.lastName || ''}`.trim());
-      const presentMembers = meetingRecord.attendees.filter(name => memberNames.includes(name));
-      const presentGuests = meetingRecord.attendees.filter(name => !memberNames.includes(name));
-
-      return {
-        totalMembers: bacentaMembers.length,
-        presentMembers: presentMembers.length,
-        presentGuests: presentGuests.length,
-        totalPresent: totalAttendees
-      };
-    }
-
-    // Fallback to old system if no meeting record exists
-    const presentMembers = bacentaMembers.filter(member => {
-      const attendanceRecord = attendanceRecords.find(
-        ar => ar.memberId === member.id && ar.date === currentDate && ar.status === 'Present'
-      );
-      return !!attendanceRecord;
-    });
-
-    const bacentaGuests = guests.filter(g =>
-      g.bacentaId === bacentaId &&
-      g.date === currentDate &&
-      g.status === 'Present'
-    );
-
-    return {
-      totalMembers: bacentaMembers.length,
-      presentMembers: presentMembers.length,
-      presentGuests: bacentaGuests.length,
-      totalPresent: presentMembers.length + bacentaGuests.length
-    };
-  };
-
-  // Calculate overall statistics for the day
-  const dayStatistics = useMemo(() => {
-    const totalBacentas = bacentasForCurrentDay.length;
-    let totalMembers = 0;
-    let totalPresent = 0;
-
-    bacentasForCurrentDay.forEach(bacenta => {
-      const attendance = getBacentaAttendance(bacenta.id);
-      totalMembers += attendance.totalMembers;
-      totalPresent += attendance.totalPresent;
-    });
-
-    return {
-      totalBacentas,
-      totalMembers,
-      totalPresent
-    };
-  }, [bacentasForCurrentDay, currentDate, attendanceRecords, guests, members]);
-
-  // Show attendance form if a bacenta is selected
+  // Show meeting details if a bacenta is selected
   if (selectedBacentaId) {
     return (
       <BacentaAttendanceForm
@@ -199,7 +138,7 @@ const BacentaMeetingsView: React.FC = () => {
                 </span>
               </h1>
               <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-                Track bible study attendance for {currentDayName}
+                Manage meeting details for {currentDayName}
               </p>
             </div>
             <MeetingDatePicker
@@ -207,57 +146,18 @@ const BacentaMeetingsView: React.FC = () => {
               onNavigate={setCurrentDate}
             />
 
-            {/* Day Summary Statistics */}
+            {/* Day Summary: Meetings only */}
             {bacentasForCurrentDay.length > 0 && (
               <div className="mt-6 bg-white/80 backdrop-blur-sm rounded-xl border border-blue-200 p-4 shadow-sm">
-                <div className="flex items-center justify-center space-x-8">
-                  {/* Bacentas Count */}
-                  <div className="flex items-center space-x-2">
-                    <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                      <BuildingOfficeIcon className="w-4 h-4 text-blue-600" />
-                    </div>
-                    <div className="text-center">
-                      <div className="text-lg font-bold text-blue-900">
-                        {dayStatistics.totalBacentas}
-                      </div>
-                      <div className="text-xs text-blue-600">
-                        Bacenta{dayStatistics.totalBacentas !== 1 ? 's' : ''} Meeting
-                      </div>
-                    </div>
+                <div className="flex items-center justify-center space-x-2">
+                  <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                    <BuildingOfficeIcon className="w-4 h-4 text-blue-600" />
                   </div>
-
-                  {/* Total Attendance */}
-                  <div className="flex items-center space-x-2">
-                    <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
-                      <CheckCircleIcon className="w-4 h-4 text-green-600" />
-                    </div>
-                    <div className="text-center">
-                      <div className="text-lg font-bold text-green-900">
-                        {dayStatistics.totalPresent}
-                      </div>
-                      <div className="text-xs text-green-600">
-                        Total Attending
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Total Members */}
-                  <div className="flex items-center space-x-2">
-                    <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center">
-                      <UsersIcon className="w-4 h-4 text-gray-600" />
-                    </div>
-                    <div className="text-center">
-                      <div className="text-lg font-bold text-gray-900">
-                        {dayStatistics.totalMembers}
-                      </div>
-                      <div className="text-xs text-gray-600">
-                        Total Members
-                      </div>
-                    </div>
+                  <div className="text-center">
+                    <div className="text-lg font-bold text-blue-900">{bacentasForCurrentDay.length}</div>
+                    <div className="text-xs text-blue-600">Bacenta{bacentasForCurrentDay.length !== 1 ? 's' : ''} Meeting</div>
                   </div>
                 </div>
-
-
               </div>
             )}
           </div>
@@ -266,8 +166,6 @@ const BacentaMeetingsView: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {bacentasForCurrentDay.map((bacenta) => {
               const memberCount = getMemberCount(bacenta.id);
-              const attendance = getBacentaAttendance(bacenta.id);
-              const hasSchedule = bacenta.meetingDay || bacenta.meetingTime;
               const existingMeetingRecord = getMeetingRecord(bacenta.id, currentDate);
               const hasExistingRecord = !!existingMeetingRecord;
 
@@ -300,7 +198,7 @@ const BacentaMeetingsView: React.FC = () => {
                         </div>
                       </div>
 
-                      {/* Attendance Badge */}
+                      {/* Recorded Badge */}
                       <div className="text-right space-y-1">
                         {hasExistingRecord && (
                           <div className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
@@ -308,46 +206,15 @@ const BacentaMeetingsView: React.FC = () => {
                             Recorded
                           </div>
                         )}
-                        <div className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                          attendance.totalPresent > 0
-                            ? 'bg-blue-100 text-blue-800'
-                            : 'bg-gray-100 text-gray-600'
-                        }`}>
-                          <UsersIcon className="w-3 h-3 mr-1" />
-                          {attendance.totalPresent > 0 ? `${attendance.totalPresent} present` : 'No data'}
-                        </div>
                       </div>
                     </div>
 
-                    {/* Attendance Details */}
+                    {/* Details Hint */}
                     <div className="bg-gray-50 rounded-lg p-3 mb-4">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-2">
-                          <UsersIcon className="w-4 h-4 text-gray-600" />
-                          <span className="text-sm font-medium text-gray-700">Attendance</span>
-                        </div>
-                        <div className="text-right">
-                          <div className="text-lg font-bold text-gray-900">
-                            {attendance.totalPresent}
-                          </div>
-                          <div className="text-xs text-gray-500">
-                            Total Attendance
-                          </div>
-                          {attendance.presentGuests > 0 && (
-                            <div className="text-xs text-green-600">
-                              {attendance.presentGuests} guest{attendance.presentGuests !== 1 ? 's' : ''}
-                            </div>
-                          )}
-                        </div>
+                      <div className="flex items-center space-x-2">
+                        <CalendarIcon className="w-4 h-4 text-gray-600" />
+                        <span className="text-sm font-medium text-gray-700">Meeting details</span>
                       </div>
-
-                      {/* Attendance breakdown */}
-                      {attendance.totalPresent > 0 && (
-                        <div className="mt-2 text-xs text-gray-600">
-                          {attendance.presentMembers} member{attendance.presentMembers !== 1 ? 's' : ''}
-                          {attendance.presentGuests > 0 && ` + ${attendance.presentGuests} guest${attendance.presentGuests !== 1 ? 's' : ''}`}
-                        </div>
-                      )}
                     </div>
 
                     {/* Meeting Schedule */}
@@ -375,9 +242,7 @@ const BacentaMeetingsView: React.FC = () => {
                           ? 'text-green-600'
                           : 'text-blue-600'
                       }`}>
-                        <span>
-                          {hasExistingRecord ? 'View attendance record' : 'Click to take attendance'}
-                        </span>
+                        <span>{hasExistingRecord ? 'View meeting details' : 'Click to add details'}</span>
                         <svg className="w-4 h-4 ml-1 transform group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                         </svg>

@@ -227,6 +227,34 @@ export const getCurrentMeetingWeek = (): string => {
   return formatDateToYYYYMMDD(wednesday);
 };
 
+// Get the latest meeting day (most recent past or today) between Wednesday and Thursday
+// Rules:
+// - If today is Wednesday -> return today's Wednesday
+// - If today is Thursday -> return today's Thursday
+// - Otherwise -> return the most recent Thursday in the past
+export const getLatestMeetingDay = (): string => {
+  const today = new Date();
+  const day = today.getDay(); // 0..6 (Sun..Sat)
+
+  if (day === 3) {
+    // Wednesday
+    today.setHours(0, 0, 0, 0);
+    return formatDateToYYYYMMDD(today);
+  }
+  if (day === 4) {
+    // Thursday
+    today.setHours(0, 0, 0, 0);
+    return formatDateToYYYYMMDD(today);
+  }
+
+  // Compute last Thursday
+  const diffToLastThursday = (day - 4 + 7) % 7; // days since last Thu
+  const lastThu = new Date(today);
+  lastThu.setDate(today.getDate() - diffToLastThursday);
+  lastThu.setHours(0, 0, 0, 0);
+  return formatDateToYYYYMMDD(lastThu);
+};
+
 // Get Wednesday and Thursday dates for a given Wednesday date
 export const getMeetingWeekDates = (wednesdayDate: string): { wednesday: string; thursday: string } => {
   const wed = new Date(wednesdayDate + 'T00:00:00');
