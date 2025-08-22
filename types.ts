@@ -66,6 +66,18 @@ export interface AttendanceRecord {
   status: AttendanceStatus;
 }
 
+// Tithe tracking types
+export interface TitheRecord {
+  id: string; // memberId_YYYY-MM
+  memberId: string;
+  month: string; // YYYY-MM
+  paid: boolean;
+  amount: number; // in ZAR
+  recordedAt?: string; // ISO timestamp
+  recordedBy?: string; // User ID who recorded
+  lastUpdated?: string; // ISO timestamp
+}
+
 // Prayer tracking types
 export type PrayerStatus = 'Prayed' | 'Missed';
 

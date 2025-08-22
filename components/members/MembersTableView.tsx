@@ -36,6 +36,8 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
     currentTab,
     isMinistryContext,
     transferMemberToConstituencyHandler,
+  titheRecords,
+  markTitheHandler,
   } = useAppContext();
 
   // Get user preference for editing previous Sundays
@@ -45,6 +47,21 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
   const [displayedDate, setDisplayedDate] = useState(new Date());
   const [roleFilter, setRoleFilter] = useState<'all' | 'Bacenta Leader' | 'Fellowship Leader' | 'Member'>('all');
   const [showFrozen, setShowFrozen] = useState(false);
+  // Tithe-only UI state
+  const [showPaidOnly, setShowPaidOnly] = useState(false);
+  const [titheSort, setTitheSort] = useState<'none' | 'paid' | 'amount_desc' | 'amount_asc'>('none');
+
+  // Tithe context flag (passed from Dashboard Tithe card)
+  const isTithe = (currentTab?.data as any)?.isTithe === true;
+
+  // Map tithe records by member for quick lookup (current month only, provided by context listener)
+  const titheByMember = useMemo(() => {
+    const map = new Map<string, { paid: boolean; amount: number; lastUpdated?: string }>();
+    for (const r of titheRecords || []) {
+      map.set(r.memberId, { paid: !!r.paid, amount: Number(r.amount || 0), lastUpdated: r.lastUpdated });
+    }
+    return map;
+  }, [titheRecords]);
 
   // Get upcoming Sunday for confirmation
   const upcomingSunday = useMemo(() => getUpcomingSunday(), []);
@@ -118,8 +135,13 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
       }
     };
 
-    return members
+  return members
       .filter(member => {
+        // Tithe: filter paid only if requested
+        if (isTithe && showPaidOnly) {
+          const rec = titheByMember.get(member.id);
+          if (!rec || !rec.paid) return false;
+        }
         // Filter by bacenta if specified
         if (bacentaFilter && member.bacentaId !== bacentaFilter) {
           return false;
@@ -149,18 +171,28 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
         return true;
       })
       .sort((a, b) => {
-        // First sort by role priority
-        const rolePriorityA = getRolePriority(a.role);
-        const rolePriorityB = getRolePriority(b.role);
-
-        if (rolePriorityA !== rolePriorityB) {
-          return rolePriorityA - rolePriorityB;
+        // Tithe-specific sorting
+        if (isTithe && titheSort !== 'none') {
+          const ra = titheByMember.get(a.id);
+          const rb = titheByMember.get(b.id);
+          if (titheSort === 'paid') {
+            const pa = ra?.paid ? 1 : 0;
+            const pb = rb?.paid ? 1 : 0;
+            if (pa !== pb) return pb - pa; // paid first
+          } else {
+            const aa = Number(ra?.amount || 0);
+            const ab = Number(rb?.amount || 0);
+            if (aa !== ab) return titheSort === 'amount_desc' ? ab - aa : aa - ab;
+          }
         }
 
-  // Then sort by last name, then first name within the same role
-  return (a.lastName || '').localeCompare(b.lastName || '') || a.firstName.localeCompare(b.firstName);
+        // Default sort by role then name
+        const rolePriorityA = getRolePriority(a.role);
+        const rolePriorityB = getRolePriority(b.role);
+        if (rolePriorityA !== rolePriorityB) return rolePriorityA - rolePriorityB;
+        return (a.lastName || '').localeCompare(b.lastName || '') || a.firstName.localeCompare(b.firstName);
       });
-  }, [members, bacentaFilter, searchTerm, roleFilter]);
+  }, [members, bacentaFilter, searchTerm, roleFilter, isTithe, showPaidOnly, titheSort, titheByMember]);
 
   // Apply frozen visibility toggle to the filtered list
   const displayMembers = useMemo(() => {
@@ -177,7 +209,7 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
 
   // Define fixed columns (numbering and name)
   const fixedColumns = useMemo(() => [
-    {
+  {
       key: 'number',
       header: '#',
       width: '50px',
@@ -192,7 +224,8 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
     {
       key: 'name',
       header: 'Name',
-      width: '140px',
+      // Make name column slimmer in Tithe mode so Paid/Amount are visible
+      width: isTithe ? '110px' : '140px',
       render: (member: Member) => {
         const roleConfig = {
           'Bacenta Leader': { icon: '💚' },
@@ -231,7 +264,7 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
                     <span className={`font-semibold text-sm truncate ${
                       member.bornAgainStatus ? 'text-green-900' : 'text-gray-900'
                     }`}>
-                      {member.firstName} {member.lastName || ''}
+                      {isTithe ? member.firstName : `${member.firstName} ${member.lastName || ''}`}
                     </span>
                     <span className="text-xs flex-shrink-0" title={member.role || 'Member'}>
                       {roleIcon}
@@ -255,36 +288,107 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
         );
       },
     }
-  ], [openMemberForm]);
+  ], [openMemberForm, isTithe]);
 
   // Define scrollable columns (phone, role, born again, attendance dates, remove)
   const scrollableColumns = useMemo(() => {
     // Base scrollable columns (role and born again status now integrated into name column)
-    const baseScrollableColumns = [
-      {
-        key: 'phoneNumber',
-        header: 'Phone',
-        width: '120px',
-  align: 'left' as const,
-        render: (member: Member) => (
-          <div
-            className={`flex items-center space-x-2 ${
-              member.phoneNumber && member.phoneNumber.trim() !== '' && member.phoneNumber !== '-'
-                ? 'cursor-pointer hover:bg-blue-50 rounded px-1 py-1 transition-colors'
-                : ''
-            }`}
-            onClick={() => member.phoneNumber && member.phoneNumber !== '-' && handlePhoneClick(member.phoneNumber)}
-          >
-            <PhoneIcon className="w-4 h-4 text-gray-400" />
-            <span className="text-sm">{member.phoneNumber || '-'}</span>
-          </div>
-        ),
-      },
-
-    ];
+    const baseScrollableColumns = isTithe
+      ? [
+          {
+            key: 'tithe_paid',
+            header: 'Paid',
+            width: '80px',
+            align: 'center' as const,
+            render: (member: Member) => {
+              const rec = titheByMember.get(member.id);
+              const checked = !!rec?.paid;
+              const amount = Number(rec?.amount || 0);
+              return (
+                <div className="flex justify-center">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 text-emerald-600"
+                    checked={checked}
+                    onChange={(e) => {
+                      const nextPaid = e.target.checked;
+                      markTitheHandler(member.id, nextPaid, amount);
+                    }}
+                    title={checked ? 'Mark as not paid' : 'Mark as paid'}
+                  />
+                </div>
+              );
+            }
+          },
+          {
+            key: 'tithe_amount',
+            header: 'Amount (ZAR)',
+            width: '140px',
+            align: 'center' as const,
+            render: (member: Member) => {
+              const rec = titheByMember.get(member.id);
+              const value = rec ? String(rec.amount ?? 0) : '';
+              return (
+                <div className="flex justify-center">
+                  <input
+                    key={`tithe_amount_${member.id}_${rec?.amount ?? 0}`}
+                    type="text"
+                    inputMode="decimal"
+                    defaultValue={value ? formatCurrency(Number(value)) : ''}
+                    onFocus={(e) => {
+                      // Show raw number on focus
+                      const raw = (rec?.amount ?? 0).toString();
+                      e.currentTarget.value = raw === '0' ? '' : raw;
+                      e.currentTarget.select();
+                    }}
+                    onKeyDown={(e) => {
+                      const allowed = '0123456789.';
+                      if (
+                        e.key.length === 1 && !allowed.includes(e.key)
+                      ) {
+                        e.preventDefault();
+                      }
+                    }}
+                    onBlur={(e) => {
+                      const amt = Number(e.currentTarget.value.replace(/[^0-9.]/g, '') || 0);
+                      const paid = amt > 0 ? true : (titheByMember.get(member.id)?.paid || false);
+                      markTitheHandler(member.id, paid, amt);
+                      // Format after saving
+                      e.currentTarget.value = amt ? formatCurrency(amt) : '';
+                    }}
+                    className="w-28 px-2 py-1 border border-gray-300 rounded-md text-sm text-gray-900"
+                    placeholder="0.00"
+                    title={rec?.lastUpdated ? `Last updated: ${new Date(rec.lastUpdated).toLocaleString()}` : 'Enter tithe amount'}
+                  />
+                </div>
+              );
+            }
+          }
+        ]
+      : [
+          {
+            key: 'phoneNumber',
+            header: 'Phone',
+            width: '120px',
+            align: 'left' as const,
+            render: (member: Member) => (
+              <div
+                className={`flex items-center space-x-2 ${
+                  member.phoneNumber && member.phoneNumber.trim() !== '' && member.phoneNumber !== '-'
+                    ? 'cursor-pointer hover:bg-blue-50 rounded px-1 py-1 transition-colors'
+                    : ''
+                }`}
+                onClick={() => member.phoneNumber && member.phoneNumber !== '-' && handlePhoneClick(member.phoneNumber)}
+              >
+                <PhoneIcon className="w-4 h-4 text-gray-400" />
+                <span className="text-sm">{member.phoneNumber || '-'}</span>
+              </div>
+            ),
+          },
+        ];
 
     // Add attendance columns for each Sunday
-    const attendanceColumns = currentMonthSundays.map((sundayDate) => {
+  const attendanceColumns = isTithe ? [] : currentMonthSundays.map((sundayDate) => {
       const isEditable = isDateEditable(sundayDate, allowEditPreviousSundays);
 
       return {
@@ -355,7 +459,7 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
     });
 
     // Add actions dropdown column
-    const actionsColumn = {
+  const actionsColumn = {
       key: 'actions',
       header: 'Actions',
       width: '80px',
@@ -380,12 +484,33 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
       },
     };
 
-    return [...baseScrollableColumns, ...attendanceColumns, actionsColumn];
-  }, [currentMonthSundays, attendanceRecords, sundayConfirmations, deleteMemberHandler, getAttendanceStatus, getConfirmationStatus, handleAttendanceToggle, upcomingSunday, markConfirmationHandler]);
+    const cols = [...baseScrollableColumns, ...attendanceColumns];
+    if (!isTithe) cols.push(actionsColumn);
+    return cols;
+  }, [currentMonthSundays, attendanceRecords, sundayConfirmations, deleteMemberHandler, getAttendanceStatus, getConfirmationStatus, handleAttendanceToggle, upcomingSunday, markConfirmationHandler, isTithe, titheByMember, markTitheHandler]);
 
   // Get displayed month name
   const currentMonthName = getMonthName(displayedDate.getMonth());
   const currentYear = displayedDate.getFullYear();
+
+  // Total tithe for displayed members (current month only)
+  const totalTithe = useMemo(() => {
+    if (!isTithe) return 0;
+    return displayMembers.reduce((sum, m) => sum + (titheByMember.get(m.id)?.amount || 0), 0);
+  }, [displayMembers, titheByMember, isTithe]);
+
+  const paidCount = useMemo(() => {
+    if (!isTithe) return 0;
+    return displayMembers.filter(m => titheByMember.get(m.id)?.paid).length;
+  }, [displayMembers, titheByMember, isTithe]);
+
+  const formatCurrency = (n: number) => {
+    try {
+      return new Intl.NumberFormat('en-ZA', { style: 'currency', currency: 'ZAR', maximumFractionDigits: 2 }).format(n);
+    } catch {
+      return `R${(n || 0).toFixed(2)}`;
+    }
+  };
 
   // Get bacenta name if filtering by bacenta
   const getBacentaName = (bacentaId: string) => {
@@ -453,7 +578,7 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
         <div className="text-center">
           {/* Title (centered, no icon) */}
           <h2 className="text-xl desktop:text-2xl desktop-lg:text-3xl font-semibold text-gray-900 mb-3">
-            Attendance for {currentMonthName} {currentYear}
+            {isTithe ? `Tithe for ${currentMonthName}` : `Attendance for ${currentMonthName} ${currentYear}`}
           </h2>
           
           {/* Summary */}
@@ -462,6 +587,13 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
             <span>•</span>
             <span>{activeCount} active member{activeCount !== 1 ? 's' : ''}</span>
           </div>
+
+          {isTithe && (
+            <div className="text-center text-sm text-gray-800 font-semibold mb-2">
+              Total Tithe: {formatCurrency(totalTithe)}
+              <div className="text-xs text-gray-600 font-normal mt-1">Paid: {paidCount} / {activeCount}</div>
+            </div>
+          )}
 
           {/* Role Statistics */}
           <div className="flex items-center justify-center gap-5 text-sm mb-4">
@@ -542,7 +674,36 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
                 <span className="text-sm text-gray-700">Show Frozen</span>
               </label>
             </div>
+            {/* Tithe-only: Paid Only toggle and Sort */}
+            {isTithe && (
+              <>
+                <div className="w-full sm:w-auto flex items-center justify-center">
+                  <label className="inline-flex items-center space-x-2 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg shadow-sm cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      className="form-checkbox h-4 w-4 text-emerald-600"
+                      checked={showPaidOnly}
+                      onChange={(e) => setShowPaidOnly(e.target.checked)}
+                    />
+                    <span className="text-sm text-gray-700">Show Paid Only</span>
+                  </label>
+                </div>
+                <div className="w-full sm:w-48">
+                  <select
+                    value={titheSort}
+                    onChange={(e) => setTitheSort(e.target.value as any)}
+                    className="w-full px-3 py-3 sm:py-2 border border-gray-300 dark:border-dark-600 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent transition-colors text-base sm:text-sm bg-white dark:bg-dark-700 text-gray-900 dark:text-dark-100 text-center cursor-pointer"
+                  >
+                    <option value="none">Sort: Default</option>
+                    <option value="paid">Sort: Paid first</option>
+                    <option value="amount_desc">Sort: Amount (High → Low)</option>
+                    <option value="amount_asc">Sort: Amount (Low → High)</option>
+                  </select>
+                </div>
+              </>
+            )}
             <div className="w-full sm:w-auto flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
+              {((currentTab?.data as any)?.isTithe === true) ? null : (
               <button
                 onClick={() => {
                   // Navigate to Copy Members page with current context
@@ -567,7 +728,8 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
                 <ClipboardIcon className="w-4 h-4" />
                 <span>Copy Members ({displayMembers.length})</span>
               </button>
-
+              )}
+              {((currentTab?.data as any)?.isTithe === true) ? null : (
               <button
                 onClick={() => {
                   // Navigate to Copy Absentees page with current context
@@ -591,6 +753,7 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
                 <ClipboardIcon className="w-4 h-4" />
                 <span>Copy Absentees</span>
               </button>
+              )}
             </div>
           </div>
         </div>

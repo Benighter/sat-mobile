@@ -30,7 +30,7 @@ import {
   fetchSignInMethodsForEmail
 } from 'firebase/auth';
 import { db, auth } from '../firebase.config';
-import { Member, Bacenta, AttendanceRecord, NewBeliever, SundayConfirmation, Guest, MemberDeletionRequest, DeletionRequestStatus, OutreachBacenta, OutreachMember, PrayerRecord, MeetingRecord } from '../types';
+import { Member, Bacenta, AttendanceRecord, NewBeliever, SundayConfirmation, Guest, MemberDeletionRequest, DeletionRequestStatus, OutreachBacenta, OutreachMember, PrayerRecord, MeetingRecord, TitheRecord } from '../types';
 
 // Types for Firebase operations
 export interface FirebaseUser {
@@ -1995,6 +1995,47 @@ export const meetingRecordsFirebaseService = {
         id: doc.id
       })) as MeetingRecord[];
       callback(records);
+    });
+  }
+};
+
+// Tithe Service
+export const titheFirebaseService = {
+  // Get all tithes for a month
+  getAllByMonth: async (yyyymm: string): Promise<TitheRecord[]> => {
+    try {
+      const ref = collection(db, getChurchCollectionPath('tithes'));
+      const qT = query(ref, where('month', '==', yyyymm));
+      const snap = await getDocs(qT);
+      return snap.docs.map(d => ({ id: d.id, ...(d.data() as any) })) as TitheRecord[];
+    } catch (error: any) {
+      throw new Error(`Failed to fetch tithes for ${yyyymm}: ${error.message}`);
+    }
+  },
+  // Add or update tithe record (by member + month)
+  addOrUpdate: async (record: Omit<TitheRecord, 'id' | 'recordedAt' | 'recordedBy' | 'lastUpdated'>): Promise<void> => {
+    try {
+      const ref = collection(db, getChurchCollectionPath('tithes'));
+      const id = `${record.memberId}_${record.month}`;
+      const docRef = doc(ref, id);
+      await setDoc(docRef, {
+        ...record,
+        id,
+        recordedAt: Timestamp.now().toDate().toISOString(),
+        recordedBy: currentUser?.uid || 'unknown',
+        lastUpdated: new Date().toISOString()
+      }, { merge: true });
+    } catch (error: any) {
+      throw new Error(`Failed to save tithe: ${error.message}`);
+    }
+  },
+  // Listen for a month
+  onSnapshotByMonth: (yyyymm: string, callback: (records: TitheRecord[]) => void): Unsubscribe => {
+    const ref = collection(db, getChurchCollectionPath('tithes'));
+    const qT = query(ref, where('month', '==', yyyymm));
+    return onSnapshot(qT, (snap) => {
+      const items = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) })) as TitheRecord[];
+      callback(items);
     });
   }
 };

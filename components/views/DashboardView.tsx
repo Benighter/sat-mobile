@@ -2,7 +2,7 @@
 import React, { memo, useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useAppContext } from '../../contexts/FirebaseAppContext';
 // import { hasAdminPrivileges } from '../../utils/permissionUtils';
-import { PeopleIcon, AttendanceIcon, CalendarIcon, ChartBarIcon, PrayerIcon } from '../icons';
+import { PeopleIcon, AttendanceIcon, CalendarIcon, ChartBarIcon, PrayerIcon, TableIcon } from '../icons';
 import { getMonthName, getCurrentOrMostRecentSunday, formatFullDate, getUpcomingSunday, getCurrentMeetingWeek, getMeetingWeekRange } from '../../utils/dateUtils';
 import { db } from '../../firebase.config';
 import { doc, getDoc } from 'firebase/firestore';
@@ -15,7 +15,7 @@ interface StatCardProps {
   title: string;
   value: string | number;
   icon: React.ReactNode;
-  description?: string;
+  description?: React.ReactNode;
   onClick?: () => void;
   accentColor?: string;
 }
@@ -85,7 +85,7 @@ const StatCard: React.FC<StatCardProps> = memo(({ title, value, icon, descriptio
 
       {/* Value section */}
       <div className="flex-1 flex flex-col justify-center min-h-0">
-        <div className="flex items-center space-x-3">
+        <div className="flex items-center space-x-3 mb-1 sm:mb-4">
           <p className="text-2xl sm:text-3xl md:text-4xl desktop:text-3xl desktop-lg:text-4xl font-bold text-gray-900 dark:text-dark-100 truncate flex-shrink-0">{value}</p>
           {title === "Attendance Rate" && (
             <div className="flex-1 max-w-12 sm:max-w-16 desktop:max-w-14 desktop-lg:max-w-16 h-2 bg-gray-200 dark:bg-dark-600 rounded-full overflow-hidden">
@@ -99,9 +99,9 @@ const StatCard: React.FC<StatCardProps> = memo(({ title, value, icon, descriptio
       </div>
 
       {/* Description section */}
-      <div className="mt-2 desktop:mt-1 min-h-0">
+      <div className="mt-3 sm:mt-3 desktop:mt-2 desktop-lg:mt-3 min-h-0">
         {description && (
-          <p className="text-xs sm:text-sm desktop:text-xs desktop-lg:text-sm text-gray-600 dark:text-dark-300 font-medium break-words overflow-wrap-anywhere leading-tight line-clamp-2">
+          <p className="text-xs sm:text-sm desktop:text-xs desktop-lg:text-sm text-gray-600 dark:text-dark-300 font-medium break-words overflow-wrap-anywhere leading-snug line-clamp-2">
             {description}
           </p>
         )}
@@ -356,8 +356,18 @@ const DashboardView: React.FC = memo(() => {
   const year = displayedDate.getFullYear();
 
   // Personal card rearranging (excluding Total Members)
-  type CardId = 'confirmations' | 'attendanceRate' | 'weeklyAttendance' | 'outreach' | 'bacentaMeetings' | 'ministries' | 'prayerOverall';
-  const baseDefaultOrder: CardId[] = ['confirmations', 'attendanceRate', 'weeklyAttendance', 'outreach', 'bacentaMeetings', 'ministries', 'prayerOverall'];
+  type CardId = 'confirmations' | 'attendanceRate' | 'weeklyAttendance' | 'outreach' | 'bacentaMeetings' | 'ministries' | 'prayerOverall' | 'tithe';
+  const baseDefaultOrder: CardId[] = [
+    'confirmations',
+    'attendanceRate',
+    'weeklyAttendance',
+    'outreach',
+    'bacentaMeetings',
+    'ministries',
+    'prayerOverall',
+    // Admin-only: automatically add Tithe card to default order for admins
+    ...(isAdmin ? (['tithe'] as CardId[]) : [])
+  ];
   const defaultOrder: CardId[] = isMinistryContext
     ? (baseDefaultOrder.filter((id) => id !== 'ministries') as CardId[])
     : baseDefaultOrder;
@@ -370,17 +380,30 @@ const DashboardView: React.FC = memo(() => {
     const uid = user?.uid ?? null;
     const loaded = dashboardLayoutStorage.loadOrder(uid, defaultOrder) as CardId[];
     // In ministry mode, ensure 'ministries' card is removed from any previously saved layout
-    const sanitized = isMinistryContext ? (loaded.filter((id) => id !== 'ministries') as CardId[]) : loaded;
+    let sanitized = isMinistryContext ? (loaded.filter((id) => id !== 'ministries') as CardId[]) : loaded;
+    // If not admin, ensure 'tithe' is not shown
+    if (!isAdmin) {
+      sanitized = sanitized.filter((id) => id !== 'tithe') as CardId[];
+    } else {
+      // If admin and tithe not present, append it to the end
+      if (!sanitized.includes('tithe')) {
+        sanitized = [...sanitized, 'tithe'] as CardId[];
+      }
+    }
     setCardOrder(sanitized);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.uid, isMinistryContext]);
+  }, [user?.uid, isMinistryContext, isAdmin]);
 
   const persistOrder = useCallback((next: CardId[]) => {
     const uid = user?.uid ?? null;
-    const sanitized = isMinistryContext ? (next.filter((id) => id !== 'ministries') as CardId[]) : next;
+    let sanitized = isMinistryContext ? (next.filter((id) => id !== 'ministries') as CardId[]) : next;
+    // Ensure admin-only tithe card is not stored for non-admins
+    if (!isAdmin) {
+      sanitized = sanitized.filter((id) => id !== 'tithe') as CardId[];
+    }
     setCardOrder(sanitized);
     dashboardLayoutStorage.saveOrder(uid, sanitized);
-  }, [user?.uid, isMinistryContext]);
+  }, [user?.uid, isMinistryContext, isAdmin]);
 
   const onDragStart = useCallback((e: React.DragEvent, id: CardId) => {
     dragItemId.current = id;
@@ -421,6 +444,20 @@ const DashboardView: React.FC = memo(() => {
 
   const renderCardById = (id: CardId) => {
     switch (id) {
+      case 'tithe': {
+        if (!isAdmin) return null;
+        return (
+          <StatCard
+            key={id}
+            title="Tithe"
+            value={activeMembers}
+            icon={<TableIcon className="w-full h-full" />}
+            accentColor="indigo"
+            description={`All members`}
+            onClick={() => !rearrangeMode && switchTab({ id: 'all_members', name: 'Tithe', data: { isTithe: true } })}
+          />
+        );
+      }
       case 'confirmations':
         return (
           <EnhancedConfirmationCard
@@ -477,9 +514,15 @@ const DashboardView: React.FC = memo(() => {
             value={bacentaMeetingAttendance.total}
             icon={<CalendarIcon className="w-full h-full" />}
             accentColor="blue"
-            description={isAdmin
-              ? `For ${bacentaMeetingAttendance.formattedWeek} • Income: ${formatZAR(bacentaMeetingAttendance.totalIncome)}`
-              : `For ${bacentaMeetingAttendance.formattedWeek}`}
+            description={isAdmin ? (
+              <>
+                <span>{`For ${bacentaMeetingAttendance.formattedWeek}`}</span>
+                <br />
+                <span>{`Income: ${formatZAR(bacentaMeetingAttendance.totalIncome)}`}</span>
+              </>
+            ) : (
+              <> {`For ${bacentaMeetingAttendance.formattedWeek}`} </>
+            )}
             onClick={() => !rearrangeMode && switchTab({ id: TabKeys.BACENTA_MEETINGS, name: 'Bacenta Meetings' })}
           />
         );
@@ -577,6 +620,8 @@ const DashboardView: React.FC = memo(() => {
           </button>
         </div>
       </div>
+
+  {/* No modal for Tithe; clicking card routes to All Members tab */}
 
       {/* Stats Grid - Enhanced responsive layout with improved desktop scaling */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 desktop:grid-cols-auto-fit-280 desktop-lg:grid-cols-auto-fit-300 desktop-xl:grid-cols-auto-fit-320 ultra-wide:grid-cols-auto-fit-350 gap-4 sm:gap-5 md:gap-6 desktop:gap-5 desktop-lg:gap-6 ultra-wide:gap-8">
@@ -729,3 +774,5 @@ const EnhancedConfirmationCard: React.FC<EnhancedConfirmationCardProps> = memo((
 EnhancedConfirmationCard.displayName = 'EnhancedConfirmationCard';
 
 export default DashboardView;
+
+// (Intentionally no additional components here)

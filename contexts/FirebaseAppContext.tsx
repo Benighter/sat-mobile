@@ -2,7 +2,7 @@
 import React, { createContext, useState, useEffect, useCallback, ReactNode, useMemo, useRef } from 'react';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../firebase.config';
-import { Member, AttendanceRecord, Bacenta, TabOption, AttendanceStatus, NewBeliever, SundayConfirmation, ConfirmationStatus, Guest, MemberDeletionRequest, OutreachBacenta, OutreachMember, PrayerRecord, PrayerStatus, MeetingRecord } from '../types';
+import { Member, AttendanceRecord, Bacenta, TabOption, AttendanceStatus, NewBeliever, SundayConfirmation, ConfirmationStatus, Guest, MemberDeletionRequest, OutreachBacenta, OutreachMember, PrayerRecord, PrayerStatus, MeetingRecord, TitheRecord } from '../types';
 import { FIXED_TABS, DEFAULT_TAB_ID } from '../constants';
 import { sessionStateStorage } from '../utils/localStorage';
 import { getSundaysOfMonth } from '../utils/dateUtils';
@@ -20,6 +20,7 @@ import {
   outreachMembersFirebaseService,
   prayerFirebaseService,
   meetingRecordsFirebaseService,
+  titheFirebaseService,
   FirebaseUser
 } from '../services/firebaseService';
 import { dataMigrationService } from '../utils/dataMigration';
@@ -36,8 +37,7 @@ import { getMinistryAggregatedData, setupMinistryDataListeners } from '../servic
 import {
   ministryMembersService,
   ministryAttendanceService,
-  ministryNewBelieversService,
-  ministryConfirmationService
+  ministryNewBelieversService
 } from '../services/ministryFirebaseService';
 
 interface AppContextType {
@@ -51,6 +51,7 @@ interface AppContextType {
   guests: Guest[];
   memberDeletionRequests: MemberDeletionRequest[];
   meetingRecords: MeetingRecord[];
+  titheRecords: TitheRecord[];
 
   // UI State
   currentTab: TabOption;
@@ -145,6 +146,9 @@ interface AppContextType {
   deleteMeetingRecordHandler: (id: string) => Promise<void>;
   getMeetingRecordHandler: (bacentaId: string, date: string) => Promise<MeetingRecord | null>;
 
+  // Tithe Operations
+  markTitheHandler: (memberId: string, paid: boolean, amount: number) => Promise<void>;
+
   // Confirmation Operations
   markConfirmationHandler: (memberId: string, date: string, status: ConfirmationStatus) => Promise<void>;
   removeConfirmationHandler: (confirmationId: string) => Promise<void>;
@@ -228,6 +232,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
   const [guests, setGuests] = useState<Guest[]>([]);
   const [memberDeletionRequests, setMemberDeletionRequests] = useState<MemberDeletionRequest[]>([]);
   const [meetingRecords, setMeetingRecords] = useState<MeetingRecord[]>([]);
+  const [titheRecords, setTitheRecords] = useState<TitheRecord[]>([]);
 
   // UI state
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -333,7 +338,12 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     return getSundaysOfMonth(displayedDate.getFullYear(), displayedDate.getMonth());
   }, [displayedDate]);
 
-
+  // Current month in YYYY-MM
+  const getCurrentMonth = useCallback(() => {
+    const y = displayedDate.getFullYear();
+    const m = String(displayedDate.getMonth() + 1).padStart(2, '0');
+    return `${y}-${m}`;
+  }, [displayedDate]);
 
   // Initialize Firebase listeners and check for migration
   useEffect(() => {
@@ -425,15 +435,13 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
 
     const unsubscribers: (() => void)[] = [];
 
-    try {
+  try {
       // If we are in ministry context, temporarily target the default church for read listeners
       const originalChurchId = firebaseUtils.getCurrentChurchId();
-      let switchedForReads = false;
-      if (isMinistryContext) {
+  if (isMinistryContext) {
         const defaultChurchId = userProfile?.contexts?.defaultChurchId || userProfile?.churchId;
         if (defaultChurchId && originalChurchId !== defaultChurchId) {
           firebaseUtils.setChurchContext(defaultChurchId);
-          switchedForReads = true;
         }
       }
       // In ministry mode with specific ministry, use cross-church aggregation
@@ -501,111 +509,100 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
           }
         });
         unsubscribers.push(unsubscribeMembers);
-      }
+        // Listen to bacentas (always; in ministry mode reads from default church due to switch above)
+        const unsubscribeBacentas = bacentasFirebaseService.onSnapshot((bacentas) => {
+          setBacentas(bacentas);
+        });
+        unsubscribers.push(unsubscribeBacentas);
 
-      // Listen to bacentas (always; in ministry mode reads from default church due to switch above)
-      const unsubscribeBacentas = bacentasFirebaseService.onSnapshot((bacentas) => {
-        setBacentas(bacentas);
-      });
-      unsubscribers.push(unsubscribeBacentas);
+        // Listen to outreach bacentas (always)
+        const unsubscribeOutreachBacentas = outreachBacentasFirebaseService.onSnapshot((items) => {
+          setOutreachBacentas(items);
+        });
+        unsubscribers.push(unsubscribeOutreachBacentas);
 
-      // Listen to outreach bacentas (always)
-      const unsubscribeOutreachBacentas = outreachBacentasFirebaseService.onSnapshot((items) => {
-        setOutreachBacentas(items);
-      });
-      unsubscribers.push(unsubscribeOutreachBacentas);
+        // Listen to ALL outreach members (for overall totals)
+        const unsubscribeAllOutreachMembers = outreachMembersFirebaseService.onSnapshot((items) => {
+          setAllOutreachMembers(items);
+        });
+        unsubscribers.push(unsubscribeAllOutreachMembers);
 
-      // Listen to ALL outreach members (for overall totals)
-      const unsubscribeAllOutreachMembers = outreachMembersFirebaseService.onSnapshot((items) => {
-        setAllOutreachMembers(items);
-      });
-      unsubscribers.push(unsubscribeAllOutreachMembers);
+        // Listen to attendance
+        const unsubscribeAttendance = attendanceFirebaseService.onSnapshot((records) => {
+          setAttendanceRecords(records);
+        });
+        unsubscribers.push(unsubscribeAttendance);
 
-      // Listen to attendance
-      const unsubscribeAttendance = attendanceFirebaseService.onSnapshot((records) => {
-        setAttendanceRecords(records);
-      });
-      unsubscribers.push(unsubscribeAttendance);
+        // Listen to prayer
+        const unsubscribePrayer = prayerFirebaseService.onSnapshot((records) => {
+          setPrayerRecords(records);
+        });
+        unsubscribers.push(unsubscribePrayer);
 
-      // Listen to prayer
-      const unsubscribePrayer = prayerFirebaseService.onSnapshot((records) => {
-        setPrayerRecords(records);
-      });
-      unsubscribers.push(unsubscribePrayer);
+        // Listen to new believers (filter by ministry in ministry mode)
+        const unsubscribeNewBelievers = isMinistryContext && (activeMinistryName || '').trim() !== ''
+          ? newBelieversFirebaseService.onSnapshotByMinistry(activeMinistryName, (items) => setNewBelievers(items))
+          : newBelieversFirebaseService.onSnapshot((items) => {
+              if (isMinistryContext) {
+                setNewBelievers(items.filter(n => (n.ministry || '').trim() !== ''));
+              } else {
+                setNewBelievers(items);
+              }
+            });
+        unsubscribers.push(unsubscribeNewBelievers);
+        // Listen to outreach members for current outreachMonth
+        const subscribeOutreachMembers = () => outreachMembersFirebaseService.onSnapshotByMonth(
+          outreachMonth,
+          (items) => setOutreachMembers(items)
+        );
+        let unsubscribeOutreachMembers = subscribeOutreachMembers();
+        unsubscribers.push(() => unsubscribeOutreachMembers());
 
-      // Listen to new believers (filter by ministry in ministry mode)
-      const unsubscribeNewBelievers = isMinistryContext && (activeMinistryName || '').trim() !== ''
-        ? newBelieversFirebaseService.onSnapshotByMinistry(activeMinistryName, (items) => setNewBelievers(items))
-        : newBelieversFirebaseService.onSnapshot((items) => {
-            if (isMinistryContext) {
-              setNewBelievers(items.filter(n => (n.ministry || '').trim() !== ''));
-            } else {
-              setNewBelievers(items);
-            }
+        // Re-subscribe when outreachMonth changes
+        const monthObserver = () => {
+          unsubscribeOutreachMembers();
+          unsubscribeOutreachMembers = subscribeOutreachMembers();
+        };
+        // Using a simple effect on outreachMonth outside this scope would be cleaner, but keep here with event
+        const monthKey = 'outreachMonthChange';
+        const handler = () => monthObserver();
+        window.addEventListener(monthKey, handler);
+        unsubscribers.push(() => window.removeEventListener(monthKey, handler));
+
+
+        // Listen to confirmations
+        const unsubscribeConfirmations = confirmationFirebaseService.onSnapshot((confirmations) => {
+          setSundayConfirmations(confirmations);
+        });
+        unsubscribers.push(unsubscribeConfirmations);
+
+        // Listen to guests
+        const unsubscribeGuests = guestFirebaseService.onSnapshot((guests) => {
+          setGuests(guests);
+        });
+        unsubscribers.push(unsubscribeGuests);
+
+        // Tithe listener for current month
+        const month = getCurrentMonth();
+        const unsubTithes = titheFirebaseService.onSnapshotByMonth(month, (items) => {
+          setTitheRecords(items);
+        });
+        unsubscribers.push(unsubTithes);
+
+        // Persist cleanup
+        listenersCleanupRef.current = () => {
+          unsubscribers.forEach((u) => {
+            try { u(); } catch {}
           });
-      unsubscribers.push(unsubscribeNewBelievers);
-      // Listen to outreach members for current outreachMonth
-      const subscribeOutreachMembers = () => outreachMembersFirebaseService.onSnapshotByMonth(
-        outreachMonth,
-        (items) => setOutreachMembers(items)
-      );
-      let unsubscribeOutreachMembers = subscribeOutreachMembers();
-      unsubscribers.push(() => unsubscribeOutreachMembers());
-
-      // Re-subscribe when outreachMonth changes
-      const monthObserver = () => {
-        unsubscribeOutreachMembers();
-        unsubscribeOutreachMembers = subscribeOutreachMembers();
-      };
-      // Using a simple effect on outreachMonth outside this scope would be cleaner, but keep here with event
-      const monthKey = 'outreachMonthChange';
-      const handler = () => monthObserver();
-      window.addEventListener(monthKey, handler);
-      unsubscribers.push(() => window.removeEventListener(monthKey, handler));
-
-
-      // Listen to confirmations
-      const unsubscribeConfirmations = confirmationFirebaseService.onSnapshot((confirmations) => {
-        setSundayConfirmations(confirmations);
-      });
-      unsubscribers.push(unsubscribeConfirmations);
-
-      // Listen to guests
-      const unsubscribeGuests = guestFirebaseService.onSnapshot((guests) => {
-        setGuests(guests);
-      });
-      unsubscribers.push(unsubscribeGuests);
-
-      // Restore original church context after attaching read listeners
-      if (switchedForReads) {
-        firebaseUtils.setChurchContext(originalChurchId);
+        console.log('[Listeners] Cleaned up listeners for church', firebaseUtils.getCurrentChurchId());
+        };
       }
-
-
-      // Listen to member deletion requests
-
-      // Re-subscribe outreach members when outreachMonth changes
-      // Cleanup previous outreach members listener if month changes
-
-      const unsubscribeDeletionRequests = memberDeletionRequestService.onSnapshot((requests) => {
-        setMemberDeletionRequests(requests);
-      });
-      unsubscribers.push(unsubscribeDeletionRequests);
-
     } catch (error: any) {
       setError(error.message);
     }
+  }, [isImpersonating, isMinistryContext, activeMinistryName, outreachMonth, userProfile]);
 
-    // Store cleanup
-    listenersCleanupRef.current = () => {
-      unsubscribers.forEach(unsub => {
-        try { unsub(); } catch {}
-      });
-    console.log('[Listeners] Cleaned up listeners for church', firebaseUtils.getCurrentChurchId());
-    };
-  }, [isImpersonating, isMinistryContext, activeMinistryName]);
-
-  // Re-establish listeners when church context changes (impersonation or restore)
+  // React when church or context changes to (re)attach listeners
   useEffect(() => {
     console.log('🔄 [Debug] Listener effect triggered:', {
       isReady: firebaseUtils.isReady(),
@@ -616,11 +613,13 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     if (firebaseUtils.isReady()) {
       setupDataListeners();
     }
+    // Cleanup on dependency change or unmount
     return () => {
-      // only cleanup on unmount; next effect run handles previous cleanup
+      if (listenersCleanupRef.current) {
+        try { listenersCleanupRef.current(); } catch {}
+      }
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentChurchId, isMinistryContext, activeMinistryName]);
+  }, [currentChurchId, isMinistryContext, activeMinistryName, setupDataListeners]);
 
   // Fetch initial data (for manual refresh)
   const fetchInitialData = useCallback(async () => {
@@ -1607,6 +1606,38 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
       return null;
     }
   }, []);
+
+  // Tithe handlers
+  const markTitheHandler = useCallback(async (memberId: string, paid: boolean, amount: number) => {
+    try {
+      const y = displayedDate.getFullYear();
+      const m = String(displayedDate.getMonth() + 1).padStart(2, '0');
+      const month = `${y}-${m}`;
+
+      await titheFirebaseService.addOrUpdate({
+        memberId,
+        month,
+        paid,
+        amount: Math.max(0, Number(amount) || 0)
+      });
+
+      // Optimistic local update
+      const id = `${memberId}_${month}`;
+      setTitheRecords(prev => {
+        const next = [...prev];
+        const idx = next.findIndex(t => t.id === id);
+        const rec: TitheRecord = { id, memberId, month, paid, amount: Math.max(0, Number(amount) || 0), lastUpdated: new Date().toISOString() };
+        if (idx >= 0) next[idx] = rec; else next.push(rec);
+        return next;
+      });
+
+      showToast('success', 'Tithe updated');
+    } catch (error: any) {
+      setError(error.message);
+      showToast('error', 'Failed to update tithe', error.message);
+      throw error;
+    }
+  }, [displayedDate, showToast]);
 
   // Attendance handlers
   const markAttendanceHandler = useCallback(async (memberId: string, date: string, status: AttendanceStatus) => {
@@ -2848,6 +2879,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     guests,
     memberDeletionRequests,
     meetingRecords,
+  titheRecords,
 
     // UI State
     currentTab,
@@ -2917,6 +2949,9 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     updateMeetingRecordHandler,
     deleteMeetingRecordHandler,
     getMeetingRecordHandler,
+
+  // Tithe Operations
+  markTitheHandler,
 
     // Confirmation Operations
     markConfirmationHandler,
