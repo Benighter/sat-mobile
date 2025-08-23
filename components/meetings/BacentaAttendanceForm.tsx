@@ -287,16 +287,7 @@ const BacentaAttendanceForm: React.FC<BacentaAttendanceFormProps> = ({
     setFirstTimerInput('');
   };
 
-  const markAllPresent = () => {
-    if (isViewMode) return;
-    const allIds = sortedBacentaMembers.map(m => m.id);
-    setPresentMemberIds(allIds);
-  };
-
-  const clearAllPresent = () => {
-    if (isViewMode) return;
-    setPresentMemberIds([]);
-  };
+  // Removed bulk select/clear actions for Name List per request
 
   const removeFirstTimer = (index: number) => {
     setFirstTimerNames(prev => prev.filter((_, i) => i !== index));
@@ -777,8 +768,6 @@ const BacentaAttendanceForm: React.FC<BacentaAttendanceFormProps> = ({
                         placeholder="Search members..."
                         className="flex-1 px-3 py-2 border rounded-lg border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                       />
-                      <button type="button" onClick={markAllPresent} className="px-3 py-2 text-sm rounded-lg bg-gray-100 hover:bg-gray-200">Select all</button>
-                      <button type="button" onClick={clearAllPresent} className="px-3 py-2 text-sm rounded-lg bg-gray-100 hover:bg-gray-200">Clear</button>
                     </div>
                     <ul className="space-y-2 max-h-[420px] overflow-auto pr-2">
                       {sortedBacentaMembers.map((m, idx) => {
