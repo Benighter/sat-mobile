@@ -396,7 +396,11 @@ export type NotificationActivityType =
   | 'bacenta_assignment_changed'
   | 'member_freeze_toggled'
   | 'member_converted'
-  | 'birthday_reminder';
+  | 'birthday_reminder'
+  // Bacenta meeting record lifecycle
+  | 'meeting_record_added'
+  | 'meeting_record_updated'
+  | 'meeting_record_deleted';
 
 export interface AdminNotification {
   id: string; // Auto-generated document ID

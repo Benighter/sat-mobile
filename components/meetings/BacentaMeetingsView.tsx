@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
-import { getLatestMeetingDay, formatDateToYYYYMMDD } from '../../utils/dateUtils';
-import { CalendarIcon, ChevronLeftIcon, ChevronRightIcon, ClockIcon, BuildingOfficeIcon, CheckCircleIcon } from '../icons';
+import { getLatestMeetingDay, formatDateToYYYYMMDD, getWednesdayOfWeek, getMeetingWeekDates } from '../../utils/dateUtils';
+import { CalendarIcon, ChevronLeftIcon, ChevronRightIcon, ClockIcon, BuildingOfficeIcon, CheckCircleIcon, ClipboardIcon } from '../icons';
 import { useAppContext } from '../../contexts/FirebaseAppContext';
 import BacentaAttendanceForm from './BacentaAttendanceForm';
 
@@ -80,7 +80,7 @@ const MeetingDatePicker: React.FC<{
 };
 
 const BacentaMeetingsView: React.FC = () => {
-  const { bacentas, members, meetingRecords, currentTab } = useAppContext();
+  const { bacentas, members, meetingRecords, currentTab, showToast } = useAppContext();
 
   // Initialize with the latest meeting day (Wed/Thu). If it's Fri–Tue, we want last Thursday.
   const [currentDate, setCurrentDate] = useState<string>(() => {
@@ -132,6 +132,156 @@ const BacentaMeetingsView: React.FC = () => {
     return meetingRecords.find(record => record.id === meetingId);
   };
 
+  // Build a cross-Wed/Thu copyable summary
+  const copyWeekSummary = async () => {
+    try {
+      // Determine the Wednesday/Thursday dates for the week of the currently selected date
+      const weekWed = getWednesdayOfWeek(currentDate);
+      const { wednesday, thursday } = getMeetingWeekDates(weekWed);
+
+      // Helper to find leader for a bacenta
+      const getLeaderName = (bacentaId: string, fallback?: string) => {
+        const bacentaMembers = members.filter(m => m.bacentaId === bacentaId && !m.frozen);
+        const leader = bacentaMembers.find(m => m.role === 'Bacenta Leader') || bacentaMembers.find(m => m.role === 'Fellowship Leader');
+        if (leader) return `${leader.firstName} ${leader.lastName || ''}`.trim();
+        return fallback || 'Unknown';
+      };
+
+      // Partition bacentas by scheduled day and sort by name for stable output
+      const wedBacentas = bacentas
+        .filter(b => b.meetingDay === 'Wednesday')
+        .sort((a, b) => a.name.localeCompare(b.name));
+      const thuBacentas = bacentas
+        .filter(b => b.meetingDay === 'Thursday')
+        .sort((a, b) => a.name.localeCompare(b.name));
+
+      let lines: string[] = [];
+      let idx = 1;
+      let totalMeetingsRecorded = 0;
+      const totalPossibleMeetings = wedBacentas.length + thuBacentas.length;
+  let overallOffering = 0;
+  let overallCash = 0;
+  let overallOnline = 0;
+      let overallFirstTimers = 0;
+      let overallNewBelievers = 0;
+
+  const WHITE_FLOWER = '💮';
+      const fmt = (ds: string) => new Date(ds + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+      const title = `Bacenta Meetings Summary  •  ${fmt(wednesday)} & ${fmt(thursday)}`;
+
+      const divider = (label?: string) => {
+        const bar = '════════════════════════════════';
+        return label ? `${bar}\n${label}\n${bar}` : bar;
+      };
+
+      const addDaySection = (label: string) => {
+        lines.push(divider(label));
+      };
+
+      const appendBacentaLine = (bacenta: any, date: string) => {
+        const record = getMeetingRecord(bacenta.id, date);
+        const leaderName = getLeaderName(bacenta.id, record?.bacentaLeaderName);
+        if (!record) {
+          lines.push(`${idx}) ${leaderName} (${bacenta.name}) — X (no record)`);
+          lines.push('');
+          idx++;
+          return;
+        }
+        // compute metrics with safe fallbacks
+  const firstTimers = (record.firstTimers ?? record.guests?.length ?? 0) as number;
+  const attendance = (record.presentMemberIds?.length || 0) + firstTimers;
+  const cash = (typeof record.cashOffering === 'number' ? record.cashOffering : 0);
+  const online = (typeof record.onlineOffering === 'number' ? record.onlineOffering : 0);
+  const offering = (record.totalOffering ?? (cash + online)) as number;
+        const converts = (record.converts || 0) as number;
+
+  overallOffering += offering;
+  overallCash += cash;
+  overallOnline += online;
+        overallFirstTimers += firstTimers;
+        overallNewBelievers += converts;
+        totalMeetingsRecorded += 1;
+
+  lines.push(`${idx}) ${WHITE_FLOWER} ${leaderName} (${bacenta.name})`);
+  lines.push(`   • Attendance: ${attendance}`);
+  lines.push(`   • Offering: R${offering.toFixed(2)}`);
+  lines.push(`   • First Timers: ${firstTimers}`);
+  lines.push(`   • New Believers: ${converts}`);
+  lines.push('');
+        idx++;
+      };
+
+      // Wednesday section
+  // Header
+  lines.push(title);
+  lines.push('');
+
+  addDaySection('Wednesday');
+      if (wedBacentas.length === 0) {
+        lines.push('— No bacentas scheduled');
+      } else {
+        wedBacentas.forEach(b => appendBacentaLine(b, wednesday));
+      }
+
+      // Spacer
+  lines.push('');
+
+  // Thursday section
+  addDaySection('Thursday');
+      if (thuBacentas.length === 0) {
+        lines.push('— No bacentas scheduled');
+      } else {
+        thuBacentas.forEach(b => appendBacentaLine(b, thursday));
+      }
+
+      // Spacer
+      lines.push('');
+
+      // Leaders that have a bacenta section with X marking if their scheduled day record missing
+      const leadersList: string[] = [];
+      const allWeekBacentas = [...wedBacentas, ...thuBacentas];
+      allWeekBacentas
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .forEach((b, i) => {
+          const scheduledDate = b.meetingDay === 'Wednesday' ? wednesday : thursday;
+          const rec = getMeetingRecord(b.id, scheduledDate);
+          const leaderName = getLeaderName(b.id);
+          leadersList.push(`${i + 1}. ${rec ? WHITE_FLOWER + ' ' : ''}${leaderName} (${b.name})${rec ? '' : ' — X'}`);
+        });
+      if (leadersList.length > 0) {
+        lines.push(divider('Leaders that have a bacenta'));
+        lines.push(...leadersList);
+        lines.push('');
+      }
+
+      // Totals
+  lines.push(divider('Totals'));
+  lines.push(`Meetings recorded: ${totalMeetingsRecorded}/${totalPossibleMeetings}`);
+  lines.push(`• Online: R${overallOnline.toFixed(2)}`);
+  lines.push(`• Cash: R${overallCash.toFixed(2)}`);
+  lines.push(`• Offering (Overall): R${overallOffering.toFixed(2)}`);
+  lines.push(`• First Timers: ${overallFirstTimers}`);
+  lines.push(`• New Believers: ${overallNewBelievers}`);
+
+      const text = lines.join('\n');
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        // Fallback
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+      }
+      showToast('success', 'Copied', 'Wed & Thu bacenta summary copied to clipboard');
+    } catch (err) {
+      console.error('Copy summary failed', err);
+      showToast('error', 'Copy failed', (err as any)?.message || 'Failed to copy summary');
+    }
+  };
+
   // Attendance removed in redesign
 
   // No attendance summary in redesigned view
@@ -179,6 +329,19 @@ const BacentaMeetingsView: React.FC = () => {
               currentDate={currentDate}
               onNavigate={setCurrentDate}
             />
+
+            {/* Copy Summary Button */}
+            <div className="flex items-center justify-center mt-2">
+              <button
+                type="button"
+                onClick={copyWeekSummary}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-blue-200 bg-white text-blue-700 hover:bg-blue-50 shadow-sm"
+                aria-label="Copy Wed/Thu summary"
+              >
+                <ClipboardIcon className="w-4 h-4" />
+                <span>Copy Wed & Thu summary</span>
+              </button>
+            </div>
 
             {/* Day Summary: Meetings only */}
             {bacentasForCurrentDay.length > 0 && (

@@ -1551,6 +1551,24 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
       });
 
       showToast('success', 'Meeting record saved successfully');
+
+      // Notify admins: meeting record added
+      try {
+        const { createNotificationHelpers } = await import('../services/notificationService');
+        const leaderName = userProfile?.displayName || `${userProfile?.firstName || ''} ${userProfile?.lastName || ''}`.trim() || 'Unknown Leader';
+        const bacentaName = bacentas.find(b => b.id === record.bacentaId)?.name || 'Unknown Bacenta';
+        const totals = {
+          attendance: (record.presentMemberIds?.length || 0) + (record.firstTimers || 0),
+          firstTimers: record.firstTimers || 0,
+          converts: record.converts || 0,
+          cash: record.cashOffering || 0,
+          online: record.onlineOffering || 0,
+          offering: record.totalOffering ?? ((record.cashOffering || 0) + (record.onlineOffering || 0))
+        };
+        await createNotificationHelpers.meetingRecordAdded(leaderName, bacentaName, record.date, totals);
+      } catch (notifyErr) {
+        console.warn('⚠️ Failed to send meeting added notification:', notifyErr);
+      }
     } catch (error: any) {
       setError(error.message);
       showToast('error', 'Failed to save meeting record', error.message);
@@ -1558,11 +1576,12 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     } finally {
       setIsLoading(false);
     }
-  }, [showToast]);
+  }, [showToast, userProfile, bacentas]);
 
   const updateMeetingRecordHandler = useCallback(async (record: MeetingRecord) => {
     try {
       setIsLoading(true);
+      const original = meetingRecords.find(r => r.id === record.id);
       await meetingRecordsFirebaseService.addOrUpdate(record);
 
       // Update local state
@@ -1571,6 +1590,41 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
       );
 
       showToast('success', 'Meeting record updated successfully');
+
+      // Notify admins: meeting record updated
+      try {
+        const { createNotificationHelpers } = await import('../services/notificationService');
+        const leaderName = userProfile?.displayName || `${userProfile?.firstName || ''} ${userProfile?.lastName || ''}`.trim() || 'Unknown Leader';
+        const bacentaName = bacentas.find(b => b.id === record.bacentaId)?.name || 'Unknown Bacenta';
+
+        // Compute simple change summary
+        const changes: string[] = [];
+        if (original) {
+          const len = (a?: any[]) => (Array.isArray(a) ? a.length : 0);
+          if (len(original.presentMemberIds) !== len(record.presentMemberIds)) changes.push('Attendance');
+          if ((original.firstTimers || 0) !== (record.firstTimers || 0)) changes.push('First Timers');
+          if ((original.converts || 0) !== (record.converts || 0)) changes.push('Converts');
+          if ((original.cashOffering || 0) !== (record.cashOffering || 0)) changes.push('Cash Offering');
+          if ((original.onlineOffering || 0) !== (record.onlineOffering || 0)) changes.push('Online Offering');
+          if ((original.totalOffering || 0) !== (record.totalOffering || 0)) changes.push('Total Offering');
+          if ((original.messagePreached || '') !== (record.messagePreached || '')) changes.push('Message');
+          if ((original.discussionLedBy || '') !== (record.discussionLedBy || '')) changes.push('Discussion');
+          if (len(original.guests) !== len(record.guests)) changes.push('Guests');
+          if ((original.meetingImage || '') !== (record.meetingImage || '')) changes.push('Image');
+        }
+
+        const totals = {
+          attendance: (record.presentMemberIds?.length || 0) + (record.firstTimers || 0),
+          firstTimers: record.firstTimers || 0,
+          converts: record.converts || 0,
+          cash: record.cashOffering || 0,
+          online: record.onlineOffering || 0,
+          offering: record.totalOffering ?? ((record.cashOffering || 0) + (record.onlineOffering || 0))
+        };
+        await createNotificationHelpers.meetingRecordUpdated(leaderName, bacentaName, record.date, changes, totals);
+      } catch (notifyErr) {
+        console.warn('⚠️ Failed to send meeting updated notification:', notifyErr);
+      }
     } catch (error: any) {
       setError(error.message);
       showToast('error', 'Failed to update meeting record', error.message);
@@ -1578,17 +1632,39 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     } finally {
       setIsLoading(false);
     }
-  }, [showToast]);
+  }, [showToast, meetingRecords, userProfile, bacentas]);
 
   const deleteMeetingRecordHandler = useCallback(async (id: string) => {
     try {
       setIsLoading(true);
+      const original = meetingRecords.find(r => r.id === id) || null;
       await meetingRecordsFirebaseService.delete(id);
 
       // Update local state
       setMeetingRecords(prev => prev.filter(r => r.id !== id));
 
       showToast('success', 'Meeting record deleted successfully');
+
+      // Notify admins: meeting record deleted
+      try {
+        const { createNotificationHelpers } = await import('../services/notificationService');
+        const leaderName = userProfile?.displayName || `${userProfile?.firstName || ''} ${userProfile?.lastName || ''}`.trim() || 'Unknown Leader';
+
+        // Derive bacentaId and date if not available
+        let bacentaId = original?.bacentaId || '';
+        let date = original?.date || '';
+        if (!bacentaId || !date) {
+          const idx = id.lastIndexOf('_');
+          if (idx > 0) {
+            bacentaId = id.substring(0, idx);
+            date = id.substring(idx + 1);
+          }
+        }
+        const bacentaName = bacentas.find(b => b.id === bacentaId)?.name || 'Unknown Bacenta';
+        await createNotificationHelpers.meetingRecordDeleted(leaderName, bacentaName, date || '');
+      } catch (notifyErr) {
+        console.warn('⚠️ Failed to send meeting deleted notification:', notifyErr);
+      }
     } catch (error: any) {
       setError(error.message);
       showToast('error', 'Failed to delete meeting record', error.message);
@@ -1596,7 +1672,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     } finally {
       setIsLoading(false);
     }
-  }, [showToast]);
+  }, [showToast, meetingRecords, userProfile, bacentas]);
 
   const getMeetingRecordHandler = useCallback(async (bacentaId: string, date: string): Promise<MeetingRecord | null> => {
     try {

@@ -605,5 +605,91 @@ export const createNotificationHelpers = {
         source
       }
     );
+  },
+
+  // Bacenta meeting record created
+  meetingRecordAdded: async (
+    leaderName: string,
+    bacentaName: string,
+    date: string,
+    totals: { attendance?: number; firstTimers?: number; converts?: number; cash?: number; online?: number; offering?: number }
+  ) => {
+    if (!currentUser) return;
+
+    const description = `${leaderName} added bacenta meeting • ${bacentaName} • ${date}`;
+    await notificationService.create(
+      currentUser.uid,
+      leaderName,
+      'meeting_record_added',
+      {
+        bacentaName,
+        attendanceDate: date,
+        description
+      },
+      {
+        attendanceCount: totals.attendance ?? undefined,
+        firstTimers: totals.firstTimers ?? undefined,
+        converts: totals.converts ?? undefined,
+        cashOffering: totals.cash ?? undefined,
+        onlineOffering: totals.online ?? undefined,
+        totalOffering: totals.offering ?? undefined
+      }
+    );
+  },
+
+  // Bacenta meeting record updated
+  meetingRecordUpdated: async (
+    leaderName: string,
+    bacentaName: string,
+    date: string,
+    changes?: string[],
+    totals?: { attendance?: number; firstTimers?: number; converts?: number; cash?: number; online?: number; offering?: number }
+  ) => {
+    if (!currentUser) return;
+
+    const description = `${leaderName} updated bacenta meeting • ${bacentaName} • ${date}${changes && changes.length ? ` (${changes.join(', ')})` : ''}`;
+    await notificationService.create(
+      currentUser.uid,
+      leaderName,
+      'meeting_record_updated',
+      {
+        bacentaName,
+        attendanceDate: date,
+        description
+      },
+      {
+        changes,
+        attendanceCount: totals?.attendance ?? undefined,
+        firstTimers: totals?.firstTimers ?? undefined,
+        converts: totals?.converts ?? undefined,
+        cashOffering: totals?.cash ?? undefined,
+        onlineOffering: totals?.online ?? undefined,
+        totalOffering: totals?.offering ?? undefined
+      }
+    );
+  },
+
+  // Bacenta meeting record deleted
+  meetingRecordDeleted: async (
+    leaderName: string,
+    bacentaName: string,
+    date: string
+  ) => {
+    if (!currentUser) return;
+
+    const description = `${leaderName} deleted bacenta meeting • ${bacentaName} • ${date}`;
+    await notificationService.create(
+      currentUser.uid,
+      leaderName,
+      'meeting_record_deleted',
+      {
+        bacentaName,
+        attendanceDate: date,
+        description
+      },
+      {
+        action: 'deleted'
+      }
+    );
   }
 };
