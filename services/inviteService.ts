@@ -8,15 +8,14 @@ import {
   deleteDoc,
   query,
   where,
-  orderBy,
-  Timestamp
+  // Timestamp
 } from 'firebase/firestore';
 import { db } from '../firebase.config';
 import { AdminInvite, User } from '../types';
 
 export const inviteService = {
   // Search for users by email in the users collection (across all churches)
-  searchUserByEmail: async (email: string, churchId: string): Promise<User | null> => {
+  searchUserByEmail: async (email: string): Promise<User | null> => {
     try {
       // Search for users with the exact email (across all churches)
       const usersQuery = query(
@@ -188,10 +187,18 @@ export const inviteService = {
 
       // Update user role to leader and grant access to the admin's church
       // Mark them as an invited admin leader to restrict their permissions
+      // Also copy churchName for better UX
       const userDocRef = doc(db, 'users', userUid);
+      let resolvedChurchName: string | undefined;
+      try {
+        const churchSnap = await getDoc(doc(db, 'churches', invite.churchId));
+        const cData: any = churchSnap.exists() ? churchSnap.data() : null;
+        resolvedChurchName = cData?.name;
+      } catch {}
       await updateDoc(userDocRef, {
         role: 'leader',
         churchId: invite.churchId, // Give access to the admin's church
+        ...(resolvedChurchName ? { churchName: resolvedChurchName } : {}),
         isInvitedAdminLeader: true, // Mark as invited admin leader
         invitedByAdminId: invite.createdBy, // Track who invited them
         lastUpdated: new Date().toISOString()
@@ -266,10 +273,17 @@ export const inviteService = {
       const invites = invitesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as AdminInvite[];
       const latestInvite = invites.sort((a, b) => new Date(b.respondedAt || b.createdAt).getTime() - new Date(a.respondedAt || a.createdAt).getTime())[0];
 
-      // Update user's churchId to match the admin's church
+      // Update user's churchId to match the admin's church and sync churchName for UI
       const userDocRef = doc(db, 'users', userUid);
+      let resolvedChurchName: string | undefined;
+      try {
+        const churchSnap = await getDoc(doc(db, 'churches', latestInvite.churchId));
+        const cData: any = churchSnap.exists() ? churchSnap.data() : null;
+        resolvedChurchName = cData?.name;
+      } catch {}
       await updateDoc(userDocRef, {
         churchId: latestInvite.churchId,
+        ...(resolvedChurchName ? { churchName: resolvedChurchName } : {}),
         lastUpdated: new Date().toISOString()
       });
 

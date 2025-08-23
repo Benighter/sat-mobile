@@ -1,7 +1,7 @@
 // Enhanced Authentication Screen with Login and Register
 import React, { useState, useEffect, ReactNode } from 'react';
 import { useAppContext } from '../../contexts/FirebaseAppContext';
-import { authService, FirebaseUser, setActiveContext, runBackfillMinistrySync } from '../../services/firebaseService';
+import { authService, FirebaseUser, setActiveContext } from '../../services/firebaseService';
 import { LoginForm } from './LoginForm';
 import RegisterForm from './RegisterForm';
 // Ministry variant removed – use standard forms only
@@ -78,7 +78,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ children, showToast }) =
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [ministryMode]);
 
   const handleSignIn = async (email: string, password: string) => {
     try {

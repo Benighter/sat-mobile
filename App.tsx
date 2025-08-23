@@ -37,6 +37,7 @@ import {
 import { TabKeys } from './types';
 import { DEFAULT_CHURCH, getAppDisplayName } from './constants';
 import { firebaseUtils } from './services/firebaseService';
+import { hasAdminPrivileges } from './utils/permissionUtils';
 import MemberFormModal from './components/modals/forms/MemberFormModal';
 import BulkMemberAddModal from './components/members/BulkMemberAddModal';
 import BacentaFormModal from './components/modals/forms/BacentaFormModal'; // Import BacentaFormModal
@@ -86,6 +87,7 @@ const AppContent: React.FC = memo(() => {
     toasts,
     user,
   userProfile,
+  currentChurchId,
     switchTab,
     removeToast,
 
@@ -119,6 +121,49 @@ const AppContent: React.FC = memo(() => {
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Gate admin UI briefly to avoid initial flicker; proceed once profile is ready (or timed bypass)
+  const [gateBypass, setGateBypass] = useState(false);
+  const gateReady = user ? (Boolean(userProfile) || gateBypass) : true;
+  useEffect(() => {
+    if (user && !gateReady) {
+      const timeout = setTimeout(() => setGateBypass(true), 2200);
+      return () => clearTimeout(timeout);
+    } else {
+      setGateBypass(false);
+    }
+  }, [user, gateReady]);
+
+  // Optional: warn in console if gating takes unusually long
+  React.useEffect(() => {
+    if (user && !gateReady) {
+      const t = setTimeout(() => {
+        if (!gateReady) {
+          console.warn('[Gate] Still waiting for profile/context', {
+            hasUser: !!user,
+            hasProfile: !!userProfile,
+            utilsCtx: firebaseUtils.getCurrentChurchId()
+          });
+        }
+      }, 1500);
+      return () => clearTimeout(t);
+    }
+  }, [user, userProfile, gateReady]);
+  if (!gateReady) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-indigo-50">
+        <div className="glass rounded-3xl p-8 shadow-2xl">
+          <div className="flex flex-col items-center space-y-3">
+            <LoadingSpinnerIcon className="w-6 h-6 animate-spin text-indigo-600" />
+            <div className="text-center">
+              <p className="text-sm font-semibold gradient-text">Syncing permissions…</p>
+              <p className="text-xs text-gray-600 mt-1">Preparing your admin dashboard</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
  // fetchInitialData itself will load current month's data
 
@@ -360,6 +405,43 @@ const AppContent: React.FC = memo(() => {
 
             {/* Right Section - Notifications and Profile */}
             <div className="flex items-center space-x-1 xs:space-x-2 sm:space-x-3 desktop:space-x-4 flex-shrink-0">
+              {/* Debug chip (enable with ?debug=1) */}
+              {typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('debug') && (
+                <div className="hidden sm:flex items-center gap-2 px-2 py-1 rounded-md bg-yellow-100 text-yellow-800 border border-yellow-300 text-[10px] font-semibold">
+                  <span>
+                    AdminGate: role={(userProfile?.role || 'unknown') as any} | isAdmin={String(hasAdminPrivileges(userProfile))} | ctx={currentChurchId || 'null'} | utilsCtx={firebaseUtils.getCurrentChurchId() || 'null'} | ministry={String(isMinistryContext)}
+                  </span>
+                  <button
+                    className="px-1.5 py-0.5 rounded bg-yellow-200 hover:bg-yellow-300"
+                    onClick={() => {
+                      try {
+                        console.log('[DebugGate] State', {
+                          user,
+                          userProfile,
+                          role: userProfile?.role,
+                          contexts: userProfile?.contexts,
+                          currentChurchId,
+                          utilsChurchId: firebaseUtils.getCurrentChurchId(),
+                          isMinistryContext
+                        });
+                        alert('Logged gate state to console');
+                      } catch {}
+                    }}
+                  >Log</button>
+                  <button
+                    className="px-1.5 py-0.5 rounded bg-yellow-200 hover:bg-yellow-300"
+                    onClick={() => {
+                      try {
+                        if (userProfile?.churchId) {
+                          firebaseUtils.setChurchContext(userProfile.churchId);
+                          console.log('[DebugGate] Forced context to', userProfile.churchId);
+                          alert('Forced context. If UI doesn\'t update, refresh.');
+                        }
+                      } catch {}
+                    }}
+                  >Fix Ctx</button>
+                </div>
+              )}
               {isImpersonating && (
                 <button
                   onClick={async () => {

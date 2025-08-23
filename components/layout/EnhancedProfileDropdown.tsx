@@ -128,6 +128,20 @@ const EnhancedProfileDropdown: React.FC<EnhancedProfileDropdownProps> = ({
 
   if (!user) return null;
 
+  // Derive role label once profile is available; fallback while loading
+  const roleLabel = useMemo(() => {
+    if (!userProfile) return 'Loading…';
+    if (hasAdminPrivileges(userProfile)) return 'Admin';
+    if (hasLeaderPrivileges(userProfile)) return 'Leader';
+    return 'Church Member';
+  }, [userProfile]);
+
+  const displayNameSafe = useMemo(() => {
+    // Prefer rich profile name; then auth; then placeholder
+    const full = (userProfile?.displayName || `${userProfile?.firstName || ''} ${userProfile?.lastName || ''}`.trim());
+    return full || user.displayName || user.email || 'User';
+  }, [userProfile, user]);
+
   return (
     <div className="relative" ref={dropdownRef}>
       {/* Profile Button */}
@@ -146,10 +160,10 @@ const EnhancedProfileDropdown: React.FC<EnhancedProfileDropdownProps> = ({
         <ProfileAvatar size="sm" />
         <div className="hidden sm:block text-left min-w-0">
           <p className="text-gray-700 font-medium text-sm truncate max-w-[80px] md:max-w-[100px] lg:max-w-[120px]">
-            {userProfile?.displayName || `${userProfile?.firstName || ''} ${userProfile?.lastName || ''}`.trim() || user.displayName || 'User'}
+            {displayNameSafe}
           </p>
           <p className="text-gray-500 text-xs truncate max-w-[80px] md:max-w-[100px] lg:max-w-[120px]">
-            Church Member
+            {roleLabel}
           </p>
         </div>
         <ChevronDownIcon className={`w-3 h-3 xs:w-4 xs:h-4 text-gray-500 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
@@ -166,12 +180,12 @@ const EnhancedProfileDropdown: React.FC<EnhancedProfileDropdownProps> = ({
               </div>
               <div className="flex-1 min-w-0 overflow-hidden">
                 <h3 className="font-semibold text-gray-900 text-sm sm:text-base mb-1 truncate">
-                  {userProfile?.displayName || `${userProfile?.firstName || ''} ${userProfile?.lastName || ''}`.trim() || user.displayName || 'User'}
+                  {displayNameSafe}
                 </h3>
                 <p className="text-xs text-gray-600 mb-2 break-words overflow-wrap-anywhere">{user.email}</p>
                 <div className="flex items-center space-x-2">
                   <div className="w-2 h-2 bg-green-500 rounded-full flex-shrink-0"></div>
-                  <p className="text-xs text-green-600 font-medium">Online</p>
+                  <p className="text-xs text-green-600 font-medium">{roleLabel}</p>
                 </div>
               </div>
             </div>

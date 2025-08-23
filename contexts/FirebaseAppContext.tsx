@@ -367,6 +367,16 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
               // Set up notification context if we have church context
               const churchId = firebaseUtils.getCurrentChurchId();
               setCurrentChurchId(churchId);
+              // SAFEGUARD: If active context isn't set yet or mismatched, align to the user's profile church immediately
+              try {
+                const targetChurchId = profile?.churchId || null;
+                const ctxId = firebaseUtils.getCurrentChurchId();
+                if (targetChurchId && targetChurchId !== ctxId) {
+                  console.log('[AuthSync] Setting church context from profile', { targetChurchId, ctxId });
+                  firebaseUtils.setChurchContext(targetChurchId);
+                  setCurrentChurchId(targetChurchId);
+                }
+              } catch {}
               if (profile && churchId) {
                 setNotificationContext(profile, churchId);
                 setNotificationIntegrationContext(profile, churchId);
@@ -417,6 +427,23 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
 
     initializeApp();
   }, []);
+
+  // Ensure church context stays aligned with the loaded profile (prevents data flicker for invited leaders)
+  useEffect(() => {
+    try {
+      const profileChurchId = userProfile?.churchId || null;
+      const ctxChurchId = firebaseUtils.getCurrentChurchId();
+      // If we have a profile with a church but context is missing/mismatched, fix it and reattach listeners
+      if (profileChurchId && profileChurchId !== ctxChurchId) {
+        console.log('[ContextSync] Aligning church context with profile', { profileChurchId, ctxChurchId });
+        firebaseUtils.setChurchContext(profileChurchId);
+        setCurrentChurchId(profileChurchId);
+    // Listener setup will react to currentChurchId change via existing effect
+      }
+    } catch (e) {
+      // noop
+    }
+  }, [userProfile?.churchId]);
 
   // Set up real-time data listeners
   const listenersCleanupRef = React.useRef<(() => void) | null>(null);

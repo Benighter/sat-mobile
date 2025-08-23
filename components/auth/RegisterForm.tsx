@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { authService } from '../../services/firebaseService';
 // contextService methods are embedded in service as helpers; we'll call through authService.register for normal mode
 import { contextService } from '../../services/firebaseService';
+import { setActiveContext } from '../../services/firebaseService';
 import { EyeIcon, EyeSlashIcon } from '../icons/index';
 import { MINISTRY_OPTIONS } from '../../constants';
 
@@ -431,7 +432,7 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, onSwitchToLogin:
 
       // In ministry mode, allow reusing the same email by attaching a ministry context
       if (ministryMode) {
-        await contextService.registerOrAttachMinistryAccount(formData.email, formData.password, {
+  await contextService.registerOrAttachMinistryAccount(formData.email, formData.password, {
           firstName: formData.firstName.trim(),
           lastName: formData.lastName.trim(),
           churchName: churchName,
@@ -439,8 +440,10 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, onSwitchToLogin:
           role: 'admin',
           ministry: formData.ministry || ''
         });
+  // Ensure the active context is immediately switched to ministry after attach
+  try { await setActiveContext('ministry'); } catch {}
       } else {
-        await authService.register(formData.email, formData.password, {
+  await authService.register(formData.email, formData.password, {
         firstName: formData.firstName.trim(),
         lastName: formData.lastName.trim(),
         churchName: churchName,
@@ -450,9 +453,11 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, onSwitchToLogin:
         ministry: '',
         isMinistryAccount: false
       });
+  // Ensure the active context is immediately set to default after registration
+  try { await setActiveContext('default'); } catch {}
       }
 
-      showToast('success', 'Registration Successful!',
+  showToast('success', 'Registration Successful!',
         'Welcome! Your account has been created successfully.');
       onSuccess();
     } catch (error: any) {

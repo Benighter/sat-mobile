@@ -98,10 +98,12 @@ const ProfileSettingsView: React.FC = () => {
 
       setConstituencyName(userProfile.churchName || '');
 
+      // Always start from a safe base to avoid spreading undefined and to keep all keys defined
+      const basePrefs = (userProfile.notificationPreferences || getDefaultNotificationPreferences()) as NotificationPreferences;
       setNotificationPreferences({
-        ...userProfile.notificationPreferences,
+        ...basePrefs,
         birthdayNotifications: {
-          ...userProfile.notificationPreferences?.birthdayNotifications,
+          ...basePrefs.birthdayNotifications,
           ...forcedBirthdayDefaults
         }
       } as NotificationPreferences);
@@ -129,8 +131,12 @@ const ProfileSettingsView: React.FC = () => {
 
   // Birthday notification preferences are controlled by the organisation and cannot be changed via profile UI
   const handleBirthdayNotificationChange = (_key: keyof NotificationPreferences['birthdayNotifications'], _value: any) => {
-    return;
+    // Admin-managed; intentionally a no-op
   };
+  // Reference once to avoid tree-shaking/unused warnings (no runtime effect)
+  useEffect(() => {
+    if (false) handleBirthdayNotificationChange('enabled', true);
+  }, []);
 
   // const handleSendTestEmail = async () => {
   //   if (!user || !user.email) {
@@ -163,18 +169,7 @@ const ProfileSettingsView: React.FC = () => {
   //   }
   // };
 
-  const handleNotificationDaysChange = (days: number, enabled: boolean) => {
-    const currentDays = notificationPreferences.birthdayNotifications.daysBeforeNotification;
-    let newDays: number[];
-
-    if (enabled) {
-      newDays = [...currentDays, days].sort((a, b) => b - a);
-    } else {
-      newDays = currentDays.filter(d => d !== days);
-    }
-
-    handleBirthdayNotificationChange('daysBeforeNotification', newDays);
-  };
+  // Note: Birthday notification timing is admin-managed; UI controls are disabled.
 
   // Removed old handleProfileChange (inputs now use inline setters)
 
@@ -502,7 +497,7 @@ const ProfileSettingsView: React.FC = () => {
                 <label className="flex items-center space-x-3 cursor-pointer">
                   <input
                     type="checkbox"
-                    checked={notificationPreferences.emailNotifications}
+                    checked={!!notificationPreferences?.emailNotifications}
                     onChange={(e) => handleNotificationPreferenceChange('emailNotifications', e.target.checked)}
                     className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                   />

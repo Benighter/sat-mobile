@@ -115,7 +115,7 @@ const AdminInviteScreen: React.FC<AdminInviteScreenProps> = ({ isOpen, onClose }
     setSearchedUser(null);
     
     try {
-      const user = await inviteService.searchUserByEmail(searchEmail.trim(), userProfile.churchId);
+  const user = await inviteService.searchUserByEmail(searchEmail.trim());
       if (user) {
         setSearchedUser(user);
       } else {
@@ -167,7 +167,9 @@ const AdminInviteScreen: React.FC<AdminInviteScreenProps> = ({ isOpen, onClose }
 
   const handleRemoveLeader = async (invite: AdminInvite) => {
     try {
-      await inviteService.removeLeaderAccess(invite.invitedUserId, invite.id);
+  if (!userProfile) return;
+  // removeLeaderAccess expects (adminUid, leaderUserId)
+  await inviteService.removeLeaderAccess(userProfile.uid, invite.invitedUserId);
       showToast('success', `Removed leader access for ${invite.invitedUserName}`);
       loadInvites();
     } catch (error: any) {
