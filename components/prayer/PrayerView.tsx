@@ -103,6 +103,8 @@ const PrayerView: React.FC = () => {
     const searchLower = searchTerm.trim().toLowerCase();
     return members
       .filter(m => {
+  // Hide frozen members by default
+  if (m.frozen) return false;
   // Bacenta filter
   if (bacentaFilter && m.bacentaId !== bacentaFilter) return false;
   // Role filter
@@ -368,21 +370,8 @@ const PrayerView: React.FC = () => {
             </div>
           </div>
 
-          {/* Day tools: select a day from this week, copy, and bulk mark */}
+          {/* Day tools: copy and bulk mark (uses auto-selected day) */}
           <div className="mt-4 flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3">
-            <div className="sm:w-64 w-full">
-              <select
-                value={selectedDay}
-                onChange={(e) => setSelectedDay(e.target.value)}
-                className="w-full px-3 py-3 sm:py-2 border border-gray-300 dark:border-dark-600 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent bg-white dark:bg-dark-700 text-gray-900 dark:text-dark-100 text-center cursor-pointer"
-              >
-                {weekDates.map(d => (
-                  <option key={d} value={d}>
-                    {new Date(d + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'short' })} • {formatFullDate(d)}
-                  </option>
-                ))}
-              </select>
-            </div>
             <div>
               <button
                 onClick={handleCopyDay}
@@ -461,7 +450,7 @@ const PrayerView: React.FC = () => {
             {filteredMembers.length === 0 ? (
               <tr>
                 <td className="px-3 py-6 text-center text-gray-500" colSpan={3 + weekDates.length}>
-                  {bacentaFilter || searchTerm ? 'No members match your filter' : 'No members added yet'}
+                  {bacentaFilter || searchTerm ? 'No members match your filter' : 'No members to show (frozen members are hidden by default)'}
                 </td>
               </tr>
             ) : (
