@@ -58,6 +58,16 @@ interface RegisterFormData {
 }
 
 const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, onSwitchToLogin: _onSwitchToLogin, showToast, ministryMode = false }) => {
+  // One-off hard refresh after signup to ensure auth/profile/context are fully initialized
+  const hardRefreshAfterSignup = React.useCallback(() => {
+    try {
+      // Cache-busting reload using replace avoids back-stack duplicate
+      const base = window.location.origin + window.location.pathname;
+      window.location.replace(`${base}?signup=${Date.now()}`);
+    } catch {
+      window.location.reload();
+    }
+  }, []);
   const [formData, setFormData] = useState<RegisterFormData>({
     firstName: '',
     lastName: '',
@@ -460,6 +470,11 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, onSwitchToLogin:
   showToast('success', 'Registration Successful!',
         'Welcome! Your account has been created successfully.');
       onSuccess();
+      // Give the UI a brief moment to show the toast, then hard-refresh
+      setTimeout(() => {
+        try { showToast('info', 'Finalizing setup', 'Refreshing the app…'); } catch {}
+        hardRefreshAfterSignup();
+      }, 350);
     } catch (error: any) {
       const msg = getErrorMessage(error.message || error.code || error.toString(), ministryMode);
       showToast('error', 'Registration Failed', msg);

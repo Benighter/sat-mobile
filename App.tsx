@@ -142,14 +142,20 @@ const AppContent: React.FC = memo(() => {
   // Gate admin UI briefly to avoid initial flicker; proceed once profile is ready (or timed bypass)
   const [gateBypass, setGateBypass] = useState(false);
   const gateReady = user ? (Boolean(userProfile) || gateBypass) : true;
+
+  // IMPORTANT: Don't flip the bypass back off once it's enabled, or the UI will flicker/loop.
+  // Only set the bypass after a short delay when we have a user but no profile yet.
   useEffect(() => {
-    if (user && !gateReady) {
+    if (!user) {
+      // Reset bypass on sign-out only
+      setGateBypass(false);
+      return;
+    }
+    if (user && !userProfile && !gateBypass) {
       const timeout = setTimeout(() => setGateBypass(true), 2200);
       return () => clearTimeout(timeout);
-    } else {
-      setGateBypass(false);
     }
-  }, [user, gateReady]);
+  }, [user, userProfile, gateBypass]);
 
   // Optional: warn in console if gating takes unusually long
   React.useEffect(() => {
@@ -166,6 +172,18 @@ const AppContent: React.FC = memo(() => {
       return () => clearTimeout(t);
     }
   }, [user, userProfile, gateReady]);
+
+  // If gating persists, show an inline hint with actions
+  const [gateSlow, setGateSlow] = useState(false);
+  useEffect(() => {
+    let timer: any;
+    if (user && !gateReady) {
+      timer = setTimeout(() => setGateSlow(true), 6000);
+    } else {
+      setGateSlow(false);
+    }
+    return () => timer && clearTimeout(timer);
+  }, [user, gateReady]);
   if (!gateReady) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-indigo-50">
@@ -175,6 +193,33 @@ const AppContent: React.FC = memo(() => {
             <div className="text-center">
               <p className="text-sm font-semibold gradient-text">Syncing permissions…</p>
               <p className="text-xs text-gray-600 mt-1">Preparing your admin dashboard</p>
+              {gateSlow && (
+                <div className="mt-3 text-xs text-gray-600 space-y-2">
+                  <p>This is taking longer than expected. You can try these options:</p>
+                  <div className="flex items-center justify-center gap-2">
+                    <button
+                      onClick={() => {
+                        try { showToast('info', 'Reloading', 'Refreshing the app…'); } catch {}
+                        // Force a full reload to re-init Firebase and listeners
+                        window.location.reload();
+                      }}
+                      className="px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-xs hover:bg-indigo-700"
+                    >
+                      Reload app
+                    </button>
+                    <button
+                      onClick={() => {
+                        try { showToast('warning', 'Continuing without full profile'); } catch {}
+                        setGateBypass(true); // Allow UI to proceed
+                      }}
+                      className="px-3 py-1.5 rounded-lg bg-gray-100 text-gray-800 text-xs hover:bg-gray-200"
+                    >
+                      Continue anyway
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-gray-500">If issues persist after reload, please restart the app.</p>
+                </div>
+              )}
             </div>
           </div>
         </div>
