@@ -329,6 +329,7 @@ const ProfileSettingsView: React.FC = () => {
                   size="lg"
                   enableCropping={true}
                   cropPresets={true}
+                  onError={(title, message) => showToast('error', title, message)}
                 />
               </div>
             </div>

@@ -52,7 +52,8 @@ const BacentaFormModal: React.FC<BacentaFormModalProps> = ({ isOpen, onClose, ba
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!validate()) return;
+  if (isSubmitting) return; // prevent duplicates
+  if (!validate()) return;
 
     try {
       setIsSubmitting(true);
@@ -87,7 +88,19 @@ const BacentaFormModal: React.FC<BacentaFormModalProps> = ({ isOpen, onClose, ba
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={bacenta ? 'Edit Bacenta' : 'Add New Bacenta'} size="md">
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="relative">
+        {isSubmitting && (
+          <div className="absolute inset-0 z-20 bg-white/70 dark:bg-dark-900/60 backdrop-blur-sm flex items-center justify-center rounded-xl">
+            <div className="flex items-center gap-3 px-4 py-3 rounded-lg bg-white/90 dark:bg-dark-800 border border-gray-200 dark:border-dark-600 shadow">
+              <svg className="animate-spin h-5 w-5 text-indigo-600" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0a12 12 0 00-12 12h4z"></path>
+              </svg>
+              <span className="text-sm font-medium text-gray-700 dark:text-dark-100">{bacenta ? 'Saving bacenta…' : 'Creating bacenta…'}</span>
+            </div>
+          </div>
+        )}
+      <form onSubmit={handleSubmit} className="space-y-4" aria-busy={isSubmitting}>
         {!bacenta && (
           <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-4">
             <div className="flex items-start space-x-3">
@@ -162,11 +175,12 @@ const BacentaFormModal: React.FC<BacentaFormModalProps> = ({ isOpen, onClose, ba
 
         <div className="flex justify-end space-x-3 pt-4">
           <Button type="button" variant="secondary" onClick={onClose} disabled={isSubmitting}>Cancel</Button>
-          <Button type="submit" variant="primary" disabled={isSubmitting}>
-            {isSubmitting ? (bacenta ? 'Saving...' : 'Creating...') : (bacenta ? 'Save Changes' : 'Create & Enter Bacenta')}
+          <Button type="submit" variant="primary" disabled={isSubmitting} loading={isSubmitting}>
+            {bacenta ? 'Save Changes' : 'Create & Enter Bacenta'}
           </Button>
         </div>
       </form>
+      </div>
     </Modal>
   );
 };

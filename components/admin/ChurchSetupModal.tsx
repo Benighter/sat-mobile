@@ -54,12 +54,13 @@ const ChurchSetupModal: React.FC<ChurchSetupModalProps> = ({ isOpen, onComplete,
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isLoading) return;
     
     if (!validateForm()) {
       return;
     }
 
-    setIsLoading(true);
+  setIsLoading(true);
     try {
       // Create church and update user profile
       await userService.createChurchAndUpdateUser({
@@ -97,7 +98,7 @@ const ChurchSetupModal: React.FC<ChurchSetupModalProps> = ({ isOpen, onComplete,
 
   return (
     <div className="fixed inset-0 bg-gradient-to-br from-slate-900 via-gray-900 to-slate-800 z-50 flex items-center justify-center p-4">
-      <div className="bg-white/10 backdrop-blur-xl rounded-2xl border border-white/20 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+      <div className="relative bg-white/10 backdrop-blur-xl rounded-2xl border border-white/20 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="p-6 border-b border-white/10">
           <div className="flex items-center justify-between">
@@ -114,7 +115,7 @@ const ChurchSetupModal: React.FC<ChurchSetupModalProps> = ({ isOpen, onComplete,
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+  <form onSubmit={handleSubmit} className="p-6 space-y-6" aria-busy={isLoading}>
           {/* Church Name */}
           <div>
             <label className="block text-sm font-medium text-gray-200 mb-2">
@@ -257,6 +258,14 @@ const ChurchSetupModal: React.FC<ChurchSetupModalProps> = ({ isOpen, onComplete,
             </button>
           </div>
         </form>
+        {isLoading && (
+          <div className="absolute inset-0 bg-black/20 backdrop-blur-[1px] rounded-2xl flex items-center justify-center z-10">
+            <div className="bg-white/90 px-4 py-2 rounded-lg shadow text-sm font-medium flex items-center gap-2">
+              <span className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+              Processing…
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

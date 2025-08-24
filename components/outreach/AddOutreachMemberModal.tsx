@@ -36,6 +36,7 @@ const AddOutreachMemberModal: React.FC<Props> = ({ isOpen, onClose, bacentaId, w
   };
 
   const handleSubmit = async () => {
+    if (submitting) return;
     const trimmed = name.trim();
   const normalizePhone = (p: string) => p.replace(/\s+/g, '').replace(/^\+?233/, '0');
   const normalizedPhone = phone ? normalizePhone(phone) : '';
@@ -43,7 +44,7 @@ const AddOutreachMemberModal: React.FC<Props> = ({ isOpen, onClose, bacentaId, w
       showToast('warning', 'Please enter a name');
       return;
     }
-    setSubmitting(true);
+  setSubmitting(true);
     try {
       // If born again, create a Member first (unassigned, outreach origin)
       let bornAgainMemberId: string | undefined;
@@ -121,7 +122,7 @@ const AddOutreachMemberModal: React.FC<Props> = ({ isOpen, onClose, bacentaId, w
 
         <div className="flex justify-end gap-3 pt-2">
           <Button variant="secondary" onClick={() => { reset(); onClose(); }} disabled={submitting}>Cancel</Button>
-          <Button onClick={handleSubmit} disabled={submitting}>
+          <Button onClick={handleSubmit} disabled={submitting} loading={submitting}>
             {submitting ? 'Adding...' : 'Add Member'}
           </Button>
         </div>

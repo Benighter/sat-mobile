@@ -3,6 +3,7 @@ import { useAppContext } from '../../contexts/FirebaseAppContext';
 import { OutreachMember } from '../../types';
 import { formatDateToYYYYMMDD } from '../../utils/dateUtils';
 import Button from '../ui/Button';
+import ConfirmationModal from '../modals/confirmations/ConfirmationModal';
 // removed inline form components after switching to modal
 import Badge from '../ui/Badge';
 import { CalendarIcon, PlusIcon, CheckIcon, ExclamationTriangleIcon, ChevronLeftIcon, ChevronRightIcon, TrashIcon, UserIcon, PhoneIcon } from '../icons';
@@ -129,13 +130,19 @@ const BacentaOutreachView: React.FC<BacentaOutreachViewProps> = ({ bacentaId }) 
     }
   };
 
-  const handleDelete = async (member: OutreachMember) => {
-    if (!confirm(`Delete ${member.name} from outreach list?`)) return;
+  const [pendingDelete, setPendingDelete] = useState<OutreachMember | null>(null);
+  const handleDelete = (member: OutreachMember) => {
+    setPendingDelete(member);
+  };
+  const confirmDelete = async () => {
+    if (!pendingDelete) return;
     try {
-      await deleteOutreachMemberHandler(member.id);
+      await deleteOutreachMemberHandler(pendingDelete.id);
       showToast('success', 'Member deleted');
     } catch (error) {
       showToast('error', 'Failed to delete member');
+    } finally {
+      setPendingDelete(null);
     }
   };
 
@@ -320,6 +327,17 @@ const BacentaOutreachView: React.FC<BacentaOutreachViewProps> = ({ bacentaId }) 
         onClose={() => setEditingMember(null)}
         member={editingMember}
         bacentaName={bacenta?.name}
+      />
+      {/* Delete confirmation */}
+      <ConfirmationModal
+        isOpen={!!pendingDelete}
+        onClose={() => setPendingDelete(null)}
+        onConfirm={confirmDelete}
+        title="Delete Outreach Member"
+        message={pendingDelete ? `Remove ${pendingDelete.name} from this week's outreach list?` : ''}
+        confirmText="Delete"
+        cancelText="Cancel"
+        type="danger"
       />
     </div>
   );

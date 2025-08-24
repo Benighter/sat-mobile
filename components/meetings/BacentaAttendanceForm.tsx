@@ -4,6 +4,7 @@ import { formatDisplayDate } from '../../utils/dateUtils';
 import { CameraIcon, CalendarIcon, UserIcon, UsersIcon, TrashIcon, PhotoIcon, PlusIcon, XMarkIcon } from '../icons';
 import Button from '../ui/Button';
 import ImageCropper from '../ui/ImageCropper';
+import ConfirmationModal from '../modals/confirmations/ConfirmationModal';
 
 interface BacentaAttendanceFormProps {
   bacentaId: string;
@@ -18,7 +19,7 @@ const BacentaAttendanceForm: React.FC<BacentaAttendanceFormProps> = ({
   onBack,
   existingRecord
 }) => {
-  const { bacentas, members, saveMeetingRecordHandler, updateMeetingRecordHandler, deleteMeetingRecordHandler } = useAppContext();
+  const { bacentas, members, saveMeetingRecordHandler, updateMeetingRecordHandler, deleteMeetingRecordHandler, showToast } = useAppContext();
 
   // View/Edit mode state
   const [isViewMode, setIsViewMode] = useState(!!existingRecord);
@@ -42,6 +43,8 @@ const BacentaAttendanceForm: React.FC<BacentaAttendanceFormProps> = ({
   // Track present members (manually ticked) – keep this near other state to avoid use-before-declare
   const [presentMemberIds, setPresentMemberIds] = useState<string[]>(existingRecord?.presentMemberIds || []);
   const [memberQuery, setMemberQuery] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   // Refs
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -116,12 +119,12 @@ const BacentaAttendanceForm: React.FC<BacentaAttendanceFormProps> = ({
     const maxSize = 5 * 1024 * 1024; // 5MB
 
     if (!validTypes.includes(file.type)) {
-      alert('Please upload a valid image file (JPG, PNG, or WEBP)');
+  try { showToast('error', 'Invalid image', 'Please upload a valid image file (JPG, PNG, or WEBP).'); } catch {}
       return false;
     }
 
     if (file.size > maxSize) {
-      alert('Image size must be less than 5MB');
+  try { showToast('error', 'Image too large', 'Image size must be less than 5MB.'); } catch {}
       return false;
     }
 
@@ -191,22 +194,25 @@ const BacentaAttendanceForm: React.FC<BacentaAttendanceFormProps> = ({
     }
   };
 
-  const handleDelete = async () => {
-    if (confirm('Are you sure you want to delete this meeting record? This action cannot be undone.')) {
-      try {
-        if (existingRecord?.id) {
-          await deleteMeetingRecordHandler(existingRecord.id);
-          onBack();
-        }
-      } catch (error) {
-        console.error('Error deleting meeting record:', error);
-        // Error handling is done by the context handler
+  const handleDelete = () => {
+    setShowDeleteConfirm(true);
+  };
+
+  const confirmDelete = async () => {
+    try {
+      if (existingRecord?.id) {
+        await deleteMeetingRecordHandler(existingRecord.id);
+        onBack();
       }
+    } catch (error) {
+      console.error('Error deleting meeting record:', error);
     }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
+    setIsSubmitting(true);
     try {
       const meetingRecord = {
         id: `${bacentaId}_${meetingDate}`,
@@ -238,6 +244,8 @@ const BacentaAttendanceForm: React.FC<BacentaAttendanceFormProps> = ({
       onBack();
     } catch (error) {
       console.error('Error saving meeting details:', error);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -424,7 +432,16 @@ const BacentaAttendanceForm: React.FC<BacentaAttendanceFormProps> = ({
 
   {/* Meeting Info Card removed as requested */}
 
-  <form onSubmit={isViewMode ? (e) => e.preventDefault() : handleSubmit} className="space-y-8">
+  <div className="relative">
+  {isSubmitting && (
+    <div className="absolute inset-0 z-20 bg-black/20 backdrop-blur-[1px] flex items-center justify-center rounded-2xl">
+      <div className="bg-white/90 px-4 py-3 rounded-lg shadow text-sm font-medium flex items-center gap-2">
+        <span className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+        Processing…
+      </div>
+    </div>
+  )}
+  <form onSubmit={isViewMode ? (e) => e.preventDefault() : handleSubmit} className="space-y-8" aria-busy={isSubmitting}>
           {/* Enhanced Meeting Photo Section */}
           <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-8">
             <div className="text-center mb-6">
@@ -918,19 +935,39 @@ const BacentaAttendanceForm: React.FC<BacentaAttendanceFormProps> = ({
                   type="button"
                   variant="secondary"
                   onClick={handleCancelEdit}
+                  disabled={isSubmitting}
                 >
                   Cancel
                 </Button>
-                <Button type="submit" variant="primary" className="px-8">
+                <Button type="submit" variant="primary" className="px-8" loading={isSubmitting} disabled={isSubmitting}>
                   {existingRecord ? 'Update Details' : 'Save Details'}
                 </Button>
               </>
             )}
           </div>
         </form>
+        </div>
       </div>
+
+      {/* Delete confirmation */}
+      {existingRecord && (
+        <ConfirmationModal
+          isOpen={showDeleteConfirm}
+          onClose={() => setShowDeleteConfirm(false)}
+          onConfirm={async () => { await confirmDelete(); setShowDeleteConfirm(false); }}
+          title="Delete Meeting Record"
+          message="Are you sure you want to delete this meeting record? This action cannot be undone."
+          confirmText="Delete"
+          cancelText="Cancel"
+          type="danger"
+        />
+      )}
     </>
   );
 };
 
 export default BacentaAttendanceForm;
+
+// Delete confirmation modal
+// Rendered alongside component content
+// Note: keep at bottom of file export above

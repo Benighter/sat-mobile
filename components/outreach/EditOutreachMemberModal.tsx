@@ -49,6 +49,7 @@ const EditOutreachMemberModal: React.FC<Props> = ({ isOpen, onClose, member, bac
   };
 
   const handleSave = async () => {
+    if (saving) return;
     if (!member) return;
     const trimmed = name.trim();
     if (!trimmed) {
@@ -141,7 +142,7 @@ const EditOutreachMemberModal: React.FC<Props> = ({ isOpen, onClose, member, bac
 
         <div className="flex justify-end gap-3 pt-2">
           <Button variant="secondary" onClick={() => { reset(); onClose(); }} disabled={saving}>Cancel</Button>
-          <Button onClick={handleSave} disabled={saving || !member}>
+          <Button onClick={handleSave} disabled={saving || !member} loading={saving}>
             {saving ? 'Saving…' : 'Save Changes'}
           </Button>
         </div>

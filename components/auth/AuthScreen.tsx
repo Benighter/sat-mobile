@@ -62,6 +62,17 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ children, showToast }) =
   // Must come before any conditional return (Rules of Hooks)
   const { isImpersonating, stopImpersonation, switchTab } = useAppContext();
 
+  // Watchdog: if auth/loading persists beyond 5 seconds, notify user
+  useEffect(() => {
+    let t: any;
+    if (loading) {
+      t = setTimeout(() => {
+        try { showToast('warning', 'Still loading…', 'If this takes too long, please restart the app.'); } catch {}
+      }, 5000);
+    }
+    return () => t && clearTimeout(t);
+  }, [loading, showToast]);
+
   useEffect(() => {
     // Listen to authentication state changes
     const unsubscribe = authService.onAuthStateChanged((user) => {

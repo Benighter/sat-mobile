@@ -5,6 +5,7 @@ import { collection, getDocs, getDoc, query, where, limit, updateDoc, doc, Times
 import { db } from '../../firebase.config';
 import { useAppContext } from '../../contexts/FirebaseAppContext';
 import AdminChurchPreview from './AdminChurchPreview';
+import ConfirmationModal from '../modals/confirmations/ConfirmationModal';
 
 interface AdminUserRecord {
   id: string;
@@ -58,6 +59,8 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
   const [editingCampusName, setEditingCampusName] = useState('');
   const [deletingCampus, setDeletingCampus] = useState(false);
   const [selectedCampusId, setSelectedCampusId] = useState<string | null>(null);
+  const [pendingDeleteAdmin, setPendingDeleteAdmin] = useState<AdminUserRecord | null>(null);
+  const [confirmDeleteCampus, setConfirmDeleteCampus] = useState(false);
 
   const campusAggregates = useMemo(() => {
     if (!campuses.length) return [] as Array<{ campus: CampusRecord; adminCount: number; constituencyCount: number; members: number }>;
@@ -341,8 +344,12 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
   };
 
   const softDeleteAdmin = async (admin: AdminUserRecord) => {
-    const confirmed = window.confirm(`Soft delete admin "${admin.displayName || admin.email}"? They will be marked deleted and removed from this list.`);
-    if (!confirmed) return;
+    setPendingDeleteAdmin(admin);
+  };
+
+  const performSoftDeleteAdmin = async () => {
+    const admin = pendingDeleteAdmin;
+    if (!admin) return;
     try {
       setUpdating(admin.id, true);
       await updateDoc(doc(db, 'users', admin.id), {
@@ -361,6 +368,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
       setError(e.message || 'Failed to delete admin');
     } finally {
       setUpdating(admin.id, false);
+      setPendingDeleteAdmin(null);
     }
   };
 
@@ -494,7 +502,12 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
 
   const deleteCampus = async () => {
     if (!editingCampus) return;
-    if (!window.confirm(`Delete campus "${editingCampus.name}"? Constituencies will become unassigned.`)) return;
+    setConfirmDeleteCampus(true);
+    return;
+  };
+
+  const performDeleteCampus = async () => {
+    if (!editingCampus) return;
     try {
       setDeletingCampus(true);
       // Soft delete campus
@@ -514,7 +527,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
       })();
       // Close modal & selection
       if (selectedCampusId === editingCampus.id) setSelectedCampusId(null);
-      setEditingCampus(null);
+  setEditingCampus(null);
     } catch (e:any) {
       setCampusError(e.message || 'Failed to delete campus');
     } finally { setDeletingCampus(false); }
@@ -1015,6 +1028,30 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
         {previewAdmin && (
           <AdminChurchPreview admin={previewAdmin} onClose={() => setPreviewAdmin(null)} />
         )}
+
+        {/* Confirm soft-delete admin */}
+        <ConfirmationModal
+          isOpen={!!pendingDeleteAdmin}
+          onClose={() => setPendingDeleteAdmin(null)}
+          onConfirm={performSoftDeleteAdmin}
+          title="Delete Admin"
+          message={pendingDeleteAdmin ? `Soft delete admin "${pendingDeleteAdmin.displayName || pendingDeleteAdmin.email}"? They will be marked deleted and removed from this list.` : ''}
+          confirmText="Delete"
+          cancelText="Cancel"
+          type="danger"
+        />
+
+        {/* Confirm delete campus */}
+        <ConfirmationModal
+          isOpen={!!editingCampus && confirmDeleteCampus}
+          onClose={() => setConfirmDeleteCampus(false)}
+          onConfirm={() => { setConfirmDeleteCampus(false); performDeleteCampus(); }}
+          title="Delete Campus"
+          message={editingCampus ? `Delete campus "${editingCampus.name}"? Constituencies will become unassigned.` : ''}
+          confirmText="Delete"
+          cancelText="Cancel"
+          type="danger"
+        />
       </div>
     </div>
   );

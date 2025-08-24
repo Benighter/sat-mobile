@@ -19,7 +19,7 @@ interface MemberFormModalProps {
 }
 
 const MemberFormModal: React.FC<MemberFormModalProps> = ({ isOpen, onClose, member }) => {
-  const { addMemberHandler, updateMemberHandler, bacentas, currentTab, userProfile, members, isMinistryContext, activeMinistryName } = useAppContext();
+  const { addMemberHandler, updateMemberHandler, bacentas, currentTab, userProfile, members, isMinistryContext, activeMinistryName, showToast } = useAppContext();
 
   // Check if user can assign roles
   const canAssignRoles = canAssignMemberRoles(userProfile);
@@ -46,6 +46,7 @@ const MemberFormModal: React.FC<MemberFormModalProps> = ({ isOpen, onClose, memb
   };
   const [formData, setFormData] = useState(initialFormData);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     if (member) {
@@ -162,14 +163,31 @@ const MemberFormModal: React.FC<MemberFormModalProps> = ({ isOpen, onClose, memb
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return; // prevent duplicate submits
     if (!validate()) return;
+    setIsSubmitting(true);
 
     if (member) {
-      await updateMemberHandler({ ...member, ...formData });
+      try {
+        await updateMemberHandler({ ...member, ...formData });
+        onClose();
+      } catch (err: any) {
+        // Error toast handled in context; re-enable for retry
+        setIsSubmitting(false);
+        return;
+      }
     } else {
-      await addMemberHandler(formData);
+      try {
+        await addMemberHandler(formData);
+        onClose();
+      } catch (err: any) {
+        // Error toast handled in context; re-enable for retry
+        setIsSubmitting(false);
+        return;
+      }
     }
-    onClose();
+    // If onClose didn't unmount yet, clear submitting
+    setIsSubmitting(false);
   };
 
   return (
@@ -187,7 +205,19 @@ const MemberFormModal: React.FC<MemberFormModalProps> = ({ isOpen, onClose, memb
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-8 desktop:space-y-6 desktop-form">
+        <div className="relative">
+        {isSubmitting && (
+          <div className="absolute inset-0 z-20 bg-white/70 dark:bg-dark-900/60 backdrop-blur-sm flex items-center justify-center rounded-xl">
+            <div className="flex items-center gap-3 px-4 py-3 rounded-lg bg-white/90 dark:bg-dark-800 border border-gray-200 dark:border-dark-600 shadow">
+              <svg className="animate-spin h-5 w-5 text-indigo-600" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0a12 12 0 00-12 12h4z"></path>
+              </svg>
+              <span className="text-sm font-medium text-gray-700 dark:text-dark-100">Saving member…</span>
+            </div>
+          </div>
+        )}
+        <form onSubmit={handleSubmit} className="space-y-8 desktop:space-y-6 desktop-form" aria-busy={isSubmitting}>
           {/* Profile Picture Section */}
           <div className="flex flex-col items-center space-y-4">
             <div className="text-center">
@@ -198,6 +228,7 @@ const MemberFormModal: React.FC<MemberFormModalProps> = ({ isOpen, onClose, memb
               value={formData.profilePicture}
               onChange={handleImageChange}
               size="lg"
+              onError={(title, message) => showToast('error', title, message)}
             />
           </div>
 
@@ -491,6 +522,7 @@ const MemberFormModal: React.FC<MemberFormModalProps> = ({ isOpen, onClose, memb
               variant="secondary"
               onClick={onClose}
               className="px-6 py-3"
+              disabled={isSubmitting}
             >
               Cancel
             </Button>
@@ -498,11 +530,14 @@ const MemberFormModal: React.FC<MemberFormModalProps> = ({ isOpen, onClose, memb
               type="submit"
               variant="primary"
               className="px-6 py-3"
+              loading={isSubmitting}
+              disabled={isSubmitting}
             >
               {member ? 'Update Member' : 'Add Member'}
             </Button>
           </div>
         </form>
+        </div>
       </div>
     </Modal>
   );

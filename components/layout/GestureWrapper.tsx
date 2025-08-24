@@ -2,6 +2,7 @@ import React, { ReactNode, useState, useRef, useCallback } from 'react';
 import { motion, PanInfo, useAnimation } from 'framer-motion';
 import { useNavigation } from '../../hooks/useNavigation';
 import { useAppContext } from '../../contexts/FirebaseAppContext';
+import ConfirmationModal from '../modals/confirmations/ConfirmationModal';
 
 interface GestureWrapperProps {
   children: ReactNode;
@@ -14,6 +15,7 @@ const GestureWrapper: React.FC<GestureWrapperProps> = ({ children, className = '
   const controls = useAnimation();
   const [isAnimating, setIsAnimating] = useState(false);
   const [showExitPrompt, setShowExitPrompt] = useState(false);
+  const [showExitConfirm, setShowExitConfirm] = useState(false);
   const exitPromptTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Handle dashboard exit confirmation
@@ -27,10 +29,8 @@ const GestureWrapper: React.FC<GestureWrapperProps> = ({ children, className = '
         if ('app' in window && typeof (window as any).app.exitApp === 'function') {
           (window as any).app.exitApp();
         } else {
-          // Fallback: try to close the window/tab
-          if (confirm('Are you sure you want to exit the app?')) {
-            window.close();
-          }
+          // Fallback: show confirmation modal before attempting to close
+          setShowExitConfirm(true);
         }
       }
       setShowExitPrompt(false);
@@ -238,6 +238,25 @@ const GestureWrapper: React.FC<GestureWrapperProps> = ({ children, className = '
             </button>
           </div>
         </motion.div>
+      )}
+
+      {/* Exit confirmation modal for fallback environments */}
+      {showExitConfirm && (
+        <ConfirmationModal
+          isOpen={showExitConfirm}
+          title="Exit App"
+          message="Are you sure you want to exit the app?"
+          confirmText="Exit"
+          type="danger"
+          onClose={() => setShowExitConfirm(false)}
+          onConfirm={async () => {
+            try {
+              window.close();
+            } finally {
+              setShowExitConfirm(false);
+            }
+          }}
+        />
       )}
     </>
   );

@@ -6,6 +6,7 @@ import ImageCropperWithPresets from './ImageCropperWithPresets';
 interface ImageUploadProps {
   value?: string; // Base64 string
   onChange: (base64: string | null) => void;
+  onError?: (title: string, message: string) => void; // optional toast handler
   className?: string;
   size?: 'sm' | 'md' | 'lg';
   enableCropping?: boolean; // Enable cropping functionality
@@ -18,7 +19,8 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
   className = '',
   size = 'md',
   enableCropping = true,
-  cropPresets = true
+  cropPresets = true,
+  onError
 }) => {
   const [isFullScreen, setIsFullScreen] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
@@ -34,9 +36,35 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
 
   const handleFileSelect = (file: File) => {
     if (file && file.type.startsWith('image/')) {
-      // Check file size (max 5MB)
-      if (file.size > 5 * 1024 * 1024) {
-        alert('Image size must be less than 5MB');
+      // Validate type and size
+      const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+      const maxSize = 5 * 1024 * 1024; // 5MB
+      if (!validTypes.includes(file.type)) {
+        onError?.('Invalid image type', 'Please upload a JPG, PNG, or WEBP image.');
+        return;
+      }
+      if (file.size > maxSize) {
+        // Try downscaling large images rather than rejecting outright
+        const tryDownscale = async () => {
+          try {
+            const base64 = await fileToBase64(file);
+            const downscaled = await downscaleImage(base64, 1920, 1920, 0.85);
+            if (downscaled.length < base64.length && downscaled.length <= maxSize * 1.4) {
+              // proceed with downscaled
+              if (enableCropping) {
+                setSelectedImage(downscaled);
+                setShowCropper(true);
+              } else {
+                onChange(downscaled);
+              }
+              return;
+            }
+            onError?.('Image too large', 'Image size must be less than 5MB. Please choose a smaller image.');
+          } catch (e) {
+            onError?.('Image too large', 'Image size must be less than 5MB. Please choose a smaller image.');
+          }
+        };
+        tryDownscale();
         return;
       }
 
@@ -52,7 +80,7 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
       };
       reader.readAsDataURL(file);
     } else {
-      alert('Please select a valid image file');
+      onError?.('Invalid file', 'Please select a valid image file.');
     }
   };
 
@@ -245,5 +273,35 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
     </>
   );
 };
+
+// Helpers
+const fileToBase64 = (file: File): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+
+const downscaleImage = (base64: string, maxW: number, maxH: number, quality = 0.85): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      let { width, height } = img;
+      const ratio = Math.min(maxW / width, maxH / height, 1);
+      width = Math.floor(width * ratio);
+      height = Math.floor(height * ratio);
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return reject(new Error('Canvas not supported'));
+      ctx.drawImage(img, 0, 0, width, height);
+      const out = canvas.toDataURL('image/jpeg', quality);
+      resolve(out);
+    };
+    img.onerror = reject;
+    img.src = base64;
+  });
 
 export default ImageUpload;

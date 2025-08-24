@@ -28,9 +28,16 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
   icon,
   details
 }) => {
-  const handleConfirm = () => {
-    onConfirm();
-    onClose();
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const handleConfirm = async () => {
+    if (isSubmitting) return;
+    try {
+      setIsSubmitting(true);
+      await Promise.resolve(onConfirm());
+      onClose();
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const getTypeStyles = () => {
@@ -121,12 +128,13 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
         )}
 
         {/* Action Buttons */}
-        <div className="flex flex-col sm:flex-row gap-3 justify-center animate-fade-in" style={{ animationDelay: '0.4s' }}>
+    <div className="flex flex-col sm:flex-row gap-3 justify-center animate-fade-in" style={{ animationDelay: '0.4s' }}>
           <Button
-            onClick={onClose}
+      onClick={onClose}
             variant="secondary"
             size="lg"
-            className="flex items-center justify-center space-x-2 min-w-32"
+      className="flex items-center justify-center space-x-2 min-w-32"
+      disabled={isSubmitting}
           >
             <XMarkIcon className="w-5 h-5" />
             <span>{cancelText}</span>
@@ -136,7 +144,9 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
             onClick={handleConfirm}
             variant={styles.confirmVariant}
             size="lg"
-            className="flex items-center justify-center space-x-2 min-w-32"
+      className="flex items-center justify-center space-x-2 min-w-32"
+      loading={isSubmitting}
+      disabled={isSubmitting}
           >
             {type === 'danger' && <TrashIcon className="w-5 h-5" />}
             <span>{confirmText}</span>

@@ -1,0 +1,50 @@
+import React from 'react';
+
+type Props = { children: React.ReactNode };
+type State = { hasError: boolean; error?: any };
+
+export default class ErrorBoundary extends React.Component<Props, State> {
+  constructor(props: Props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(error: any) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: any, info: any) {
+    // eslint-disable-next-line no-console
+    console.error('Unhandled UI error:', error, info);
+  }
+
+  handleReload = () => {
+    try {
+      if (typeof window !== 'undefined') {
+        window.location.reload();
+      }
+    } catch {}
+  };
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-rose-50 via-white to-orange-50 p-6">
+          <div className="glass rounded-3xl p-8 shadow-2xl max-w-md w-full">
+            <div className="flex items-center space-x-3 mb-4">
+              <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
+                <span className="text-red-500 text-xl">⚠️</span>
+              </div>
+              <h3 className="font-semibold text-red-800">Something went wrong</h3>
+            </div>
+            <p className="text-sm text-gray-700 mb-4">The app hit an unexpected error. You can try reloading the app. If the problem persists, please contact support.</p>
+            <button onClick={this.handleReload} className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-semibold shadow">
+              Reload App
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}

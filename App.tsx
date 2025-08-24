@@ -53,6 +53,7 @@ import DeletionRequestNotificationBadge from './components/notifications/Deletio
 import { DeleteMemberModal, DeleteBacentaModal, DeleteNewBelieverModal, ClearAllDataModal, ClearSelectedDataModal, CreateDeletionRequestModal, ClearAllNewBelieversModal } from './components/modals/confirmations/ConfirmationModal';
 import WhatsNewModal from './components/modals/general/WhatsNewModal';
 import { useWhatsNew } from './hooks/useWhatsNew';
+import ErrorBoundary from './components/common/ErrorBoundary';
 
 const AppContent: React.FC = memo(() => {
   const {
@@ -60,6 +61,7 @@ const AppContent: React.FC = memo(() => {
     isLoading,
     error,
     fetchInitialData,
+  showToast,
   isMinistryContext,
   activeMinistryName,
   isImpersonating,
@@ -95,6 +97,7 @@ const AppContent: React.FC = memo(() => {
 
   const [isDataManagementOpen, setIsDataManagementOpen] = useState(false);
   const [isBulkMemberModalOpen, setIsBulkMemberModalOpen] = useState(false);
+  const [loadingStuckHint, setLoadingStuckHint] = useState<string | null>(null);
 
   // What's New modal state
   const { isOpen: isWhatsNewOpen, closeModal: closeWhatsNew } = useWhatsNew();
@@ -121,6 +124,20 @@ const AppContent: React.FC = memo(() => {
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Watchdog: if loading persists beyond 5 seconds, show restart hint once
+  useEffect(() => {
+    let timer: any;
+    if (isLoading) {
+      timer = setTimeout(() => {
+        setLoadingStuckHint('Sync is taking longer than expected. If this message persists, please restart the app.');
+  try { showToast('warning', 'Slow sync detected', 'If this persists, please restart the app.'); } catch {}
+      }, 5000);
+    } else {
+      setLoadingStuckHint(null);
+    }
+    return () => timer && clearTimeout(timer);
+  }, [isLoading]);
 
   // Gate admin UI briefly to avoid initial flicker; proceed once profile is ready (or timed bypass)
   const [gateBypass, setGateBypass] = useState(false);
@@ -203,7 +220,7 @@ const AppContent: React.FC = memo(() => {
       );
     }
 
-    if (isBacentaTab) {
+  if (isBacentaTab) {
       return (
         <LazyWrapper>
           <LazyMemberListView bacentaFilter={currentTab.id} />
@@ -424,7 +441,7 @@ const AppContent: React.FC = memo(() => {
                           utilsChurchId: firebaseUtils.getCurrentChurchId(),
                           isMinistryContext
                         });
-                        alert('Logged gate state to console');
+                        showToast('info', 'Debug', 'Logged gate state to console');
                       } catch {}
                     }}
                   >Log</button>
@@ -435,7 +452,7 @@ const AppContent: React.FC = memo(() => {
                         if (userProfile?.churchId) {
                           firebaseUtils.setChurchContext(userProfile.churchId);
                           console.log('[DebugGate] Forced context to', userProfile.churchId);
-                          alert('Forced context. If UI doesn\'t update, refresh.');
+                          showToast('info', 'Context', "Forced context. If UI doesn't update, refresh.");
                         }
                       } catch {}
                     }}
@@ -449,7 +466,7 @@ const AppContent: React.FC = memo(() => {
                     if (!churchId) return;
                     const data = await firebaseUtils.debugFetchChurchCollections(churchId);
                     console.log('[Impersonation Debug]', data);
-                    alert('Debug fetched. Check console for details.');
+                    showToast('info', 'Debug', 'Fetched debug data. Check console for details.');
                   }}
                   className="hidden sm:inline px-3 py-1.5 rounded-md bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold shadow"
                 >Force Debug Fetch</button>
@@ -492,6 +509,27 @@ const AppContent: React.FC = memo(() => {
           </div>
         </GestureWrapper>
       </main>
+
+      {/* Restart Hint Banner */}
+      {loadingStuckHint && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 max-w-lg w-[90%]">
+          <div className="bg-amber-600 text-white px-4 py-3 rounded-xl shadow-xl border border-amber-500">
+            <div className="flex items-start gap-3">
+              <span className="text-lg">⚠️</span>
+              <div className="flex-1">
+                <div className="font-semibold">Sync taking longer than expected</div>
+                <div className="text-sm opacity-90">{loadingStuckHint}</div>
+              </div>
+              <button
+                className="ml-2 bg-white/20 hover:bg-white/30 rounded-full w-7 h-7 flex items-center justify-center"
+                onClick={() => setLoadingStuckHint(null)}
+                aria-label="Dismiss"
+                title="Dismiss"
+              >×</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Swipe Indicator */}
       <SwipeIndicator />
@@ -711,7 +749,9 @@ const App: React.FC = () => {
   return (
     <ThemeProvider>
       <FirebaseAppProvider>
-        <AuthenticatedApp />
+        <ErrorBoundary>
+          <AuthenticatedApp />
+        </ErrorBoundary>
       </FirebaseAppProvider>
     </ThemeProvider>
   );

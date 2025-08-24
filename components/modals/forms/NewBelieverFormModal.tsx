@@ -34,6 +34,7 @@ const NewBelieverFormModal: React.FC<NewBelieverFormModalProps> = ({ isOpen, onC
 
   const [formData, setFormData] = useState(initialFormData);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     if (newBeliever) {
@@ -107,12 +108,13 @@ const NewBelieverFormModal: React.FC<NewBelieverFormModalProps> = ({ isOpen, onC
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+    if (isSubmitting) return;
     if (!validateForm()) {
       return;
     }
 
     try {
+      setIsSubmitting(true);
       if (newBeliever) {
         await updateNewBelieverHandler({ ...newBeliever, ...formData });
       } else {
@@ -121,12 +123,27 @@ const NewBelieverFormModal: React.FC<NewBelieverFormModalProps> = ({ isOpen, onC
       onClose();
     } catch (error) {
       console.error('Error saving new believer:', error);
+      setIsSubmitting(false);
+      return;
     }
+    setIsSubmitting(false);
   };
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={newBeliever ? 'Edit New Believer' : 'Add New Believer'} size="lg">
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="relative">
+        {isSubmitting && (
+          <div className="absolute inset-0 z-20 bg-white/70 dark:bg-dark-900/60 backdrop-blur-sm flex items-center justify-center rounded-xl">
+            <div className="flex items-center gap-3 px-4 py-3 rounded-lg bg-white/90 dark:bg-dark-800 border border-gray-200 dark:border-dark-600 shadow">
+              <svg className="animate-spin h-5 w-5 text-indigo-600" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0a12 12 0 00-12 12h4z"></path>
+              </svg>
+              <span className="text-sm font-medium text-gray-700 dark:text-dark-100">Saving new believer…</span>
+            </div>
+          </div>
+        )}
+      <form onSubmit={handleSubmit} className="space-y-4" aria-busy={isSubmitting}>
         {!newBeliever && (
           <div className="bg-green-50 border border-green-200 rounded-xl p-4 mb-4">
             <div className="flex items-start space-x-3">
@@ -277,10 +294,11 @@ const NewBelieverFormModal: React.FC<NewBelieverFormModalProps> = ({ isOpen, onC
         />
 
         <div className="flex justify-end space-x-3 pt-4">
-          <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
-          <Button type="submit" variant="primary">{newBeliever ? 'Save Changes' : 'Add New Believer'}</Button>
+          <Button type="button" variant="secondary" onClick={onClose} disabled={isSubmitting}>Cancel</Button>
+          <Button type="submit" variant="primary" loading={isSubmitting} disabled={isSubmitting}>{newBeliever ? 'Save Changes' : 'Add New Believer'}</Button>
         </div>
       </form>
+      </div>
     </Modal>
   );
 };
