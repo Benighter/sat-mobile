@@ -121,6 +121,40 @@ const BacentaMeetingsView: React.FC = () => {
     );
   }, [bacentas, currentDayName]);
 
+  // Aggregate "so far" totals for this meeting week.
+  // On Wednesday: include only Wednesday records. On Thursday: include Wednesday + Thursday records.
+  const weekSoFar = useMemo(() => {
+    const weekWed = getWednesdayOfWeek(currentDate);
+    const { wednesday, thursday } = getMeetingWeekDates(weekWed);
+    const includeDates = currentDayName === 'Wednesday' ? [wednesday] : [wednesday, thursday];
+
+    let held = 0;
+    let attendance = 0;
+    let cash = 0;
+    let online = 0;
+    let offering = 0;
+    let firstTimers = 0;
+    let converts = 0;
+
+    // Only count one record per bacenta per date (records are unique by id anyway)
+    for (const rec of meetingRecords) {
+      if (!includeDates.includes(rec.date)) continue;
+      held += 1;
+      const ft = (rec.firstTimers ?? (Array.isArray(rec.guests) ? rec.guests.length : 0)) as number;
+      const present = Array.isArray(rec.presentMemberIds) ? rec.presentMemberIds.length : 0;
+      attendance += present + ft;
+      const c = typeof rec.cashOffering === 'number' ? rec.cashOffering : 0;
+      const o = typeof rec.onlineOffering === 'number' ? rec.onlineOffering : 0;
+      cash += c; online += o;
+      const tot = typeof rec.totalOffering === 'number' ? rec.totalOffering : (c + o);
+      offering += tot;
+      firstTimers += ft;
+      converts += (typeof rec.converts === 'number' ? rec.converts : 0);
+    }
+
+    return { held, attendance, offering, firstTimers, converts, cash, online, wednesday, thursday };
+  }, [meetingRecords, currentDate, currentDayName]);
+
   // Get member count for each bacenta
   const getMemberCount = (bacentaId: string) => {
     return members.filter(m => m.bacentaId === bacentaId && !m.frozen).length;
@@ -343,18 +377,43 @@ const BacentaMeetingsView: React.FC = () => {
               </button>
             </div>
 
-            {/* Day Summary: Meetings only */}
-            {bacentasForCurrentDay.length > 0 && (
-              <div className="mt-6 w-full max-w-[320px] mx-auto">
-                <div className="relative rounded-2xl border border-blue-200 bg-white shadow-sm px-6 py-5 text-center">
-                  <div className="w-10 h-10 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-2.5">
-                    <BuildingOfficeIcon className="w-5 h-5 text-blue-600" />
-                  </div>
-                  <div className="text-2xl font-extrabold leading-none text-blue-900">{bacentasForCurrentDay.length}</div>
-                  <div className="text-[11px] uppercase tracking-wider text-blue-700 mt-1">Bacentas Meeting</div>
+            {/* Weekly summary (so far). Visible for Wed/Thu regardless of scheduled bacentas list. */}
+            <div className="mt-6">
+              <div className="text-center text-sm text-gray-600 mb-3">
+                {currentDayName === 'Wednesday' ? (
+                  <span>Totals for Wednesday (so far)</span>
+                ) : (
+                  <span>Totals for Wed & Thu (so far)</span>
+                )}
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 max-w-5xl mx-auto">
+                <div className="rounded-xl border border-blue-200 bg-white shadow-sm px-4 py-4 text-center">
+                  <div className="text-xs text-blue-700 uppercase tracking-wider">Bacentas held</div>
+                  <div className="text-2xl font-extrabold text-blue-900 mt-1">{weekSoFar.held}</div>
+                </div>
+
+                <div className="rounded-xl border border-emerald-200 bg-white shadow-sm px-4 py-4 text-center">
+                  <div className="text-xs text-emerald-700 uppercase tracking-wider">Attendance</div>
+                  <div className="text-2xl font-extrabold text-emerald-900 mt-1">{weekSoFar.attendance}</div>
+                </div>
+
+                <div className="rounded-xl border border-amber-200 bg-white shadow-sm px-4 py-4 text-center">
+                  <div className="text-xs text-amber-700 uppercase tracking-wider">Offering so far</div>
+                  <div className="text-xl sm:text-2xl font-extrabold text-amber-900 mt-1">R{weekSoFar.offering.toFixed(2)}</div>
+                  <div className="text-[10px] text-amber-700/80 mt-0.5">Online R{weekSoFar.online.toFixed(2)} · Cash R{weekSoFar.cash.toFixed(2)}</div>
+                </div>
+
+                <div className="rounded-xl border border-indigo-200 bg-white shadow-sm px-4 py-4 text-center">
+                  <div className="text-xs text-indigo-700 uppercase tracking-wider">First timers</div>
+                  <div className="text-2xl font-extrabold text-indigo-900 mt-1">{weekSoFar.firstTimers}</div>
+                </div>
+
+                <div className="rounded-xl border border-fuchsia-200 bg-white shadow-sm px-4 py-4 text-center">
+                  <div className="text-xs text-fuchsia-700 uppercase tracking-wider">New believers</div>
+                  <div className="text-2xl font-extrabold text-fuchsia-900 mt-1">{weekSoFar.converts}</div>
                 </div>
               </div>
-            )}
+            </div>
           </div>
 
           {/* Bacentas Grid */}
