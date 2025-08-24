@@ -81,7 +81,7 @@ const NewBelieversTableView: React.FC = () => {
     {
       key: 'name',
       header: 'Name',
-      width: '140px',
+  width: '110px',
       render: (m: Member) => (
         <div
           className="flex items-center space-x-2 cursor-pointer hover:bg-blue-50 rounded-lg p-1 -m-1 transition-colors duration-200"
@@ -94,7 +94,7 @@ const NewBelieversTableView: React.FC = () => {
             <div className="flex items-center space-x-2">
               <div className="flex-1 min-w-0">
                 <div className="flex items-center space-x-2">
-                  <span className="font-semibold text-sm truncate text-gray-900">{m.firstName} {m.lastName || ''}</span>
+                  <span className="font-semibold text-sm truncate text-gray-900">{m.firstName}</span>
                   {m.outreachOrigin && (
                     <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-orange-100 text-orange-800 border border-orange-200">
                       Outreach

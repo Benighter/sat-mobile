@@ -264,7 +264,7 @@ const DetailSection: React.FC<{
         <table className="min-w-full text-xs">
           <thead className="bg-gray-50 dark:bg-dark-700 text-gray-600 dark:text-dark-300">
             <tr>
-              {view === 'members' && <th className="px-3 py-2 text-left font-semibold">Name</th>}
+              {view === 'members' && <th className="px-3 py-2 text-left font-semibold w-32">Name</th>}
               {view === 'members' && <th className="px-3 py-2 text-left font-semibold">Bacenta</th>}
               {view === 'confirmations' && <th className="px-3 py-2 text-left font-semibold">Date</th>}
               {view === 'confirmations' && <th className="px-3 py-2 text-left font-semibold">Member/Guest</th>}
@@ -285,7 +285,7 @@ const DetailSection: React.FC<{
           <tbody className="divide-y divide-gray-100 dark:divide-dark-600 bg-white dark:bg-dark-800 text-gray-700 dark:text-dark-200">
             {rows.map((r, i) => {
               if (view === 'members') {
-                return <tr key={r.id || i}><td className="px-3 py-1.5">{r.firstName} {r.lastName}</td><td className="px-3 py-1.5">{r.bacentaId || '—'}</td></tr>;
+                return <tr key={r.id || i}><td className="px-3 py-1.5">{r.firstName}</td><td className="px-3 py-1.5">{r.bacentaId || '—'}</td></tr>;
               }
               if (view === 'confirmations') {
                 const label = r.memberId ? `Member:${r.memberId}` : r.guestId ? `Guest:${r.guestId}` : '—';
@@ -296,16 +296,17 @@ const DetailSection: React.FC<{
                 return <tr key={r.id || i}><td className="px-3 py-1.5">{r.date}</td><td className="px-3 py-1.5">{label}</td><td className="px-3 py-1.5">{r.status}</td></tr>;
               }
               if (view === 'outreach') {
-                return <tr key={r.id || i}><td className="px-3 py-1.5">{r.name}</td><td className="px-3 py-1.5">{r.bacentaId || '—'}</td></tr>;
+                const first = typeof r.name === 'string' ? r.name.split(' ')[0] : r.firstName || '—';
+                return <tr key={r.id || i}><td className="px-3 py-1.5">{first}</td><td className="px-3 py-1.5">{r.bacentaId || '—'}</td></tr>;
               }
               if (view === 'bacentas') {
                 return <tr key={r.id || i}><td className="px-3 py-1.5">{r.name || r.bacentaName || '—'}</td><td className="px-3 py-1.5">{r.leaderId || '—'}</td></tr>;
               }
               if (view === 'guests') {
-                return <tr key={r.id || i}><td className="px-3 py-1.5">{r.firstName} {r.lastName}</td><td className="px-3 py-1.5">{r.bacentaId || '—'}</td></tr>;
+                return <tr key={r.id || i}><td className="px-3 py-1.5">{r.firstName}</td><td className="px-3 py-1.5">{r.bacentaId || '—'}</td></tr>;
               }
               if (view === 'newBelievers') {
-                return <tr key={r.id || i}><td className="px-3 py-1.5">{r.firstName} {r.lastName}</td><td className="px-3 py-1.5">{r.bacentaId || '—'}</td></tr>;
+                return <tr key={r.id || i}><td className="px-3 py-1.5">{r.firstName}</td><td className="px-3 py-1.5">{r.bacentaId || '—'}</td></tr>;
               }
               return null;
             })}

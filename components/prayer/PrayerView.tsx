@@ -427,7 +427,7 @@ const PrayerView: React.FC = () => {
               {/* Member column */}
               <th
                 className="px-3 py-2 text-left sticky top-0 z-30"
-                style={{ left: 50, width: '140px', minWidth: '140px', background: 'linear-gradient(to right, rgb(249 250 251), rgb(243 244 246))', boxShadow: '2px 0 4px rgba(0,0,0,0.08)' }}
+                style={{ left: 50, width: '110px', minWidth: '110px', background: 'linear-gradient(to right, rgb(249 250 251), rgb(243 244 246))', boxShadow: '2px 0 4px rgba(0,0,0,0.08)' }}
               >
                 Member
               </th>
@@ -469,7 +469,7 @@ const PrayerView: React.FC = () => {
                   {/* Member cell with role badge */}
                   <td
                     className="px-3 py-2 sticky z-10"
-                    style={{ left: 50, width: '140px', minWidth: '140px', backgroundColor: rowIndex % 2 === 0 ? 'white' : 'rgb(249 250 251)', boxShadow: '2px 0 4px rgba(0,0,0,0.06)' }}
+                    style={{ left: 50, width: '110px', minWidth: '110px', backgroundColor: rowIndex % 2 === 0 ? 'white' : 'rgb(249 250 251)', boxShadow: '2px 0 4px rgba(0,0,0,0.06)' }}
                   >
                     <button
                       type="button"

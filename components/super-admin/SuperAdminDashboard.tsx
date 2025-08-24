@@ -797,7 +797,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
               <thead>
                 <tr className="text-left text-[11px] uppercase tracking-wider text-gray-500 dark:text-dark-300 bg-gray-50/70 dark:bg-dark-700/70 backdrop-blur-sm">
                   <th className="px-4 py-3 font-semibold w-10">#</th>
-                  <th className="px-5 py-3 font-semibold">Name</th>
+                  <th className="px-5 py-3 font-semibold w-36">Name</th>
                   <th className="px-5 py-3 font-semibold">Email</th>
                   <th className="px-5 py-3 font-semibold">Constituency</th>
                   <th className="px-5 py-3 font-semibold">Campus</th>
@@ -821,7 +821,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
                     >
                       <td className="px-4 py-3 text-gray-500 dark:text-dark-300 text-right tabular-nums select-none">{idx + 1}</td>
                       <td className="px-5 py-3 font-medium text-gray-800 dark:text-dark-50 whitespace-nowrap">
-                        {a.displayName || [a.firstName, a.lastName].filter(Boolean).join(' ') || '—'}
+                        {a.displayName ? a.displayName.split(' ')[0] : (a.firstName || '—')}
                       </td>
                       <td className="px-5 py-3 text-gray-600 dark:text-dark-200 whitespace-nowrap">{a.email || '—'}</td>
                       <td className="px-5 py-3 text-gray-700 dark:text-dark-300 min-w-[200px]">

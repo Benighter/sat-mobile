@@ -10,15 +10,16 @@ import {
   membersFirebaseService, 
   attendanceFirebaseService, 
   newBelieversFirebaseService,
-  confirmationFirebaseService 
+  confirmationFirebaseService,
+  ministryExclusionsService,
+  ministryMemberOverridesService
 } from './firebaseService';
 import {
   syncMemberToSourceChurch,
   syncAttendanceToSourceChurch,
   syncNewBelieverToSourceChurch,
   syncConfirmationToSourceChurch,
-  determineSourceChurchForNewRecord,
-  isSyncedRecord
+  determineSourceChurchForNewRecord
 } from './bidirectionalSyncService';
 
 /**
@@ -83,17 +84,27 @@ export const ministryMembersService = {
       
       // Get current member to check for source church
       const currentMember = await membersFirebaseService.getById(memberId);
-      if (!currentMember) {
-        throw new Error('Member not found');
+      const sourceChurchId = (currentMember as any)?.sourceChurchId;
+      const isSyncedOnly = !currentMember; // member not found in ministry church doc set
+      
+      if (isSyncedOnly) {
+        // Apply overrides in ministry church for synced-only member (e.g., frozen flag)
+        const srcId = sourceChurchId || userProfile?.churchId;
+        if (!srcId) throw new Error('Member not found');
+        const overridePayload: { frozen?: boolean } = {};
+        if (updates.frozen !== undefined) overridePayload.frozen = updates.frozen;
+        if (Object.keys(overridePayload).length > 0) {
+          await ministryMemberOverridesService.set(memberId, srcId, overridePayload);
+          console.log('✅ [Ministry Service] Applied ministry overrides for synced-only member');
+        }
+      } else {
+        // Update in ministry church document
+        await membersFirebaseService.update(memberId, updates);
       }
       
-      // Update in ministry church
-      await membersFirebaseService.update(memberId, updates);
-      
       // Sync to source church if this member came from another church
-      const sourceChurchId = (currentMember as any).sourceChurchId;
-      if (sourceChurchId && sourceChurchId !== userProfile?.churchId) {
-        await syncMemberToSourceChurch(currentMember, updates, userProfile?.uid || '');
+      if ((currentMember as any)?.sourceChurchId && (currentMember as any).sourceChurchId !== userProfile?.churchId) {
+        await syncMemberToSourceChurch(currentMember as Member, updates, userProfile?.uid || '');
       }
       
     } catch (error) {
@@ -112,6 +123,17 @@ export const ministryMembersService = {
       // Delete from ministry church
       await membersFirebaseService.delete(memberId);
       
+      // Exclude the member from ministry aggregated view if they are synced from another church
+      const sourceChurchId = (currentMember as any)?.sourceChurchId || userProfile?.churchId;
+      if (sourceChurchId) {
+        try {
+          await ministryExclusionsService.excludeMember(memberId, sourceChurchId);
+          console.log(`🛡️ [Ministry Service] Excluded member ${memberId} from ministry view (sourceChurchId=${sourceChurchId})`);
+        } catch (ex) {
+          console.warn('⚠️ [Ministry Service] Failed to record exclusion for deleted member:', ex);
+        }
+      }
+
       // Note: We don't delete from source church to preserve data integrity
       // The member will just no longer appear in ministry mode
       console.log('Member deleted from ministry church only (preserved in source church)');
@@ -169,12 +191,13 @@ export const ministryAttendanceService = {
   onSnapshot: attendanceFirebaseService.onSnapshot,
 
   // Write operations with bidirectional sync
-  add: async (attendance: AttendanceRecord | Omit<AttendanceRecord, 'createdDate' | 'lastUpdated'>, userProfile: any): Promise<string> => {
+  add: async (attendance: AttendanceRecord | Omit<AttendanceRecord, 'createdDate' | 'lastUpdated'>, _userProfile: any): Promise<string> => {
     try {
       console.log('🔄 [Ministry Service] Adding attendance with bidirectional sync');
 
       // Add to ministry church first
-      const attendanceId = await attendanceFirebaseService.addOrUpdate(attendance as AttendanceRecord);
+  await attendanceFirebaseService.addOrUpdate(attendance as AttendanceRecord);
+  const attendanceId = (attendance as any).id as string;
 
       // For ministry mode, we need to sync to the member's source church
       const memberId = attendance.memberId;
@@ -185,7 +208,7 @@ export const ministryAttendanceService = {
         console.log('Note: Source church sync requires member lookup - implementing enhanced sync...');
       }
 
-      return attendanceId;
+  return attendanceId;
     } catch (error) {
       console.error('Failed to add attendance with sync:', error);
       throw error;
@@ -217,13 +240,13 @@ export const ministryAttendanceService = {
         console.log(`🔄 [Ministry Service] Syncing attendance to source church: ${sourceChurchId}`);
 
         // Sync to source church in parallel with ministry church for faster operation
-        const [attendanceId] = await Promise.all([
+        await Promise.all([
           attendanceFirebaseService.addOrUpdate(attendance),
           syncAttendanceToSourceChurch(attendance, sourceChurchId, userProfile?.uid || '')
         ]);
 
         console.log(`✅ [Ministry Service] Attendance synced to both ministry and source church`);
-        return attendanceId;
+        return attendance.id;
       } else {
         const reason = isNativeMember
           ? 'member is native to ministry'
@@ -233,9 +256,9 @@ export const ministryAttendanceService = {
         console.log(`📝 [Ministry Service] No source church sync needed - ${reason}`);
 
         // Add/update in ministry church only
-        const attendanceId = await attendanceFirebaseService.addOrUpdate(attendance);
-        console.log(`✅ [Ministry Service] Attendance saved to ministry church only`);
-        return attendanceId;
+  await attendanceFirebaseService.addOrUpdate(attendance);
+  console.log(`✅ [Ministry Service] Attendance saved to ministry church only`);
+  return attendance.id;
       }
     } catch (error) {
       console.error('Failed to add/update attendance with sync:', error);
@@ -243,12 +266,12 @@ export const ministryAttendanceService = {
     }
   },
 
-  update: async (attendanceId: string, updates: Partial<AttendanceRecord>, userProfile: any): Promise<void> => {
+  update: async (attendanceId: string, updates: Partial<AttendanceRecord>, _userProfile: any): Promise<void> => {
     try {
       console.log(`🔄 [Ministry Service] Updating attendance ${attendanceId} with bidirectional sync`);
 
-      // Update in ministry church
-      await attendanceFirebaseService.update(attendanceId, updates);
+  // Update in ministry church by merging changes
+  await attendanceFirebaseService.addOrUpdate({ id: attendanceId, ...(updates as any) } as AttendanceRecord);
 
       // For attendance updates, we typically don't sync back to avoid conflicts
       // Attendance is usually managed per church
@@ -261,7 +284,7 @@ export const ministryAttendanceService = {
   },
 
   // Clear attendance from source church for bidirectional sync
-  clearFromSourceChurch: async (recordId: string, sourceChurchId: string, currentUserId: string): Promise<void> => {
+  clearFromSourceChurch: async (recordId: string, sourceChurchId: string, _currentUserId: string): Promise<void> => {
     try {
       console.log(`🔄 [Ministry Service] Clearing attendance from source church: ${sourceChurchId}`);
 

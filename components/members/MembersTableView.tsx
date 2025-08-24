@@ -219,8 +219,8 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
     {
       key: 'name',
       header: 'Name',
-      // Make name column slimmer in Tithe mode so Paid/Amount are visible
-      width: isTithe ? '110px' : '140px',
+  // Make name column slimmer so other columns are visible
+  width: '110px',
       render: (member: Member) => {
         const roleConfig = {
           'Bacenta Leader': { icon: '💚' },
@@ -259,7 +259,7 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
                     <span className={`font-semibold text-sm truncate ${
                       member.bornAgainStatus ? 'text-green-900' : 'text-gray-900'
                     }`}>
-                      {isTithe ? member.firstName : `${member.firstName} ${member.lastName || ''}`}
+                      {member.firstName}
                     </span>
                     <span className="text-xs flex-shrink-0" title={member.role || 'Member'}>
                       {roleIcon}

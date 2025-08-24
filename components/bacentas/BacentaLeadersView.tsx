@@ -2,11 +2,11 @@ import React, { useState, useMemo } from 'react';
 import { useAppContext } from '../../contexts/FirebaseAppContext';
 import { Member } from '../../types';
 import Table from '../ui/Table';
-import { UserIcon, EditIcon, TrashIcon, UsersIcon, CalendarIcon, TrendingUpIcon, PhoneIcon, MapPinIcon, SearchIcon } from '../icons';
+import { UserIcon, EditIcon, TrashIcon, UsersIcon, TrendingUpIcon, PhoneIcon, MapPinIcon, SearchIcon } from '../icons';
 import Button from '../ui/Button';
 import Badge from '../ui/Badge';
 import Input from '../ui/Input';
-import { formatDisplayDate } from '../../utils/dateUtils';
+// import { formatDisplayDate } from '../../utils/dateUtils';
 import { canManageMembers, canManageHierarchy } from '../../utils/permissionUtils';
 
 const BacentaLeadersView: React.FC = () => {
@@ -98,7 +98,7 @@ const BacentaLeadersView: React.FC = () => {
           </div>
           <div>
             <div className="font-semibold text-gray-900 text-lg">
-              {leader.firstName} {leader.lastName}
+              {leader.firstName}
             </div>
             <div className="flex items-center space-x-1">
               <span className="px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium flex items-center">
@@ -134,9 +134,7 @@ const BacentaLeadersView: React.FC = () => {
       render: (leader: Member) => (
         <div className="text-center">
           <div className="font-medium text-gray-900">{getBacentaName(leader.bacentaId)}</div>
-          <div className="text-xs text-gray-500 mt-1">
-            {leader.joinedDate ? formatDisplayDate(leader.joinedDate) : 'Unknown date'}
-          </div>
+          <div className="text-xs text-gray-500 mt-1">&nbsp;</div>
         </div>
       ),
     },
@@ -175,8 +173,8 @@ const BacentaLeadersView: React.FC = () => {
               <TrendingUpIcon className="w-4 h-4 text-green-500" />
               <span className="font-semibold text-lg">{rate}%</span>
             </div>
-            <Badge 
-              variant={rate >= 80 ? 'success' : rate >= 60 ? 'warning' : 'danger'} 
+            <Badge
+              color={rate >= 80 ? 'green' : rate >= 60 ? 'yellow' : 'red'}
               size="sm"
               className="mt-1"
             >
@@ -263,7 +261,7 @@ const BacentaLeadersView: React.FC = () => {
             <Input
               placeholder="Search leaders..."
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(value) => setSearchTerm(value)}
               className="border-0 bg-white/50 focus:bg-white/80 transition-colors"
               leftIcon={<SearchIcon className="w-4 h-4 sm:w-5 sm:h-5" />}
               iconType="search"

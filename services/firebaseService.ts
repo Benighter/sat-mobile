@@ -585,6 +585,119 @@ export const contextService = {
   }
 };
 
+// Ministry Exclusions Service: store members hidden from ministry UI (by source church + memberId)
+export const ministryExclusionsService = {
+  // Add or update an exclusion entry
+  excludeMember: async (memberId: string, sourceChurchId: string): Promise<void> => {
+    try {
+      const ref = collection(db, getChurchCollectionPath('ministryExclusions'));
+      const id = `${sourceChurchId}_${memberId}`;
+      const docRef = doc(ref, id);
+      await setDoc(docRef, {
+        memberId,
+        sourceChurchId,
+        createdAt: Timestamp.now(),
+      }, { merge: true });
+    } catch (error: any) {
+      throw new Error(`Failed to exclude member from ministry view: ${error.message}`);
+    }
+  },
+
+  // Remove an exclusion entry (unhide)
+  includeMember: async (memberId: string, sourceChurchId: string): Promise<void> => {
+    try {
+      const ref = collection(db, getChurchCollectionPath('ministryExclusions'));
+      const id = `${sourceChurchId}_${memberId}`;
+      const docRef = doc(ref, id);
+      await deleteDoc(docRef);
+    } catch (error: any) {
+      throw new Error(`Failed to include member back to ministry view: ${error.message}`);
+    }
+  },
+
+  // Get all exclusions
+  getAll: async (): Promise<Array<{ id: string; memberId: string; sourceChurchId: string }>> => {
+    try {
+      const ref = collection(db, getChurchCollectionPath('ministryExclusions'));
+      const snap = await getDocs(ref);
+      return snap.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
+    } catch (error: any) {
+      throw new Error(`Failed to fetch ministry exclusions: ${error.message}`);
+    }
+  },
+
+  // Listen to exclusions
+  onSnapshot: (callback: (items: Array<{ id: string; memberId: string; sourceChurchId: string }>) => void): Unsubscribe => {
+    const ref = collection(db, getChurchCollectionPath('ministryExclusions'));
+    return onSnapshot(ref, (snap) => {
+      const items = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
+      callback(items);
+    });
+  }
+};
+
+// Ministry Member Overrides Service: store per-member overrides (e.g., frozen) for ministry UI
+export const ministryMemberOverridesService = {
+  // Set or update overrides
+  set: async (
+    memberId: string,
+    sourceChurchId: string,
+    overrides: { frozen?: boolean }
+  ): Promise<void> => {
+    try {
+      const ref = collection(db, getChurchCollectionPath('ministryMemberOverrides'));
+      const id = `${sourceChurchId}_${memberId}`;
+      const docRef = doc(ref, id);
+      await setDoc(
+        docRef,
+        {
+          memberId,
+          sourceChurchId,
+          ...overrides,
+          updatedAt: Timestamp.now(),
+        },
+        { merge: true }
+      );
+    } catch (error: any) {
+      throw new Error(`Failed to set ministry member overrides: ${error.message}`);
+    }
+  },
+
+  // Clear overrides (remove document)
+  clear: async (memberId: string, sourceChurchId: string): Promise<void> => {
+    try {
+      const ref = collection(db, getChurchCollectionPath('ministryMemberOverrides'));
+      const id = `${sourceChurchId}_${memberId}`;
+      const docRef = doc(ref, id);
+      await deleteDoc(docRef);
+    } catch (error: any) {
+      throw new Error(`Failed to clear ministry member overrides: ${error.message}`);
+    }
+  },
+
+  // Get all overrides
+  getAll: async (): Promise<Array<{ id: string; memberId: string; sourceChurchId: string; frozen?: boolean }>> => {
+    try {
+      const ref = collection(db, getChurchCollectionPath('ministryMemberOverrides'));
+      const snap = await getDocs(ref);
+      return snap.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
+    } catch (error: any) {
+      throw new Error(`Failed to fetch ministry member overrides: ${error.message}`);
+    }
+  },
+
+  // Listen to overrides
+  onSnapshot: (
+    callback: (items: Array<{ id: string; memberId: string; sourceChurchId: string; frozen?: boolean }>) => void
+  ): Unsubscribe => {
+    const ref = collection(db, getChurchCollectionPath('ministryMemberOverrides'));
+    return onSnapshot(ref, (snap) => {
+      const items = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
+      callback(items);
+    });
+  }
+};
+
 export const setActiveContext = async (mode: 'default' | 'ministry'): Promise<void> => {
   const user = auth.currentUser;
   if (!user) throw new Error('No authenticated user');
@@ -739,6 +852,22 @@ export const membersFirebaseService = {
       });
     } catch (error: any) {
       throw firebaseUtils.handleOfflineError('Fetch members', error);
+    }
+  },
+  // Get single member by ID
+  getById: async (memberId: string): Promise<Member | null> => {
+    try {
+      return await firebaseUtils.retryOperation(async () => {
+        const memberRef = doc(db, getChurchCollectionPath('members'), memberId);
+        const snap = await getDoc(memberRef);
+        if (!snap.exists()) return null;
+        const data = { id: snap.id, ...snap.data() } as Member;
+        // Only return if active or isActive not set; preserve soft-deleted semantics
+        if ((data as any).isActive === false) return null;
+        return data;
+      });
+    } catch (error: any) {
+      throw firebaseUtils.handleOfflineError('Fetch member by id', error);
     }
   },
   // Get members by ministry (server-side filter by ministry; isActive filtered client-side to avoid composite index)
@@ -1047,6 +1176,17 @@ export const newBelieversFirebaseService = {
       throw new Error(`Failed to fetch new believers: ${error.message}`);
     }
   },
+  // Get new believer by ID
+  getById: async (newBelieverId: string): Promise<NewBeliever | null> => {
+    try {
+      const ref = doc(db, getChurchCollectionPath('newBelievers'), newBelieverId);
+      const snap = await getDoc(ref);
+      if (!snap.exists()) return null;
+      return ({ id: snap.id, ...snap.data() } as NewBeliever);
+    } catch (error: any) {
+      throw new Error(`Failed to fetch new believer: ${error.message}`);
+    }
+  },
   // Get all new believers by ministry (filter by ministry on server, isActive client-side)
   getAllByMinistry: async (ministryName: string): Promise<NewBeliever[]> => {
     try {
@@ -1150,6 +1290,18 @@ export const attendanceFirebaseService = {
       })) as AttendanceRecord[];
     } catch (error: any) {
       throw new Error(`Failed to fetch attendance records: ${error.message}`);
+    }
+  },
+
+  // Get attendance record by ID
+  getById: async (recordId: string): Promise<AttendanceRecord | null> => {
+    try {
+      const recordRef = doc(db, getChurchCollectionPath('attendance'), recordId);
+      const snap = await getDoc(recordRef);
+      if (!snap.exists()) return null;
+      return ({ id: snap.id, ...snap.data() } as AttendanceRecord);
+    } catch (error: any) {
+      throw new Error(`Failed to fetch attendance record: ${error.message}`);
     }
   },
 
@@ -1335,6 +1487,17 @@ export const confirmationFirebaseService = {
       throw new Error(`Failed to fetch confirmations: ${error.message}`);
     }
   },
+  // Get confirmation by ID
+  getById: async (recordId: string): Promise<SundayConfirmation | null> => {
+    try {
+      const ref = doc(db, getChurchCollectionPath('confirmations'), recordId);
+      const snap = await getDoc(ref);
+      if (!snap.exists()) return null;
+      return ({ id: snap.id, ...snap.data() } as SundayConfirmation);
+    } catch (error: any) {
+      throw new Error(`Failed to fetch confirmation: ${error.message}`);
+    }
+  },
 
   // Get confirmations for a specific date
   getByDate: async (date: string): Promise<SundayConfirmation[]> => {
@@ -1348,6 +1511,21 @@ export const confirmationFirebaseService = {
       })) as SundayConfirmation[];
     } catch (error: any) {
       throw new Error(`Failed to fetch confirmations for date ${date}: ${error.message}`);
+    }
+  },
+
+  // Add confirmation record
+  add: async (record: Omit<SundayConfirmation, 'id' | 'createdDate' | 'lastUpdated'>): Promise<string> => {
+    try {
+      const confirmationsRef = collection(db, getChurchCollectionPath('confirmations'));
+      const docRef = await addDoc(confirmationsRef, {
+        ...record,
+        createdDate: new Date().toISOString(),
+        lastUpdated: new Date().toISOString()
+      });
+      return docRef.id;
+    } catch (error: any) {
+      throw new Error(`Failed to add confirmation record: ${error.message}`);
     }
   },
 

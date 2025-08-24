@@ -16,6 +16,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../firebase.config';
 import { Member, Bacenta, AttendanceRecord, NewBeliever, SundayConfirmation, Guest } from '../types';
+import { ministryExclusionsService, ministryMemberOverridesService } from './firebaseService';
 
 export interface MinistryAggregatedData {
   members: Member[];
@@ -323,15 +324,40 @@ export const setupMinistryDataListeners = (
     guests: [],
     sourceChurches: []
   };
+  let excludedKeys = new Set<string>(); // key: `${sourceChurchId}_${memberId}`
+  let overridesMap = new Map<string, { frozen?: boolean }>(); // key: `${sourceChurchId}_${memberId}`
 
   const updateAggregatedData = () => {
     onDataUpdate({ ...currentData });
   };
 
   // Initialize with current data
-  getMinistryAggregatedData(ministryName).then(data => {
+  getMinistryAggregatedData(ministryName, currentChurchId).then(data => {
     currentData = data;
     updateAggregatedData();
+
+    // Subscribe to exclusions in the ministry church (if available)
+    if (currentChurchId) {
+      const unsubExclusions = ministryExclusionsService.onSnapshot((items) => {
+        excludedKeys = new Set(items.map(i => `${i.sourceChurchId}_${i.memberId}`));
+        // Re-filter current members with new exclusions and push update
+        currentData.members = currentData.members.filter(m => !excludedKeys.has(`${(m as any).sourceChurchId || currentChurchId}_${m.id}`));
+        updateAggregatedData();
+      });
+      unsubscribers.push(unsubExclusions);
+
+      const unsubOverrides = ministryMemberOverridesService.onSnapshot((items) => {
+        overridesMap = new Map(items.map(i => [`${i.sourceChurchId}_${i.memberId}`, { frozen: i.frozen }]));
+        // Apply overrides to current members
+        currentData.members = currentData.members.map(m => {
+          const key = `${(m as any).sourceChurchId || currentChurchId}_${m.id}`;
+          const ov = overridesMap.get(key);
+          return ov ? { ...m, ...ov } : m;
+        });
+        updateAggregatedData();
+      });
+      unsubscribers.push(unsubOverrides);
+    }
 
     // Set up listeners for each church
     data.sourceChurches.forEach(churchId => {
@@ -361,7 +387,13 @@ export const setupMinistryDataListeners = (
             // Keep members that are NOT from this church OR are native ministry members
             return !isFromThisChurch || isNative;
           });
-          currentData.members.push(...filtered);
+          // Filter by exclusions (if any) then add
+          const allowed = filtered.filter(m => !excludedKeys.has(`${churchId}_${m.id}`));
+          const withOverrides = allowed.map(m => {
+            const ov = overridesMap.get(`${churchId}_${m.id}`);
+            return ov ? { ...m, ...ov } : m;
+          });
+          currentData.members.push(...withOverrides);
           updateAggregatedData();
         });
 
@@ -480,7 +512,12 @@ export const setupMinistryDataListeners = (
             // Keep members that are NOT native from ministry church
             return !(isFromMinistryChurch && isNative);
           });
-          currentData.members.push(...filtered);
+          const allowed = filtered.filter(m => !excludedKeys.has(`${currentChurchId}_${m.id}`));
+          const withOverrides = allowed.map(m => {
+            const ov = overridesMap.get(`${currentChurchId}_${m.id}`);
+            return ov ? { ...m, ...ov } : m;
+          });
+          currentData.members.push(...withOverrides);
           updateAggregatedData();
         });
 
