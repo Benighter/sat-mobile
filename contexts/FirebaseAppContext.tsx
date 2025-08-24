@@ -525,6 +525,12 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
           setGuests(data.guests);
         }, optimisticUpdatesRef, userProfile?.churchId);
         unsubscribers.push(unsubscribeMinistryData);
+
+        // Even in ministry mode, listen to deletion requests tied to the current (active) church context
+        const unsubscribeDeletionRequests = memberDeletionRequestService.onSnapshot((requests) => {
+          setMemberDeletionRequests(requests);
+        });
+        unsubscribers.push(unsubscribeDeletionRequests);
       } else {
         // Normal mode or ministry mode without specific ministry
         const unsubscribeMembers = membersFirebaseService.onSnapshot((members) => {
@@ -608,6 +614,12 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
           setGuests(guests);
         });
         unsubscribers.push(unsubscribeGuests);
+
+        // Listen to member deletion requests (for leader/admin UIs relying on context)
+        const unsubscribeDeletionRequests = memberDeletionRequestService.onSnapshot((requests) => {
+          setMemberDeletionRequests(requests);
+        });
+        unsubscribers.push(unsubscribeDeletionRequests);
 
         // Tithe listener for current month
         const month = getCurrentMonth();
@@ -2460,8 +2472,19 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
         throw new Error('User not authenticated');
       }
 
+      // Ensure only admins can approve
+      const { hasAdminPrivileges } = await import('../utils/permissionUtils');
+      if (!hasAdminPrivileges(userProfile)) {
+        throw new Error('Only administrators can approve deletion requests');
+      }
+
       // Find the request
-      const request = memberDeletionRequests.find(r => r.id === requestId);
+      let request = memberDeletionRequests.find(r => r.id === requestId);
+      if (!request) {
+        // Fallback: fetch directly in case local state is stale
+        const fetched = await memberDeletionRequestService.getById(requestId);
+        request = fetched || undefined;
+      }
       if (!request) {
         throw new Error('Deletion request not found');
       }
@@ -2506,8 +2529,18 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
         throw new Error('User not authenticated');
       }
 
+      // Ensure only admins can reject
+      const { hasAdminPrivileges } = await import('../utils/permissionUtils');
+      if (!hasAdminPrivileges(userProfile)) {
+        throw new Error('Only administrators can reject deletion requests');
+      }
+
       // Find the request
-      const request = memberDeletionRequests.find(r => r.id === requestId);
+      let request = memberDeletionRequests.find(r => r.id === requestId);
+      if (!request) {
+        const fetched = await memberDeletionRequestService.getById(requestId);
+        request = fetched || undefined;
+      }
       if (!request) {
         throw new Error('Deletion request not found');
       }

@@ -1510,6 +1510,18 @@ export const memberDeletionRequestService = {
     }
   },
 
+  // Get a single deletion request by ID
+  getById: async (requestId: string): Promise<MemberDeletionRequest | null> => {
+    try {
+      const requestRef = doc(db, getChurchCollectionPath('memberDeletionRequests'), requestId);
+      const snap = await getDoc(requestRef);
+      if (!snap.exists()) return null;
+      return ({ id: snap.id, ...snap.data() } as MemberDeletionRequest);
+    } catch (error: any) {
+      throw new Error(`Failed to fetch deletion request: ${error.message}`);
+    }
+  },
+
   // Get pending deletion requests for a specific admin
   getPendingForAdmin: async (_adminId: string): Promise<MemberDeletionRequest[]> => {
     try {
