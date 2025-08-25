@@ -82,6 +82,12 @@ const MemberFormModal: React.FC<MemberFormModalProps> = ({ isOpen, onClose, memb
     setErrors({});
   }, [isOpen, member, bacentas, currentBacentaId, isMinistryContext, activeMinistryName]);
 
+  // Dancing Stars role label mapping (UI-only). Underlying values remain MemberRole.
+  const isDancingStars = useMemo(() => {
+    const name = (activeMinistryName || '').trim().toLowerCase();
+    return isMinistryContext && name === 'dancing stars';
+  }, [isMinistryContext, activeMinistryName]);
+
   // Set of bacenta IDs that already have a primary leader (a leader whose main bacentaId matches)
   const primaryLedBacentaIds = useMemo(() => {
     const set = new Set<string>();
@@ -492,9 +498,21 @@ const MemberFormModal: React.FC<MemberFormModalProps> = ({ isOpen, onClose, memb
                     onChange={handleChange}
                     className={`w-full px-4 py-3 border ${errors.role ? 'border-red-500' : 'border-gray-300'} rounded-lg shadow-sm focus:outline-none focus:ring-2 ${errors.role ? 'focus:ring-red-500' : 'focus:ring-blue-500'} focus:border-transparent transition-colors h-12`}
                   >
-                    <option value="Member">Member</option>
-                    <option value="Fellowship Leader">Fellowship Leader</option>
-                    <option value="Bacenta Leader">Bacenta Leader</option>
+                    {(
+                      isDancingStars
+                        ? [
+                            { value: 'Bacenta Leader' as MemberRole, label: 'Ministry head' },
+                            { value: 'Fellowship Leader' as MemberRole, label: 'Ministry leader' },
+                            { value: 'Member' as MemberRole, label: 'Assistances' },
+                          ]
+                        : [
+                            { value: 'Member' as MemberRole, label: 'Member' },
+                            { value: 'Fellowship Leader' as MemberRole, label: 'Fellowship Leader' },
+                            { value: 'Bacenta Leader' as MemberRole, label: 'Bacenta Leader' },
+                          ]
+                    ).map(opt => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
                   </select>
                   {errors.role && <p className="mt-1 text-xs text-red-600">{errors.role}</p>}
                 </div>

@@ -6,8 +6,8 @@ import { formatDisplayDate, getMonthName, getUpcomingSunday } from '../../utils/
 import { isDateEditable } from '../../utils/attendanceUtils';
 import { canDeleteMemberWithRole, hasAdminPrivileges } from '../../utils/permissionUtils';
 import { SmartTextParser } from '../../utils/smartTextParser';
-import { memberDeletionRequestService } from '../../services/firebaseService';
-import { UserIcon, TrashIcon, PhoneIcon, CalendarIcon, ChevronLeftIcon, ChevronRightIcon, EllipsisVerticalIcon, CheckIcon, ClockIcon, ClipboardIcon, ArrowRightIcon, CogIcon, SearchIcon } from '../icons';
+import { memberDeletionRequestService, ministryExclusionsService } from '../../services/firebaseService';
+import { UserIcon, TrashIcon, PhoneIcon, CalendarIcon, ChevronLeftIcon, ChevronRightIcon, EllipsisVerticalIcon, CheckIcon, ClockIcon, ClipboardIcon, ArrowRightIcon, CogIcon, SearchIcon, UserPlusIcon } from '../icons';
 import ConstituencyTransferModal from '../modals/ConstituencyTransferModal';
 // Removed unused UI imports
 
@@ -805,6 +805,16 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
               </>
             )}
             <div className="w-full sm:w-auto flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
+              {isMinistryContext && ((currentTab?.data as any)?.isTithe === true ? false : true) && (
+                <button
+                  onClick={() => openMemberForm()}
+                  className="w-full sm:w-auto flex items-center justify-center space-x-2 px-4 py-3 sm:py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg shadow-sm transition-colors text-base sm:text-sm font-medium"
+                  title="Add a new member to this ministry"
+                >
+                  <UserPlusIcon className="w-4 h-4" />
+                  <span>Add Member</span>
+                </button>
+              )}
               {((currentTab?.data as any)?.isTithe === true) ? null : (
               <button
                 onClick={() => {
@@ -1065,6 +1075,23 @@ const MemberActionsDropdown: React.FC<MemberActionsDropdownProps> = ({
     setIsOpen(false);
   };
 
+  // Hide-only removal from Ministry UI (does not touch admin/source church)
+  const handleExcludeFromMinistry = async () => {
+    setIsOpen(false);
+    try {
+      const sourceChurchId = (member as any)?.sourceChurchId || userProfile?.churchId;
+      if (!sourceChurchId) {
+        showToast('error', 'Cannot remove', 'Missing source church information.');
+        return;
+      }
+      await ministryExclusionsService.excludeMember(member.id, sourceChurchId);
+      showToast('success', 'Removed from Ministry', 'This member is now hidden from the ministry. Admin-side data is unaffected.');
+    } catch (e: any) {
+      console.error('Failed to exclude member from ministry view:', e);
+      showToast('error', 'Failed', e?.message || 'Could not remove from ministry');
+    }
+  };
+
   const handleRemove = async () => {
     setIsOpen(false);
 
@@ -1204,6 +1231,21 @@ const MemberActionsDropdown: React.FC<MemberActionsDropdownProps> = ({
 
           {/* Actions */}
           <div className="p-1 relative">
+            {/* Hide from Ministry (UI only) */}
+            {isMinistryContext && (
+              <button
+                onClick={handleExcludeFromMinistry}
+                className="w-full px-3 py-2.5 text-left hover:bg-amber-50 rounded-lg transition-colors duration-150 flex items-start gap-3 text-amber-800"
+                title="Hide this member from the ministry view only"
+              >
+                <span className="mt-0.5">🚫</span>
+                <div className="flex-1">
+                  <div className="text-sm font-medium">Remove from Ministry</div>
+                  <div className="text-xs text-amber-700">Hides in ministry app only; admin side not affected</div>
+                </div>
+              </button>
+            )}
+
             {/* Freeze/Unfreeze */}
             <button
               onClick={handleToggleFreeze}
