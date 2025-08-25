@@ -120,7 +120,9 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
   // Filter and search members
   const filteredMembers = useMemo(() => {
     // Optional ministry-only filter passed via current tab data
-    const ministryOnly: boolean = (currentTab?.data as any)?.ministryOnly === true;
+  const ministryOnly: boolean = (currentTab?.data as any)?.ministryOnly === true;
+  const speaksInTonguesOnly: boolean = (currentTab?.data as any)?.speaksInTonguesOnly === true;
+  const baptizedOnly: boolean = (currentTab?.data as any)?.baptizedOnly === true;
     const getRolePriority = (role: string | undefined) => {
       switch (role) {
         case 'Bacenta Leader': return 1;
@@ -144,6 +146,14 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
 
         // Filter by ministry if requested
         if (ministryOnly && !(member.ministry && member.ministry.trim() !== '')) {
+          return false;
+        }
+
+        // Filter by spiritual milestones if requested via nav
+        if (speaksInTonguesOnly && member.speaksInTongues !== true) {
+          return false;
+        }
+        if (baptizedOnly && member.baptized !== true) {
           return false;
         }
 
@@ -186,7 +196,7 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
         const rolePriorityB = getRolePriority(b.role);
         if (rolePriorityA !== rolePriorityB) return rolePriorityA - rolePriorityB;
         return (a.lastName || '').localeCompare(b.lastName || '') || a.firstName.localeCompare(b.firstName);
-      });
+  });
   }, [members, bacentaFilter, searchTerm, roleFilter, isTithe, showPaidOnly, titheSort, titheByMember]);
 
   // Apply frozen visibility toggle to the filtered list
@@ -199,6 +209,98 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
   const countBL = useMemo(() => filteredMembers.filter(m => !m.frozen && (m.role || 'Member') === 'Bacenta Leader').length, [filteredMembers]);
   const countFL = useMemo(() => filteredMembers.filter(m => !m.frozen && (m.role || 'Member') === 'Fellowship Leader').length, [filteredMembers]);
   const countM = useMemo(() => filteredMembers.filter(m => !m.frozen && (m.role || 'Member') === 'Member').length, [filteredMembers]);
+
+  // Special simple views for Tongues/Baptized navigation
+  const speaksInTonguesOnly: boolean = (currentTab?.data as any)?.speaksInTonguesOnly === true;
+  const baptizedOnly: boolean = (currentTab?.data as any)?.baptizedOnly === true;
+  const isSpecialListView = speaksInTonguesOnly || baptizedOnly;
+
+  // Global stats across active (non-frozen) members
+  const allActiveMembers = useMemo(() => members.filter(m => !m.frozen), [members]);
+  const baseForStats = useMemo(() => {
+    if (bacentaFilter) {
+      return allActiveMembers.filter(m => m.bacentaId === bacentaFilter);
+    }
+    return allActiveMembers;
+  }, [allActiveMembers, bacentaFilter]);
+  const tonguesYesCount = useMemo(() => baseForStats.filter(m => m.speaksInTongues === true).length, [baseForStats]);
+  const tonguesNoCount = useMemo(() => baseForStats.length - tonguesYesCount, [baseForStats, tonguesYesCount]);
+  const baptizedYesCount = useMemo(() => baseForStats.filter(m => m.baptized === true).length, [baseForStats]);
+  const baptizedNoCount = useMemo(() => baseForStats.length - baptizedYesCount, [baseForStats, baptizedYesCount]);
+
+  if (isSpecialListView) {
+  const title = speaksInTonguesOnly ? 'Praying in Tongues' : 'Water Baptized';
+    const stats = speaksInTonguesOnly
+      ? [
+          { label: 'Can pray in tongues', value: tonguesYesCount, color: 'text-emerald-700' },
+          { label: "Can't pray in tongues", value: tonguesNoCount, color: 'text-gray-700' },
+          { label: 'Total members', value: baseForStats.length, color: 'text-slate-700' },
+        ]
+      : [
+          { label: 'Baptized', value: baptizedYesCount, color: 'text-emerald-700' },
+          { label: 'Not baptized', value: baptizedNoCount, color: 'text-gray-700' },
+          { label: 'Total members', value: baseForStats.length, color: 'text-slate-700' },
+        ];
+    const currentBacentaName = bacentaFilter ? (bacentas.find(b => b.id === bacentaFilter)?.name || '') : '';
+
+    return (
+      <div className="space-y-5 animate-fade-in">
+        {/* Centered header */}
+        <div className="text-center">
+          <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">{title}</h1>
+          {currentBacentaName && (
+            <p className="mt-1 text-sm text-slate-500">Filtered to {currentBacentaName}</p>
+          )}
+        </div>
+
+        {/* Stats */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {stats.map((s) => (
+            <div key={s.label} className="glass rounded-xl px-5 py-4 text-center shadow-sm">
+              <div className="text-[11px] uppercase tracking-wide text-gray-500">{s.label}</div>
+              <div className={`mt-1 text-2xl font-bold ${s.color}`}>{s.value}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Numbered simple list */}
+        <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+          {displayMembers.length === 0 ? (
+            <div className="p-6 text-sm text-gray-500 text-center">No members found.</div>
+          ) : (
+            displayMembers.map((member, idx) => (
+              <div
+                key={member.id}
+                className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 cursor-pointer transition-colors group"
+                onClick={() => openMemberForm(member)}
+                title="Open member"
+              >
+                <div className="w-8 h-8 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center text-xs font-semibold">
+                  {idx + 1}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-base font-semibold text-gray-900 truncate">
+                    {member.firstName} {member.lastName || ''}
+                  </div>
+                  <div className="text-xs text-gray-500 truncate">
+                    {(member.role || 'Member')}{member.ministry ? ` • ${member.ministry}` : ''}
+                  </div>
+                </div>
+                {member.phoneNumber && member.phoneNumber !== '-' && (
+                  <button
+                    className="ml-auto text-xs px-2 py-1 rounded-full bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200"
+                    onClick={(e) => { e.stopPropagation(); handlePhoneClick(member.phoneNumber); }}
+                  >
+                    {member.phoneNumber}
+                  </button>
+                )}
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    );
+  }
 
 
 

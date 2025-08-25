@@ -363,21 +363,18 @@ const DashboardView: React.FC = memo(() => {
   }, [titheRecords, members]);
 
   // Personal card rearranging (excluding Total Members)
-  type CardId = 'confirmations' | 'attendanceRate' | 'weeklyAttendance' | 'outreach' | 'bacentaMeetings' | 'ministries' | 'prayerOverall' | 'tithe';
+  type CardId = 'confirmations' | 'attendanceRate' | 'weeklyAttendance' | 'outreach' | 'bacentaMeetings' | 'prayerOverall' | 'tithe';
   const baseDefaultOrder: CardId[] = [
     'confirmations',
     'attendanceRate',
     'weeklyAttendance',
     'outreach',
     'bacentaMeetings',
-    'ministries',
     'prayerOverall',
     // Admin-only: automatically add Tithe card to default order for admins
     ...(isAdmin ? (['tithe'] as CardId[]) : [])
   ];
-  const defaultOrder: CardId[] = isMinistryContext
-    ? (baseDefaultOrder.filter((id) => id !== 'ministries') as CardId[])
-    : baseDefaultOrder;
+  const defaultOrder: CardId[] = baseDefaultOrder;
   const [cardOrder, setCardOrder] = useState<CardId[]>(() => defaultOrder);
   const [rearrangeMode, setRearrangeMode] = useState<boolean>(false);
   const dragItemId = useRef<CardId | null>(null);
@@ -386,8 +383,8 @@ const DashboardView: React.FC = memo(() => {
   useEffect(() => {
     const uid = user?.uid ?? null;
     const loaded = dashboardLayoutStorage.loadOrder(uid, defaultOrder) as CardId[];
-    // In ministry mode, ensure 'ministries' card is removed from any previously saved layout
-    let sanitized = isMinistryContext ? (loaded.filter((id) => id !== 'ministries') as CardId[]) : loaded;
+  // Remove deprecated/hidden cards from any previously saved layout
+  let sanitized = (loaded.filter((id) => id !== ('ministries' as any)) as CardId[]);
     // If not admin, ensure 'tithe' is not shown
     if (!isAdmin) {
       sanitized = sanitized.filter((id) => id !== 'tithe') as CardId[];
@@ -397,17 +394,21 @@ const DashboardView: React.FC = memo(() => {
         sanitized = [...sanitized, 'tithe'] as CardId[];
       }
     }
+  // Remove deprecated cards if present in persisted layouts
+  sanitized = sanitized.filter((id) => id !== ('tongues' as any) && id !== ('baptized' as any)) as CardId[];
     setCardOrder(sanitized);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.uid, isMinistryContext, isAdmin]);
 
   const persistOrder = useCallback((next: CardId[]) => {
     const uid = user?.uid ?? null;
-    let sanitized = isMinistryContext ? (next.filter((id) => id !== 'ministries') as CardId[]) : next;
+  let sanitized = next.filter((id) => id !== ('ministries' as any)) as CardId[];
     // Ensure admin-only tithe card is not stored for non-admins
     if (!isAdmin) {
       sanitized = sanitized.filter((id) => id !== 'tithe') as CardId[];
     }
+  // Remove deprecated cards
+  sanitized = sanitized.filter((id) => id !== ('tongues' as any) && id !== ('baptized' as any)) as CardId[];
     setCardOrder(sanitized);
     dashboardLayoutStorage.saveOrder(uid, sanitized);
   }, [user?.uid, isMinistryContext, isAdmin]);
@@ -533,21 +534,7 @@ const DashboardView: React.FC = memo(() => {
             onClick={() => !rearrangeMode && switchTab({ id: TabKeys.BACENTA_MEETINGS, name: 'Bacenta Meetings' })}
           />
         );
-      case 'ministries': {
-        if (isMinistryContext) return null; // Hide in ministry mode
-        const ministriesCount = members.filter(m => !!m.ministry && m.ministry.trim() !== '').length;
-        return (
-          <StatCard
-            key={id}
-            title="Ministries"
-            value={ministriesCount}
-            icon={<PeopleIcon className="w-full h-full" />}
-            accentColor="indigo"
-            description={ministriesCount === 1 ? '1 member in a ministry' : `${ministriesCount} members in ministries`}
-            onClick={() => !rearrangeMode && switchTab({ id: TabKeys.MINISTRIES, name: 'Ministries' })}
-          />
-        );
-      }
+      
   case 'prayerOverall':
         return (
           <StatCard

@@ -72,7 +72,7 @@ export class SmartTextParser {
   /**
    * Parse a single line of text to extract member information
    */
-  private static parseLine(line: string, lineNumber: number): ParsedMemberData | null {
+  private static parseLine(line: string, _lineNumber: number): ParsedMemberData | null {
     if (!line || line.length < 3) {
       return null; // Skip very short lines
     }
@@ -371,7 +371,7 @@ export class SmartTextParser {
   static convertToMember(
     parsedData: ParsedMemberData,
     bacentaId: string,
-    joinedDate: string = new Date().toISOString().split('T')[0]
+  _joinedDate: string = new Date().toISOString().split('T')[0]
   ): Omit<Member, 'id' | 'createdDate' | 'lastUpdated'> {
     return {
       firstName: parsedData.firstName || 'Unknown',
@@ -380,6 +380,8 @@ export class SmartTextParser {
       buildingAddress: parsedData.buildingAddress || '',
       profilePicture: '', // No profile picture from text parsing
       bornAgainStatus: false, // Default to false, user can edit later
+  speaksInTongues: false,
+  baptized: false,
       bacentaId: bacentaId,
       role: 'Member' // Default role
     };

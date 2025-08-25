@@ -37,6 +37,8 @@ const MemberFormModal: React.FC<MemberFormModalProps> = ({ isOpen, onClose, memb
     roomNumber: '',
     profilePicture: '',
     bornAgainStatus: false,
+  speaksInTongues: false,
+  baptized: false,
     bacentaId: isMinistryContext ? '' : (currentBacentaId || (bacentas.length > 0 ? bacentas[0].id : '')),
     linkedBacentaIds: [],
     role: 'Member' as MemberRole, // Default role is Member
@@ -58,6 +60,8 @@ const MemberFormModal: React.FC<MemberFormModalProps> = ({ isOpen, onClose, memb
         roomNumber: member.roomNumber || '',
         profilePicture: member.profilePicture || '',
         bornAgainStatus: member.bornAgainStatus,
+  speaksInTongues: member.speaksInTongues || false,
+  baptized: member.baptized || false,
         bacentaId: member.bacentaId,
         linkedBacentaIds: member.linkedBacentaIds || [],
         role: member.role || 'Member', // Default to Member if role is not set (for backward compatibility)
@@ -511,6 +515,37 @@ const MemberFormModal: React.FC<MemberFormModalProps> = ({ isOpen, onClose, memb
                   </label>
                 </div>
                 <p className="text-xs text-gray-500 ml-8">Check if this member has been born again</p>
+
+                {/* Spiritual Milestones */}
+                <div className="flex items-center space-x-3 mt-4">
+                  <input
+                    type="checkbox"
+                    id="speaksInTongues"
+                    name="speaksInTongues"
+                    checked={!!formData.speaksInTongues}
+                    onChange={handleChange}
+                    className="w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
+                  />
+                  <label htmlFor="speaksInTongues" className="text-sm font-medium text-gray-700">
+                    Prays in tongues
+                  </label>
+                </div>
+                <p className="text-xs text-gray-500 ml-8">Tick if this member prays in tongues</p>
+
+                <div className="flex items-center space-x-3">
+                  <input
+                    type="checkbox"
+                    id="baptized"
+                    name="baptized"
+                    checked={!!formData.baptized}
+                    onChange={handleChange}
+                    className="w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
+                  />
+                  <label htmlFor="baptized" className="text-sm font-medium text-gray-700">
+                    Water baptized
+                  </label>
+                </div>
+                <p className="text-xs text-gray-500 ml-8">Tick if this member has been water baptized</p>
               </div>
             </div>
           </div>

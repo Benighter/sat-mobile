@@ -16,6 +16,7 @@ import {
   CogIcon,
   CalendarIcon
 } from '../icons';
+import { PrayerIcon, CheckIcon, PeopleIcon } from '../icons';
 
 interface BacentaDrawerProps {
   isOpen: boolean;
@@ -80,6 +81,11 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
   const upcomingBirthdaysCount = useMemo(() => {
     return getUpcomingBirthdays(members).length;
   }, [members]);
+
+  // New counts: tongues, baptized, ministries (active members only)
+  const tonguesCount = useMemo(() => members.filter(m => m.speaksInTongues === true && !m.frozen).length, [members]);
+  const baptizedCount = useMemo(() => members.filter(m => m.baptized === true && !m.frozen).length, [members]);
+  const ministriesCount = useMemo(() => members.filter(m => !!m.ministry && m.ministry.trim() !== '' && !m.frozen).length, [members]);
 
   // Filter bacentas based on search query
   const filteredBacentas = useMemo(() => {
@@ -297,6 +303,42 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
                     badge={upcomingBirthdaysCount > 0 ? upcomingBirthdaysCount : undefined}
                     onClick={() => {
                       switchTab({ id: TabKeys.BIRTHDAYS, name: 'Birthdays' });
+                      onClose();
+                    }}
+                  />
+
+                  {/* New: Prays in Tongues */}
+                  <NavigationItem
+                    icon={<PrayerIcon className="w-4 h-4" />}
+                    label="Prays in Tongues"
+                    isActive={currentTab.id === TabKeys.ALL_CONGREGATIONS && (currentTab.data as any)?.speaksInTonguesOnly === true}
+                    badge={tonguesCount > 0 ? tonguesCount : undefined}
+                    onClick={() => {
+                      switchTab({ id: TabKeys.ALL_CONGREGATIONS, name: 'Praying in Tongues', data: { speaksInTonguesOnly: true } });
+                      onClose();
+                    }}
+                  />
+
+                  {/* New: Water Baptized */}
+                  <NavigationItem
+                    icon={<CheckIcon className="w-4 h-4" />}
+                    label="Water Baptized"
+                    isActive={currentTab.id === TabKeys.ALL_CONGREGATIONS && (currentTab.data as any)?.baptizedOnly === true}
+                    badge={baptizedCount > 0 ? baptizedCount : undefined}
+                    onClick={() => {
+                      switchTab({ id: TabKeys.ALL_CONGREGATIONS, name: 'Water Baptized', data: { baptizedOnly: true } });
+                      onClose();
+                    }}
+                  />
+
+                  {/* New: Ministries */}
+                  <NavigationItem
+                    icon={<PeopleIcon className="w-4 h-4" />}
+                    label="Ministries"
+                    isActive={currentTab.id === TabKeys.MINISTRIES}
+                    badge={ministriesCount > 0 ? ministriesCount : undefined}
+                    onClick={() => {
+                      switchTab({ id: TabKeys.MINISTRIES, name: 'Ministries' });
                       onClose();
                     }}
                   />

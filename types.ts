@@ -10,6 +10,10 @@ export interface Member {
   roomNumber?: string; // Room number for members
   profilePicture?: string; // Base64 encoded image string
   bornAgainStatus: boolean;
+  /** If true, member prays/speaks in tongues */
+  speaksInTongues?: boolean;
+  /** If true, member has been water baptized */
+  baptized?: boolean;
   /** Optional ministry assignment for the member */
   ministry?: string;
   /** If true, this member is temporarily frozen (excluded from counts/absentees) */
