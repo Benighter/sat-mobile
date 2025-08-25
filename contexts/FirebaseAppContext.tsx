@@ -1,6 +1,6 @@
 // Firebase-enabled App Context
 import React, { createContext, useState, useEffect, useCallback, ReactNode, useMemo, useRef } from 'react';
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, getDocs, onSnapshot, query as fsQuery, where as fsWhere } from 'firebase/firestore';
 import { db } from '../firebase.config';
 import { Member, AttendanceRecord, Bacenta, TabOption, AttendanceStatus, NewBeliever, SundayConfirmation, ConfirmationStatus, Guest, MemberDeletionRequest, OutreachBacenta, OutreachMember, PrayerRecord, PrayerStatus, MeetingRecord, TitheRecord, CrossTenantAccessLink, CrossTenantPermission } from '../types';
 import { FIXED_TABS, DEFAULT_TAB_ID } from '../constants';
@@ -349,6 +349,25 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     return getSundaysOfMonth(displayedDate.getFullYear(), displayedDate.getMonth());
   }, [displayedDate]);
 
+  // Real-time listener: keep cross-tenant access links in sync for current user
+  useEffect(() => {
+    if (!user?.uid) return;
+    const q = fsQuery(collection(db, 'crossTenantAccessLinks'), fsWhere('viewerUid', '==', user.uid));
+    const unsub = onSnapshot(q, (snap) => {
+      try {
+        let items = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) })) as any[];
+        items = items.filter(i => !(i as any).revoked);
+        items.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+        setAccessibleChurchLinks(items as any);
+      } catch (e) {
+        console.warn('crossTenantAccessLinks onSnapshot parse failed', e);
+      }
+    }, (err) => {
+      console.warn('crossTenantAccessLinks onSnapshot error', err);
+    });
+    return () => unsub();
+  }, [user?.uid]);
+
   // Current month in YYYY-MM
   const getCurrentMonth = useCallback(() => {
     const y = displayedDate.getFullYear();
@@ -379,7 +398,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
                 const links = await crossTenantService.getAccessibleChurchLinks(user.uid);
                 setAccessibleChurchLinks(links);
               } catch (e) {
-                console.warn('Failed to load accessible church links', e);
+                console.warn('Failed to load accessible church links (initial)', e);
               }
 
               // Set up notification context if we have church context

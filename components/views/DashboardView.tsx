@@ -112,7 +112,7 @@ const StatCard: React.FC<StatCardProps> = memo(({ title, value, icon, descriptio
 
 
 const DashboardView: React.FC = memo(() => {
-  const { members, attendanceRecords, newBelievers, displayedSundays, displayedDate, sundayConfirmations, guests, switchTab, user, userProfile, currentChurchId, allOutreachMembers, bacentas, prayerRecords, meetingRecords, isMinistryContext, titheRecords } = useAppContext(); // Use displayedSundays
+  const { members, attendanceRecords, newBelievers, displayedSundays, displayedDate, sundayConfirmations, guests, switchTab, user, userProfile, currentChurchId, allOutreachMembers, bacentas, prayerRecords, meetingRecords, isMinistryContext, titheRecords, activeMinistryName } = useAppContext(); // Use displayedSundays
 
   const activeMembers = useMemo(() => {
     const filtered = members.filter(m => !m.frozen);
@@ -363,7 +363,7 @@ const DashboardView: React.FC = memo(() => {
   }, [titheRecords, members]);
 
   // Personal card rearranging (excluding Total Members)
-  type CardId = 'confirmations' | 'attendanceRate' | 'weeklyAttendance' | 'outreach' | 'bacentaMeetings' | 'prayerOverall' | 'tithe';
+  type CardId = 'sundayHeadCounts' | 'confirmations' | 'attendanceRate' | 'weeklyAttendance' | 'outreach' | 'bacentaMeetings' | 'prayerOverall' | 'tithe';
   const baseDefaultOrder: CardId[] = [
     'confirmations',
     'attendanceRate',
@@ -374,7 +374,10 @@ const DashboardView: React.FC = memo(() => {
     // Admin-only: automatically add Tithe card to default order for admins
     ...(isAdmin ? (['tithe'] as CardId[]) : [])
   ];
-  const defaultOrder: CardId[] = baseDefaultOrder;
+  const shouldShowSundayHeadCounts = isMinistryContext && (activeMinistryName || '').trim().toLowerCase() === 'ushers';
+  const defaultOrder: CardId[] = shouldShowSundayHeadCounts
+    ? (['sundayHeadCounts', ...baseDefaultOrder] as CardId[])
+    : baseDefaultOrder;
   const [cardOrder, setCardOrder] = useState<CardId[]>(() => defaultOrder);
   const [rearrangeMode, setRearrangeMode] = useState<boolean>(false);
   const dragItemId = useRef<CardId | null>(null);
@@ -394,11 +397,20 @@ const DashboardView: React.FC = memo(() => {
         sanitized = [...sanitized, 'tithe'] as CardId[];
       }
     }
+    // Ushers-only Sunday Head counts card visibility and placement
+    if (!shouldShowSundayHeadCounts) {
+      sanitized = sanitized.filter((id) => id !== 'sundayHeadCounts') as CardId[];
+    } else {
+      // Ensure it appears first (right after Total Members) if missing
+      if (!sanitized.includes('sundayHeadCounts')) {
+        sanitized = (['sundayHeadCounts', ...sanitized]) as CardId[];
+      }
+    }
   // Remove deprecated cards if present in persisted layouts
   sanitized = sanitized.filter((id) => id !== ('tongues' as any) && id !== ('baptized' as any)) as CardId[];
     setCardOrder(sanitized);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.uid, isMinistryContext, isAdmin]);
+  }, [user?.uid, isMinistryContext, isAdmin, shouldShowSundayHeadCounts]);
 
   const persistOrder = useCallback((next: CardId[]) => {
     const uid = user?.uid ?? null;
@@ -407,11 +419,15 @@ const DashboardView: React.FC = memo(() => {
     if (!isAdmin) {
       sanitized = sanitized.filter((id) => id !== 'tithe') as CardId[];
     }
+    // Ensure Ushers-only card is not stored when not applicable
+    if (!shouldShowSundayHeadCounts) {
+      sanitized = sanitized.filter((id) => id !== 'sundayHeadCounts') as CardId[];
+    }
   // Remove deprecated cards
   sanitized = sanitized.filter((id) => id !== ('tongues' as any) && id !== ('baptized' as any)) as CardId[];
     setCardOrder(sanitized);
     dashboardLayoutStorage.saveOrder(uid, sanitized);
-  }, [user?.uid, isMinistryContext, isAdmin]);
+  }, [user?.uid, isMinistryContext, isAdmin, shouldShowSundayHeadCounts]);
 
   const onDragStart = useCallback((e: React.DragEvent, id: CardId) => {
     dragItemId.current = id;
@@ -452,6 +468,20 @@ const DashboardView: React.FC = memo(() => {
 
   const renderCardById = (id: CardId) => {
     switch (id) {
+      case 'sundayHeadCounts': {
+        if (!shouldShowSundayHeadCounts) return null;
+        return (
+          <StatCard
+            key={id}
+            title="Sunday Head counts"
+            value={''}
+            icon={<CalendarIcon className="w-full h-full" />}
+            accentColor="indigo"
+            description={`For ${monthName}`}
+            onClick={() => !rearrangeMode && switchTab({ id: TabKeys.SUNDAY_HEAD_COUNTS, name: 'Sunday Head counts' })}
+          />
+        );
+      }
       case 'tithe': {
         if (!isAdmin) return null;
         return (

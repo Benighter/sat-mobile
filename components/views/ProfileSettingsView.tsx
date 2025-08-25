@@ -6,7 +6,7 @@ import { inviteService } from '../../services/inviteService';
 import { getDefaultNotificationPreferences } from '../../utils/notificationUtils';
 // import { emailServiceClient } from '../../services/emailServiceClient'; // Email feature on hold
 // Ministry feature removed – no MINISTRY_OPTIONS import
-import { NotificationPreferences } from '../../types';
+import { NotificationPreferences, CrossTenantInvite, CrossTenantPermission } from '../../types';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
 import Badge from '../ui/Badge';
@@ -31,6 +31,7 @@ import {
 } from '../icons';
 import { collection, doc, getDocs, query, Timestamp, updateDoc, where } from 'firebase/firestore';
 import { db } from '../../firebase.config';
+import { crossTenantService } from '../../services/crossTenantService';
 
 interface UserPreferences {
   // theme: 'light' | 'dark' | 'system'; // disabled
@@ -51,6 +52,7 @@ const ProfileSettingsView: React.FC = () => {
     showToast,
     refreshUserProfile,
     // Cross-tenant switching
+  refreshAccessibleChurchLinks,
     accessibleChurchLinks,
     switchToExternalChurch,
     switchBackToOwnChurch,
@@ -800,7 +802,7 @@ const ProfileSettingsView: React.FC = () => {
               await crossTenantService.updateAccessPermission(link.id, 'read-write');
               // Optimistically reflect the upgrade and switch
               switchToExternalChurch({ ...link, permission: 'read-write' });
-              try { await (useAppContext()?.refreshAccessibleChurchLinks?.()); } catch {}
+              try { await refreshAccessibleChurchLinks?.(); } catch {}
               return;
             } catch (e:any) {
               try { showToast('warning', 'Full access unavailable', 'Opening in view-only mode. Ask the owner to grant edit access.'); } catch {}
@@ -1018,6 +1020,71 @@ const ConstituencyManagerScreen: React.FC<ConstituencyManagerScreenProps> = ({
 }) => {
   if (!isOpen) return null;
 
+  const { user, userProfile, showToast } = useAppContext();
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [invitePermission, setInvitePermission] = useState<CrossTenantPermission>('read-only');
+  const [isInviting, setIsInviting] = useState(false);
+  const [pendingInvites, setPendingInvites] = useState<CrossTenantInvite[]>([]);
+
+  const refreshPending = async () => {
+    try {
+      if (!user?.uid) return;
+      const items = await crossTenantService.getOutgoingInvites(user.uid);
+      setPendingInvites(items);
+    } catch (e:any) {
+      console.warn('Failed to load pending invites', e);
+    }
+  };
+
+  useEffect(() => {
+    refreshPending();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.uid, isOpen]);
+
+  const handleSendInvite = async () => {
+    if (!user || !userProfile) return;
+    const email = inviteEmail.trim();
+    if (!email) {
+      showToast('error', 'Missing email', 'Enter the admin’s email to invite');
+      return;
+    }
+    try {
+      setIsInviting(true);
+      // Look up the target admin by email
+      const target = await inviteService.searchUserByEmail(email);
+      if (!target) {
+        showToast('error', 'Admin not found', 'No active user matches that email');
+        setIsInviting(false);
+        return;
+      }
+      // Prevent inviting self
+      if (target.uid === user.uid) {
+        showToast('warning', 'Cannot invite yourself');
+        setIsInviting(false);
+        return;
+      }
+      // Send cross-tenant invite
+      await crossTenantService.sendInvite({
+        fromAdminUid: user.uid,
+        fromAdminName: userProfile.displayName || `${userProfile.firstName || ''} ${userProfile.lastName || ''}`.trim() || 'Admin',
+        fromChurchId: userProfile.churchId,
+        fromChurchName: userProfile.churchName,
+        toAdminUid: target.uid!,
+        toAdminEmail: target.email,
+        toAdminName: target.displayName || `${target.firstName || ''} ${target.lastName || ''}`.trim() || undefined,
+        permission: invitePermission
+      });
+      setInviteEmail('');
+      showToast('success', 'Invite sent', 'They’ll see your request to grant access');
+      await refreshPending();
+    } catch (e:any) {
+      console.warn('sendInvite failed', e);
+      showToast('error', 'Failed to send invite', e.message || String(e));
+    } finally {
+      setIsInviting(false);
+    }
+  };
+
   // Detect navbar height similar to AdminInviteScreen for proper fit
   useEffect(() => {
     const detectNavbarHeight = (): number => {
@@ -1112,6 +1179,64 @@ const ConstituencyManagerScreen: React.FC<ConstituencyManagerScreenProps> = ({
         style={{ height: 'calc(100% - 84px)' }}
       >
         <div className="max-w-5xl mx-auto">
+          {/* Invite Admin Section */}
+          <div className="mb-5 rounded-2xl border border-gray-200 bg-white p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-semibold text-gray-900">Invite an Admin</h3>
+              <span className="text-xs text-gray-500">Grant you access to their constituency</span>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <Input
+                type="email"
+                value={inviteEmail}
+                onChange={setInviteEmail}
+                placeholder="Admin email (example@domain.com)"
+                className="h-11 flex-1"
+              />
+              <select
+                value={invitePermission}
+                onChange={(e) => setInvitePermission(e.target.value as CrossTenantPermission)}
+                className="h-11 rounded-xl border border-gray-300 px-3 text-gray-800 bg-white"
+                title="Requested access level"
+              >
+                <option value="read-only">View only</option>
+                <option value="read-write">Full access</option>
+              </select>
+              <Button
+                type="button"
+                variant="primary"
+                onClick={handleSendInvite}
+                disabled={isInviting}
+                className="h-11 px-5 rounded-xl"
+              >
+                {isInviting ? 'Sending…' : 'Send Invite'}
+              </Button>
+            </div>
+            {pendingInvites.length > 0 && (
+              <div className="mt-4">
+                <div className="text-sm text-gray-700 font-medium mb-2">Pending invites</div>
+                <div className="space-y-2">
+                  {pendingInvites.map(inv => (
+                    <div key={inv.id} className="flex items-center justify-between rounded-xl border border-gray-200 p-3">
+                      <div className="min-w-0">
+                        <div className="font-medium text-gray-900 truncate">{inv.toAdminName || inv.toAdminEmail}</div>
+                        <div className="text-xs text-gray-500">{inv.permission === 'read-only' ? 'View only' : 'Full access'} • {inv.toAdminEmail}</div>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        onClick={async () => { try { await crossTenantService.cancelInvite(inv.id); await refreshPending(); showToast('success', 'Invite cancelled'); } catch (e:any) { showToast('error', 'Failed to cancel invite', e.message || String(e)); } }}
+                        className="h-9 px-3 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 border border-red-200"
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
           <ConstituenciesList
             links={links}
             isImpersonating={isImpersonating}

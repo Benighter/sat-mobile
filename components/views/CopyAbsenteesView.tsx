@@ -4,7 +4,7 @@ import { Member } from '../../types';
 import { ArrowLeftIcon, ClipboardIcon, ChevronLeftIcon, ChevronRightIcon, CalendarIcon } from '../icons';
 import Button from '../ui/Button';
 import { useNavigation } from '../../hooks/useNavigation';
-import { formatDisplayDate, getSundaysOfMonth, getMonthName, formatDateToYYYYMMDD, getCurrentOrMostRecentSunday } from '../../utils/dateUtils';
+import { formatDisplayDate, getSundaysOfMonth, getMonthName, formatDateToYYYYMMDD, getCurrentOrMostRecentSunday, getPreviousSunday } from '../../utils/dateUtils';
 
 interface CopyOptions {
   includeNames: boolean;
@@ -31,6 +31,7 @@ const CopyAbsenteesView: React.FC = () => {
   const { navigateBack } = useNavigation();
   const [selectedDate, setSelectedDate] = useState<string>(getCurrentOrMostRecentSunday());
   const [displayedDate, setDisplayedDate] = useState(new Date());
+  const [rangeOption, setRangeOption] = useState<'1' | '2' | '3' | 'month'>('1');
 
   // Get the current bacenta filter from navigation context
   const bacentaFilter = currentTab.data?.bacentaFilter || null;
@@ -59,6 +60,19 @@ const CopyAbsenteesView: React.FC = () => {
     // Only show Sundays that have already occurred (not future dates)
     return allSundays.filter(sunday => sunday <= today);
   }, [displayedDate]);
+
+  // Compute consecutive Sundays to check based on range option (month = last 4 Sundays)
+  const selectedDates = useMemo(() => {
+    const count = rangeOption === 'month' ? 4 : parseInt(rangeOption, 10);
+    const dates: string[] = [];
+    let cursor = selectedDate;
+    for (let i = 0; i < count; i++) {
+      dates.push(cursor);
+      cursor = getPreviousSunday(cursor);
+    }
+    // Oldest -> newest for labels
+    return dates.slice().reverse();
+  }, [selectedDate, rangeOption]);
 
   // Navigation handlers for month
   const navigateToPreviousMonth = () => {
@@ -136,35 +150,31 @@ const CopyAbsenteesView: React.FC = () => {
       });
   }, [members, bacentaFilter, searchTerm, roleFilter, ministryOnly, ministryName]);
 
-  // Get absentee members for the selected date
+  // Get absentee members who missed N consecutive Sundays ending on selectedDate
   const absenteeMembers = useMemo(() => {
-    // Get attendance records for the selected date
-    const dateAttendanceRecords = attendanceRecords.filter(record => 
-      record.date === selectedDate && record.memberId // Only member records, not new believers
-    );
+    // Build quick lookup: date+member -> status
+    const attendanceMap = new Map<string, 'Present' | 'Absent'>();
+    for (const r of attendanceRecords) {
+      if (!r.memberId) continue;
+      const key = `${r.date}|${r.memberId}`;
+      attendanceMap.set(key, r.status);
+    }
 
-    // Get member IDs who were present
-    const presentMemberIds = dateAttendanceRecords
-      .filter(record => record.status === 'Present')
-      .map(record => record.memberId!);
+    const isAbsentOn = (memberId: string, date: string) => {
+      const status = attendanceMap.get(`${date}|${memberId}`);
+      // Absent if explicitly Absent or no record; Present breaks streak
+      return status !== 'Present';
+    };
 
-    // Get member IDs who were explicitly marked absent
-    const explicitlyAbsentMemberIds = dateAttendanceRecords
-      .filter(record => record.status === 'Absent')
-      .map(record => record.memberId!);
-
-    // A member is absent if:
-    // 1. They have no attendance record for this date, OR
-    // 2. They are explicitly marked as absent
     return filteredMembers.filter(member => {
-      if (member.frozen) return false; // exclude frozen from absentees
-      const hasAttendanceRecord = dateAttendanceRecords.some(record => record.memberId === member.id);
-      const isPresent = presentMemberIds.includes(member.id);
-      const isExplicitlyAbsent = explicitlyAbsentMemberIds.includes(member.id);
-      
-      return !isPresent && (isExplicitlyAbsent || !hasAttendanceRecord);
+      if (member.frozen) return false;
+      // Must be absent on every selected date (consecutive weeks)
+      for (const d of selectedDates) {
+        if (!isAbsentOn(member.id, d)) return false; // Present -> exclude
+      }
+      return true;
     });
-  }, [filteredMembers, attendanceRecords, selectedDate]);
+  }, [filteredMembers, attendanceRecords, selectedDates]);
 
   // If no members available, show a message
   if (members.length === 0) {
@@ -304,6 +314,19 @@ const CopyAbsenteesView: React.FC = () => {
   const hasMoreLines = previewText.split('\n').length > 10;
   const absenteeCount = getFilteredAbsenteesByType().length;
 
+  // Label for the selected range
+  const rangeLabel = useMemo(() => {
+    if (selectedDates.length === 0) return formatDisplayDate(selectedDate);
+    const first = selectedDates[0];
+    const last = selectedDates[selectedDates.length - 1];
+    const weeks = selectedDates.length;
+    if (rangeOption === 'month') {
+      return `Last 4 Sundays up to ${formatDisplayDate(last)}`;
+    }
+    if (weeks === 1) return `Missed on ${formatDisplayDate(last)}`;
+    return `Missed ${weeks} weeks in a row (${formatDisplayDate(first)} – ${formatDisplayDate(last)})`;
+  }, [selectedDates, selectedDate, rangeOption]);
+
   return (
     <div className="min-h-screen bg-gray-50 py-6">
       <div className="space-y-6 max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -319,7 +342,7 @@ const CopyAbsenteesView: React.FC = () => {
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Copy Absentees</h1>
             <p className="text-sm text-gray-600">
-              {ministryOnly ? (ministryName ? `${ministryName} Ministry` : 'All Ministries') : (currentBacentaName ? `${currentBacentaName} Bacenta` : 'All Members')} • {formatDisplayDate(selectedDate)} • {absenteeCount} absentee{absenteeCount !== 1 ? 's' : ''}
+              {ministryOnly ? (ministryName ? `${ministryName} Ministry` : 'All Ministries') : (currentBacentaName ? `${currentBacentaName} Bacenta` : 'All Members')} • {rangeLabel} • {absenteeCount} absentee{absenteeCount !== 1 ? 's' : ''}
             </p>
           </div>
         </div>
@@ -374,6 +397,46 @@ const CopyAbsenteesView: React.FC = () => {
               </button>
             ))}
           </div>
+
+          {/* Range Selection */}
+          <div className="mt-4">
+            <h4 className="text-sm font-medium text-gray-800 mb-2">Date Range</h4>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <button
+                onClick={() => setRangeOption('1')}
+                className={`px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                  rangeOption === '1' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                }`}
+              >
+                1 Week
+              </button>
+              <button
+                onClick={() => setRangeOption('2')}
+                className={`px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                  rangeOption === '2' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                }`}
+              >
+                2 Weeks
+              </button>
+              <button
+                onClick={() => setRangeOption('3')}
+                className={`px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                  rangeOption === '3' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                }`}
+              >
+                3 Weeks
+              </button>
+              <button
+                onClick={() => setRangeOption('month')}
+                className={`px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                  rangeOption === 'month' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                }`}
+              >
+                Month
+              </button>
+            </div>
+            <p className="mt-2 text-xs text-gray-500">{rangeOption === 'month' ? 'Select members who missed the last 4 Sundays in a row (ending on the chosen date).' : `Select members who missed ${selectedDates.length} Sunday${selectedDates.length > 1 ? 's' : ''} in a row, ending ${formatDisplayDate(selectedDates[selectedDates.length - 1])}.`}</p>
+          </div>
         </div>
 
         <div className="space-y-6">
@@ -391,7 +454,7 @@ const CopyAbsenteesView: React.FC = () => {
                     </pre>
                   </div>
                   <p className="text-xs text-gray-500 mt-3">
-                    {absenteeCount} absentee{absenteeCount !== 1 ? 's' : ''} will be copied for {formatDisplayDate(selectedDate)}
+                    {absenteeCount} absentee{absenteeCount !== 1 ? 's' : ''} will be copied for {rangeLabel}
                     {hasMoreLines && ` (showing first 10 lines)`}
                   </p>
                 </>

@@ -198,6 +198,7 @@ export enum TabKeys {
   ALL_BACENTAS = 'all_bacentas',
   ATTENDANCE_ANALYTICS = 'attendance_analytics',
   WEEKLY_ATTENDANCE = 'weekly_attendance',
+  SUNDAY_HEAD_COUNTS = 'sunday_head_counts',
   SUNDAY_CONFIRMATIONS = 'sunday_confirmations',
   NEW_BELIEVERS = 'new_believers',
   OUTREACH = 'outreach',

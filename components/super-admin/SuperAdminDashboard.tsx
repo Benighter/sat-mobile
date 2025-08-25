@@ -39,6 +39,10 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
   const isImpersonating = false; // feature disabled
   const [previewAdmin, setPreviewAdmin] = useState<AdminUserRecord | null>(null);
   const [admins, setAdmins] = useState<AdminUserRecord[]>([]);
+  // Leaders state and view toggle
+  const [leaders, setLeaders] = useState<AdminUserRecord[]>([]);
+  const [viewMode, setViewMode] = useState<'admins' | 'leaders'>('admins');
+  const [leadersLoading, setLeadersLoading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [stats, setStats] = useState<{ total: number; active: number; inactive: number } | null>(null);
@@ -61,6 +65,8 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
   const [selectedCampusId, setSelectedCampusId] = useState<string | null>(null);
   const [pendingDeleteAdmin, setPendingDeleteAdmin] = useState<AdminUserRecord | null>(null);
   const [confirmDeleteCampus, setConfirmDeleteCampus] = useState(false);
+  // Promotion flow
+  const [pendingPromotion, setPendingPromotion] = useState<AdminUserRecord | null>(null);
 
   const campusAggregates = useMemo(() => {
     if (!campuses.length) return [] as Array<{ campus: CampusRecord; adminCount: number; constituencyCount: number; members: number }>;
@@ -225,6 +231,33 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
   useEffect(() => {
     fetchAdmins();
   }, [fetchAdmins]);
+
+  // Leaders realtime listener (enabled when viewing leaders)
+  useEffect(() => {
+    if (viewMode !== 'leaders') return;
+    setLeadersLoading(true);
+    const qL = query(
+      collection(db, 'users'),
+      where('role', '==', 'leader'),
+      limit(800)
+    );
+    const unsubL = onSnapshot(qL, snap => {
+      try {
+        const raw: AdminUserRecord[] = snap.docs.map(d => ({ id: d.id, ...d.data() } as any));
+        const filtered = raw.filter(a => !(a as any).isDeleted);
+        const getTime = (val: any): number => {
+          if (!val) return 0; if (typeof val.toMillis === 'function') return val.toMillis(); if (typeof val.toDate === 'function') return val.toDate().getTime(); if (typeof val === 'string') { const t = Date.parse(val); return isNaN(t) ? 0 : t; } return 0;
+        };
+        filtered.sort((a,b) => getTime(b.createdAt) - getTime(a.createdAt));
+        setLeaders(filtered);
+      } catch (e) {
+        console.warn('Leaders snapshot processing failed', e);
+      } finally {
+        setLeadersLoading(false);
+      }
+    }, err => { setLeadersLoading(false); setError(err?.message || 'Failed to load leaders'); });
+    return () => { try { unsubL(); } catch {} };
+  }, [viewMode]);
 
   // Load campuses (realtime)
   useEffect(() => {
@@ -568,6 +601,64 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
     }
   };
 
+  // Promote a leader to admin and demote current admin to leader (swap)
+  const promoteLeaderToAdmin = async (leader: AdminUserRecord) => {
+    try {
+      if (updatingIds[leader.id]) return;
+      setUpdating(leader.id, true);
+      const churchId = (leader as any).churchId || null;
+      // Find current admin for this church if any
+      let currentAdmin: AdminUserRecord | null = null;
+      if (churchId) {
+        try {
+          const qAdmin = query(
+            collection(db, 'users'),
+            where('churchId', '==', churchId),
+            where('role', '==', 'admin'),
+            limit(1)
+          );
+          const snap = await getDocs(qAdmin);
+          if (!snap.empty) currentAdmin = { id: snap.docs[0].id, ...(snap.docs[0].data() as any) } as any;
+        } catch (e) { console.warn('Failed to resolve current admin for church', churchId, e); }
+      }
+
+      // Demote current admin first (if any)
+      if (currentAdmin) {
+        try {
+          await updateDoc(doc(db, 'users', currentAdmin.id), {
+            role: 'leader',
+            isInvitedAdminLeader: true,
+            invitedByAdminId: leader.uid || leader.id,
+            lastUpdated: Timestamp.now()
+          });
+        } catch (e) { console.warn('Failed demoting current admin', e); }
+      }
+
+      // Promote leader
+      try {
+        await updateDoc(doc(db, 'users', leader.id), {
+          role: 'admin',
+          isInvitedAdminLeader: false,
+          invitedByAdminId: null,
+          lastUpdated: Timestamp.now()
+        });
+      } catch (e:any) {
+        setError(e.message || 'Failed to promote leader');
+        return;
+      }
+
+      // Local optimistic updates
+      setLeaders(prev => prev.filter(l => l.id !== leader.id));
+      setAdmins(prev => [{ ...leader, role: 'admin' }, ...prev]);
+      if (currentAdmin) {
+        setAdmins(prev => prev.filter(a => a.id !== currentAdmin!.id));
+      }
+    } finally {
+      setUpdating(leader.id, false);
+      setPendingPromotion(null);
+    }
+  };
+
   // Filtered admins for search ------------------------------------------------
   const filteredAdmins = useMemo(() => {
     // Show only unassigned constituencies (no campus) in main table
@@ -576,6 +667,12 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
     const q = searchQuery.trim().toLowerCase();
     return base.filter(a => [a.churchName, a.displayName, a.email, a.firstName, a.lastName].some(v => v && v.toLowerCase().includes(q)));
   }, [admins, searchQuery]);
+
+  const filteredLeaders = useMemo(() => {
+    if (!searchQuery.trim()) return leaders;
+    const q = searchQuery.trim().toLowerCase();
+    return leaders.filter(a => [a.churchName, a.displayName, a.email, a.firstName, a.lastName].some(v => v && v.toLowerCase().includes(q)));
+  }, [leaders, searchQuery]);
 
   const selectedCampus = useMemo(() => campuses.find(c => c.id === selectedCampusId) || null, [campuses, selectedCampusId]);
   const campusAdmins = useMemo(() => {
@@ -647,6 +744,22 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
               onClick={() => setShowCampusModal(true)}
               className="flex-1 inline-flex items-center justify-center px-3 py-2 rounded-lg text-xs font-semibold bg-indigo-600 text-white shadow hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-400"
             >New Campus</button>
+          </div>
+        )}
+
+        {/* View toggle */}
+        {!selectedCampus && (
+          <div className="mb-4 flex items-center gap-2">
+            <div className="inline-flex rounded-lg overflow-hidden border border-gray-300 dark:border-dark-600 bg-white dark:bg-dark-700">
+              <button
+                onClick={() => setViewMode('admins')}
+                className={`px-3 py-1.5 text-[11px] font-semibold ${viewMode === 'admins' ? 'bg-indigo-600 text-white' : 'text-gray-700 dark:text-dark-200'}`}
+              >Admins</button>
+              <button
+                onClick={() => setViewMode('leaders')}
+                className={`px-3 py-1.5 text-[11px] font-semibold ${viewMode === 'leaders' ? 'bg-indigo-600 text-white' : 'text-gray-700 dark:text-dark-200'}`}
+              >Leaders</button>
+            </div>
           </div>
         )}
 
@@ -773,8 +886,8 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
           </div>
         )}
 
-  {/* Table Card (unassigned constituencies) */}
-  {filteredAdmins.length > 0 && (
+  {/* Table Card (admins or leaders) */}
+  {viewMode === 'admins' && (
   <div className="glass rounded-2xl shadow-xl overflow-hidden border border-gray-200/40 dark:border-dark-600/40">
           <div className="px-5 py-4 flex flex-col gap-3 border-b border-gray-200/40 dark:border-dark-600/40 bg-white/60 dark:bg-dark-800/60 backdrop-blur-sm">
             <div className="flex items-center justify-between">
@@ -950,6 +1063,96 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
           </div>
           </div>
         )}
+
+        {viewMode === 'leaders' && (
+          <div className="glass rounded-2xl shadow-xl overflow-hidden border border-gray-200/40 dark:border-dark-600/40">
+            <div className="px-5 py-4 flex flex-col gap-3 border-b border-gray-200/40 dark:border-dark-600/40 bg-white/60 dark:bg-dark-800/60 backdrop-blur-sm">
+              <div className="flex items-center justify-between">
+                <h2 className="font-semibold text-gray-800 dark:text-white text-lg flex items-center gap-2">
+                  <span className="text-indigo-500">▣</span> Leaders
+                </h2>
+                <div className="flex items-center gap-3 text-xs font-medium text-gray-500 dark:text-dark-300">
+                  <span className="hidden xs:inline">Showing</span>
+                  <span className="px-2 py-0.5 rounded-lg bg-gray-100 dark:bg-dark-700 text-gray-700 dark:text-dark-200">{filteredLeaders.length}</span>
+                </div>
+              </div>
+              <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                <input
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  placeholder="Search leaders, email..."
+                  className="w-full sm:max-w-xs px-3 py-2 rounded-lg bg-white/70 dark:bg-dark-700/70 border border-gray-300 dark:border-dark-600 text-[12px] focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    className="px-3 py-2 rounded-lg text-[11px] font-semibold bg-gray-300 dark:bg-dark-600 text-gray-800 dark:text-dark-50"
+                  >Clear</button>
+                )}
+                <div className="flex-1" />
+                <div className="flex items-center gap-2 text-[10px] text-gray-500 dark:text-dark-400">
+                  <span className="hidden md:inline">Tip: Promote a leader to make them admin and demote current admin</span>
+                </div>
+              </div>
+            </div>
+            <div className="overflow-x-auto custom-scrollbar max-h-[60vh]">
+              <table className="min-w-full text-[13px]">
+                <thead>
+                  <tr className="text-left text-[11px] uppercase tracking-wider text-gray-500 dark:text-dark-300 bg-gray-50/70 dark:bg-dark-700/70 backdrop-blur-sm">
+                    <th className="px-4 py-3 font-semibold w-10">#</th>
+                    <th className="px-5 py-3 font-semibold w-36">Name</th>
+                    <th className="px-5 py-3 font-semibold">Email</th>
+                    <th className="px-5 py-3 font-semibold">Constituency</th>
+                    <th className="px-5 py-3 font-semibold">Status</th>
+                    <th className="px-5 py-3 font-semibold">Created</th>
+                    <th className="px-5 py-3 font-semibold">Last Login</th>
+                    <th className="px-5 py-3 font-semibold">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100/60 dark:divide-dark-600/40">
+                  {filteredLeaders.map((l, idx) => {
+                    const created = (l as any).createdAt?.toDate ? (l as any).createdAt.toDate() : ((l as any).createdAt ? new Date((l as any).createdAt) : null);
+                    const lastLogin = (l as any).lastLoginAt?.toDate ? (l as any).lastLoginAt.toDate() : ((l as any).lastLoginAt ? new Date((l as any).lastLoginAt) : null);
+                    return (
+                      <tr key={l.id} className="group hover:bg-indigo-50/60 dark:hover:bg-indigo-900/20 transition-colors">
+                        <td className="px-4 py-3 text-right text-gray-500 dark:text-dark-300">{idx + 1}</td>
+                        <td className="px-5 py-3 font-medium text-gray-800 dark:text-dark-50 whitespace-nowrap">{l.displayName ? l.displayName.split(' ')[0] : (l.firstName || '—')}</td>
+                        <td className="px-5 py-3 text-gray-600 dark:text-dark-200 whitespace-nowrap">{l.email || '—'}</td>
+                        <td className="px-5 py-3 text-gray-700 dark:text-dark-300 min-w-[200px]">
+                          <div className="flex flex-col leading-tight">
+                            <span className="font-medium text-gray-800 dark:text-dark-100 truncate max-w-[180px]" title={l.churchName}>{l.churchName || '—'}</span>
+                            {l.churchId && <span className="text-[10px] text-gray-400 dark:text-dark-400 font-mono">{l.churchId}</span>}
+                          </div>
+                        </td>
+                        <td className="px-5 py-3"><StatusBadge active={l.isActive !== false} /></td>
+                        <td className="px-5 py-3 text-gray-500 dark:text-dark-400 whitespace-nowrap">{created ? created.toLocaleDateString() : '—'}</td>
+                        <td className="px-5 py-3 text-gray-500 dark:text-dark-400 whitespace-nowrap">{lastLogin ? lastLogin.toLocaleDateString() : '—'}</td>
+                        <td className="px-5 py-3 whitespace-nowrap">
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => setPendingPromotion(l)}
+                              disabled={updatingIds[l.id]}
+                              className="px-2.5 py-1 rounded-md text-[11px] font-semibold bg-indigo-600 hover:bg-indigo-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                              title="Promote to Admin (swap with current admin)"
+                            >{updatingIds[l.id] ? '...' : 'Promote to Admin'}</button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {filteredLeaders.length === 0 && !leadersLoading && (
+                    <tr>
+                      <td className="px-5 py-10 text-center text-gray-500 dark:text-dark-300" colSpan={8}>No leaders found</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+              {leadersLoading && (
+                <div className="p-4 text-center text-xs text-gray-500 dark:text-dark-300">Loading leaders...</div>
+              )}
+            </div>
+          </div>
+        )}
           {/* end of conditional sections */}
           </>
         )}
@@ -1051,6 +1254,17 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
           confirmText="Delete"
           cancelText="Cancel"
           type="danger"
+        />
+        {/* Promote leader to admin (swap roles) */}
+        <ConfirmationModal
+          isOpen={!!pendingPromotion}
+          onClose={() => setPendingPromotion(null)}
+          onConfirm={async () => { if (pendingPromotion) await promoteLeaderToAdmin(pendingPromotion); }}
+          title="Promote Leader"
+          message={pendingPromotion ? `Promote ${pendingPromotion.displayName || pendingPromotion.email} to Admin? The current admin for their constituency will become a leader.` : ''}
+          confirmText="Promote"
+          cancelText="Cancel"
+          type="info"
         />
       </div>
     </div>
