@@ -38,6 +38,10 @@ const EnhancedProfileDropdown: React.FC<EnhancedProfileDropdownProps> = ({
     bacentas,
     newBelievers,
   userProfile,
+  // cross-tenant
+  accessibleChurchLinks,
+  isImpersonating,
+  currentExternalPermission,
   // Ensure profile dropdown and navigation drawer aren't open at the same time
   isBacentaDrawerOpen,
   closeBacentaDrawer
@@ -249,6 +253,30 @@ const EnhancedProfileDropdown: React.FC<EnhancedProfileDropdownProps> = ({
 
           {/* Menu Items */}
           <div className="p-2">
+            {/* Cross-tenant context switching moved to Profile Settings → Constituencies */}
+            {accessibleChurchLinks && accessibleChurchLinks.length > 0 && (
+              <div className="mb-2 px-4 py-3 rounded-lg bg-indigo-50 border border-indigo-100">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-indigo-700">Constituencies</span>
+                  {isImpersonating && (
+                    <span className="text-[11px] text-indigo-700">Viewing external ({currentExternalPermission || 'read-only'})</span>
+                  )}
+                </div>
+                <button
+                  onClick={() => {
+                    switchTab({ id: TabKeys.PROFILE_SETTINGS, name: 'Profile Settings' });
+                    setIsOpen(false);
+                    // Attempt to scroll to the section after navigation
+                    setTimeout(() => {
+                      try { document.getElementById('constituencies-section')?.scrollIntoView({ behavior: 'smooth' }); } catch {}
+                    }, 250);
+                  }}
+                  className="mt-2 w-full text-left text-sm px-2 py-2 rounded bg-white hover:bg-indigo-100 text-indigo-800 border border-indigo-100"
+                >
+                  Manage constituencies in Profile Settings
+                </button>
+              </div>
+            )}
             <button
               onClick={() => {
                 switchTab({ id: TabKeys.PROFILE_SETTINGS, name: 'Profile Settings' });

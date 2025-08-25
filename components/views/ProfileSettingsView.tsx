@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useAppContext } from '../../contexts/FirebaseAppContext';
 // import { useTheme } from '../../contexts/ThemeContext'; // Theme selection disabled
 import { userService } from '../../services/userService';
@@ -25,7 +25,8 @@ import {
   UserGroupIcon,
   RefreshIcon,
   BellIcon,
-  CakeIcon
+  CakeIcon,
+  ArrowLeftIcon
 } from '../icons';
 import { collection, doc, getDocs, query, Timestamp, updateDoc, where } from 'firebase/firestore';
 import { db } from '../../firebase.config';
@@ -43,7 +44,19 @@ interface ProfileFormData {
 }
 
 const ProfileSettingsView: React.FC = () => {
-  const { userProfile, user, showToast, refreshUserProfile } = useAppContext();
+  const {
+    userProfile,
+    user,
+    showToast,
+    refreshUserProfile,
+    // Cross-tenant switching
+    accessibleChurchLinks,
+    switchToExternalChurch,
+    switchBackToOwnChurch,
+    isImpersonating,
+    currentExternalPermission,
+    currentChurchId
+  } = useAppContext();
   // const { theme, setTheme } = useTheme(); // Theme selection disabled
 
   const [preferences, setPreferences] = useState<UserPreferences>({
@@ -86,6 +99,7 @@ const ProfileSettingsView: React.FC = () => {
   const [isChangePasswordModalOpen, setIsChangePasswordModalOpen] = useState(false);
   const [isAdminInviteModalOpen, setIsAdminInviteModalOpen] = useState(false);
   const [isFixingAccess, setIsFixingAccess] = useState(false);
+  const [isConstituencyManagerOpen, setIsConstituencyManagerOpen] = useState(false);
   // const [isSendingTestEmail, setIsSendingTestEmail] = useState(false); // Email feature on hold
 
   // Update state when userProfile changes
@@ -356,6 +370,46 @@ const ProfileSettingsView: React.FC = () => {
             </div>
           </div>
         </div>
+
+        {/* Constituencies – simplified to a single CTA */}
+        {hasAdminPrivileges(userProfile) && (
+          <div id="constituencies-section" className="bg-white dark:bg-dark-800 rounded-3xl shadow-xl border border-gray-100 dark:border-dark-600 p-6 sm:p-8 mb-8">
+            <div className="flex flex-col items-center text-center gap-3">
+              <div className="w-12 h-12 bg-gradient-to-br from-indigo-500 to-blue-600 rounded-2xl flex items-center justify-center">
+                <BuildingOfficeIcon className="w-6 h-6 text-white" />
+              </div>
+              <h2 className="text-2xl font-bold text-gray-900 dark:text-dark-100">Constituencies</h2>
+              <p className="text-sm text-gray-600 dark:text-dark-300">Switch between constituencies you are linked to</p>
+              <Button
+                type="button"
+                variant="primary"
+                onClick={() => setIsConstituencyManagerOpen(true)}
+                className="mt-2 h-12 px-5 rounded-2xl bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 w-full sm:w-auto max-w-xs mx-auto"
+              >
+                Manage Constituencies
+              </Button>
+            </div>
+
+            {isImpersonating && (
+              <div className="mt-6 p-4 rounded-xl bg-indigo-50 border border-indigo-100 text-sm text-indigo-800">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="font-medium">Currently viewing an external constituency</span>
+                    {currentExternalPermission && (
+                      <span className="ml-2 inline-block px-2 py-0.5 rounded bg-indigo-600 text-white text-xs align-middle">{currentExternalPermission === 'read-only' ? 'Read-only' : 'Read & Write'}</span>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => switchBackToOwnChurch()}
+                    className="px-3 py-1.5 rounded-lg bg-white border border-indigo-200 text-indigo-700 hover:bg-indigo-100"
+                  >
+                    Switch back
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Personal Information */}
         <div className="bg-white dark:bg-dark-800 rounded-3xl shadow-xl border border-gray-100 dark:border-dark-600 p-6 sm:p-8 mb-8">
@@ -727,8 +781,319 @@ const ProfileSettingsView: React.FC = () => {
         isOpen={isAdminInviteModalOpen}
         onClose={() => setIsAdminInviteModalOpen(false)}
       />
+
+      {/* Constituency Manager Overlay */}
+      <ConstituencyManagerScreen
+        isOpen={isConstituencyManagerOpen}
+        onClose={() => setIsConstituencyManagerOpen(false)}
+        links={accessibleChurchLinks || []}
+        isImpersonating={isImpersonating}
+        currentChurchId={currentChurchId || ''}
+        onSwitch={async (link, mode) => {
+          setIsConstituencyManagerOpen(false);
+          const selected = mode || 'read-write';
+          if (selected === 'read-write' && link.permission === 'read-only') {
+            try {
+              // Try upgrading the link in backend so subsequent loads reflect full access
+              const { crossTenantService } = await import('../../services/crossTenantService');
+              await crossTenantService.updateAccessPermission(link.id, 'read-write');
+              // Optimistically reflect the upgrade and switch
+              switchToExternalChurch({ ...link, permission: 'read-write' });
+              try { await (useAppContext()?.refreshAccessibleChurchLinks?.()); } catch {}
+              return;
+            } catch (e:any) {
+              try { showToast('warning', 'Full access unavailable', 'Opening in view-only mode. Ask the owner to grant edit access.'); } catch {}
+              switchToExternalChurch({ ...link, permission: 'read-only' });
+              return;
+            }
+          }
+          switchToExternalChurch({ ...link, permission: selected });
+        }}
+        onSwitchBack={switchBackToOwnChurch}
+        currentExternalPermission={currentExternalPermission}
+      />
+    </div>
+  );
+};
+
+// Lightweight, inline component for listing many constituencies with UX controls
+interface ConstituenciesListProps {
+  links: Array<{
+    id: string;
+    ownerChurchId: string;
+    ownerChurchName?: string;
+    ownerName?: string;
+    permission: 'read-only' | 'read-write';
+  }>;
+  isImpersonating: boolean;
+  currentChurchId: string;
+  onSwitch: (link: any, mode: 'read-only' | 'read-write') => void;
+}
+
+const ConstituenciesList: React.FC<ConstituenciesListProps> = ({ links, isImpersonating, currentChurchId, onSwitch }) => {
+  // Pagination only (search/filters removed per request)
+  const [page, setPage] = useState(1);
+  const pageSize = 12;
+
+  // Normalize with safe fallbacks
+  const normalized = useMemo(() => links.map(l => ({
+    ...l,
+    ownerChurchName: l.ownerChurchName || 'External Constituency',
+    ownerName: l.ownerName || 'Unknown Admin'
+  })), [links]);
+
+  const filtered = normalized; // no filtering UI
+
+  const sorted = useMemo(() => {
+    const arr = [...filtered];
+    // Default sort: name asc
+    arr.sort((a, b) => (a.ownerChurchName || '').localeCompare(b.ownerChurchName || ''));
+    return arr;
+  }, [filtered]);
+
+  const total = sorted.length;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const pageItems = useMemo(() => sorted.slice((page - 1) * pageSize, page * pageSize), [sorted, page]);
+
+  // Helper for initials avatar
+  const getInitials = (name?: string) => (name || 'C').split(' ').slice(0, 2).map(s => s[0]).join('').toUpperCase();
+
+  return (
+    <div className="space-y-5">
+      {/* Simple header note */}
+      <div className="text-center text-sm text-gray-600">
+        Tap a card for Full Access, or choose View Only.
+      </div>
+
+      {/* Empty state */}
+      {links.length === 0 && (
+        <div className="rounded-3xl border border-dashed border-gray-300 bg-gray-50 p-8 text-center">
+          <div className="mx-auto mb-3 h-12 w-12 rounded-2xl bg-gradient-to-br from-indigo-500 to-blue-600 text-white grid place-items-center text-lg font-bold">☰</div>
+          <p className="text-gray-700 font-medium">No external constituencies yet</p>
+          <p className="text-gray-500 text-sm mt-1">Ask another admin to grant you access via an invite.</p>
+        </div>
+      )}
+
+      {/* No results for current filters */}
+      {links.length > 0 && filtered.length === 0 && (
+        <div className="rounded-2xl border border-gray-200 bg-white p-6 text-center">
+          <p className="text-gray-700 font-medium">No matches</p>
+          <p className="text-gray-500 text-sm mt-1">Try changing filters or clearing the search.</p>
+        </div>
+      )}
+
+      {/* Grid List */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 lg:gap-4">
+        {pageItems.map(link => {
+          const isActive = isImpersonating && link.ownerChurchId === currentChurchId;
+          const initials = getInitials(link.ownerChurchName);
+          return (
+            <div
+              key={link.id}
+              onClick={() => onSwitch(link, 'read-write')}
+              title="Tap to open with Full Access"
+              className={`group relative overflow-hidden rounded-2xl border p-4 transition-all cursor-pointer ${isActive ? 'bg-indigo-50/70 border-indigo-200' : 'bg-white border-gray-200 hover:border-indigo-300 hover:shadow-md'}`}
+            >
+              <div className="flex items-center gap-4">
+                <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-indigo-500 to-blue-600 text-white grid place-items-center text-sm font-bold flex-shrink-0">
+                  {initials}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <h3 className="font-semibold text-gray-900 truncate">{link.ownerChurchName}</h3>
+                    {isActive && (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-indigo-600 text-white">Current</span>
+                    )}
+                  </div>
+                  <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-gray-600">
+                    <span className="truncate">Admin: {link.ownerName}</span>
+                    <span className="text-gray-300">•</span>
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs ${link.permission === 'read-only' ? 'bg-gray-100 text-gray-700' : 'bg-green-100 text-green-700'}`}>
+                      {link.permission === 'read-only' ? 'Read-only' : 'Read & Write'}
+                    </span>
+                  </div>
+                </div>
+                <div className="flex-shrink-0 flex flex-col sm:flex-row gap-2">
+                  <Button
+                    type="button"
+                    variant="primary"
+                    onClick={(e) => { e.stopPropagation(); onSwitch(link, 'read-write'); }}
+                    className={`h-10 px-4 rounded-xl ${isActive ? 'bg-indigo-600 hover:bg-indigo-700' : ''}`}
+                  >
+                    Full Access
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={(e) => { e.stopPropagation(); onSwitch(link, 'read-only'); }}
+                    className="h-10 px-4 rounded-xl bg-white border border-gray-300 text-gray-800 hover:bg-gray-50"
+                  >
+                    View Only
+                  </Button>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between pt-2">
+          <div className="text-sm text-gray-600">
+            Showing {(page - 1) * pageSize + 1}-{Math.min(page * pageSize, total)} of {total}
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+              className="px-3 py-1.5 rounded-full border border-gray-300 bg-white hover:border-indigo-300 disabled:opacity-50"
+              disabled={page === 1}
+            >
+              Prev
+            </button>
+            <span className="text-sm text-gray-700">Page {page} / {totalPages}</span>
+            <button
+              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+              className="px-3 py-1.5 rounded-full border border-gray-300 bg-white hover:border-indigo-300 disabled:opacity-50"
+              disabled={page === totalPages}
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
 
 export default ProfileSettingsView;
+
+// Full-screen overlay for managing and switching constituencies
+interface ConstituencyManagerScreenProps {
+  isOpen: boolean;
+  onClose: () => void;
+  links: ConstituenciesListProps['links'];
+  isImpersonating: boolean;
+  currentChurchId: string;
+  currentExternalPermission?: 'read-only' | 'read-write' | null;
+  onSwitch: (link: any, mode: 'read-only' | 'read-write') => void;
+  onSwitchBack: () => void;
+}
+
+const ConstituencyManagerScreen: React.FC<ConstituencyManagerScreenProps> = ({
+  isOpen,
+  onClose,
+  links,
+  isImpersonating,
+  currentChurchId,
+  currentExternalPermission,
+  onSwitch,
+  onSwitchBack
+}) => {
+  if (!isOpen) return null;
+
+  // Detect navbar height similar to AdminInviteScreen for proper fit
+  useEffect(() => {
+    const detectNavbarHeight = (): number => {
+      const selectors = ['nav', '.navbar', '[role="navigation"]', 'header'];
+      for (const s of selectors) {
+        const el = document.querySelector(s) as HTMLElement;
+        if (el && el.offsetHeight > 0) return el.offsetHeight;
+      }
+      return 0;
+    };
+    const update = () => {
+      const h = detectNavbarHeight();
+      document.documentElement.style.setProperty('--navbar-height', `${h}px`);
+    };
+    update();
+    const t = setTimeout(update, 100);
+    window.addEventListener('resize', update);
+    window.addEventListener('orientationchange', update);
+    return () => {
+      clearTimeout(t);
+      window.removeEventListener('resize', update);
+      window.removeEventListener('orientationchange', update);
+    };
+  }, []);
+
+  return (
+    <div
+      className="fixed bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 z-50 overflow-hidden"
+      style={{
+        top: 'calc(var(--navbar-height, 0px) + env(safe-area-inset-top, 0px))',
+        left: 'env(safe-area-inset-left, 0px)',
+        right: 'env(safe-area-inset-right, 0px)',
+        bottom: 'env(safe-area-inset-bottom, 0px)',
+        height:
+          'calc(100vh - var(--navbar-height, 0px) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px))',
+        minHeight:
+          'calc(100dvh - var(--navbar-height, 0px) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px))'
+      }}
+    >
+      {/* Header */}
+      <div className="bg-white/80 backdrop-blur-md border-b border-gray-200/50 shadow-sm">
+        <div className="max-w-5xl mx-auto px-4 py-6 relative">
+          <button
+            onClick={onClose}
+            className="absolute left-2 top-1/2 -translate-y-1/2 p-2 hover:bg-gray-100 rounded-xl transition-colors duration-200"
+            aria-label="Go back"
+          >
+            <ArrowLeftIcon className="w-6 h-6 text-gray-600" />
+          </button>
+
+          <div className="text-center">
+            <h1 className="text-3xl sm:text-4xl font-extrabold text-gray-900 tracking-tight">
+              Manage Constituencies
+            </h1>
+            <p className="text-sm sm:text-base text-gray-600">View and switch to constituencies you are linked to</p>
+          </div>
+
+          <div className="absolute right-2 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-gradient-to-br from-indigo-500 to-blue-600 flex items-center justify-center shadow-lg ring-1 ring-white/60">
+            <BuildingOfficeIcon className="w-6 h-6 text-white" />
+          </div>
+        </div>
+      </div>
+
+      {/* Impersonation banner */}
+      {isImpersonating && (
+        <div className="bg-indigo-50 border-b border-indigo-100">
+          <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between text-sm text-indigo-800">
+            <div>
+              <span className="font-medium">Currently viewing an external constituency</span>
+              {currentExternalPermission && (
+                <span className="ml-2 inline-block px-2 py-0.5 rounded bg-indigo-600 text-white text-xs align-middle">
+                  {currentExternalPermission === 'read-only' ? 'Read-only' : 'Read & Write'}
+                </span>
+              )}
+            </div>
+            <button
+              onClick={() => {
+                onSwitchBack();
+                onClose();
+              }}
+              className="px-3 py-1.5 rounded-lg bg-white border border-indigo-200 text-indigo-700 hover:bg-indigo-100"
+            >
+              Switch back to my constituency
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Content */}
+      <div
+        className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-6 scroll-smooth scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent touch-pan-y"
+        style={{ height: 'calc(100% - 84px)' }}
+      >
+        <div className="max-w-5xl mx-auto">
+          <ConstituenciesList
+            links={links}
+            isImpersonating={isImpersonating}
+            currentChurchId={currentChurchId}
+            onSwitch={onSwitch}
+          />
+        </div>
+      </div>
+    </div>
+  );
+};

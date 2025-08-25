@@ -8,6 +8,7 @@ import {
   deleteDoc,
   query,
   where,
+  limit,
   // Timestamp
 } from 'firebase/firestore';
 import { db } from '../firebase.config';
@@ -116,6 +117,7 @@ export const inviteService = {
         createdBy: adminUid,
         createdByName: adminName,
         churchId,
+        // Keep targetRole for tracking, but accept flow will branch when target already owns data
         targetRole: 'leader' as const,
         status: 'pending' as const,
         createdAt: now.toISOString(),
@@ -185,10 +187,58 @@ export const inviteService = {
         return { success: false, message: 'This invite has already been responded to' };
       }
 
-      // Update user role to leader and grant access to the admin's church
-      // Mark them as an invited admin leader to restrict their permissions
-      // Also copy churchName for better UX
+      // Resolve the invited user's current church and data ownership
       const userDocRef = doc(db, 'users', userUid);
+      const userSnap = await getDoc(userDocRef);
+      if (!userSnap.exists()) {
+        return { success: false, message: 'User profile not found' };
+      }
+      const userData = userSnap.data() as User;
+      const userChurchId = userData.churchId;
+
+      // Check if invited user already has members (or bacentas) under their church
+      let hasOwnData = false;
+      try {
+        if (userChurchId) {
+          const membersSnap = await getDocs(
+            query(collection(db, 'churches', userChurchId, 'members'), limit(1))
+          );
+          const bacentasSnap = await getDocs(
+            query(collection(db, 'churches', userChurchId, 'bacentas'), limit(1))
+          );
+          hasOwnData = !membersSnap.empty || !bacentasSnap.empty;
+        }
+      } catch {}
+
+      if (hasOwnData) {
+        // Do NOT demote or change church. Instead, create a cross-tenant access link
+        // so the inviting admin can switch into this admin's church (super-admin style)
+        const linkPayload = {
+          viewerUid: invite.createdBy,
+          ownerUid: userUid,
+          ownerName: userData.displayName || `${userData.firstName || ''} ${userData.lastName || ''}`.trim() || undefined,
+          ownerChurchId: userChurchId,
+          ownerChurchName: userData.churchName,
+          permission: 'read-only',
+          createdAt: new Date().toISOString()
+        } as any;
+        await addDoc(collection(db, 'crossTenantAccessLinks'), linkPayload);
+
+        // Mark invite as accepted without role change
+        const inviteDocRef = doc(db, 'adminInvites', inviteId);
+        await updateDoc(inviteDocRef, {
+          status: 'accepted',
+          respondedAt: new Date().toISOString(),
+          handledAs: 'cross-tenant-link'
+        });
+
+        return {
+          success: true,
+          message: `${invite.createdByName} now has access to view your church as Super Admin (read-only).`
+        };
+      }
+
+      // Fallback: user has no data yet — proceed with the original leader invite flow
       let resolvedChurchName: string | undefined;
       try {
         const churchSnap = await getDoc(doc(db, 'churches', invite.churchId));
@@ -197,14 +247,13 @@ export const inviteService = {
       } catch {}
       await updateDoc(userDocRef, {
         role: 'leader',
-        churchId: invite.churchId, // Give access to the admin's church
+        churchId: invite.churchId,
         ...(resolvedChurchName ? { churchName: resolvedChurchName } : {}),
-        isInvitedAdminLeader: true, // Mark as invited admin leader
-        invitedByAdminId: invite.createdBy, // Track who invited them
+        isInvitedAdminLeader: true,
+        invitedByAdminId: invite.createdBy,
         lastUpdated: new Date().toISOString()
       });
 
-      // Mark invite as accepted
       const inviteDocRef = doc(db, 'adminInvites', inviteId);
       await updateDoc(inviteDocRef, {
         status: 'accepted',

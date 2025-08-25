@@ -363,6 +363,37 @@ export interface AdminInvite {
   accessChurchId?: string; // Church ID that the leader should have access to
 }
 
+// Cross-tenant (admin-to-admin) access sharing
+export type CrossTenantPermission = 'read-only' | 'read-write';
+
+export interface CrossTenantInvite {
+  id: string;
+  fromAdminUid: string; // Requester who wants access
+  fromAdminName: string;
+  fromChurchId: string;
+  fromChurchName?: string;
+  toAdminUid: string; // Target admin who owns a different church
+  toAdminEmail: string;
+  toAdminName?: string;
+  permission: CrossTenantPermission; // Requested permission
+  status: 'pending' | 'accepted' | 'rejected' | 'cancelled';
+  createdAt: string;
+  respondedAt?: string;
+}
+
+export interface CrossTenantAccessLink {
+  id: string;
+  viewerUid: string; // The admin who can view/switch into another church
+  ownerUid: string; // The admin who granted access
+  ownerName?: string;
+  ownerChurchId: string;
+  ownerChurchName?: string;
+  permission: CrossTenantPermission;
+  createdAt: string;
+  revoked?: boolean;
+  revokedAt?: string;
+}
+
 // Member Deletion Request System Types
 export type DeletionRequestStatus = 'pending' | 'approved' | 'rejected';
 

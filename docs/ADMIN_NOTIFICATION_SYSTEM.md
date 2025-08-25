@@ -1,5 +1,9 @@
 # Admin Notification System
 
+## Note on Admin Invites and Cross-Tenant Access
+
+When an administrator invites another administrator who already has their own members/bacentas (i.e., existing data under their church), accepting the invite will no longer demote them to a leader or change their church. Instead, a cross-tenant access link is created so the inviter can switch (view-as) into the invited admin’s church. This link is read-only by default unless upgraded separately.
+
 This document explains the Admin Notification System implemented for SAT Mobile, which allows admins to monitor their linked leaders' activities in real-time.
 
 ## Overview

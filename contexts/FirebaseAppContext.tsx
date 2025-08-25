@@ -2,7 +2,7 @@
 import React, { createContext, useState, useEffect, useCallback, ReactNode, useMemo, useRef } from 'react';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../firebase.config';
-import { Member, AttendanceRecord, Bacenta, TabOption, AttendanceStatus, NewBeliever, SundayConfirmation, ConfirmationStatus, Guest, MemberDeletionRequest, OutreachBacenta, OutreachMember, PrayerRecord, PrayerStatus, MeetingRecord, TitheRecord } from '../types';
+import { Member, AttendanceRecord, Bacenta, TabOption, AttendanceStatus, NewBeliever, SundayConfirmation, ConfirmationStatus, Guest, MemberDeletionRequest, OutreachBacenta, OutreachMember, PrayerRecord, PrayerStatus, MeetingRecord, TitheRecord, CrossTenantAccessLink, CrossTenantPermission } from '../types';
 import { FIXED_TABS, DEFAULT_TAB_ID } from '../constants';
 import { sessionStateStorage } from '../utils/localStorage';
 import { getSundaysOfMonth } from '../utils/dateUtils';
@@ -23,6 +23,7 @@ import {
   titheFirebaseService,
   FirebaseUser
 } from '../services/firebaseService';
+import { crossTenantService } from '../services/crossTenantService';
 import { dataMigrationService } from '../utils/dataMigration';
 import { userService } from '../services/userService';
 import { setNotificationContext } from '../services/notificationService';
@@ -212,6 +213,13 @@ interface AppContextType {
   // Force data reload while impersonating (raw fetch bypassing listeners)
   forceImpersonatedDataReload?: () => Promise<void>;
 
+  // Cross-tenant switching (admin-to-admin access links)
+  accessibleChurchLinks: CrossTenantAccessLink[];
+  refreshAccessibleChurchLinks: () => Promise<void>;
+  switchToExternalChurch: (link: CrossTenantAccessLink) => Promise<void>;
+  switchBackToOwnChurch: () => Promise<void>;
+  currentExternalPermission: CrossTenantPermission | null;
+
   // Outreach data/state
   outreachBacentas: OutreachBacenta[];
   outreachMembers: OutreachMember[];
@@ -332,6 +340,9 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
   const [impersonatedAdminId, setImpersonatedAdminId] = useState<string | null>(null);
   const originalChurchContextRef = React.useRef<string | null>(null);
   const originalUserProfileRef = React.useRef<any | null>(null);
+  // Cross-tenant state
+  const [accessibleChurchLinks, setAccessibleChurchLinks] = useState<CrossTenantAccessLink[]>([]);
+  const [currentExternalPermission, setCurrentExternalPermission] = useState<CrossTenantPermission | null>(null);
 
   // Memoized computed values
   const displayedSundays = useMemo(() => {
@@ -363,6 +374,13 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
             try {
               const profile = await userService.getUserProfile(user.uid);
               setUserProfile(profile);
+              // Load cross-tenant accessible links for this admin
+              try {
+                const links = await crossTenantService.getAccessibleChurchLinks(user.uid);
+                setAccessibleChurchLinks(links);
+              } catch (e) {
+                console.warn('Failed to load accessible church links', e);
+              }
 
               // Set up notification context if we have church context
               const churchId = firebaseUtils.getCurrentChurchId();
@@ -406,6 +424,8 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
             setNotificationContext(null, null);
             setNotificationIntegrationContext(null, null);
             setEnhancedNotificationContext(null, null);
+            setAccessibleChurchLinks([]);
+            setCurrentExternalPermission(null);
             setMembers([]);
             setBacentas([]);
             setAttendanceRecords([]);
@@ -787,6 +807,15 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     setToasts(prev => prev.filter(toast => toast.id !== id));
   }, []);
 
+  // Guard: block writes when impersonating in read-only external context
+  const ensureCanWrite = useCallback(() => {
+    if (isImpersonating && currentExternalPermission === 'read-only') {
+      showToast('warning', 'Read-only access', 'You cannot make changes in this church.');
+      return false;
+    }
+    return true;
+  }, [isImpersonating, currentExternalPermission, showToast]);
+
   // Confirmation modal functions
   const showConfirmation = useCallback((type: 'deleteMember' | 'deleteBacenta' | 'deleteNewBeliever' | 'clearData' | 'clearSelectedData' | 'createDeletionRequest' | 'clearAllNewBelievers', data: any, onConfirm: () => void) => {
     setConfirmationModal({
@@ -808,6 +837,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
 
   // Member handlers
   const addMemberHandler = useCallback(async (memberData: Omit<Member, 'id' | 'createdDate' | 'lastUpdated'>): Promise<string> => {
+    if (!ensureCanWrite()) throw new Error('Read-only access');
     try {
       setIsLoading(true);
       // In ministry context, auto-tag to selected ministry and allow no bacenta
@@ -837,6 +867,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
   }, [showToast, isMinistryContext, activeMinistryName]);
 
   const addMultipleMembersHandler = useCallback(async (membersData: Omit<Member, 'id' | 'createdDate' | 'lastUpdated'>[]) => {
+    if (!ensureCanWrite()) throw new Error('Read-only access');
     const successful: Member[] = [];
     const failed: { data: Omit<Member, 'id' | 'createdDate' | 'lastUpdated'>, error: string }[] = [];
 
@@ -907,6 +938,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
   }, [showToast]);
 
   const updateMemberHandler = useCallback(async (memberData: Member) => {
+  if (!ensureCanWrite()) throw new Error('Read-only access');
     try {
       setIsLoading(true);
       const original = members.find(m => m.id === memberData.id);
@@ -938,6 +970,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
   }, [showToast, members]);
 
   const deleteMemberHandler = useCallback(async (memberId: string) => {
+  if (!ensureCanWrite()) throw new Error('Read-only access');
     try {
       setIsLoading(true);
 
@@ -1005,6 +1038,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
 
   // Bacenta handlers
   const addBacentaHandler = useCallback(async (bacentaData: Omit<Bacenta, 'id'>) => {
+  if (!ensureCanWrite()) throw new Error('Read-only access');
     try {
       setIsLoading(true);
       const newId = await bacentasFirebaseService.add(bacentaData);
@@ -1020,6 +1054,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
   }, [showToast]);
 
   const updateBacentaHandler = useCallback(async (bacentaData: Bacenta) => {
+  if (!ensureCanWrite()) throw new Error('Read-only access');
     try {
       setIsLoading(true);
       await bacentasFirebaseService.update(bacentaData.id, bacentaData);
@@ -1034,6 +1069,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
   }, [showToast]);
 
   const deleteBacentaHandler = useCallback(async (bacentaId: string) => {
+  if (!ensureCanWrite()) throw new Error('Read-only access');
     try {
       setIsLoading(true);
       await bacentasFirebaseService.delete(bacentaId);
@@ -1049,6 +1085,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
 
   // New Believer handlers
   const addNewBelieverHandler = useCallback(async (newBelieverData: Omit<NewBeliever, 'id' | 'createdDate' | 'lastUpdated'>) => {
+  if (!ensureCanWrite()) throw new Error('Read-only access');
     try {
       setIsLoading(true);
       // Use ministry service for bidirectional sync in ministry mode
@@ -1069,6 +1106,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
   }, [showToast]);
 
   const addMultipleNewBelieversHandler = useCallback(async (newBelieversData: Omit<NewBeliever, 'id' | 'createdDate' | 'lastUpdated'>[]) => {
+  if (!ensureCanWrite()) throw new Error('Read-only access');
     const successful: NewBeliever[] = [];
     const failed: { data: Omit<NewBeliever, 'id' | 'createdDate' | 'lastUpdated'>, error: string }[] = [];
 
@@ -1102,6 +1140,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
   }, [showToast]);
 
   const updateNewBelieverHandler = useCallback(async (newBelieverData: NewBeliever) => {
+  if (!ensureCanWrite()) throw new Error('Read-only access');
     try {
       setIsLoading(true);
       await newBelieversFirebaseService.update(newBelieverData.id, newBelieverData);
@@ -1116,6 +1155,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
   }, [showToast]);
 
   const deleteNewBelieverHandler = useCallback(async (newBelieverId: string) => {
+  if (!ensureCanWrite()) throw new Error('Read-only access');
     try {
       setIsLoading(true);
       await newBelieversFirebaseService.delete(newBelieverId);
@@ -1138,6 +1178,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
 
 
   const addOutreachBacentaHandler = useCallback(async (data: Omit<OutreachBacenta, 'id'>) => {
+  if (!ensureCanWrite()) throw new Error('Read-only access');
     try {
       setIsLoading(true);
       const id = await outreachBacentasFirebaseService.add(data);
@@ -1153,6 +1194,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
   }, [showToast]);
 
   const updateOutreachBacentaHandler = useCallback(async (data: OutreachBacenta) => {
+  if (!ensureCanWrite()) throw new Error('Read-only access');
     try {
       setIsLoading(true);
       await outreachBacentasFirebaseService.update(data.id, data);
@@ -1167,6 +1209,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
   }, [showToast]);
 
   const deleteOutreachBacentaHandler = useCallback(async (id: string) => {
+  if (!ensureCanWrite()) throw new Error('Read-only access');
     try {
       setIsLoading(true);
       await outreachBacentasFirebaseService.delete(id);
@@ -1276,6 +1319,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
   }, [guests, sundayConfirmations, showToast]);
 
   const addOutreachMemberHandler = useCallback(async (data: Omit<OutreachMember, 'id' | 'createdDate' | 'lastUpdated'>): Promise<string> => {
+  if (!ensureCanWrite()) throw new Error('Read-only access');
     try {
       setIsLoading(true);
       const outreachMemberId = await outreachMembersFirebaseService.add(data);
@@ -1321,6 +1365,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
   }, [findOrCreateGuest, showToast, userProfile]);
 
   const updateOutreachMemberHandler = useCallback(async (id: string, updates: Partial<OutreachMember>) => {
+  if (!ensureCanWrite()) throw new Error('Read-only access');
     try {
       setIsLoading(true);
 
@@ -1416,6 +1461,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
   }, [findOrCreateGuest, showToast, outreachMembers, userProfile]);
 
   const deleteOutreachMemberHandler = useCallback(async (id: string) => {
+  if (!ensureCanWrite()) throw new Error('Read-only access');
     try {
       setIsLoading(true);
       const { hasAdminPrivileges } = await import('../utils/permissionUtils');
@@ -1489,6 +1535,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
   }, [showToast, outreachMembers, sundayConfirmations, deleteMemberHandler, members, userProfile]);
 
   const convertOutreachMemberToPermanentHandler = useCallback(async (outreachMemberId: string) => {
+  if (!ensureCanWrite()) throw new Error('Read-only access');
     try {
       setIsLoading(true);
       const om = outreachMembers.find(o => o.id === outreachMemberId);
@@ -1573,6 +1620,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
 
   // Meeting Record handlers
   const saveMeetingRecordHandler = useCallback(async (record: MeetingRecord) => {
+  if (!ensureCanWrite()) throw new Error('Read-only access');
     try {
       setIsLoading(true);
       await meetingRecordsFirebaseService.addOrUpdate(record);
@@ -1618,6 +1666,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
   }, [showToast, userProfile, bacentas]);
 
   const updateMeetingRecordHandler = useCallback(async (record: MeetingRecord) => {
+  if (!ensureCanWrite()) throw new Error('Read-only access');
     try {
       setIsLoading(true);
       const original = meetingRecords.find(r => r.id === record.id);
@@ -1674,6 +1723,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
   }, [showToast, meetingRecords, userProfile, bacentas]);
 
   const deleteMeetingRecordHandler = useCallback(async (id: string) => {
+  if (!ensureCanWrite()) throw new Error('Read-only access');
     try {
       setIsLoading(true);
       const original = meetingRecords.find(r => r.id === id) || null;
@@ -1724,6 +1774,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
 
   // Tithe handlers
   const markTitheHandler = useCallback(async (memberId: string, paid: boolean, amount: number) => {
+  if (!ensureCanWrite()) throw new Error('Read-only access');
     try {
       // Only allow saving for the current calendar month
       const now = new Date();
@@ -1762,6 +1813,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
 
   // Attendance handlers
   const markAttendanceHandler = useCallback(async (memberId: string, date: string, status: AttendanceStatus) => {
+  if (!ensureCanWrite()) throw new Error('Read-only access');
     try {
       const recordId = `${memberId}_${date}`;
       const record: AttendanceRecord = {
@@ -1844,6 +1896,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
   }, [showToast, isMinistryContext, userProfile, members]);
 
   const markNewBelieverAttendanceHandler = useCallback(async (newBelieverId: string, date: string, status: AttendanceStatus) => {
+  if (!ensureCanWrite()) throw new Error('Read-only access');
     try {
       const recordId = `${newBelieverId}_${date}`;
       const record: AttendanceRecord = {
@@ -1863,6 +1916,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
   }, [showToast]);
 
   const clearAttendanceHandler = useCallback(async (memberId: string, date: string) => {
+  if (!ensureCanWrite()) throw new Error('Read-only access');
     try {
       const recordId = `${memberId}_${date}`;
       console.log('🗑️ Clearing attendance record:', recordId);
@@ -1952,6 +2006,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
 
   // Transfer member to constituency handler
   const transferMemberToConstituencyHandler = useCallback(async (memberId: string, targetConstituencyId: string) => {
+  if (!ensureCanWrite()) throw new Error('Read-only access');
     try {
       setIsLoading(true);
 
@@ -1983,6 +2038,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
 
   // Prayer handlers
   const markPrayerHandler = useCallback(async (memberId: string, date: string, status: PrayerStatus) => {
+  if (!ensureCanWrite()) throw new Error('Read-only access');
     try {
       const recordId = `${memberId}_${date}`;
       const record: PrayerRecord = { id: recordId, memberId, date, status };
@@ -1996,6 +2052,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
   }, [showToast]);
 
   const clearPrayerHandler = useCallback(async (memberId: string, date: string) => {
+  if (!ensureCanWrite()) throw new Error('Read-only access');
     try {
       const recordId = `${memberId}_${date}`;
       await prayerFirebaseService.delete(recordId);
@@ -2009,6 +2066,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
 
   // Confirmation handlers
   const markConfirmationHandler = useCallback(async (memberId: string, date: string, status: ConfirmationStatus) => {
+  if (!ensureCanWrite()) throw new Error('Read-only access');
     try {
       const recordId = `${memberId}_${date}`;
       const record: SundayConfirmation = {
@@ -2048,6 +2106,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
 
   // Remove confirmation handler
   const removeConfirmationHandler = useCallback(async (confirmationId: string) => {
+  if (!ensureCanWrite()) throw new Error('Read-only access');
     try {
       if (!userProfile?.uid) {
         throw new Error('User not authenticated');
@@ -2098,6 +2157,11 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
 
   // Clean up orphaned confirmation records
   const cleanupOrphanedConfirmations = useCallback(async () => {
+    if (isImpersonating && currentExternalPermission === 'read-only') {
+      // Do not perform data cleanup when viewing external church in read-only mode
+      console.log('🔒 Skipping orphaned confirmation cleanup in read-only external context');
+      return 0;
+    }
     try {
       console.log('🧹 Starting cleanup of orphaned confirmation records...');
       let cleanedCount = 0;
@@ -2140,6 +2204,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
 
   // Guest handlers
   const addGuestHandler = useCallback(async (guestData: Omit<Guest, 'id' | 'createdDate' | 'lastUpdated' | 'createdBy'>) => {
+  if (!ensureCanWrite()) throw new Error('Read-only access');
     try {
       setIsLoading(true);
 
@@ -2184,6 +2249,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
   }, [findOrCreateGuest, guests, showToast, userProfile]);
 
   const updateGuestHandler = useCallback(async (guestData: Guest) => {
+  if (!ensureCanWrite()) throw new Error('Read-only access');
     try {
       setIsLoading(true);
       await guestFirebaseService.update(guestData.id, guestData);
@@ -2198,6 +2264,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
   }, [showToast]);
 
   const deleteGuestHandler = useCallback(async (guestId: string) => {
+  if (!ensureCanWrite()) throw new Error('Read-only access');
     try {
       setIsLoading(true);
 
@@ -2225,6 +2292,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
   }, [showToast, sundayConfirmations]);
 
   const markGuestConfirmationHandler = useCallback(async (guestId: string, date: string, status: ConfirmationStatus) => {
+  if (!ensureCanWrite()) throw new Error('Read-only access');
     try {
       const recordId = `guest_${guestId}_${date}`;
       const record: SundayConfirmation = {
@@ -2264,6 +2332,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
   }, [showToast, userProfile]);
 
   const removeGuestConfirmationHandler = useCallback(async (guestId: string, date: string) => {
+  if (!ensureCanWrite()) throw new Error('Read-only access');
     try {
       const recordId = `guest_${guestId}_${date}`;
       console.log('✅ Removing guest confirmation:', recordId);
@@ -2293,6 +2362,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
   }, [showToast, outreachMembers, userProfile]);
 
   const convertGuestToMemberHandler = useCallback(async (guestId: string) => {
+  if (!ensureCanWrite()) throw new Error('Read-only access');
     let newMemberId: string | null = null;
     let createdConfirmations: string[] = [];
 
@@ -2428,6 +2498,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
 
   // Member Deletion Request handlers
   const createDeletionRequestHandler = useCallback(async (memberId: string, reason?: string) => {
+  if (!ensureCanWrite()) throw new Error('Read-only access');
     try {
       if (!userProfile?.uid) {
         throw new Error('User not authenticated');
@@ -2467,6 +2538,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
   }, [members, userProfile, showToast]);
 
   const approveDeletionRequestHandler = useCallback(async (requestId: string) => {
+  if (!ensureCanWrite()) throw new Error('Read-only access');
     try {
       if (!userProfile?.uid) {
         throw new Error('User not authenticated');
@@ -2524,6 +2596,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
   }, [memberDeletionRequests, userProfile, showToast, deleteMemberHandler, deleteOutreachMemberHandler, outreachMembers, members]);
 
   const rejectDeletionRequestHandler = useCallback(async (requestId: string, adminNotes?: string) => {
+  if (!ensureCanWrite()) throw new Error('Read-only access');
     try {
       if (!userProfile?.uid) {
         throw new Error('User not authenticated');
@@ -3009,6 +3082,29 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     }
   };
 
+  // Cross-tenant helpers ----------------------------------------------------
+  const refreshAccessibleChurchLinks = useCallback(async () => {
+    try {
+      if (!user?.uid) return;
+      const links = await crossTenantService.getAccessibleChurchLinks(user.uid);
+      setAccessibleChurchLinks(links);
+    } catch (e) {
+      console.warn('refreshAccessibleChurchLinks failed', e);
+    }
+  }, [user?.uid]);
+
+  const switchToExternalChurch = useCallback(async (link: CrossTenantAccessLink) => {
+    // Reuse impersonation plumbing to pivot context and fetch data
+    await startImpersonation(link.ownerUid, link.ownerChurchId);
+    setCurrentExternalPermission(link.permission || 'read-only');
+    showToast('info', 'Switched Context', `Viewing ${link.ownerChurchName || 'External Church'} (${link.permission})`);
+  }, [startImpersonation, showToast]);
+
+  const switchBackToOwnChurch = useCallback(async () => {
+    await stopImpersonation();
+    setCurrentExternalPermission(null);
+  }, [stopImpersonation]);
+
   // Context value
   const contextValue: AppContextType = {
     // Data
@@ -3168,6 +3264,12 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
   startImpersonation,
   stopImpersonation,
   forceImpersonatedDataReload: () => forceImpersonatedDataReloadRef.current ? forceImpersonatedDataReloadRef.current() : Promise.resolve(),
+  // Cross-tenant switching
+  accessibleChurchLinks,
+  refreshAccessibleChurchLinks,
+  switchToExternalChurch,
+  switchBackToOwnChurch,
+  currentExternalPermission,
   };
 
 
