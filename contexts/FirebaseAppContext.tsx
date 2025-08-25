@@ -1960,8 +1960,8 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
           // Clear from ministry church
           await attendanceFirebaseService.delete(recordId);
 
-          // Clear from source church if different
-          if (sourceChurchId && sourceChurchId !== userProfile?.churchId) {
+          // Clear from source church if different from current context
+          if (sourceChurchId && sourceChurchId !== currentChurchId) {
             console.log(`🔄 [Ministry Mode] Clearing attendance from source church: ${sourceChurchId}`);
             await ministryAttendanceService.clearFromSourceChurch(recordId, sourceChurchId, userProfile?.uid || '');
           }

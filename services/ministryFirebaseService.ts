@@ -86,6 +86,9 @@ export const ministryMembersService = {
       const currentMember = await membersFirebaseService.getById(memberId);
       const sourceChurchId = (currentMember as any)?.sourceChurchId;
       const isSyncedOnly = !currentMember; // member not found in ministry church doc set
+  // Determine current church from context (ministry church when in ministry mode)
+  const { firebaseUtils } = await import('./firebaseService');
+  const currentChurchId = firebaseUtils.getCurrentChurchId();
       
       if (isSyncedOnly) {
         // Apply overrides in ministry church for synced-only member (e.g., frozen flag)
@@ -103,7 +106,7 @@ export const ministryMembersService = {
       }
       
       // Sync to source church if this member came from another church
-      if ((currentMember as any)?.sourceChurchId && (currentMember as any).sourceChurchId !== userProfile?.churchId) {
+  if ((currentMember as any)?.sourceChurchId && (currentMember as any).sourceChurchId !== currentChurchId) {
         await syncMemberToSourceChurch(currentMember as Member, updates, userProfile?.uid || '');
       }
       
@@ -226,6 +229,9 @@ export const ministryAttendanceService = {
       const member = members.find(m => m.id === attendance.memberId);
       const sourceChurchId = (member as any)?.sourceChurchId;
       const isNativeMember = member?.isNativeMinistryMember;
+      // Determine current church from context (ministry church when in ministry mode)
+      const { firebaseUtils } = await import('./firebaseService');
+      const currentChurchId = firebaseUtils.getCurrentChurchId();
 
       console.log('👤 Member details:', {
         memberId: attendance.memberId,
@@ -233,10 +239,10 @@ export const ministryAttendanceService = {
         memberName: member ? `${member.firstName} ${member.lastName}` : 'Unknown',
         sourceChurchId,
         isNativeMember,
-        currentChurchId: userProfile?.churchId
+        currentChurchId
       });
 
-      if (sourceChurchId && sourceChurchId !== userProfile?.churchId && !isNativeMember) {
+      if (sourceChurchId && sourceChurchId !== currentChurchId && !isNativeMember) {
         console.log(`🔄 [Ministry Service] Syncing attendance to source church: ${sourceChurchId}`);
 
         // Sync to source church in parallel with ministry church for faster operation
@@ -250,7 +256,7 @@ export const ministryAttendanceService = {
       } else {
         const reason = isNativeMember
           ? 'member is native to ministry'
-          : sourceChurchId === userProfile?.churchId
+          : sourceChurchId === currentChurchId
             ? 'member belongs to current church'
             : 'no source church found';
         console.log(`📝 [Ministry Service] No source church sync needed - ${reason}`);

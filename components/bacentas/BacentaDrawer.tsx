@@ -254,6 +254,35 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
                       onClose();
                     }}
                   />
+                  {/* New in ministry mode: Prays in Tongues */}
+                  <NavigationItem
+                    icon={<PrayerIcon className="w-4 h-4" />}
+                    label="Prays in Tongues"
+                    isActive={
+                      currentTab.id === TabKeys.ALL_CONGREGATIONS &&
+                      (currentTab.data as any)?.speaksInTonguesOnly === true
+                    }
+                    badge={tonguesCount > 0 ? tonguesCount : undefined}
+                    onClick={() => {
+                      switchTab({ id: TabKeys.ALL_CONGREGATIONS, name: 'Praying in Tongues', data: { speaksInTonguesOnly: true } });
+                      onClose();
+                    }}
+                  />
+
+                  {/* New in ministry mode: Water Baptized */}
+                  <NavigationItem
+                    icon={<CheckIcon className="w-4 h-4" />}
+                    label="Water Baptized"
+                    isActive={
+                      currentTab.id === TabKeys.ALL_CONGREGATIONS &&
+                      (currentTab.data as any)?.baptizedOnly === true
+                    }
+                    badge={baptizedCount > 0 ? baptizedCount : undefined}
+                    onClick={() => {
+                      switchTab({ id: TabKeys.ALL_CONGREGATIONS, name: 'Water Baptized', data: { baptizedOnly: true } });
+                      onClose();
+                    }}
+                  />
                   <NavigationItem
                     icon={<CogIcon className="w-4 h-4" />}
                     label="Ministry Sync Test"
