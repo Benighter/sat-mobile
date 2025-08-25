@@ -2103,6 +2103,67 @@ export const firebaseUtils = {
     } catch (error: any) {
       throw new Error(`Failed to import church data: ${error.message}`);
     }
+  },
+
+  // Permanently purge all data for the current church (irreversible)
+  // Returns a map of collection => deletedCount (or -1 if that collection failed)
+  purgeChurchData: async (): Promise<Record<string, number>> => {
+    try {
+      if (!currentChurchId) {
+        throw new Error('No church context available');
+      }
+
+      const deleteAllInCollection = async (collectionPath: string): Promise<number> => {
+        const colRef = collection(db, collectionPath);
+        const snap = await getDocs(colRef);
+        let deleted = 0;
+        const CHUNK = 450; // keep under 500 writes/commit
+        for (let i = 0; i < snap.docs.length; i += CHUNK) {
+          const batch = writeBatch(db);
+          const chunk = snap.docs.slice(i, i + CHUNK);
+          chunk.forEach((d) => batch.delete(d.ref));
+          await batch.commit();
+          deleted += chunk.length;
+        }
+        return deleted;
+      };
+
+      // Known subcollections used by this app under churches/{currentChurchId}
+      const collectionsToPurge = [
+        'members',
+        'bacentas',
+        'attendance',
+        'newBelievers',
+        'confirmations',
+        'sundayConfirmations', // legacy name, if present
+        'guests',
+        'memberDeletionRequests',
+        'outreachBacentas',
+        'outreachMembers',
+        'prayers',
+        'meetings',
+        'tithes',
+        'ministryExclusions',
+        'ministryMemberOverrides',
+        'notifications',
+        'notificationStats'
+      ];
+
+      const results: Record<string, number> = {};
+      for (const name of collectionsToPurge) {
+        const path = `churches/${currentChurchId}/${name}`;
+        try {
+          results[name] = await deleteAllInCollection(path);
+        } catch (err: any) {
+          console.warn(`Failed to purge collection ${name}:`, err?.message || err);
+          results[name] = -1;
+        }
+      }
+
+      return results;
+    } catch (error: any) {
+      throw new Error(`Failed to purge church data: ${error.message}`);
+    }
   }
 };
 

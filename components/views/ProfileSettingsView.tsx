@@ -26,7 +26,8 @@ import {
   RefreshIcon,
   BellIcon,
   CakeIcon,
-  ArrowLeftIcon
+  ArrowLeftIcon,
+  XMarkIcon
 } from '../icons';
 import { collection, doc, getDocs, query, Timestamp, updateDoc, where } from 'firebase/firestore';
 import { db } from '../../firebase.config';
@@ -831,6 +832,7 @@ interface ConstituenciesListProps {
 }
 
 const ConstituenciesList: React.FC<ConstituenciesListProps> = ({ links, isImpersonating, currentChurchId, onSwitch }) => {
+  const { showToast, refreshAccessibleChurchLinks, switchBackToOwnChurch } = useAppContext();
   // Pagination only (search/filters removed per request)
   const [page, setPage] = useState(1);
   const pageSize = 12;
@@ -929,6 +931,30 @@ const ConstituenciesList: React.FC<ConstituenciesListProps> = ({ links, isImpers
                     className="h-10 px-4 rounded-xl bg-white border border-gray-300 text-gray-800 hover:bg-gray-50"
                   >
                     View Only
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      try {
+                        const { crossTenantService } = await import('../../services/crossTenantService');
+                        await crossTenantService.revokeAccess(link.id);
+                        if (isImpersonating && link.ownerChurchId === currentChurchId) {
+                          try { await switchBackToOwnChurch(); } catch {}
+                        }
+                        try { await refreshAccessibleChurchLinks?.(); } catch {}
+                        showToast('success', 'Access revoked', 'This constituency has been removed from your list');
+                      } catch (err:any) {
+                        console.warn('Revoke access failed', err);
+                        showToast('error', 'Failed to revoke access', err.message || String(err));
+                      }
+                    }}
+                    className="h-10 px-3 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 flex items-center gap-1"
+                    title="Remove this external constituency from my list"
+                  >
+                    <XMarkIcon className="w-4 h-4" />
+                    <span className="hidden sm:inline">Revoke</span>
                   </Button>
                 </div>
               </div>

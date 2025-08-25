@@ -361,6 +361,7 @@ export interface AdminInvite {
   respondedAt?: string;
   revokedAt?: string; // When leader access was revoked
   accessChurchId?: string; // Church ID that the leader should have access to
+  handledAs?: 'cross-tenant-link'; // When accepted without role change, provide cross-tenant access instead
 }
 
 // Cross-tenant (admin-to-admin) access sharing

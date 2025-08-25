@@ -22,7 +22,7 @@ interface AdminInviteScreenProps {
 }
 
 const AdminInviteScreen: React.FC<AdminInviteScreenProps> = ({ isOpen, onClose }) => {
-  const { userProfile, showToast } = useAppContext();
+  const { userProfile, showToast, refreshAccessibleChurchLinks, isImpersonating, impersonatedAdminId, switchBackToOwnChurch } = useAppContext();
   const [invites, setInvites] = useState<AdminInvite[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [searchEmail, setSearchEmail] = useState('');
@@ -171,6 +171,14 @@ const AdminInviteScreen: React.FC<AdminInviteScreenProps> = ({ isOpen, onClose }
   // removeLeaderAccess expects (adminUid, leaderUserId)
   await inviteService.removeLeaderAccess(userProfile.uid, invite.invitedUserId);
       showToast('success', `Removed leader access for ${invite.invitedUserName}`);
+      // If we are currently viewing this external constituency, switch back immediately
+      try {
+        if (isImpersonating && impersonatedAdminId === invite.invitedUserId) {
+          await switchBackToOwnChurch();
+        }
+      } catch {}
+      // Refresh accessible links so the constituency disappears from Manage Constituencies
+      try { await refreshAccessibleChurchLinks?.(); } catch {}
       loadInvites();
     } catch (error: any) {
       console.error('Error removing leader:', error);
@@ -457,12 +465,12 @@ const AdminInviteScreen: React.FC<AdminInviteScreenProps> = ({ isOpen, onClose }
                     key={invite.id}
                     className="bg-white/90 backdrop-blur-sm rounded-2xl p-4 shadow-sm border border-white/60 hover:shadow-md transition-all duration-200 w-full relative group"
                   >
-                    {/* Clean X button for rejected invites only - shows on hover */}
-                    {invite.status === 'rejected' && (
+          {/* Clean X button for rejected or revoked (removed) invites only - shows on hover */}
+          {(invite.status === 'rejected' || invite.status === 'revoked') && (
                       <button
                         onClick={() => handleDeleteInvite(invite)}
                         className="absolute top-3 right-3 w-6 h-6 bg-gray-100 hover:bg-red-100 border border-gray-200 hover:border-red-200 rounded-full flex items-center justify-center transition-all duration-200 opacity-0 group-hover:opacity-100"
-                        title="Remove rejected invite"
+            title="Delete entry"
                       >
                         <XMarkIcon className="w-3 h-3 text-gray-400 hover:text-red-500" />
                       </button>

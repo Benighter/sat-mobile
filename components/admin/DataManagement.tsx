@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useAppContext } from '../../contexts/FirebaseAppContext';
 import { storageInfo } from '../../utils/localStorage';
 import { hasAdminPrivileges } from '../../utils/permissionUtils';
+import { firebaseUtils } from '../../services/firebaseService';
 import Button from '../ui/Button';
 import Modal from '../ui/Modal';
 import ExcelExportModal from '../modals/data/ExcelExportModal';
@@ -33,8 +34,19 @@ const DataManagement: React.FC<DataManagementProps> = ({ isOpen, onClose }) => {
       totalAttendance: attendanceRecords.length
     }, () => {
       try {
-        storageInfo.clearAll();
-        window.location.reload(); // Reload to reset the app state
+        // First purge Firestore data for this church
+        firebaseUtils.purgeChurchData()
+          .then(() => {
+            // Clear any local/session storage caches
+            storageInfo.clearAll();
+            showToast('success', 'All data cleared', 'Your church data has been permanently deleted.');
+            // Reload to reset the app state to first-time user UX
+            window.location.reload();
+          })
+          .catch((err) => {
+            console.error('Failed to purge church data:', err);
+            showToast('error', 'Failed to clear data', err?.message || 'Please try again.');
+          });
       } catch (error) {
         console.error('Failed to clear data:', error);
         showToast('error', 'Failed to clear data', 'Please try again.');

@@ -362,6 +362,35 @@ export const inviteService = {
         throw new Error('No accepted invite found for this leader');
       }
 
+      const inviteDoc = inviteSnapshot.docs[0];
+      const inviteData = inviteDoc.data() as any;
+
+      // If the invite was handled as a cross-tenant access link, revoke the link(s) instead of changing roles
+      if (inviteData?.handledAs === 'cross-tenant-link') {
+        // Revoke any active cross-tenant links between this admin (viewer) and the target owner (leaderUserId)
+        const linksQuery = query(
+          collection(db, 'crossTenantAccessLinks'),
+          where('viewerUid', '==', adminUid),
+          where('ownerUid', '==', leaderUserId)
+        );
+        const linksSnap = await getDocs(linksQuery);
+        const nowIso = new Date().toISOString();
+        await Promise.all(
+          linksSnap.docs
+            .filter(d => !(d.data() as any)?.revoked)
+            .map(d => updateDoc(doc(db, 'crossTenantAccessLinks', d.id), { revoked: true, revokedAt: nowIso }))
+        );
+
+        // Mark the invite as revoked
+        await updateDoc(doc(db, 'adminInvites', inviteDoc.id), {
+          status: 'revoked',
+          revokedAt: nowIso
+        });
+
+        return { success: true, message: 'Access to external constituency has been revoked.' };
+      }
+
+      // Default flow: user was converted to leader under admin's church — revert role and clear access
       // Get the leader's user document
       const userDocRef = doc(db, 'users', leaderUserId);
       const userDoc = await getDoc(userDocRef);
@@ -372,26 +401,20 @@ export const inviteService = {
 
       const userData = userDoc.data() as User;
 
-      // Revert user back to admin role and remove church access
       await updateDoc(userDocRef, {
         role: 'admin',
         churchId: leaderUserId, // Reset to their own church ID (their user ID)
-        isInvitedAdminLeader: false, // Clear invited admin leader status
-        invitedByAdminId: null, // Clear the inviting admin reference
+        isInvitedAdminLeader: false,
+        invitedByAdminId: null,
         lastUpdated: new Date().toISOString()
       });
 
-      // Mark the invite as revoked
-      const inviteDoc = inviteSnapshot.docs[0];
       await updateDoc(doc(db, 'adminInvites', inviteDoc.id), {
         status: 'revoked',
         revokedAt: new Date().toISOString()
       });
 
-      return {
-        success: true,
-        message: `${userData.displayName || userData.firstName} has been removed as a leader and reverted to admin role.`
-      };
+      return { success: true, message: `${userData.displayName || userData.firstName} has been removed as a leader and reverted to admin role.` };
     } catch (error: any) {
       throw new Error(`Failed to remove leader access: ${error.message}`);
     }
