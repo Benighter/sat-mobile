@@ -112,7 +112,7 @@ const StatCard: React.FC<StatCardProps> = memo(({ title, value, icon, descriptio
 
 
 const DashboardView: React.FC = memo(() => {
-  const { members, attendanceRecords, newBelievers, displayedSundays, displayedDate, sundayConfirmations, guests, switchTab, user, userProfile, currentChurchId, allOutreachMembers, bacentas, prayerRecords, meetingRecords, isMinistryContext, titheRecords, activeMinistryName } = useAppContext(); // Use displayedSundays
+  const { members, attendanceRecords, newBelievers, displayedSundays, displayedDate, sundayConfirmations, guests, switchTab, user, userProfile, currentChurchId, allOutreachMembers, bacentas, prayerRecords, meetingRecords, isMinistryContext, titheRecords, bussingRecords, activeMinistryName } = useAppContext(); // Use displayedSundays
 
   const activeMembers = useMemo(() => {
     const filtered = members.filter(m => !m.frozen);
@@ -362,6 +362,13 @@ const DashboardView: React.FC = memo(() => {
     return titheRecords.reduce((acc, r) => acc + (r.paid && activeIds.has(r.memberId) ? 1 : 0), 0);
   }, [titheRecords, members]);
 
+  // Bussing card counts: paid vs total (active members) for the selected month
+  const paidBussingCount = useMemo(() => {
+    if (!bussingRecords?.length || !members?.length) return 0;
+    const activeIds = new Set(members.filter(m => !m.frozen).map(m => m.id));
+    return bussingRecords.reduce((acc, r) => acc + (r.paid && activeIds.has(r.memberId) ? 1 : 0), 0);
+  }, [bussingRecords, members]);
+
   // Personal card rearranging (excluding Total Members)
   type CardId = 'sundayHeadCounts' | 'confirmations' | 'attendanceRate' | 'weeklyAttendance' | 'outreach' | 'bacentaMeetings' | 'prayerOverall' | 'tithe';
   const baseDefaultOrder: CardId[] = [
@@ -487,12 +494,12 @@ const DashboardView: React.FC = memo(() => {
         return (
           <StatCard
             key={id}
-            title="Tithe"
+            title="Tithe & Bussing"
             value={`${paidTithesCount}/${activeMembers}`}
             icon={<CurrencyDollarIcon className="w-full h-full" />}
             accentColor="emerald"
-            description={`For ${monthName}`}
-            onClick={() => !rearrangeMode && switchTab({ id: 'all_members', name: 'Tithe', data: { isTithe: true } })}
+            description={`For ${monthName} • Bussing ${paidBussingCount}/${activeMembers}`}
+            onClick={() => !rearrangeMode && switchTab({ id: 'all_members', name: 'Tithe & Bussing', data: { isTithe: true } })}
           />
         );
       }

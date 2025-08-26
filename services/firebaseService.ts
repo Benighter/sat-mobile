@@ -30,7 +30,7 @@ import {
   fetchSignInMethodsForEmail
 } from 'firebase/auth';
 import { db, auth } from '../firebase.config';
-import { Member, Bacenta, AttendanceRecord, NewBeliever, SundayConfirmation, Guest, MemberDeletionRequest, DeletionRequestStatus, OutreachBacenta, OutreachMember, PrayerRecord, MeetingRecord, TitheRecord } from '../types';
+import { Member, Bacenta, AttendanceRecord, NewBeliever, SundayConfirmation, Guest, MemberDeletionRequest, DeletionRequestStatus, OutreachBacenta, OutreachMember, PrayerRecord, MeetingRecord, TitheRecord, BussingRecord } from '../types';
 
 // Types for Firebase operations
 export interface FirebaseUser {
@@ -2298,6 +2298,47 @@ export const titheFirebaseService = {
     const qT = query(ref, where('month', '==', yyyymm));
     return onSnapshot(qT, (snap) => {
       const items = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) })) as TitheRecord[];
+      callback(items);
+    });
+  }
+};
+
+// Bussing Service (parallel to Tithes)
+export const bussingFirebaseService = {
+  // Get all bussing payments for a month
+  getAllByMonth: async (yyyymm: string): Promise<BussingRecord[]> => {
+    try {
+      const ref = collection(db, getChurchCollectionPath('bussing'));
+      const qT = query(ref, where('month', '==', yyyymm));
+      const snap = await getDocs(qT);
+      return snap.docs.map(d => ({ id: d.id, ...(d.data() as any) })) as BussingRecord[];
+    } catch (error: any) {
+      throw new Error(`Failed to fetch bussing for ${yyyymm}: ${error.message}`);
+    }
+  },
+  // Add or update bussing record (by member + month)
+  addOrUpdate: async (record: Omit<BussingRecord, 'id' | 'recordedAt' | 'recordedBy' | 'lastUpdated'>): Promise<void> => {
+    try {
+      const ref = collection(db, getChurchCollectionPath('bussing'));
+      const id = `${record.memberId}_${record.month}`;
+      const docRef = doc(ref, id);
+      await setDoc(docRef, {
+        ...record,
+        id,
+        recordedAt: Timestamp.now().toDate().toISOString(),
+        recordedBy: currentUser?.uid || 'unknown',
+        lastUpdated: new Date().toISOString()
+      }, { merge: true });
+    } catch (error: any) {
+      throw new Error(`Failed to save bussing: ${error.message}`);
+    }
+  },
+  // Listen for a month
+  onSnapshotByMonth: (yyyymm: string, callback: (records: BussingRecord[]) => void): Unsubscribe => {
+    const ref = collection(db, getChurchCollectionPath('bussing'));
+    const qT = query(ref, where('month', '==', yyyymm));
+    return onSnapshot(qT, (snap) => {
+      const items = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) })) as BussingRecord[];
       callback(items);
     });
   }

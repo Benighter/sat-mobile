@@ -82,6 +82,18 @@ export interface TitheRecord {
   lastUpdated?: string; // ISO timestamp
 }
 
+// Bussing tracking types (mirrors TitheRecord)
+export interface BussingRecord {
+  id: string; // memberId_YYYY-MM
+  memberId: string;
+  month: string; // YYYY-MM
+  paid: boolean;
+  amount: number; // in ZAR
+  recordedAt?: string; // ISO timestamp
+  recordedBy?: string; // User ID who recorded
+  lastUpdated?: string; // ISO timestamp
+}
+
 // Prayer tracking types
 export type PrayerStatus = 'Prayed' | 'Missed';
 

@@ -37,7 +37,9 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
     isMinistryContext,
     transferMemberToConstituencyHandler,
   titheRecords,
+  bussingRecords,
   markTitheHandler,
+  markBussingHandler,
   // Global month navigation/state from context (unifies month across views)
   displayedDate,
   displayedSundays,
@@ -56,6 +58,9 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
   const [showPaidOnly, setShowPaidOnly] = useState(false);
   // Default to 'paid' so Tithe view shows paid members first
   const [titheSort, setTitheSort] = useState<'none' | 'paid' | 'amount_desc' | 'amount_asc'>('paid');
+  // Bussing-only UI state
+  const [showBussingPaidOnly, setShowBussingPaidOnly] = useState(false);
+  const [bussingSort, setBussingSort] = useState<'none' | 'paid' | 'amount_desc' | 'amount_asc'>('none');
 
   // Tithe context flag (passed from Dashboard Tithe card)
   const isTithe = (currentTab?.data as any)?.isTithe === true;
@@ -68,6 +73,15 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
     }
     return map;
   }, [titheRecords]);
+
+  // Map bussing records by member for quick lookup
+  const bussingByMember = useMemo(() => {
+    const map = new Map<string, { paid: boolean; amount: number; lastUpdated?: string }>();
+    for (const r of bussingRecords || []) {
+      map.set(r.memberId, { paid: !!r.paid, amount: Number(r.amount || 0), lastUpdated: r.lastUpdated });
+    }
+    return map;
+  }, [bussingRecords]);
 
   // Get upcoming Sunday for confirmation
   const upcomingSunday = useMemo(() => getUpcomingSunday(), []);
@@ -135,6 +149,11 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
           const rec = titheByMember.get(member.id);
           if (!rec || !rec.paid) return false;
         }
+        // Bussing: filter paid only if requested
+        if (isTithe && showBussingPaidOnly) {
+          const recB = bussingByMember.get(member.id);
+          if (!recB || !recB.paid) return false;
+        }
         // Filter by bacenta if specified
         if (bacentaFilter && member.bacentaId !== bacentaFilter) {
           return false;
@@ -172,7 +191,7 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
         return true;
       })
       .sort((a, b) => {
-        // Tithe-specific sorting
+        // Tithe-specific sorting (primary)
         if (isTithe && titheSort !== 'none') {
           const ra = titheByMember.get(a.id);
           const rb = titheByMember.get(b.id);
@@ -186,6 +205,20 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
             if (aa !== ab) return titheSort === 'amount_desc' ? ab - aa : aa - ab;
           }
         }
+        // Bussing-specific sorting (secondary)
+        if (isTithe && bussingSort !== 'none') {
+          const ra = bussingByMember.get(a.id);
+          const rb = bussingByMember.get(b.id);
+          if (bussingSort === 'paid') {
+            const pa = ra?.paid ? 1 : 0;
+            const pb = rb?.paid ? 1 : 0;
+            if (pa !== pb) return pb - pa; // paid first
+          } else {
+            const aa = Number(ra?.amount || 0);
+            const ab = Number(rb?.amount || 0);
+            if (aa !== ab) return bussingSort === 'amount_desc' ? ab - aa : aa - ab;
+          }
+        }
 
         // Default sort by role then name
         const rolePriorityA = getRolePriority(a.role);
@@ -193,7 +226,7 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
         if (rolePriorityA !== rolePriorityB) return rolePriorityA - rolePriorityB;
         return (a.lastName || '').localeCompare(b.lastName || '') || a.firstName.localeCompare(b.firstName);
   });
-  }, [members, bacentaFilter, searchTerm, roleFilter, isTithe, showPaidOnly, titheSort, titheByMember]);
+  }, [members, bacentaFilter, searchTerm, roleFilter, isTithe, showPaidOnly, showBussingPaidOnly, titheSort, bussingSort, titheByMember, bussingByMember]);
 
   // Apply frozen visibility toggle to the filtered list
   const displayMembers = useMemo(() => {
@@ -386,7 +419,7 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
   // Define scrollable columns (phone, role, born again, attendance dates, remove)
   const scrollableColumns = useMemo(() => {
     // Base scrollable columns (role and born again status now integrated into name column)
-    const baseScrollableColumns = isTithe
+  const baseScrollableColumns = isTithe
       ? [
           {
             key: 'tithe_paid',
@@ -454,6 +487,72 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
                     className="w-28 px-2 py-1 border border-gray-300 rounded-md text-sm text-gray-900"
                     placeholder="0.00"
                     title={(rec?.lastUpdated ? `Last updated: ${new Date(rec.lastUpdated).toLocaleString()}` : 'Enter tithe amount')}
+                  />
+                </div>
+              );
+            }
+          },
+          // Bussing columns
+          {
+            key: 'bussing_paid',
+            header: 'Bussing',
+            width: '90px',
+            align: 'center' as const,
+            render: (member: Member) => {
+              const rec = bussingByMember.get(member.id);
+              const checked = !!rec?.paid;
+              const amount = Number(rec?.amount || 0);
+              return (
+                <div className="flex justify-center">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 text-emerald-600"
+                    checked={checked}
+                    onChange={(e) => {
+                      const nextPaid = e.target.checked;
+                      markBussingHandler(member.id, nextPaid, amount);
+                    }}
+                    title={(checked ? 'Mark bussing as not paid' : 'Mark bussing as paid')}
+                  />
+                </div>
+              );
+            }
+          },
+          {
+            key: 'bussing_amount',
+            header: 'Bussing (ZAR)',
+            width: '150px',
+            align: 'center' as const,
+            render: (member: Member) => {
+              const rec = bussingByMember.get(member.id);
+              const value = rec ? String(rec.amount ?? 0) : '';
+              return (
+                <div className="flex justify-center">
+                  <input
+                    key={`bussing_amount_${member.id}_${rec?.amount ?? 0}`}
+                    type="text"
+                    inputMode="decimal"
+                    defaultValue={value ? formatCurrency(Number(value)) : ''}
+                    onFocus={(e) => {
+                      const raw = (rec?.amount ?? 0).toString();
+                      e.currentTarget.value = raw === '0' ? '' : raw;
+                      e.currentTarget.select();
+                    }}
+                    onKeyDown={(e) => {
+                      const allowed = '0123456789.';
+                      if (e.key.length === 1 && !allowed.includes(e.key)) {
+                        e.preventDefault();
+                      }
+                    }}
+                    onBlur={(e) => {
+                      const amt = Number(e.currentTarget.value.replace(/[^0-9.]/g, '') || 0);
+                      const paid = amt > 0 ? true : (bussingByMember.get(member.id)?.paid || false);
+                      markBussingHandler(member.id, paid, amt);
+                      e.currentTarget.value = amt ? formatCurrency(amt) : '';
+                    }}
+                    className="w-32 px-2 py-1 border border-gray-300 rounded-md text-sm text-gray-900"
+                    placeholder="0.00"
+                    title={(rec?.lastUpdated ? `Last updated: ${new Date(rec.lastUpdated).toLocaleString()}` : 'Enter bussing amount')}
                   />
                 </div>
               );
@@ -582,13 +681,13 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
     const cols = [...baseScrollableColumns, ...attendanceColumns];
     if (!isTithe) cols.push(actionsColumn);
     return cols;
-  }, [currentMonthSundays, attendanceRecords, sundayConfirmations, deleteMemberHandler, getAttendanceStatus, getConfirmationStatus, handleAttendanceToggle, upcomingSunday, markConfirmationHandler, isTithe, titheByMember, markTitheHandler]);
+  }, [currentMonthSundays, attendanceRecords, sundayConfirmations, deleteMemberHandler, getAttendanceStatus, getConfirmationStatus, handleAttendanceToggle, upcomingSunday, markConfirmationHandler, isTithe, titheByMember, bussingByMember, markTitheHandler, markBussingHandler]);
 
   // Get displayed month name
   const currentMonthName = getMonthName(displayedDate.getMonth());
   const currentYear = displayedDate.getFullYear();
 
-  // Total tithe for displayed members (current month only)
+  // Totals for displayed members (current month only)
   const totalTithe = useMemo(() => {
     if (!isTithe) return 0;
     return displayMembers.reduce((sum, m) => sum + (titheByMember.get(m.id)?.amount || 0), 0);
@@ -598,6 +697,16 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
     if (!isTithe) return 0;
     return displayMembers.filter(m => titheByMember.get(m.id)?.paid).length;
   }, [displayMembers, titheByMember, isTithe]);
+
+  const totalBussing = useMemo(() => {
+    if (!isTithe) return 0;
+    return displayMembers.reduce((sum, m) => sum + (bussingByMember.get(m.id)?.amount || 0), 0);
+  }, [displayMembers, bussingByMember, isTithe]);
+
+  const bussingPaidCount = useMemo(() => {
+    if (!isTithe) return 0;
+    return displayMembers.filter(m => bussingByMember.get(m.id)?.paid).length;
+  }, [displayMembers, bussingByMember, isTithe]);
 
   const formatCurrency = (n: number) => {
     try {
@@ -684,10 +793,15 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
           </div>
 
           {isTithe && (
-            <div className="text-center text-sm text-gray-800 font-semibold mb-2">
-              Total Tithe: {formatCurrency(totalTithe)}
-              <div className="text-xs text-gray-600 font-normal mt-1">Paid: {paidCount} / {activeCount}</div>
-              {/* Tithe editing is allowed for any month */}
+            <div className="text-center text-sm text-gray-800 font-semibold mb-2 space-y-1">
+              <div>
+                Total Tithe: {formatCurrency(totalTithe)}
+                <div className="text-xs text-gray-600 font-normal mt-1">Paid: {paidCount} / {activeCount}</div>
+              </div>
+              <div>
+                Total Bussing: {formatCurrency(totalBussing)}
+                <div className="text-xs text-gray-600 font-normal mt-1">Paid: {bussingPaidCount} / {activeCount}</div>
+              </div>
             </div>
           )}
 
@@ -770,7 +884,7 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
                 <span className="text-sm text-gray-700">Show Frozen</span>
               </label>
             </div>
-            {/* Tithe-only: Paid Only toggle and Sort */}
+            {/* Tithe-only: Paid Only toggle and Sort; plus Bussing filters/sort */}
             {isTithe && (
               <>
                 <div className="w-full sm:w-auto flex items-center justify-center">
@@ -794,6 +908,29 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
                     <option value="paid">Sort: Paid first</option>
                     <option value="amount_desc">Sort: Amount (High → Low)</option>
                     <option value="amount_asc">Sort: Amount (Low → High)</option>
+                  </select>
+                </div>
+                <div className="w-full sm:w-auto flex items-center justify-center">
+                  <label className="inline-flex items-center space-x-2 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg shadow-sm cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      className="form-checkbox h-4 w-4 text-emerald-600"
+                      checked={showBussingPaidOnly}
+                      onChange={(e) => setShowBussingPaidOnly(e.target.checked)}
+                    />
+                    <span className="text-sm text-gray-700">Show Bussing Paid Only</span>
+                  </label>
+                </div>
+                <div className="w-full sm:w-56">
+                  <select
+                    value={bussingSort}
+                    onChange={(e) => setBussingSort(e.target.value as any)}
+                    className="w-full px-3 py-3 sm:py-2 border border-gray-300 dark:border-dark-600 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent transition-colors text-base sm:text-sm bg-white dark:bg-dark-700 text-gray-900 dark:text-dark-100 text-center cursor-pointer"
+                  >
+                    <option value="none">Bussing sort: Default</option>
+                    <option value="paid">Bussing sort: Paid first</option>
+                    <option value="amount_desc">Bussing sort: Amount (High → Low)</option>
+                    <option value="amount_asc">Bussing sort: Amount (Low → High)</option>
                   </select>
                 </div>
               </>
