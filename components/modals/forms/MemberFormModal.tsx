@@ -45,6 +45,7 @@ const MemberFormModal: React.FC<MemberFormModalProps> = ({ isOpen, onClose, memb
     birthday: '', // Optional birthday field
     ministry: isMinistryContext ? (activeMinistryName || '') : '',
     isNativeMinistryMember: isMinistryContext, // Mark as native if added in ministry mode
+    ministryPosition: ''
   };
   const [formData, setFormData] = useState(initialFormData);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -66,13 +67,14 @@ const MemberFormModal: React.FC<MemberFormModalProps> = ({ isOpen, onClose, memb
         linkedBacentaIds: member.linkedBacentaIds || [],
         role: member.role || 'Member', // Default to Member if role is not set (for backward compatibility)
         birthday: member.birthday || '', // Include birthday field
-        ministry: member.ministry || '',
+  ministry: member.ministry || '',
+  ministryPosition: member.ministryPosition || '',
         isNativeMinistryMember: member.isNativeMinistryMember || false,
       });
     } else {
       // For new members, default to current bacenta if we're in one
       const defaultBacentaId = isMinistryContext ? '' : (currentBacentaId || (bacentas.length > 0 ? bacentas[0].id : ''));
-      setFormData({
+  setFormData({
         ...initialFormData,
         bacentaId: defaultBacentaId,
         linkedBacentaIds: [],
@@ -83,10 +85,9 @@ const MemberFormModal: React.FC<MemberFormModalProps> = ({ isOpen, onClose, memb
   }, [isOpen, member, bacentas, currentBacentaId, isMinistryContext, activeMinistryName]);
 
   // Dancing Stars role label mapping (UI-only). Underlying values remain MemberRole.
-  const isDancingStars = useMemo(() => {
-    const name = (activeMinistryName || '').trim().toLowerCase();
-    return isMinistryContext && name === 'dancing stars';
-  }, [isMinistryContext, activeMinistryName]);
+  const ministryKey = useMemo(() => (activeMinistryName || '').trim().toLowerCase(), [activeMinistryName]);
+  const isDancingStars = useMemo(() => isMinistryContext && ministryKey === 'dancing stars', [isMinistryContext, ministryKey]);
+  const isUshers = useMemo(() => isMinistryContext && ministryKey === 'ushers', [isMinistryContext, ministryKey]);
 
   // Set of bacenta IDs that already have a primary leader (a leader whose main bacentaId matches)
   const primaryLedBacentaIds = useMemo(() => {
@@ -135,6 +136,11 @@ const MemberFormModal: React.FC<MemberFormModalProps> = ({ isOpen, onClose, memb
         const { checked } = e.target as HTMLInputElement;
         setFormData(prev => ({ ...prev, [name]: checked }));
     } else {
+        if (name === 'role' && isUshers) {
+          // Value is encoded as "<Role>|<Position>"
+          const [baseRole, position] = (value || '').split('|');
+          return setFormData(prev => ({ ...prev, role: (baseRole as MemberRole) || 'Member', ministryPosition: position || '' }));
+        }
         setFormData(prev => ({ ...prev, [name]: value }));
     }
   };
@@ -494,25 +500,44 @@ const MemberFormModal: React.FC<MemberFormModalProps> = ({ isOpen, onClose, memb
                   </label>
                   <select
                     name="role"
-                    value={formData.role}
+                    value={isUshers ? `${formData.role}|${formData.ministryPosition || (formData.role === 'Bacenta Leader' ? 'Ministry Head' : formData.role === 'Fellowship Leader' ? 'Ministry Leader' : 'Assistant')}` : formData.role}
                     onChange={handleChange}
                     className={`w-full px-4 py-3 border ${errors.role ? 'border-red-500' : 'border-gray-300'} rounded-lg shadow-sm focus:outline-none focus:ring-2 ${errors.role ? 'focus:ring-red-500' : 'focus:ring-blue-500'} focus:border-transparent transition-colors h-12`}
                   >
-                    {(
-                      isDancingStars
-                        ? [
-                            { value: 'Bacenta Leader' as MemberRole, label: 'Ministry head' },
-                            { value: 'Fellowship Leader' as MemberRole, label: 'Ministry leader' },
-                            { value: 'Member' as MemberRole, label: 'Assistances' },
-                          ]
-                        : [
-                            { value: 'Member' as MemberRole, label: 'Member' },
-                            { value: 'Fellowship Leader' as MemberRole, label: 'Fellowship Leader' },
-                            { value: 'Bacenta Leader' as MemberRole, label: 'Bacenta Leader' },
-                          ]
-                    ).map(opt => (
-                      <option key={opt.value} value={opt.value}>{opt.label}</option>
-                    ))}
+                    {(() => {
+                      if (isUshers) {
+                        // Ushers exclusive roles mapping
+                        const ushersOptions = [
+                          { value: 'Bacenta Leader|Ministry Head', label: 'Ministry Head' },
+                          { value: 'Fellowship Leader|Ministry Leader', label: 'Ministry Leader' },
+                          { value: 'Member|Assistant', label: 'Assistant' },
+                          { value: 'Member|Usher at the door', label: 'Usher at the door' },
+                          { value: 'Member|Altar Call Usher', label: 'Altar Call Usher' },
+                          { value: 'Member|Sunday Management', label: 'Sunday Management' },
+                        ];
+                        return ushersOptions.map(opt => (
+                          <option key={`${opt.value}-${opt.label}`} value={opt.value}>{opt.label}</option>
+                        ));
+                      }
+                      if (isDancingStars) {
+                        const dsOptions = [
+                          { value: 'Bacenta Leader' as MemberRole, label: 'Ministry head' },
+                          { value: 'Fellowship Leader' as MemberRole, label: 'Ministry leader' },
+                          { value: 'Member' as MemberRole, label: 'Assistances' },
+                        ];
+                        return dsOptions.map(opt => (
+                          <option key={`${opt.value}-${opt.label}`} value={opt.value}>{opt.label}</option>
+                        ));
+                      }
+                      const defaultOptions = [
+                        { value: 'Member' as MemberRole, label: 'Member' },
+                        { value: 'Fellowship Leader' as MemberRole, label: 'Fellowship Leader' },
+                        { value: 'Bacenta Leader' as MemberRole, label: 'Bacenta Leader' },
+                      ];
+                      return defaultOptions.map(opt => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                      ));
+                    })()}
                   </select>
                   {errors.role && <p className="mt-1 text-xs text-red-600">{errors.role}</p>}
                 </div>

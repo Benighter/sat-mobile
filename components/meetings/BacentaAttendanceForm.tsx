@@ -35,10 +35,10 @@ const BacentaAttendanceForm: React.FC<BacentaAttendanceFormProps> = ({
   // New lightweight attendance/finance state
   const [firstTimerNames, setFirstTimerNames] = useState<string[]>(existingRecord?.guests || []);
   const [firstTimerInput, setFirstTimerInput] = useState('');
-  const [cashOffering, setCashOffering] = useState<number>(existingRecord?.cashOffering ?? 0);
-  const [onlineOffering, setOnlineOffering] = useState<number>(existingRecord?.onlineOffering ?? 0);
-  const [converts, setConverts] = useState<number>(existingRecord?.converts ?? 0);
-  const [testimonies, setTestimonies] = useState<number>(existingRecord?.testimonies ?? 0);
+  const [cashOffering, setCashOffering] = useState<number>(Number(existingRecord?.cashOffering ?? 0));
+  const [onlineOffering, setOnlineOffering] = useState<number>(Number(existingRecord?.onlineOffering ?? 0));
+  const [converts, setConverts] = useState<number>(Number(existingRecord?.converts ?? 0));
+  const [testimonies, setTestimonies] = useState<number>(Number(existingRecord?.testimonies ?? 0));
 
   // Track present members (manually ticked) – keep this near other state to avoid use-before-declare
   const [presentMemberIds, setPresentMemberIds] = useState<string[]>(existingRecord?.presentMemberIds || []);
@@ -183,10 +183,10 @@ const BacentaAttendanceForm: React.FC<BacentaAttendanceFormProps> = ({
       setBacentaLeaderName(existingRecord.bacentaLeaderName || '');
   setFirstTimerNames(existingRecord.guests || []);
   setFirstTimerInput('');
-  setCashOffering(existingRecord.cashOffering ?? 0);
-  setOnlineOffering(existingRecord.onlineOffering ?? 0);
-  setConverts(existingRecord.converts ?? 0);
-  setTestimonies(existingRecord.testimonies ?? 0);
+  setCashOffering(Number(existingRecord.cashOffering ?? 0));
+  setOnlineOffering(Number(existingRecord.onlineOffering ?? 0));
+  setConverts(Number(existingRecord.converts ?? 0));
+  setTestimonies(Number(existingRecord.testimonies ?? 0));
   setPresentMemberIds(existingRecord.presentMemberIds || []);
       setIsViewMode(true);
     } else {
@@ -280,7 +280,7 @@ const BacentaAttendanceForm: React.FC<BacentaAttendanceFormProps> = ({
     setPresentMemberIds(prev => (prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]));
   };
 
-  const totalOffering = (cashOffering || 0) + (onlineOffering || 0);
+  const totalOffering = Number(cashOffering || 0) + Number(onlineOffering || 0);
   const totalCount = presentMemberIds.length + firstTimerNames.length;
   const attendeeMembers = useMemo(() => {
     return bacentaMembers

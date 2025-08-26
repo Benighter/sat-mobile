@@ -426,11 +426,15 @@ const BacentaMeetingsView: React.FC = () => {
               const existingMeetingRecord: any = getMeetingRecord(bacenta.id, currentDate);
               const hasExistingRecord = !!existingMeetingRecord;
               const totals = hasExistingRecord ? {
-                attendance: (existingMeetingRecord.presentMemberIds?.length || 0) + (existingMeetingRecord.firstTimers || 0),
-                offering: (existingMeetingRecord.totalOffering ?? ((existingMeetingRecord.cashOffering || 0) + (existingMeetingRecord.onlineOffering || 0))),
-                converts: existingMeetingRecord.converts || 0,
-                firstTimers: existingMeetingRecord.firstTimers || 0,
-                testimonies: existingMeetingRecord.testimonies || 0,
+                attendance: (Number(existingMeetingRecord.presentMemberIds?.length || 0)) + Number(existingMeetingRecord.firstTimers ?? existingMeetingRecord.guests?.length ?? 0),
+                offering: Number(
+                  existingMeetingRecord.totalOffering ?? (
+                    Number(existingMeetingRecord.cashOffering || 0) + Number(existingMeetingRecord.onlineOffering || 0)
+                  )
+                ),
+                converts: Number(existingMeetingRecord.converts || 0),
+                firstTimers: Number(existingMeetingRecord.firstTimers ?? existingMeetingRecord.guests?.length ?? 0),
+                testimonies: Number(existingMeetingRecord.testimonies || 0),
               } : null;
 
               return (

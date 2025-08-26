@@ -16,6 +16,8 @@ export interface Member {
   baptized?: boolean;
   /** Optional ministry assignment for the member */
   ministry?: string;
+  /** Optional ministry-specific position/title (e.g., Ushers: Usher at the door) */
+  ministryPosition?: string;
   /** If true, this member is temporarily frozen (excluded from counts/absentees) */
   frozen?: boolean;
   /** If true, this member originated from an Outreach flow (born again from outreach) */

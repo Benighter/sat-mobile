@@ -338,15 +338,15 @@ export const setupMinistryDataListeners = (
 
     // Subscribe to exclusions in the ministry church (if available)
     if (currentChurchId) {
-      const unsubExclusions = ministryExclusionsService.onSnapshot((items) => {
+  const unsubExclusions = ministryExclusionsService.onSnapshot((items) => {
         excludedKeys = new Set(items.map(i => `${i.sourceChurchId}_${i.memberId}`));
         // Re-filter current members with new exclusions and push update
         currentData.members = currentData.members.filter(m => !excludedKeys.has(`${(m as any).sourceChurchId || currentChurchId}_${m.id}`));
         updateAggregatedData();
-      });
+  }, currentChurchId);
       unsubscribers.push(unsubExclusions);
 
-      const unsubOverrides = ministryMemberOverridesService.onSnapshot((items) => {
+  const unsubOverrides = ministryMemberOverridesService.onSnapshot((items) => {
         overridesMap = new Map(items.map(i => [`${i.sourceChurchId}_${i.memberId}`, { frozen: i.frozen }]));
         // Apply overrides to current members
         currentData.members = currentData.members.map(m => {
@@ -355,7 +355,7 @@ export const setupMinistryDataListeners = (
           return ov ? { ...m, ...ov } : m;
         });
         updateAggregatedData();
-      });
+  }, currentChurchId);
       unsubscribers.push(unsubOverrides);
     }
 

@@ -498,6 +498,14 @@ const getChurchCollectionPath = (collectionName: string): string => {
   return `churches/${currentChurchId}/${collectionName}`;
 };
 
+// Variant that allows explicitly scoping to a provided churchId (avoids relying on global context)
+const getChurchCollectionPathScoped = (collectionName: string, churchIdOverride?: string | null): string => {
+  if (churchIdOverride) {
+    return `churches/${churchIdOverride}/${collectionName}`;
+  }
+  return getChurchCollectionPath(collectionName);
+};
+
 // Expose helpers for ministry context and active context switching
 export const contextService = {
   registerOrAttachMinistryAccount: async (
@@ -627,8 +635,11 @@ export const ministryExclusionsService = {
   },
 
   // Listen to exclusions
-  onSnapshot: (callback: (items: Array<{ id: string; memberId: string; sourceChurchId: string }>) => void): Unsubscribe => {
-    const ref = collection(db, getChurchCollectionPath('ministryExclusions'));
+  onSnapshot: (
+    callback: (items: Array<{ id: string; memberId: string; sourceChurchId: string }>) => void,
+    churchIdOverride?: string
+  ): Unsubscribe => {
+    const ref = collection(db, getChurchCollectionPathScoped('ministryExclusions', churchIdOverride));
     return onSnapshot(ref, (snap) => {
       const items = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
       callback(items);
@@ -688,9 +699,10 @@ export const ministryMemberOverridesService = {
 
   // Listen to overrides
   onSnapshot: (
-    callback: (items: Array<{ id: string; memberId: string; sourceChurchId: string; frozen?: boolean }>) => void
+    callback: (items: Array<{ id: string; memberId: string; sourceChurchId: string; frozen?: boolean }>) => void,
+    churchIdOverride?: string
   ): Unsubscribe => {
-    const ref = collection(db, getChurchCollectionPath('ministryMemberOverrides'));
+    const ref = collection(db, getChurchCollectionPathScoped('ministryMemberOverrides', churchIdOverride));
     return onSnapshot(ref, (snap) => {
       const items = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
       callback(items);

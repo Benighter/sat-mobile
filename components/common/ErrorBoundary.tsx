@@ -1,6 +1,10 @@
 import React from 'react';
 
-type Props = { children: React.ReactNode };
+type Props = {
+  children: React.ReactNode;
+  // When this value changes, the boundary will reset its error state
+  resetKey?: any;
+};
 type State = { hasError: boolean; error?: any };
 
 export default class ErrorBoundary extends React.Component<Props, State> {
@@ -26,6 +30,18 @@ export default class ErrorBoundary extends React.Component<Props, State> {
     } catch {}
   };
 
+  handleRetry = () => {
+    // Allow attempting to re-render without a full reload
+    this.setState({ hasError: false, error: undefined });
+  };
+
+  componentDidUpdate(prevProps: Props) {
+    // If the reset key changes, clear the error state so children can render again
+    if (this.props.resetKey !== prevProps.resetKey && this.state.hasError) {
+      this.setState({ hasError: false, error: undefined });
+    }
+  }
+
   render() {
     if (this.state.hasError) {
       return (
@@ -38,9 +54,14 @@ export default class ErrorBoundary extends React.Component<Props, State> {
               <h3 className="font-semibold text-red-800">Something went wrong</h3>
             </div>
             <p className="text-sm text-gray-700 mb-4">The app hit an unexpected error. You can try reloading the app. If the problem persists, please contact support.</p>
-            <button onClick={this.handleReload} className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-semibold shadow">
-              Reload App
-            </button>
+            <div className="flex gap-2">
+              <button onClick={this.handleRetry} className="px-4 py-2 rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-800 text-sm font-semibold shadow">
+                Try again
+              </button>
+              <button onClick={this.handleReload} className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-semibold shadow">
+                Reload App
+              </button>
+            </div>
           </div>
         </div>
       );

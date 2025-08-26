@@ -807,11 +807,14 @@ const AppContent: React.FC = memo(() => {
 
 // Wrapper component to access context for AuthScreen
 const AuthenticatedApp: React.FC = () => {
-  const { showToast } = useAppContext();
+  const { showToast, currentTab, userProfile } = useAppContext();
 
   return (
     <AuthScreen showToast={showToast}>
-      <AppContent />
+      {/* Local ErrorBoundary allows recovering from transient view errors without reloading the whole shell */}
+      <ErrorBoundary resetKey={`${currentTab.id}-${userProfile?.uid || 'nouser'}`}>
+        <AppContent />
+      </ErrorBoundary>
     </AuthScreen>
   );
 };

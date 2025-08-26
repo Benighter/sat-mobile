@@ -871,7 +871,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     try {
       setIsLoading(true);
       // In ministry context, auto-tag to selected ministry and allow no bacenta
-      const payload: Omit<Member, 'id' | 'createdDate' | 'lastUpdated'> = isMinistryContext
+  const payload: Omit<Member, 'id' | 'createdDate' | 'lastUpdated'> = isMinistryContext
         ? {
             ...memberData,
             ministry: memberData.ministry || activeMinistryName || memberData.ministry,
