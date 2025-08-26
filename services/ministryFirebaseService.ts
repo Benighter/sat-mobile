@@ -6,6 +6,8 @@
  */
 
 import { Member, AttendanceRecord, NewBeliever, SundayConfirmation } from '../types';
+import { collection, doc, getDocs, query, updateDoc, where } from 'firebase/firestore';
+import { db } from '../firebase.config';
 import { 
   membersFirebaseService, 
   attendanceFirebaseService, 
@@ -359,6 +361,37 @@ export const ministryNewBelieversService = {
       console.error('Failed to update new believer with sync:', error);
       throw error;
     }
+  }
+};
+
+/**
+ * Utility: Ensure newly added members in the current ministry church are marked as native
+ * so that ministry data listeners include them immediately.
+ */
+export const ensureNativeFlagsForMinistryChurch = async (ministryName: string): Promise<void> => {
+  try {
+    const { firebaseUtils } = await import('./firebaseService');
+    const currentChurchId = firebaseUtils.getCurrentChurchId();
+    if (!currentChurchId) return;
+
+    // Find members in the ministry church with the selected ministry that are missing the native flag
+    const ref = collection(db, `churches/${currentChurchId}/members`);
+    const q = query(ref, where('ministry', '==', ministryName));
+    const snap = await getDocs(q);
+
+    const updates: Promise<any>[] = [];
+    for (const d of snap.docs) {
+      const data = d.data() as any;
+      if ((data.isActive !== false) && data.ministry === ministryName && data.isNativeMinistryMember !== true) {
+        updates.push(updateDoc(doc(db, `churches/${currentChurchId}/members/${d.id}`), { isNativeMinistryMember: true }));
+      }
+    }
+    if (updates.length) {
+      await Promise.allSettled(updates);
+    }
+  } catch (e) {
+    // Best-effort; ignore errors
+    console.warn('[ensureNativeFlagsForMinistryChurch] failed:', (e as any)?.message || String(e));
   }
 };
 

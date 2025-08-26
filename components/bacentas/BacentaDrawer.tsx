@@ -13,7 +13,6 @@ import {
   ChartBarIcon,
   CakeIcon,
   BuildingOfficeIcon,
-  CogIcon,
   CalendarIcon
 } from '../icons';
 import { PrayerIcon, CheckIcon, PeopleIcon } from '../icons';
@@ -283,15 +282,7 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
                       onClose();
                     }}
                   />
-                  <NavigationItem
-                    icon={<CogIcon className="w-4 h-4" />}
-                    label="Ministry Sync Test"
-                    isActive={currentTab.id === TabKeys.MINISTRY_SYNC_TEST}
-                    onClick={() => {
-                      switchTab({ id: TabKeys.MINISTRY_SYNC_TEST, name: 'Ministry Sync Test' });
-                      onClose();
-                    }}
-                  />
+                  {/* Ministry Sync Test removed */}
                 </>
               ) : (
                 <>

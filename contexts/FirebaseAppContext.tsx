@@ -765,6 +765,14 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
             guests: ministryData.guests.length,
             sourceChurches: ministryData.sourceChurches.length
           });
+
+          // One-off repair: ensure native flags for members in ministry church so they appear in listeners
+          try {
+            const { ensureNativeFlagsForMinistryChurch } = await import('../services/ministryFirebaseService');
+            await ensureNativeFlagsForMinistryChurch(activeMinistryName!);
+          } catch (e) {
+            console.warn('[InitData] Failed to run native flag repair:', (e as any)?.message || String(e));
+          }
         } catch (error) {
           console.error('❌ [Ministry Mode] Failed to fetch cross-church data:', error);
           // Fallback to normal data fetching
@@ -913,10 +921,25 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
                 bacentaId: memberData.bacentaId || ''
               }
             : memberData;
-          const memberId = await memberOperationsWithNotifications.add(payload);
+          // Use ministry service for bidirectional sync and native flag in ministry mode
+          const memberId = isMinistryContext
+            ? await ministryMembersService.add(payload, userProfile)
+            : await memberOperationsWithNotifications.add(payload);
           successful.push({ ...memberData, id: memberId, createdDate: new Date().toISOString(), lastUpdated: new Date().toISOString() });
         } catch (error: any) {
           failed.push({ data: memberData, error: error.message });
+        }
+      }
+
+      // In ministry context, ensure any newly added ministry members in the ministry church
+      // are correctly marked as native to keep them included by listeners
+      if (isMinistryContext && (activeMinistryName || '').trim() !== '') {
+        try {
+          const { ensureNativeFlagsForMinistryChurch } = await import('../services/ministryFirebaseService');
+          await ensureNativeFlagsForMinistryChurch(activeMinistryName!);
+        } catch (e) {
+          // Non-fatal – continue; members will still exist, they just might not appear until next repair
+          console.warn('[BulkAdd] Failed to run native flag repair:', (e as any)?.message || String(e));
         }
       }
 

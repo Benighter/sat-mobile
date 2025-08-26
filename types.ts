@@ -230,7 +230,6 @@ export enum TabKeys {
   COPY_ABSENTEES = 'copy_absentees',
   BACENTA_OUTREACH = 'bacenta_outreach',
   MINISTRIES = 'ministries',
-  MINISTRY_SYNC_TEST = 'ministry_sync_test',
   BIDIRECTIONAL_SYNC_TEST = 'bidirectional_sync_test',
 }
 
