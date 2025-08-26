@@ -3006,6 +3006,8 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     // Ensure church doc exists (avoid queries against non-existent path causing confusion)
   // (Optional) could create church doc if missing; skipped since helper not available
     if (isImpersonating && impersonatedAdminId === adminUserId && currentChurchId === churchId) return;
+  // Reset any external permission (from cross-tenant link) when doing direct impersonation
+  setCurrentExternalPermission(null);
     originalChurchContextRef.current = currentChurchId; // store original church
     originalUserProfileRef.current = userProfile; // store original profile
     setIsImpersonating(true);
@@ -3037,6 +3039,10 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     setMembers([]); setBacentas([]); setAttendanceRecords([]); setNewBelievers([]); setSundayConfirmations([]); setGuests([]); setMemberDeletionRequests([]);
     // Trigger manual fetch (listeners will also attach via effect on currentChurchId)
     try { await fetchInitialData(); } catch (e) { console.warn('Impersonation data load failed', e); }
+    // Eager fallback: immediately run a raw fetch once to populate cards even if rules delay/block listeners
+    try { await forceImpersonatedDataReloadRef.current?.(); } catch (e) {
+      console.warn('Immediate impersonation fallback fetch failed', e);
+    }
     // Schedule fallback raw fetch if nothing loaded (e.g. due to auth rules) after short delay
     setTimeout(() => {
       if (isImpersonating && firebaseUtils.getCurrentChurchId() === churchId && members.length === 0 && bacentas.length === 0) {
@@ -3080,14 +3086,41 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     try {
       setIsLoading(true);
       console.log('[Impersonation Raw Fetch] Fetching all collections for church', cid);
+      let permissionDenied = false;
       const col = async (name: string) => {
-        try { const snap = await getDocs(collection(db, 'churches', cid, name)); return snap.docs.map(d => ({ id: d.id, ...d.data() })); } catch (e) { console.warn('[Impersonation Raw Fetch] Failed', name, e); return []; }
+        try {
+          const snap = await getDocs(collection(db, 'churches', cid, name));
+          return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        } catch (e: any) {
+          console.warn('[Impersonation Raw Fetch] Failed', name, e);
+          if (e?.code === 'permission-denied') permissionDenied = true;
+          return [];
+        }
       };
-      const [m,b,a,nb,cfg,gu] = await Promise.all([
-        col('members'), col('bacentas'), col('attendance'), col('newBelievers'), col('sundayConfirmations'), col('guests')
+  const [m,b,a,nb,confA,confLegacy,gu] = await Promise.all([
+        col('members'),
+        col('bacentas'),
+        col('attendance'),
+        col('newBelievers'),
+        // Primary confirmations collection name
+        col('confirmations'),
+        // Legacy confirmations collection name (merge if present)
+        col('sundayConfirmations'),
+        col('guests')
       ]);
-      setMembers(m as any); setBacentas(b as any); setAttendanceRecords(a as any); setNewBelievers(nb as any); setSundayConfirmations(cfg as any); setGuests(gu as any);
-      console.log('[Impersonation Raw Fetch] Counts', { members: m.length, bacentas: b.length, attendance: a.length, newBelievers: nb.length, confirmations: cfg.length, guests: gu.length });
+      const confirmations = [...confA, ...confLegacy];
+  // Filter out soft-deleted members: include if isActive !== false and not explicitly isDeleted
+  const activeMembers = (m as any[]).filter((mm: any) => mm && mm.isActive !== false && mm.isDeleted !== true);
+  setMembers(activeMembers as any);
+      setBacentas(b as any);
+      setAttendanceRecords(a as any);
+      setNewBelievers(nb as any);
+      setSundayConfirmations(confirmations as any);
+      setGuests(gu as any);
+  console.log('[Impersonation Raw Fetch] Counts', { membersRaw: m.length, membersActive: activeMembers.length, bacentas: b.length, attendance: a.length, newBelievers: nb.length, confirmations: confirmations.length, guests: gu.length });
+      if (permissionDenied) {
+        showToast('error', 'Access blocked', 'Your account lacks read access to this constituency. Check Firestore rules or use an access link with permission.');
+      }
       if (m.length === 0 && b.length === 0) {
         showToast('warning', 'No Data Found', 'Target admin church has no records or access is blocked');
       } else {

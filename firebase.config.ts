@@ -1,7 +1,7 @@
 // Firebase Configuration for SAT Mobile
 import { initializeApp } from 'firebase/app';
 import { initializeFirestore, connectFirestoreEmulator, setLogLevel } from 'firebase/firestore';
-import { getAuth, connectAuthEmulator } from 'firebase/auth';
+import { getAuth, connectAuthEmulator, setPersistence, browserLocalPersistence } from 'firebase/auth';
 import { getMessaging, isSupported } from 'firebase/messaging';
 
 // Ministry variant removed – single SAT project only
@@ -48,6 +48,18 @@ setLogLevel(process.env.NODE_ENV === 'development' ? 'error' : 'error');
 
 // Initialize Firebase Authentication
 export const auth = getAuth(app);
+
+// Ensure auth persists across page reloads (explicitly set to LOCAL)
+try {
+  // setPersistence returns a Promise; fire-and-forget here
+  setPersistence(auth, browserLocalPersistence).then(() => {
+    console.log('✅ Firebase Auth persistence set to LOCAL');
+  }).catch((err) => {
+    console.warn('⚠️ Failed to set Firebase Auth persistence', err?.message || err);
+  });
+} catch (e) {
+  console.warn('⚠️ setPersistence not applied:', (e as any)?.message || e);
+}
 
 // Initialize Firebase Messaging (only if supported)
 let messaging: any = null;

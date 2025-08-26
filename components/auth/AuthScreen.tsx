@@ -74,6 +74,16 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ children, showToast }) =
   }, [loading, showToast]);
 
   useEffect(() => {
+    // Restore Super Admin prototype session (if previously set)
+    try {
+      const persisted = localStorage.getItem('superadmin_session');
+      if (persisted === 'true') {
+        setIsSuperAdmin(true);
+        setLoading(false);
+        return; // Skip Firebase listener until user signs out
+      }
+    } catch {}
+
     // Listen to authentication state changes
     const unsubscribe = authService.onAuthStateChanged((user) => {
       // Select data context based on toggle
@@ -98,6 +108,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ children, showToast }) =
       // Hardcoded Super Admin credentials (temporary prototype)
       if (email.trim().toLowerCase() === 'admin@gmail.com' && password === 'Admin@123') {
         setIsSuperAdmin(true);
+  try { localStorage.setItem('superadmin_session', 'true'); } catch {}
         showToast('success', 'Super Admin', 'Signed in as Super Admin');
         return; // Skip firebase auth
       }
@@ -173,6 +184,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ children, showToast }) =
 
   const handleSuperAdminSignOut = () => {
     setIsSuperAdmin(false);
+  try { localStorage.removeItem('superadmin_session'); } catch {}
     setAuthMode('login');
     showToast('success', 'Signed Out', 'Super Admin session ended');
   };

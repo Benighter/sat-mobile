@@ -110,6 +110,38 @@ const AppContent: React.FC = memo(() => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Ensure main content clears the fixed header (and impersonation banner) height
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const getHeader = () => document.querySelector('header.desktop-nav') as HTMLElement | null;
+
+    const updateNavbarHeight = () => {
+      const headerEl = getHeader();
+      if (!headerEl) return;
+      const h = Math.ceil(headerEl.getBoundingClientRect().height);
+      document.documentElement.style.setProperty('--navbar-height', `${h}px`);
+    };
+
+    // Initial and delayed measurements to catch layout shifts
+    updateNavbarHeight();
+    const t = setTimeout(updateNavbarHeight, 100);
+
+    // React to header size changes
+    const headerEl = getHeader();
+    const ro = (window as any).ResizeObserver ? new ResizeObserver(updateNavbarHeight) : null;
+    if (headerEl && ro) ro.observe(headerEl);
+    window.addEventListener('resize', updateNavbarHeight);
+    window.addEventListener('orientationchange', updateNavbarHeight);
+
+    return () => {
+      clearTimeout(t);
+      if (headerEl && ro) ro.unobserve(headerEl);
+      if (ro) ro.disconnect();
+      window.removeEventListener('resize', updateNavbarHeight);
+      window.removeEventListener('orientationchange', updateNavbarHeight);
+    };
+  }, [isImpersonating]);
+
   // Watchdog: if loading persists beyond 5 seconds, show restart hint once
   useEffect(() => {
     let timer: any;
@@ -532,9 +564,11 @@ const AppContent: React.FC = memo(() => {
 
       {/* Scrollable Main Content */}
       <main
-        className="flex-1 pt-12 xs:pt-14 sm:pt-16 md:pt-18 desktop:pt-20 desktop-lg:pt-24 pb-4 sm:pb-6 desktop:pb-8 relative z-10"
+        className="flex-1 pb-4 sm:pb-6 desktop:pb-8 relative z-10"
         style={{
-          minHeight: 'calc(100vh - 3rem)', // Ensure minimum height for proper scrolling
+          // Pad top by the actual measured header height (includes impersonation banner)
+          paddingTop: 'calc(var(--navbar-height, 64px) + 8px)',
+          minHeight: 'calc(100vh - 3rem)',
         }}
       >
         <GestureWrapper>
@@ -704,11 +738,12 @@ const AppContent: React.FC = memo(() => {
       />
 
       {/* Toast Notifications - Centered at Top */}
-      {toasts.map((toast) => (
+    {toasts.map((toast) => (
         <div
           key={toast.id}
-          className="toast-container fixed top-4 sm:top-6 left-1/2 transform -translate-x-1/2 z-50 max-w-xs sm:max-w-sm w-full px-4"
+      className="toast-container fixed left-1/2 transform -translate-x-1/2 z-50 max-w-xs sm:max-w-sm w-full px-4"
           onClick={() => removeToast(toast.id)}
+      style={{ top: 'calc(var(--navbar-height, 64px) + 0.5rem)' }}
         >
           <div className={`
             ${toast.type === 'success' ? 'bg-green-600 border-green-500' :

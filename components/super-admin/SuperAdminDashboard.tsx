@@ -35,8 +35,7 @@ const StatusBadge: React.FC<{ active: boolean }> = ({ active }) => (
 );
 
 export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSignOut }) => {
-  const { /* impersonation removed */ } = useAppContext();
-  const isImpersonating = false; // feature disabled
+  const { isImpersonating, startImpersonation } = useAppContext();
   const [previewAdmin, setPreviewAdmin] = useState<AdminUserRecord | null>(null);
   const [admins, setAdmins] = useState<AdminUserRecord[]>([]);
   // Leaders state and view toggle
@@ -799,48 +798,135 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
                 <h3 className="font-semibold text-gray-700 dark:text-dark-100 text-sm">Constituencies in this Campus</h3>
                 <span className="px-2 py-0.5 rounded-md bg-gray-100 dark:bg-dark-700 text-[11px] font-semibold text-gray-600 dark:text-dark-300">{campusAdmins.length}</span>
               </div>
-              <div className="overflow-x-auto max-h-[50vh] custom-scrollbar">
+              <div className="overflow-x-auto max-h-[60vh] custom-scrollbar">
                 <table className="min-w-full text-[13px]">
                   <thead>
                     <tr className="text-left text-[11px] uppercase tracking-wider text-gray-500 dark:text-dark-300 bg-gray-50/70 dark:bg-dark-700/70">
                       <th className="px-4 py-3 font-semibold w-10">#</th>
+                      <th className="px-5 py-3 font-semibold">Admin</th>
                       <th className="px-5 py-3 font-semibold">Constituency</th>
                       <th className="px-5 py-3 font-semibold">Members</th>
+                      <th className="px-5 py-3 font-semibold">Status</th>
                       <th className="px-5 py-3 font-semibold">Actions</th>
+                      <th className="px-5 py-3 font-semibold">Campus</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100/60 dark:divide-dark-600/40">
-          {campusAdmins.map((a, idx) => (
-                      <tr
-                        key={a.id}
-                        className="group hover:bg-indigo-50/60 dark:hover:bg-indigo-900/20 cursor-pointer"
-            onClick={(e) => { if ((e.target as HTMLElement).closest('select,button')) return; if (a.churchId) setPreviewAdmin(a); }}
-            title="View admin church snapshot"
-                      >
-                        <td className="px-4 py-3 text-right text-gray-500 dark:text-dark-300">{idx + 1}</td>
-                        <td className="px-5 py-3">
-                          <div className="flex flex-col leading-tight">
-                            <span className="font-medium text-gray-800 dark:text-dark-100 truncate max-w-[180px]" title={a.churchName}>{a.churchName || '—'}</span>
-                            {a.churchId && <span className="text-[10px] text-gray-400 dark:text-dark-400 font-mono">{a.churchId}</span>}
-                          </div>
-                        </td>
-                        <td className="px-5 py-3">{typeof a.memberCount === 'number' ? a.memberCount : '—'}</td>
-                        <td className="px-5 py-3">
-                          <div className="flex items-center gap-2">
-                            <select
-                              value={(a as any).campusId || ''}
-                              onChange={e => assignCampus(a, e.target.value || null)}
-                              className="px-2 py-1 rounded-md bg-white/70 dark:bg-dark-700/70 border border-gray-300 dark:border-dark-600 text-[11px] focus:outline-none focus:ring-2 focus:ring-indigo-400"
-                            >
-                              <option value="">Unassign</option>
-                              {campuses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                            </select>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
+                    {campusAdmins.map((a, idx) => {
+                      return (
+                        <tr
+                          key={a.id}
+                          className="group hover:bg-indigo-50/60 dark:hover:bg-indigo-900/20 cursor-pointer"
+                          onClick={(e) => { if ((e.target as HTMLElement).closest('select,button,input')) return; if (a.churchId) startImpersonation((a as any).uid || a.id, a.churchId!); }}
+                          title={a.churchId ? 'Enter app (impersonate)' : ''}
+                        >
+                          <td className="px-4 py-3 text-right text-gray-500 dark:text-dark-300">{idx + 1}</td>
+                          <td className="px-5 py-3 whitespace-nowrap min-w-[180px]">
+                            <div className="flex flex-col leading-tight">
+                              <span className="font-medium text-gray-800 dark:text-dark-100 truncate max-w-[200px]">{a.displayName || a.firstName || '—'}</span>
+                              <span className="text-[11px] text-gray-500 dark:text-dark-300 truncate max-w-[220px]">{a.email || '—'}</span>
+                            </div>
+                          </td>
+                          <td className="px-5 py-3 min-w-[220px] text-gray-700 dark:text-dark-300">
+                            {editingConstituencyId === a.id ? (
+                              <div className="flex flex-col gap-1">
+                                <input
+                                  autoFocus
+                                  value={constituencyInput}
+                                  onChange={e => setConstituencyInput(e.target.value)}
+                                  placeholder="Constituency name"
+                                  className="px-2 py-1 rounded-md bg-white/70 dark:bg-dark-700/70 border border-gray-300 dark:border-dark-600 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                                />
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    onClick={() => saveConstituency(a)}
+                                    disabled={savingConstituencyId === a.id}
+                                    className="px-2.5 py-1 rounded-md text-[11px] font-semibold bg-green-600 hover:bg-green-700 text-white disabled:opacity-50"
+                                  >{savingConstituencyId === a.id ? 'Saving...' : 'Save'}</button>
+                                  <button
+                                    onClick={cancelEditConstituency}
+                                    className="px-2.5 py-1 rounded-md text-[11px] font-semibold bg-gray-300 dark:bg-dark-600 hover:bg-gray-400 dark:hover:bg-dark-500 text-gray-800 dark:text-dark-50"
+                                  >Cancel</button>
+                                </div>
+                              </div>
+                            ) : (
+                              a.churchName ? (
+                                <div className="flex flex-col leading-tight">
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-medium text-gray-800 dark:text-dark-100 truncate max-w-[180px] underline decoration-dotted" title={a.churchName}>{a.churchName}</span>
+                                    <button
+                                      onClick={() => startEditConstituency(a)}
+                                      className="text-[10px] px-1.5 py-0.5 rounded-md bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-200 dark:hover:bg-indigo-800 transition-colors"
+                                      title="Rename constituency"
+                                    >Rename</button>
+                                  </div>
+                                  {a.churchId && <span className="text-[10px] text-gray-400 dark:text-dark-400 font-mono">{a.churchId}</span>}
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => startEditConstituency(a)}
+                                  className="px-2.5 py-1 rounded-md text-[11px] font-semibold bg-indigo-600 hover:bg-indigo-700 text-white"
+                                >Set Name</button>
+                              )
+                            )}
+                          </td>
+                          <td className="px-5 py-3 whitespace-nowrap text-gray-700 dark:text-dark-300">
+                            {a.churchId ? (
+                              a.memberCount != null ? (
+                                a.memberCount >= 0 ? (
+                                  <span className="font-semibold" title="Members in this constituency">{a.memberCount}</span>
+                                ) : (
+                                  <span className="text-[11px] text-orange-500" title="Member count unavailable (permissions)">!</span>
+                                )
+                              ) : memberCountsLoading ? (
+                                <span className="text-[11px] text-gray-400">…</span>
+                              ) : (
+                                <span className="text-[11px] text-gray-400">—</span>
+                              )
+                            ) : <span className="text-[11px] text-gray-400">—</span>}
+                          </td>
+                          <td className="px-5 py-3"><StatusBadge active={a.isActive !== false} /></td>
+                          <td className="px-5 py-3 whitespace-nowrap">
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => toggleActiveStatus(a)}
+                                disabled={updatingIds[a.id]}
+                                className={`px-2.5 py-1 rounded-md text-[11px] font-semibold shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed
+                                  ${a.isActive !== false
+                                    ? 'bg-yellow-500 hover:bg-yellow-600 text-white'
+                                    : 'bg-green-600 hover:bg-green-700 text-white'}`}
+                                title={a.isActive !== false ? 'Deactivate admin' : 'Activate admin'}
+                              >
+                                {updatingIds[a.id] ? '...' : (a.isActive !== false ? 'Deactivate' : 'Activate')}
+                              </button>
+                              <button
+                                onClick={() => softDeleteAdmin(a)}
+                                disabled={updatingIds[a.id]}
+                                className="px-2.5 py-1 rounded-md text-[11px] font-semibold bg-red-600 hover:bg-red-700 text-white shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                                title="Soft delete admin"
+                              >
+                                {updatingIds[a.id] ? '...' : 'Delete'}
+                              </button>
+                            </div>
+                          </td>
+                          <td className="px-5 py-3">
+                            <div className="flex items-center gap-2">
+                              <select
+                                value={(a as any).campusId || ''}
+                                onChange={e => assignCampus(a, e.target.value || null)}
+                                className="px-2 py-1 rounded-md bg-white/70 dark:bg-dark-700/70 border border-gray-300 dark:border-dark-600 text-[11px] focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                              >
+                                <option value="">Unassign</option>
+                                {campuses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                              </select>
+                              {assigningRef.current[a.id] && <span className="text-[10px] text-indigo-500">Updating…</span>}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
                     {campusAdmins.length === 0 && (
-                      <tr><td colSpan={4} className="px-5 py-8 text-center text-gray-500 dark:text-dark-300 text-sm">No constituencies yet.</td></tr>
+                      <tr><td colSpan={7} className="px-5 py-8 text-center text-gray-500 dark:text-dark-300 text-sm">No constituencies yet.</td></tr>
                     )}
                   </tbody>
                 </table>
@@ -942,8 +1028,8 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
                     <tr
                       key={a.id}
                       className="group hover:bg-indigo-50/60 dark:hover:bg-indigo-900/20 transition-colors cursor-pointer"
-                      onClick={(e) => { if ((e.target as HTMLElement).closest('select,button,input')) return; if (a.churchId) setPreviewAdmin(a); }}
-                      title={a.churchId ? 'View admin church snapshot' : ''}
+                      onClick={(e) => { if ((e.target as HTMLElement).closest('select,button,input')) return; if (a.churchId) startImpersonation((a as any).uid || a.id, a.churchId!); }}
+                      title={a.churchId ? 'Enter app (impersonate)' : ''}
                     >
                       <td className="px-4 py-3 text-gray-500 dark:text-dark-300 text-right tabular-nums select-none">{idx + 1}</td>
                       <td className="px-5 py-3 font-medium text-gray-800 dark:text-dark-50 whitespace-nowrap">
@@ -980,8 +1066,8 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
                                 <button
                                   onClick={() => startEditConstituency(a)}
                                   className="text-[10px] px-1.5 py-0.5 rounded-md bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-200 dark:hover:bg-indigo-800 transition-colors"
-                                  title="Edit constituency"
-                                >Edit</button>
+                                  title="Rename constituency"
+                                >Rename</button>
                               </div>
                               {a.churchId && <span className="text-[10px] text-gray-400 dark:text-dark-400 font-mono">{a.churchId}</span>}
                             </div>
@@ -989,7 +1075,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
                             <button
                               onClick={() => startEditConstituency(a)}
                               className="px-2.5 py-1 rounded-md text-[11px] font-semibold bg-indigo-600 hover:bg-indigo-700 text-white"
-                            >Assign</button>
+                            >Set Name</button>
                           )
                         )}
                       </td>
