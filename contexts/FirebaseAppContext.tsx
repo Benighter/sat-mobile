@@ -3097,7 +3097,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
           return [];
         }
       };
-  const [m,b,a,nb,confA,confLegacy,gu] = await Promise.all([
+  const [m,b,a,nb,confA,confLegacy,gu,pr,me,ti] = await Promise.all([
         col('members'),
         col('bacentas'),
         col('attendance'),
@@ -3106,7 +3106,11 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
         col('confirmations'),
         // Legacy confirmations collection name (merge if present)
         col('sundayConfirmations'),
-        col('guests')
+        col('guests'),
+        // Additional data for full dashboard parity
+        col('prayers'),
+        col('meetings'),
+        col('tithes')
       ]);
       const confirmations = [...confA, ...confLegacy];
   // Filter out soft-deleted members: include if isActive !== false and not explicitly isDeleted
@@ -3117,7 +3121,16 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
       setNewBelievers(nb as any);
       setSundayConfirmations(confirmations as any);
       setGuests(gu as any);
-  console.log('[Impersonation Raw Fetch] Counts', { membersRaw: m.length, membersActive: activeMembers.length, bacentas: b.length, attendance: a.length, newBelievers: nb.length, confirmations: confirmations.length, guests: gu.length });
+      // Set prayer and meetings directly
+      setPrayerRecords(pr as any);
+      setMeetingRecords(me as any);
+      // Filter tithes to current month to match normal listener behavior
+      try {
+        const month = getCurrentMonth();
+        const tForMonth = (ti as any[]).filter((t: any) => t && t.month === month);
+        setTitheRecords(tForMonth as any);
+      } catch {}
+  console.log('[Impersonation Raw Fetch] Counts', { membersRaw: m.length, membersActive: activeMembers.length, bacentas: b.length, attendance: a.length, newBelievers: nb.length, confirmations: confirmations.length, guests: gu.length, prayers: pr.length, meetings: me.length, tithes: (ti as any[]).length });
       if (permissionDenied) {
         showToast('error', 'Access blocked', 'Your account lacks read access to this constituency. Check Firestore rules or use an access link with permission.');
       }

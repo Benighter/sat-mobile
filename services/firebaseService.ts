@@ -1993,7 +1993,19 @@ export const firebaseUtils = {
   // Debug helper: fetch raw counts from a church's subcollections (no filters)
   debugFetchChurchCollections: async (churchId: string) => {
     const result: any = { churchId };
-    const collNames = ['members', 'bacentas', 'attendance', 'newBelievers', 'sundayConfirmations'];
+    const collNames = [
+      'members',
+      'bacentas',
+      'attendance',
+      'newBelievers',
+      // confirmations (primary) and legacy
+      'confirmations',
+      'sundayConfirmations',
+      'guests',
+      'prayers',
+      'meetings',
+      'tithes'
+    ];
     for (const name of collNames) {
       try {
         const snap = await getDocs(collection(db, `churches/${churchId}/${name}`));
