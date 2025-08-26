@@ -75,11 +75,7 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
   // Use context-provided Sundays for the displayed month
   const currentMonthSundays = useMemo(() => displayedSundays, [displayedSundays]);
 
-  // Lock tithe editing when not on the current (real) month
-  const isCurrentCalendarMonth = useMemo(() => {
-    const now = new Date();
-    return now.getFullYear() === displayedDate.getFullYear() && now.getMonth() === displayedDate.getMonth();
-  }, [displayedDate]);
+  // Tithe editing is allowed for any displayed month
 
   // Month navigation is provided by context
 
@@ -407,12 +403,12 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
                     type="checkbox"
                     className="h-4 w-4 text-emerald-600"
                     checked={checked}
-        disabled={!isCurrentCalendarMonth}
+  disabled={false}
                     onChange={(e) => {
                       const nextPaid = e.target.checked;
                       markTitheHandler(member.id, nextPaid, amount);
                     }}
-        title={!isCurrentCalendarMonth ? 'Past months are locked' : (checked ? 'Mark as not paid' : 'Mark as paid')}
+  title={(checked ? 'Mark as not paid' : 'Mark as paid')}
                   />
                 </div>
               );
@@ -433,7 +429,7 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
                     type="text"
                     inputMode="decimal"
                     defaultValue={value ? formatCurrency(Number(value)) : ''}
-        disabled={!isCurrentCalendarMonth}
+  disabled={false}
                     onFocus={(e) => {
                       // Show raw number on focus
                       const raw = (rec?.amount ?? 0).toString();
@@ -457,7 +453,7 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
                     }}
                     className="w-28 px-2 py-1 border border-gray-300 rounded-md text-sm text-gray-900"
                     placeholder="0.00"
-                    title={!isCurrentCalendarMonth ? 'Past months are locked' : (rec?.lastUpdated ? `Last updated: ${new Date(rec.lastUpdated).toLocaleString()}` : 'Enter tithe amount')}
+                    title={(rec?.lastUpdated ? `Last updated: ${new Date(rec.lastUpdated).toLocaleString()}` : 'Enter tithe amount')}
                   />
                 </div>
               );
@@ -691,9 +687,7 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
             <div className="text-center text-sm text-gray-800 font-semibold mb-2">
               Total Tithe: {formatCurrency(totalTithe)}
               <div className="text-xs text-gray-600 font-normal mt-1">Paid: {paidCount} / {activeCount}</div>
-              {!isCurrentCalendarMonth && (
-                <div className="mt-1 text-[11px] text-gray-500">Past months are view-only. Navigate to the current month to edit.</div>
-              )}
+              {/* Tithe editing is allowed for any month */}
             </div>
           )}
 

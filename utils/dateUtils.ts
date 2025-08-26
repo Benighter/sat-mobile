@@ -231,10 +231,25 @@ export const getCurrentMeetingWeek = (): string => {
 // Rules:
 // - If today is Wednesday -> return today's Wednesday
 // - If today is Thursday -> return today's Thursday
-// - Otherwise -> return the most recent Thursday in the past
+// - If today is Monday or Tuesday -> return the upcoming Wednesday of the current week
+// - Otherwise (Fri, Sat, Sun) -> return the most recent Thursday in the past
 export const getLatestMeetingDay = (): string => {
   const today = new Date();
   const day = today.getDay(); // 0..6 (Sun..Sat)
+
+  // New behaviour: from Monday/Tuesday, reset to this week's upcoming Wednesday
+  if (day === 1) { // Monday
+    const nextWed = new Date(today);
+    nextWed.setDate(today.getDate() + 2);
+    nextWed.setHours(0, 0, 0, 0);
+    return formatDateToYYYYMMDD(nextWed);
+  }
+  if (day === 2) { // Tuesday
+    const nextWed = new Date(today);
+    nextWed.setDate(today.getDate() + 1);
+    nextWed.setHours(0, 0, 0, 0);
+    return formatDateToYYYYMMDD(nextWed);
+  }
 
   if (day === 3) {
     // Wednesday

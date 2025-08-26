@@ -80,7 +80,8 @@ const MeetingDatePicker: React.FC<{
 };
 
 const BacentaMeetingsView: React.FC = () => {
-  const { bacentas, members, meetingRecords, currentTab, showToast } = useAppContext();
+  const { bacentas, members, meetingRecords, currentTab, showToast, userProfile } = useAppContext();
+  const isAdmin = (userProfile?.role === 'admin');
 
   // Initialize with the latest meeting day (Wed/Thu). If it's Fri–Tue, we want last Thursday.
   const [currentDate, setCurrentDate] = useState<string>(() => {
@@ -397,11 +398,13 @@ const BacentaMeetingsView: React.FC = () => {
                   <div className="text-2xl font-extrabold text-emerald-900 mt-1">{weekSoFar.attendance}</div>
                 </div>
 
-                <div className="rounded-xl border border-amber-200 bg-white shadow-sm px-4 py-4 text-center">
-                  <div className="text-xs text-amber-700 uppercase tracking-wider">Offering so far</div>
-                  <div className="text-xl sm:text-2xl font-extrabold text-amber-900 mt-1">R{weekSoFar.offering.toFixed(2)}</div>
-                  <div className="text-[10px] text-amber-700/80 mt-0.5">Online R{weekSoFar.online.toFixed(2)} · Cash R{weekSoFar.cash.toFixed(2)}</div>
-                </div>
+                {isAdmin && (
+                  <div className="rounded-xl border border-amber-200 bg-white shadow-sm px-4 py-4 text-center">
+                    <div className="text-xs text-amber-700 uppercase tracking-wider">Offering so far</div>
+                    <div className="text-xl sm:text-2xl font-extrabold text-amber-900 mt-1">R{weekSoFar.offering.toFixed(2)}</div>
+                    <div className="text-[10px] text-amber-700/80 mt-0.5">Online R{weekSoFar.online.toFixed(2)} · Cash R{weekSoFar.cash.toFixed(2)}</div>
+                  </div>
+                )}
 
                 <div className="rounded-xl border border-indigo-200 bg-white shadow-sm px-4 py-4 text-center">
                   <div className="text-xs text-indigo-700 uppercase tracking-wider">First timers</div>

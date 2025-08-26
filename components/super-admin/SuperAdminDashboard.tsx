@@ -977,12 +977,14 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
   <div className="glass rounded-2xl shadow-xl overflow-hidden border border-gray-200/40 dark:border-dark-600/40">
           <div className="px-5 py-4 flex flex-col gap-3 border-b border-gray-200/40 dark:border-dark-600/40 bg-white/60 dark:bg-dark-800/60 backdrop-blur-sm">
             <div className="flex items-center justify-between">
-              <h2 className="font-semibold text-gray-800 dark:text-white text-lg flex items-center gap-2">
-                <span className="text-indigo-500">▣</span> Admin Accounts / Constituencies
+              <h2 className="font-semibold text-black dark:text-white text-lg flex items-center gap-2">
+                <span className="text-black dark:text-white">▣</span> Admin Accounts / Constituencies
               </h2>
-              <div className="flex items-center gap-3 text-xs font-medium text-gray-500 dark:text-dark-300">
+              <div className="flex items-center gap-3 text-xs font-medium text-gray-600 dark:text-dark-300">
                 <span className="hidden xs:inline">Showing</span>
-                <span className="px-2 py-0.5 rounded-lg bg-gray-100 dark:bg-dark-700 text-gray-700 dark:text-dark-200">{filteredAdmins.length}</span>
+                <span className="px-2 py-0.5 rounded-lg bg-gray-200 text-gray-900 border border-gray-300 dark:bg-dark-700 dark:text-dark-50 dark:border-dark-600 shadow-sm">
+                  {filteredAdmins.length}
+                </span>
               </div>
             </div>
             <div className="flex flex-col sm:flex-row sm:items-center gap-3">

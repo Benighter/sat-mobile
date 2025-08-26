@@ -1795,12 +1795,6 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
   const markTitheHandler = useCallback(async (memberId: string, paid: boolean, amount: number) => {
   if (!ensureCanWrite()) throw new Error('Read-only access');
     try {
-      // Only allow saving for the current calendar month
-      const now = new Date();
-      if (now.getFullYear() !== displayedDate.getFullYear() || now.getMonth() !== displayedDate.getMonth()) {
-        showToast('warning', 'Past month is locked', 'You can only edit the current month. Use arrows to change month to current.');
-        return;
-      }
       const y = displayedDate.getFullYear();
       const m = String(displayedDate.getMonth() + 1).padStart(2, '0');
       const month = `${y}-${m}`;
