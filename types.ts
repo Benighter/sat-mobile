@@ -82,8 +82,8 @@ export interface TitheRecord {
   lastUpdated?: string; // ISO timestamp
 }
 
-// Bussing tracking types (mirrors TitheRecord)
-export interface BussingRecord {
+// Transport tracking types (mirrors TitheRecord)
+export interface TransportRecord {
   id: string; // memberId_YYYY-MM
   memberId: string;
   month: string; // YYYY-MM
@@ -93,6 +93,9 @@ export interface BussingRecord {
   recordedBy?: string; // User ID who recorded
   lastUpdated?: string; // ISO timestamp
 }
+
+// Backward compatibility: BussingRecord now aliases TransportRecord
+export type BussingRecord = TransportRecord;
 
 // Prayer tracking types
 export type PrayerStatus = 'Prayed' | 'Missed';

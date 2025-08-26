@@ -112,7 +112,7 @@ const StatCard: React.FC<StatCardProps> = memo(({ title, value, icon, descriptio
 
 
 const DashboardView: React.FC = memo(() => {
-  const { members, attendanceRecords, newBelievers, displayedSundays, displayedDate, sundayConfirmations, guests, switchTab, user, userProfile, currentChurchId, allOutreachMembers, bacentas, prayerRecords, meetingRecords, isMinistryContext, titheRecords, bussingRecords, activeMinistryName } = useAppContext(); // Use displayedSundays
+  const { members, attendanceRecords, newBelievers, displayedSundays, displayedDate, sundayConfirmations, guests, switchTab, user, userProfile, currentChurchId, allOutreachMembers, bacentas, prayerRecords, meetingRecords, isMinistryContext, titheRecords, transportRecords, activeMinistryName } = useAppContext(); // Use displayedSundays
 
   const activeMembers = useMemo(() => {
     const filtered = members.filter(m => !m.frozen);
@@ -364,10 +364,10 @@ const DashboardView: React.FC = memo(() => {
 
   // Bussing card counts: paid vs total (active members) for the selected month
   const paidBussingCount = useMemo(() => {
-    if (!bussingRecords?.length || !members?.length) return 0;
+    if (!transportRecords?.length || !members?.length) return 0;
     const activeIds = new Set(members.filter(m => !m.frozen).map(m => m.id));
-    return bussingRecords.reduce((acc, r) => acc + (r.paid && activeIds.has(r.memberId) ? 1 : 0), 0);
-  }, [bussingRecords, members]);
+    return transportRecords.reduce((acc, r) => acc + (r.paid && activeIds.has(r.memberId) ? 1 : 0), 0);
+  }, [transportRecords, members]);
 
   // Personal card rearranging (excluding Total Members)
   type CardId = 'sundayHeadCounts' | 'confirmations' | 'attendanceRate' | 'weeklyAttendance' | 'outreach' | 'bacentaMeetings' | 'prayerOverall' | 'tithe';
@@ -494,12 +494,12 @@ const DashboardView: React.FC = memo(() => {
         return (
           <StatCard
             key={id}
-            title="Tithe & Bussing"
+            title="Tithe & Transport"
             value={`${paidTithesCount}/${activeMembers}`}
             icon={<CurrencyDollarIcon className="w-full h-full" />}
             accentColor="emerald"
-            description={`For ${monthName} • Bussing ${paidBussingCount}/${activeMembers}`}
-            onClick={() => !rearrangeMode && switchTab({ id: 'all_members', name: 'Tithe & Bussing', data: { isTithe: true } })}
+            description={`For ${monthName} • Transport ${paidBussingCount}/${activeMembers}`}
+            onClick={() => !rearrangeMode && switchTab({ id: 'all_members', name: 'Tithe & Transport', data: { isTithe: true } })}
           />
         );
       }

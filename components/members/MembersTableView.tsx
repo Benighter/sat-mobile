@@ -37,9 +37,9 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
     isMinistryContext,
     transferMemberToConstituencyHandler,
   titheRecords,
-  bussingRecords,
+  transportRecords,
   markTitheHandler,
-  markBussingHandler,
+  markTransportHandler,
   // Global month navigation/state from context (unifies month across views)
   displayedDate,
   displayedSundays,
@@ -74,14 +74,14 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
     return map;
   }, [titheRecords]);
 
-  // Map bussing records by member for quick lookup
+  // Map transport records by member for quick lookup (backed by transportRecords in context)
   const bussingByMember = useMemo(() => {
     const map = new Map<string, { paid: boolean; amount: number; lastUpdated?: string }>();
-    for (const r of bussingRecords || []) {
+    for (const r of transportRecords || []) {
       map.set(r.memberId, { paid: !!r.paid, amount: Number(r.amount || 0), lastUpdated: r.lastUpdated });
     }
     return map;
-  }, [bussingRecords]);
+  }, [transportRecords]);
 
   // Get upcoming Sunday for confirmation
   const upcomingSunday = useMemo(() => getUpcomingSunday(), []);
@@ -492,10 +492,10 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
               );
             }
           },
-          // Bussing columns
+    // Transport columns
           {
             key: 'bussing_paid',
-            header: 'Bussing',
+      header: 'Transport',
             width: '90px',
             align: 'center' as const,
             render: (member: Member) => {
@@ -510,9 +510,9 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
                     checked={checked}
                     onChange={(e) => {
                       const nextPaid = e.target.checked;
-                      markBussingHandler(member.id, nextPaid, amount);
+                      markTransportHandler(member.id, nextPaid, amount);
                     }}
-                    title={(checked ? 'Mark bussing as not paid' : 'Mark bussing as paid')}
+        title={(checked ? 'Mark transport as not paid' : 'Mark transport as paid')}
                   />
                 </div>
               );
@@ -520,7 +520,7 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
           },
           {
             key: 'bussing_amount',
-            header: 'Bussing (ZAR)',
+      header: 'Transport (ZAR)',
             width: '150px',
             align: 'center' as const,
             render: (member: Member) => {
@@ -547,12 +547,12 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
                     onBlur={(e) => {
                       const amt = Number(e.currentTarget.value.replace(/[^0-9.]/g, '') || 0);
                       const paid = amt > 0 ? true : (bussingByMember.get(member.id)?.paid || false);
-                      markBussingHandler(member.id, paid, amt);
+                      markTransportHandler(member.id, paid, amt);
                       e.currentTarget.value = amt ? formatCurrency(amt) : '';
                     }}
                     className="w-32 px-2 py-1 border border-gray-300 rounded-md text-sm text-gray-900"
                     placeholder="0.00"
-                    title={(rec?.lastUpdated ? `Last updated: ${new Date(rec.lastUpdated).toLocaleString()}` : 'Enter bussing amount')}
+        title={(rec?.lastUpdated ? `Last updated: ${new Date(rec.lastUpdated).toLocaleString()}` : 'Enter transport amount')}
                   />
                 </div>
               );
@@ -681,7 +681,7 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
     const cols = [...baseScrollableColumns, ...attendanceColumns];
     if (!isTithe) cols.push(actionsColumn);
     return cols;
-  }, [currentMonthSundays, attendanceRecords, sundayConfirmations, deleteMemberHandler, getAttendanceStatus, getConfirmationStatus, handleAttendanceToggle, upcomingSunday, markConfirmationHandler, isTithe, titheByMember, bussingByMember, markTitheHandler, markBussingHandler]);
+  }, [currentMonthSundays, attendanceRecords, sundayConfirmations, deleteMemberHandler, getAttendanceStatus, getConfirmationStatus, handleAttendanceToggle, upcomingSunday, markConfirmationHandler, isTithe, titheByMember, bussingByMember, markTitheHandler, markTransportHandler]);
 
   // Get displayed month name
   const currentMonthName = getMonthName(displayedDate.getMonth());
@@ -799,7 +799,7 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
                 <div className="text-xs text-gray-600 font-normal mt-1">Paid: {paidCount} / {activeCount}</div>
               </div>
               <div>
-                Total Bussing: {formatCurrency(totalBussing)}
+                Total Transport: {formatCurrency(totalBussing)}
                 <div className="text-xs text-gray-600 font-normal mt-1">Paid: {bussingPaidCount} / {activeCount}</div>
               </div>
             </div>
@@ -918,7 +918,7 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
                       checked={showBussingPaidOnly}
                       onChange={(e) => setShowBussingPaidOnly(e.target.checked)}
                     />
-                    <span className="text-sm text-gray-700">Show Bussing Paid Only</span>
+                    <span className="text-sm text-gray-700">Show Transport Paid Only</span>
                   </label>
                 </div>
                 <div className="w-full sm:w-56">
@@ -927,10 +927,10 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
                     onChange={(e) => setBussingSort(e.target.value as any)}
                     className="w-full px-3 py-3 sm:py-2 border border-gray-300 dark:border-dark-600 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent transition-colors text-base sm:text-sm bg-white dark:bg-dark-700 text-gray-900 dark:text-dark-100 text-center cursor-pointer"
                   >
-                    <option value="none">Bussing sort: Default</option>
-                    <option value="paid">Bussing sort: Paid first</option>
-                    <option value="amount_desc">Bussing sort: Amount (High → Low)</option>
-                    <option value="amount_asc">Bussing sort: Amount (Low → High)</option>
+                    <option value="none">Transport sort: Default</option>
+                    <option value="paid">Transport sort: Paid first</option>
+                    <option value="amount_desc">Transport sort: Amount (High → Low)</option>
+                    <option value="amount_asc">Transport sort: Amount (Low → High)</option>
                   </select>
                 </div>
               </>

@@ -30,7 +30,7 @@ import {
   fetchSignInMethodsForEmail
 } from 'firebase/auth';
 import { db, auth } from '../firebase.config';
-import { Member, Bacenta, AttendanceRecord, NewBeliever, SundayConfirmation, Guest, MemberDeletionRequest, DeletionRequestStatus, OutreachBacenta, OutreachMember, PrayerRecord, MeetingRecord, TitheRecord, BussingRecord } from '../types';
+import { Member, Bacenta, AttendanceRecord, NewBeliever, SundayConfirmation, Guest, MemberDeletionRequest, DeletionRequestStatus, OutreachBacenta, OutreachMember, PrayerRecord, MeetingRecord, TitheRecord, BussingRecord, TransportRecord } from '../types';
 
 // Types for Firebase operations
 export interface FirebaseUser {
@@ -2303,23 +2303,28 @@ export const titheFirebaseService = {
   }
 };
 
-// Bussing Service (parallel to Tithes)
-export const bussingFirebaseService = {
-  // Get all bussing payments for a month
-  getAllByMonth: async (yyyymm: string): Promise<BussingRecord[]> => {
+// Transport Service (parallel to Tithes) with backward-compat support for legacy 'bussing' collection
+export const transportFirebaseService = {
+  // Get all transport payments for a month (read from 'transport'; fallback to 'bussing')
+  getAllByMonth: async (yyyymm: string): Promise<TransportRecord[]> => {
     try {
-      const ref = collection(db, getChurchCollectionPath('bussing'));
-      const qT = query(ref, where('month', '==', yyyymm));
+      const refTransport = collection(db, getChurchCollectionPath('transport'));
+      const qT = query(refTransport, where('month', '==', yyyymm));
       const snap = await getDocs(qT);
-      return snap.docs.map(d => ({ id: d.id, ...(d.data() as any) })) as BussingRecord[];
+      if (snap.size > 0) return snap.docs.map(d => ({ id: d.id, ...(d.data() as any) })) as TransportRecord[];
+      // Fallback to legacy
+      const refLegacy = collection(db, getChurchCollectionPath('bussing'));
+      const qL = query(refLegacy, where('month', '==', yyyymm));
+      const snapL = await getDocs(qL);
+      return snapL.docs.map(d => ({ id: d.id, ...(d.data() as any) })) as TransportRecord[];
     } catch (error: any) {
-      throw new Error(`Failed to fetch bussing for ${yyyymm}: ${error.message}`);
+      throw new Error(`Failed to fetch transport for ${yyyymm}: ${error.message}`);
     }
   },
-  // Add or update bussing record (by member + month)
-  addOrUpdate: async (record: Omit<BussingRecord, 'id' | 'recordedAt' | 'recordedBy' | 'lastUpdated'>): Promise<void> => {
+  // Add or update transport record (by member + month) into the new 'transport' collection
+  addOrUpdate: async (record: Omit<TransportRecord, 'id' | 'recordedAt' | 'recordedBy' | 'lastUpdated'>): Promise<void> => {
     try {
-      const ref = collection(db, getChurchCollectionPath('bussing'));
+      const ref = collection(db, getChurchCollectionPath('transport'));
       const id = `${record.memberId}_${record.month}`;
       const docRef = doc(ref, id);
       await setDoc(docRef, {
@@ -2330,18 +2335,37 @@ export const bussingFirebaseService = {
         lastUpdated: new Date().toISOString()
       }, { merge: true });
     } catch (error: any) {
-      throw new Error(`Failed to save bussing: ${error.message}`);
+      throw new Error(`Failed to save transport: ${error.message}`);
     }
   },
-  // Listen for a month
-  onSnapshotByMonth: (yyyymm: string, callback: (records: BussingRecord[]) => void): Unsubscribe => {
-    const ref = collection(db, getChurchCollectionPath('bussing'));
+  // Listen for a month (prefer 'transport'; if empty, also attach a one-time legacy fetch)
+  onSnapshotByMonth: (yyyymm: string, callback: (records: TransportRecord[]) => void): Unsubscribe => {
+    const ref = collection(db, getChurchCollectionPath('transport'));
     const qT = query(ref, where('month', '==', yyyymm));
-    return onSnapshot(qT, (snap) => {
-      const items = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) })) as BussingRecord[];
+    const unsub = onSnapshot(qT, async (snap) => {
+      let items = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) })) as TransportRecord[];
+      if (items.length === 0) {
+        // Legacy fallback: single read
+        try {
+          const refLegacy = collection(db, getChurchCollectionPath('bussing'));
+          const qL = query(refLegacy, where('month', '==', yyyymm));
+          const snapL = await getDocs(qL);
+          items = snapL.docs.map(d => ({ id: d.id, ...(d.data() as any) })) as TransportRecord[];
+        } catch {
+          // ignore fallback errors
+        }
+      }
       callback(items);
     });
+    return unsub;
   }
+};
+
+// Backward compatibility export: keep bussingFirebaseService referencing transport service types
+export const bussingFirebaseService = {
+  getAllByMonth: (yyyymm: string) => transportFirebaseService.getAllByMonth(yyyymm),
+  addOrUpdate: (record: Omit<BussingRecord, 'id' | 'recordedAt' | 'recordedBy' | 'lastUpdated'>) => transportFirebaseService.addOrUpdate(record as any),
+  onSnapshotByMonth: (yyyymm: string, callback: (records: BussingRecord[]) => void) => transportFirebaseService.onSnapshotByMonth(yyyymm, callback as any),
 };
 
 // Initialize Firebase services

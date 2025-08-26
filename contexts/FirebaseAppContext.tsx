@@ -2,7 +2,7 @@
 import React, { createContext, useState, useEffect, useCallback, ReactNode, useMemo, useRef } from 'react';
 import { collection, getDocs, onSnapshot, query as fsQuery, where as fsWhere } from 'firebase/firestore';
 import { db } from '../firebase.config';
-import { Member, AttendanceRecord, Bacenta, TabOption, AttendanceStatus, NewBeliever, SundayConfirmation, ConfirmationStatus, Guest, MemberDeletionRequest, OutreachBacenta, OutreachMember, PrayerRecord, PrayerStatus, MeetingRecord, TitheRecord, BussingRecord, CrossTenantAccessLink, CrossTenantPermission } from '../types';
+import { Member, AttendanceRecord, Bacenta, TabOption, AttendanceStatus, NewBeliever, SundayConfirmation, ConfirmationStatus, Guest, MemberDeletionRequest, OutreachBacenta, OutreachMember, PrayerRecord, PrayerStatus, MeetingRecord, TitheRecord, TransportRecord, CrossTenantAccessLink, CrossTenantPermission } from '../types';
 import { FIXED_TABS, DEFAULT_TAB_ID } from '../constants';
 import { sessionStateStorage } from '../utils/localStorage';
 import { getSundaysOfMonth } from '../utils/dateUtils';
@@ -21,7 +21,7 @@ import {
   prayerFirebaseService,
   meetingRecordsFirebaseService,
   titheFirebaseService,
-  bussingFirebaseService,
+  transportFirebaseService,
   FirebaseUser
 } from '../services/firebaseService';
 import { crossTenantService } from '../services/crossTenantService';
@@ -54,7 +54,7 @@ interface AppContextType {
   memberDeletionRequests: MemberDeletionRequest[];
   meetingRecords: MeetingRecord[];
   titheRecords: TitheRecord[];
-  bussingRecords: BussingRecord[];
+  transportRecords: TransportRecord[];
 
   // UI State
   currentTab: TabOption;
@@ -151,8 +151,8 @@ interface AppContextType {
 
   // Tithe Operations
   markTitheHandler: (memberId: string, paid: boolean, amount: number) => Promise<void>;
-  // Bussing Operations
-  markBussingHandler: (memberId: string, paid: boolean, amount: number) => Promise<void>;
+  // Transport Operations
+  markTransportHandler: (memberId: string, paid: boolean, amount: number) => Promise<void>;
 
   // Confirmation Operations
   markConfirmationHandler: (memberId: string, date: string, status: ConfirmationStatus) => Promise<void>;
@@ -245,7 +245,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
   const [memberDeletionRequests, setMemberDeletionRequests] = useState<MemberDeletionRequest[]>([]);
   const [meetingRecords, setMeetingRecords] = useState<MeetingRecord[]>([]);
   const [titheRecords, setTitheRecords] = useState<TitheRecord[]>([]);
-  const [bussingRecords, setBussingRecords] = useState<BussingRecord[]>([]);
+  const [transportRecords, setTransportRecords] = useState<TransportRecord[]>([]);
 
   // UI state
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -672,11 +672,11 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
         });
         unsubscribers.push(unsubTithes);
 
-        // Bussing listener for current month
-        const unsubBussing = bussingFirebaseService.onSnapshotByMonth(month, (items) => {
-          setBussingRecords(items);
+        // Transport listener for current month
+        const unsubTransport = transportFirebaseService.onSnapshotByMonth(month, (items) => {
+          setTransportRecords(items);
         });
-        unsubscribers.push(unsubBussing);
+        unsubscribers.push(unsubTransport);
 
         // Persist cleanup
         listenersCleanupRef.current = () => {
@@ -1835,15 +1835,15 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     }
   }, [displayedDate, showToast]);
 
-  // Bussing handlers
-  const markBussingHandler = useCallback(async (memberId: string, paid: boolean, amount: number) => {
+  // Transport handlers
+  const markTransportHandler = useCallback(async (memberId: string, paid: boolean, amount: number) => {
   if (!ensureCanWrite()) throw new Error('Read-only access');
     try {
       const y = displayedDate.getFullYear();
       const m = String(displayedDate.getMonth() + 1).padStart(2, '0');
       const month = `${y}-${m}`;
 
-      await bussingFirebaseService.addOrUpdate({
+      await transportFirebaseService.addOrUpdate({
         memberId,
         month,
         paid,
@@ -1852,18 +1852,17 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
 
       // Optimistic local update
       const id = `${memberId}_${month}`;
-      setBussingRecords(prev => {
+      setTransportRecords(prev => {
         const next = [...prev];
         const idx = next.findIndex(t => t.id === id);
-        const rec: BussingRecord = { id, memberId, month, paid, amount: Math.max(0, Number(amount) || 0), lastUpdated: new Date().toISOString() };
+        const rec: TransportRecord = { id, memberId, month, paid, amount: Math.max(0, Number(amount) || 0), lastUpdated: new Date().toISOString() };
         if (idx >= 0) next[idx] = rec; else next.push(rec);
         return next;
       });
-
-      showToast('success', 'Bussing updated');
+  showToast('success', 'Transport updated');
     } catch (error: any) {
       setError(error.message);
-      showToast('error', 'Failed to update bussing', error.message);
+  showToast('error', 'Failed to update transport', error.message);
       throw error;
     }
   }, [displayedDate, showToast]);
@@ -3221,7 +3220,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     memberDeletionRequests,
     meetingRecords,
   titheRecords,
-  bussingRecords,
+  transportRecords,
 
     // UI State
     currentTab,
@@ -3294,8 +3293,8 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
 
   // Tithe Operations
   markTitheHandler,
-  // Bussing Operations
-  markBussingHandler,
+  // Transport Operations
+  markTransportHandler,
 
     // Confirmation Operations
     markConfirmationHandler,
