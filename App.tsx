@@ -50,6 +50,7 @@ const AppContent: React.FC = memo(() => {
   activeMinistryName,
   isImpersonating,
   stopImpersonation,
+  cleanupDuplicateMembers,
     isMemberFormOpen,
     editingMember,
     closeMemberForm,
@@ -426,6 +427,11 @@ const AppContent: React.FC = memo(() => {
               onClick={stopImpersonation}
               className="px-2 py-0.5 rounded-md bg-white/20 hover:bg-white/30 text-white text-[10px] font-bold"
             >Exit</button>
+            <button
+              onClick={async () => { try { await cleanupDuplicateMembers(); } catch {} }}
+              className="px-2 py-0.5 rounded-md bg-red-500/80 hover:bg-red-600 text-white text-[10px] font-bold"
+              title="Delete duplicated members (keeps oldest)"
+            >Delete Duplicates</button>
           </div>
         )}
         <div className="container mx-auto px-2 xs:px-3 sm:px-6 desktop:px-8 desktop-lg:px-12 py-2 xs:py-3 sm:py-4 desktop:py-4 desktop-lg:py-5">

@@ -168,6 +168,8 @@ interface AppContextType {
   removeGuestConfirmationHandler: (guestId: string, date: string) => Promise<void>;
   convertGuestToMemberHandler: (guestId: string) => Promise<void>;
   cleanupDuplicateGuests: () => Promise<void>;
+  // Maintenance utilities
+  cleanupDuplicateMembers: () => Promise<void>;
 
   // Member Deletion Request Operations
   createDeletionRequestHandler: (memberId: string, reason?: string) => Promise<void>;
@@ -255,6 +257,9 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
 
   // Modal states
   const [isMemberFormOpen, setIsMemberFormOpen] = useState(false);
+
+  // Maintenance utilities
+  /** Super Admin: Remove duplicated members in current church (impersonation). Keeps oldest record per unique person. */
   const [editingMember, setEditingMember] = useState<Member | null>(null);
   const [isBacentaFormOpen, setIsBacentaFormOpen] = useState(false);
   const [editingBacenta, setEditingBacenta] = useState<Bacenta | null>(null);
@@ -597,7 +602,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
           setNewBelievers(data.newBelievers);
           setSundayConfirmations(data.sundayConfirmations);
           setGuests(data.guests);
-  }, optimisticUpdatesRef, ministryChurchId);
+  }, optimisticUpdatesRef, ministryChurchId, (userProfile?.contexts?.defaultChurchId || userProfile?.churchId || undefined));
         unsubscribers.push(unsubscribeMinistryData);
 
         // Even in ministry mode, listen to deletion requests tied to the current (active) church context
@@ -818,7 +823,8 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
         try {
           const ministryData = await getMinistryAggregatedData(
             activeMinistryName,
-            userProfile?.contexts?.ministryChurchId || firebaseUtils.getCurrentChurchId() || undefined
+            userProfile?.contexts?.ministryChurchId || firebaseUtils.getCurrentChurchId() || undefined,
+            userProfile?.contexts?.defaultChurchId || userProfile?.churchId || undefined
           );
 
           setMembers(ministryData.members);
@@ -1478,6 +1484,97 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
       showToast('error', 'Cleanup Failed', 'Failed to remove duplicate guests');
     }
   }, [guests, sundayConfirmations, showToast]);
+
+  // Helper: normalize string for dedup keys
+  const normalize = (s?: string) => (s || '').toLowerCase().trim();
+
+  // Super Admin utility: delete duplicated members within the impersonated church context
+  const cleanupDuplicateMembers = useCallback(async () => {
+    if (isImpersonating && currentExternalPermission === 'read-only') {
+      showToast('warning', 'Read-only mode', 'You do not have delete permission while impersonating read-only');
+      return;
+    }
+    try {
+      setIsLoading(true);
+      console.log('🧹 Starting duplicate members cleanup…');
+
+      // Build groups: consider duplicates if same bacentaId and either
+      // - same normalized first+last name and same phoneNumber OR
+      // - same normalized first+last name and same roomNumber (fallback when phone missing)
+      const groups = new Map<string, Member[]>();
+      members.forEach(m => {
+        if (m.isActive === false) return; // ignore inactive/soft-deleted
+        const nameKey = `${normalize(m.firstName)}_${normalize(m.lastName)}`;
+        const phoneKey = normalize(m.phoneNumber);
+        const roomKey = normalize(m.roomNumber);
+        const key = `${m.bacentaId}__${nameKey}__${phoneKey || `room:${roomKey}`}`;
+        const arr = groups.get(key) || [];
+        arr.push(m);
+        groups.set(key, arr);
+      });
+
+  let duplicatesFound = 0;
+  let duplicatesRemoved = 0;
+  const removedIds = new Set<string>();
+
+      for (const [key, list] of groups) {
+        if (list.length <= 1) continue;
+        // Only treat as real duplicates if at least one has identical phone or room (already in key)
+        // Keep the earliest created record
+        const sorted = list.slice().sort((a, b) => (a.createdDate || '').localeCompare(b.createdDate || ''));
+        const keep = sorted[0];
+        const toRemove = sorted.slice(1);
+        duplicatesFound += toRemove.length;
+        console.log(`Duplicate group ${key}: keep=${keep.id} remove=${toRemove.map(x => x.id).join(',')}`);
+
+        // Remove linked records first to keep data consistent
+  for (const d of toRemove) {
+          try {
+            // Remove confirmations for this member
+            const confs = sundayConfirmations.filter(c => c.memberId === d.id);
+            for (const c of confs) await confirmationFirebaseService.delete(c.id);
+
+            // Remove attendance for this member
+            const att = attendanceRecords.filter(a => a.memberId === d.id);
+            for (const a of att) await attendanceFirebaseService.delete(a.id);
+
+            // Remove prayer records for this member
+            const prayers = prayerRecords.filter(p => p.memberId === d.id);
+            for (const p of prayers) await prayerFirebaseService.delete(p.id);
+
+            // Tithe/Transport are keyed by memberId_month; leave them as-is to preserve financial history
+            // Optionally could migrate to the kept member's ID in a future tool.
+
+            // Finally remove member
+            await membersFirebaseService.delete(d.id);
+            removedIds.add(d.id);
+            duplicatesRemoved++;
+          } catch (e) {
+            console.warn('Failed removing duplicate member', d.id, e);
+          }
+        }
+      }
+
+      if (duplicatesFound > 0) {
+        // Update UI immediately by removing deleted IDs
+        setMembers(prev => prev.filter(m => !removedIds.has(m.id)));
+        // In impersonation fallback scenarios (no live listeners), force a raw reload
+        try {
+          if (isImpersonating) {
+            await (forceImpersonatedDataReloadRef.current?.());
+          }
+        } catch {}
+        showToast('success', 'Duplicate Members Cleanup', `Removed ${duplicatesRemoved} duplicate member${duplicatesRemoved === 1 ? '' : 's'}`);
+      } else {
+        showToast('info', 'No Duplicates', 'No duplicate members detected');
+      }
+    } catch (error: any) {
+      console.error('Failed to cleanup duplicate members:', error);
+      showToast('error', 'Cleanup Failed', error.message || 'Failed to remove duplicate members');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [isImpersonating, currentExternalPermission, members, sundayConfirmations, attendanceRecords, prayerRecords, showToast]);
 
   const addOutreachMemberHandler = useCallback(async (data: Omit<OutreachMember, 'id' | 'createdDate' | 'lastUpdated'>): Promise<string> => {
   if (!ensureCanWrite()) throw new Error('Read-only access');
@@ -3494,6 +3591,8 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     convertOutreachMemberToPermanentHandler,
     addMultipleOutreachMembersHandler,
     setOutreachMonth,
+  // Maintenance
+  cleanupDuplicateMembers,
   // Impersonation
   isImpersonating,
   impersonatedAdminId,

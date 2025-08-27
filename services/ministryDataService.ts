@@ -28,6 +28,28 @@ export interface MinistryAggregatedData {
   sourceChurches: string[]; // List of church IDs that contributed data
 }
 
+// Helper: Dedupe members by ID across multiple churches. When the same ID exists
+// in both the ministry church and a source church, prefer the source-church copy
+// (so once sync completes, we show the canonical record without duplicates).
+const dedupeMembers = (items: Member[], currentChurchId?: string): Member[] => {
+  const byId = new Map<string, Member>();
+  for (const m of items) {
+    const key = m.id;
+    const existing = byId.get(key);
+    if (!existing) {
+      byId.set(key, m);
+      continue;
+    }
+    const existingFromMinistry = (existing as any).sourceChurchId === currentChurchId;
+    const nextFromMinistry = (m as any).sourceChurchId === currentChurchId;
+    // Prefer non-ministry-church copy when available; otherwise keep existing
+    if (existingFromMinistry && !nextFromMinistry) {
+      byId.set(key, m);
+    }
+  }
+  return Array.from(byId.values());
+};
+
 // Get all churches that have members with a specific ministry (SuperAdmin style)
 export const getChurchesWithMinistry = async (ministryName: string): Promise<string[]> => {
   try {
@@ -176,12 +198,20 @@ const fetchMinistryMembersFromChurch = async (churchId: string, ministryName: st
 };
 
 // Get aggregated data for a specific ministry across all churches (SuperAdmin style)
-export const getMinistryAggregatedData = async (ministryName: string, currentChurchId?: string): Promise<MinistryAggregatedData> => {
+export const getMinistryAggregatedData = async (
+  ministryName: string,
+  currentChurchId?: string,
+  defaultChurchId?: string
+): Promise<MinistryAggregatedData> => {
   try {
     console.log(`🔍 [SuperAdmin Style] Fetching cross-church data for ministry: ${ministryName}`);
 
     // Step 1: Get all churches that have members with this ministry (like SuperAdmin gets all admin churches)
-    const churchIds = await getChurchesWithMinistry(ministryName);
+    let churchIds = await getChurchesWithMinistry(ministryName);
+    // Safeguard: Always include the caller's default church if provided (leaders should see what their admin sees)
+    if (defaultChurchId && !churchIds.includes(defaultChurchId)) {
+      churchIds = [...churchIds, defaultChurchId];
+    }
     console.log(`📍 [SuperAdmin Style] Found ${churchIds.length} churches with ${ministryName} ministry`);
 
     if (churchIds.length === 0) {
@@ -240,7 +270,7 @@ export const getMinistryAggregatedData = async (ministryName: string, currentChu
       newBelievers: [],
       sundayConfirmations: [],
       guests: [],
-      sourceChurches: churchIds
+  sourceChurches: churchIds
     };
 
     churchDataArray.forEach(churchData => {
@@ -252,15 +282,15 @@ export const getMinistryAggregatedData = async (ministryName: string, currentChu
       aggregatedData.guests.push(...churchData.guests);
     });
 
-  // Step 4: Add native ministry members from the current ministry church
+  // Step 4: Add ministry-church members from the current ministry church as well (both native and just-added)
   if (currentChurchId) {
       console.log('📥 Fetching native ministry members from current ministry church...');
       try {
-        // Fetch native ministry members (those with isNativeMinistryMember: true)
+        // Fetch ALL ministry members in the ministry church (include native + those pending/after sync)
+        // We intentionally do not filter by isNativeMinistryMember here so added members never disappear
         const nativeMembersQuery = query(
           collection(db, `churches/${currentChurchId}/members`),
-          where('ministry', '==', ministryName),
-          where('isNativeMinistryMember', '==', true)
+          where('ministry', '==', ministryName)
         );
         const nativeSnapshot = await getDocs(nativeMembersQuery);
         const nativeMembers = nativeSnapshot.docs.map(doc => ({
@@ -269,7 +299,7 @@ export const getMinistryAggregatedData = async (ministryName: string, currentChu
           sourceChurchId: currentChurchId // Mark as coming from ministry church
         } as any as Member)).filter(m => m.isActive !== false);
 
-        console.log(`✅ Found ${nativeMembers.length} native ministry members`);
+        console.log(`✅ Found ${nativeMembers.length} ministry-church members (native + synced)`);
         aggregatedData.members.push(...nativeMembers);
       } catch (e) {
         console.warn('Failed to fetch native ministry members:', e);
@@ -278,7 +308,10 @@ export const getMinistryAggregatedData = async (ministryName: string, currentChu
       console.log('📥 No current church ID provided - skipping native members fetch');
     }
 
-    console.log(`🎉 [SuperAdmin Style] Successfully aggregated data for ${ministryName}:`, {
+  // Dedupe members before returning (avoid duplicates once sync completes)
+  aggregatedData.members = dedupeMembers(aggregatedData.members, currentChurchId);
+
+  console.log(`🎉 [SuperAdmin Style] Successfully aggregated data for ${ministryName}:`, {
       members: aggregatedData.members.length,
       nativeMembers: aggregatedData.members.filter(m => m.isNativeMinistryMember).length,
       syncedMembers: aggregatedData.members.filter(m => !m.isNativeMinistryMember).length,
@@ -288,7 +321,7 @@ export const getMinistryAggregatedData = async (ministryName: string, currentChu
       confirmations: aggregatedData.sundayConfirmations.length,
       guests: aggregatedData.guests.length,
       churches: churchIds.length,
-      sourceChurches: aggregatedData.sourceChurches,
+  sourceChurches: aggregatedData.sourceChurches,
       currentChurchId: currentChurchId || 'not provided'
     });
 
@@ -312,7 +345,8 @@ export const setupMinistryDataListeners = (
   ministryName: string,
   onDataUpdate: (data: MinistryAggregatedData) => void,
   optimisticUpdatesRef?: React.MutableRefObject<Set<string>>,
-  currentChurchId?: string
+  currentChurchId?: string,
+  defaultChurchId?: string
 ): (() => void) => {
   const unsubscribers: Unsubscribe[] = [];
   let currentData: MinistryAggregatedData = {
@@ -328,11 +362,13 @@ export const setupMinistryDataListeners = (
   let overridesMap = new Map<string, { frozen?: boolean }>(); // key: `${sourceChurchId}_${memberId}`
 
   const updateAggregatedData = () => {
-    onDataUpdate({ ...currentData });
+  // Always dedupe before emitting to the app state
+  currentData.members = dedupeMembers(currentData.members, currentChurchId);
+  onDataUpdate({ ...currentData });
   };
 
   // Initialize with current data
-  getMinistryAggregatedData(ministryName, currentChurchId).then(data => {
+  getMinistryAggregatedData(ministryName, currentChurchId, defaultChurchId).then(data => {
     currentData = data;
     updateAggregatedData();
 
@@ -483,16 +519,15 @@ export const setupMinistryDataListeners = (
       }
     });
 
-    // Set up listener for native ministry members in the current ministry church
+    // Set up listener for ministry-church members in the current ministry church (include native + synced)
     if (currentChurchId && !data.sourceChurches.includes(currentChurchId)) {
       try {
         console.log(`🔄 Setting up native members listener for ministry church: ${currentChurchId}`);
 
-        // Listen to native ministry members
+        // Listen to all ministry members (don’t restrict to isNativeMinistryMember)
         const nativeMembersQuery = query(
           collection(db, `churches/${currentChurchId}/members`),
-          where('ministry', '==', ministryName),
-          where('isNativeMinistryMember', '==', true)
+          where('ministry', '==', ministryName)
         );
 
         const unsubNativeMembers = onSnapshot(nativeMembersQuery, (snapshot) => {
@@ -505,12 +540,11 @@ export const setupMinistryDataListeners = (
           const filtered = items.filter(m => m.isActive !== false);
           filtered.sort((a, b) => (a.lastName || '').localeCompare(b.lastName || ''));
 
-          // Update native members for ministry church
+          // Replace the entire ministry-church subset so added members never disappear
           currentData.members = currentData.members.filter(m => {
             const isFromMinistryChurch = (m as any).sourceChurchId === currentChurchId;
-            const isNative = m.isNativeMinistryMember;
-            // Keep members that are NOT native from ministry church
-            return !(isFromMinistryChurch && isNative);
+            // Keep only those NOT from the ministry church; we’ll re-add fresh snapshot
+            return !isFromMinistryChurch;
           });
           const allowed = filtered.filter(m => !excludedKeys.has(`${currentChurchId}_${m.id}`));
           const withOverrides = allowed.map(m => {
