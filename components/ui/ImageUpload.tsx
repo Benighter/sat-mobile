@@ -37,8 +37,8 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
   const handleFileSelect = (file: File) => {
     if (file && file.type.startsWith('image/')) {
       // Validate type and size
-      const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
-      const maxSize = 5 * 1024 * 1024; // 5MB
+  const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+  const maxSize = 20 * 1024 * 1024; // 20MB
       if (!validTypes.includes(file.type)) {
         onError?.('Invalid image type', 'Please upload a JPG, PNG, or WEBP image.');
         return;
@@ -59,9 +59,9 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
               }
               return;
             }
-            onError?.('Image too large', 'Image size must be less than 5MB. Please choose a smaller image.');
+            onError?.('Image too large', 'Image size must be less than 20MB. Please choose a smaller image.');
           } catch (e) {
-            onError?.('Image too large', 'Image size must be less than 5MB. Please choose a smaller image.');
+            onError?.('Image too large', 'Image size must be less than 20MB. Please choose a smaller image.');
           }
         };
         tryDownscale();

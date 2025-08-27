@@ -215,7 +215,7 @@ const ProfileSettingsView: React.FC = () => {
     const clearLoadingSafely = () => setIsLoading(false);
     const safetyTimer = setTimeout(clearLoadingSafely, 15000);
     try {
-      const updates = {
+      let updates: any = {
         firstName: profileData.firstName.trim(),
         lastName: profileData.lastName.trim(),
         displayName: `${profileData.firstName.trim()} ${profileData.lastName.trim()}`,
@@ -224,6 +224,19 @@ const ProfileSettingsView: React.FC = () => {
   preferences: { ...preferences, allowEditPreviousSundays: true, theme: 'light' as any },
         notificationPreferences: notificationPreferences
       };
+
+      // Upload profile image to Storage if provided as base64
+      try {
+        if (user?.uid) {
+          const { imageStorageService, isDataUrl } = await import('../../services/imageStorageService');
+          if (isDataUrl(updates.profilePicture)) {
+            const url = await imageStorageService.uploadUserProfilePicture(user.uid, updates.profilePicture);
+            updates.profilePicture = url;
+          }
+        }
+      } catch (e) {
+        // If upload fails, proceed with original value
+      }
 
       await userService.updateUserProfile(user.uid, updates);
 

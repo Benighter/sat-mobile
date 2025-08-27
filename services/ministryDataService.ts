@@ -198,20 +198,12 @@ const fetchMinistryMembersFromChurch = async (churchId: string, ministryName: st
 };
 
 // Get aggregated data for a specific ministry across all churches (SuperAdmin style)
-export const getMinistryAggregatedData = async (
-  ministryName: string,
-  currentChurchId?: string,
-  defaultChurchId?: string
-): Promise<MinistryAggregatedData> => {
+export const getMinistryAggregatedData = async (ministryName: string, currentChurchId?: string): Promise<MinistryAggregatedData> => {
   try {
     console.log(`🔍 [SuperAdmin Style] Fetching cross-church data for ministry: ${ministryName}`);
 
     // Step 1: Get all churches that have members with this ministry (like SuperAdmin gets all admin churches)
-    let churchIds = await getChurchesWithMinistry(ministryName);
-    // Safeguard: Always include the caller's default church if provided (leaders should see what their admin sees)
-    if (defaultChurchId && !churchIds.includes(defaultChurchId)) {
-      churchIds = [...churchIds, defaultChurchId];
-    }
+    const churchIds = await getChurchesWithMinistry(ministryName);
     console.log(`📍 [SuperAdmin Style] Found ${churchIds.length} churches with ${ministryName} ministry`);
 
     if (churchIds.length === 0) {
@@ -270,7 +262,7 @@ export const getMinistryAggregatedData = async (
       newBelievers: [],
       sundayConfirmations: [],
       guests: [],
-  sourceChurches: churchIds
+      sourceChurches: churchIds
     };
 
     churchDataArray.forEach(churchData => {
@@ -321,7 +313,7 @@ export const getMinistryAggregatedData = async (
       confirmations: aggregatedData.sundayConfirmations.length,
       guests: aggregatedData.guests.length,
       churches: churchIds.length,
-  sourceChurches: aggregatedData.sourceChurches,
+      sourceChurches: aggregatedData.sourceChurches,
       currentChurchId: currentChurchId || 'not provided'
     });
 
@@ -345,8 +337,7 @@ export const setupMinistryDataListeners = (
   ministryName: string,
   onDataUpdate: (data: MinistryAggregatedData) => void,
   optimisticUpdatesRef?: React.MutableRefObject<Set<string>>,
-  currentChurchId?: string,
-  defaultChurchId?: string
+  currentChurchId?: string
 ): (() => void) => {
   const unsubscribers: Unsubscribe[] = [];
   let currentData: MinistryAggregatedData = {
@@ -368,7 +359,7 @@ export const setupMinistryDataListeners = (
   };
 
   // Initialize with current data
-  getMinistryAggregatedData(ministryName, currentChurchId, defaultChurchId).then(data => {
+  getMinistryAggregatedData(ministryName, currentChurchId).then(data => {
     currentData = data;
     updateAggregatedData();
 

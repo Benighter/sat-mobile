@@ -55,6 +55,7 @@ export interface FirebaseError {
 // Current user and church context
 let currentUser: FirebaseUser | null = null;
 let currentChurchId: string | null = null;
+export const getCurrentChurchId = (): string | null => currentChurchId;
 
 // Helper: map a real email to a ministry-only Auth email alias (same inbox for providers that support plus-addressing)
 const toMinistryAuthEmail = (email: string): string => {
@@ -904,8 +905,29 @@ export const membersFirebaseService = {
   add: async (member: Omit<Member, 'id' | 'createdDate' | 'lastUpdated'>): Promise<string> => {
     try {
       const membersRef = collection(db, getChurchCollectionPath('members'));
+      // Upload profile picture to Storage when provided as base64 data URL
+      let payload: any = { ...member };
+      try {
+        const { imageStorageService, isDataUrl } = await import('./imageStorageService');
+        if (currentChurchId && isDataUrl(member.profilePicture)) {
+          // Create a temporary doc to get an ID for pathing
+          const tempRef = await addDoc(membersRef, { createdDate: new Date().toISOString(), lastUpdated: new Date().toISOString(), isActive: true });
+          const uploadedUrl = await imageStorageService.uploadMemberProfilePicture(currentChurchId, tempRef.id, member.profilePicture as any);
+          payload.profilePicture = uploadedUrl;
+          // Update the temp doc with full payload below by reusing the temp ID
+          await updateDoc(tempRef, {
+            ...payload,
+            isActive: true,
+            createdDate: new Date().toISOString(),
+            lastUpdated: new Date().toISOString()
+          });
+          return tempRef.id;
+        }
+      } catch (e) {
+        // If upload fails, continue to store whatever is provided
+      }
       const docRef = await addDoc(membersRef, {
-        ...member,
+        ...payload,
         isActive: true,
         createdDate: new Date().toISOString(),
         lastUpdated: new Date().toISOString()
@@ -923,6 +945,15 @@ export const membersFirebaseService = {
       const memberRef = doc(db, getChurchCollectionPath('members'), memberId);
       // Remove undefined values to avoid Firestore updateDoc errors
       const sanitized: any = { ...updates };
+      try {
+        const { imageStorageService, isDataUrl } = await import('./imageStorageService');
+        if (currentChurchId && isDataUrl(updates.profilePicture)) {
+          const uploadedUrl = await imageStorageService.uploadMemberProfilePicture(currentChurchId, memberId, updates.profilePicture as any);
+          sanitized.profilePicture = uploadedUrl;
+        }
+      } catch (e) {
+        // ignore upload issues; fallback to provided value
+      }
       Object.keys(sanitized).forEach((k) => {
         if (sanitized[k] === undefined) delete sanitized[k];
       });
@@ -2229,8 +2260,20 @@ export const meetingRecordsFirebaseService = {
       const meetingsRef = collection(db, getChurchCollectionPath('meetings'));
       const docRef = doc(meetingsRef, record.id);
 
+      // If meetingImage is a base64 data URL, upload to Storage and store URL
+      let payload: any = { ...record };
+      try {
+        const { imageStorageService, isDataUrl } = await import('./imageStorageService');
+        if (currentChurchId && isDataUrl(record.meetingImage)) {
+          const uploadedUrl = await imageStorageService.uploadMeetingImage(currentChurchId, record.id, record.meetingImage as any);
+          payload.meetingImage = uploadedUrl;
+        }
+      } catch (e) {
+        // ignore storage failures; keep original payload
+      }
+
       await setDoc(docRef, {
-        ...record,
+        ...payload,
         updatedAt: new Date().toISOString(),
         recordedBy: currentUser?.uid || 'unknown'
       }, { merge: true });

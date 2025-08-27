@@ -602,7 +602,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
           setNewBelievers(data.newBelievers);
           setSundayConfirmations(data.sundayConfirmations);
           setGuests(data.guests);
-  }, optimisticUpdatesRef, ministryChurchId, (userProfile?.contexts?.defaultChurchId || userProfile?.churchId || undefined));
+  }, optimisticUpdatesRef, ministryChurchId);
         unsubscribers.push(unsubscribeMinistryData);
 
         // Even in ministry mode, listen to deletion requests tied to the current (active) church context
@@ -823,8 +823,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
         try {
           const ministryData = await getMinistryAggregatedData(
             activeMinistryName,
-            userProfile?.contexts?.ministryChurchId || firebaseUtils.getCurrentChurchId() || undefined,
-            userProfile?.contexts?.defaultChurchId || userProfile?.churchId || undefined
+            userProfile?.contexts?.ministryChurchId || firebaseUtils.getCurrentChurchId() || undefined
           );
 
           setMembers(ministryData.members);
