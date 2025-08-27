@@ -32,7 +32,7 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
     deleteBacentaHandler,
     isBacentaFormOpen,
     confirmationModal,
-  // userProfile,
+  userProfile,
   // user,
   // showToast,
     showConfirmation,
@@ -186,7 +186,7 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
           <div className="flex items-center justify-between mb-3 sm:mb-4">
             <h2 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-dark-100 flex items-center min-w-0">
               <ChartBarIcon className="w-5 h-5 sm:w-6 sm:h-6 mr-2 sm:mr-3 text-slate-500 dark:text-slate-400 flex-shrink-0" />
-              <span className="truncate">{isMinistryContext ? (activeMinistryName || 'Ministry Navigation') : 'Navigation'}</span>
+              <span className="truncate">{isMinistryContext ? (activeMinistryName || 'Ministry Navigation') : (userProfile?.churchName || 'Navigation')}</span>
             </h2>
             <button
               onClick={onClose}
@@ -215,11 +215,11 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
         {/* Content */}
         <div className="flex-1 overflow-y-auto sidebar-scroll p-3 sm:p-4 space-y-4 sm:space-y-6 min-h-0">
 
-          {/* Main Navigation */}
+      {/* Main Navigation */}
           <div>
             <h3 className="text-xs sm:text-sm font-semibold text-gray-500 dark:text-dark-400 mb-2 sm:mb-3 flex items-center">
               <ChartBarIcon className="w-3 h-3 sm:w-4 sm:h-4 mr-1.5 sm:mr-2 text-slate-500 dark:text-slate-400 flex-shrink-0" />
-              <span className="truncate">Navigation</span>
+        <span className="truncate">{isMinistryContext ? 'Navigation' : (userProfile?.churchName || 'Navigation')}</span>
             </h3>
             <div className="space-y-1.5 sm:space-y-2">
               {/* Ministry-aware items */}
