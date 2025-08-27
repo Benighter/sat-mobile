@@ -304,6 +304,18 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
   // Optimistic update tracking to prevent listener conflicts
   const optimisticUpdatesRef = useRef<Set<string>>(new Set());
   const optimisticTimeoutsRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
+  // Keep separate references for base (default church) members and native ministry members
+  // so we can compose the visible list in normal mode for ministry accounts
+  const baseMembersRef = useRef<Member[]>([]);
+  const nativeMinistryMembersRef = useRef<Member[]>([]);
+
+  // Helper: combine members from default church and native ministry church without duplicates
+  // (IDs are church-scoped, so just concat and stable-sort by lastName)
+  const composeVisibleMembers = useCallback((base: Member[], native: Member[]): Member[] => {
+    const combined = [...base, ...native];
+    combined.sort((a, b) => (a.lastName || '').localeCompare(b.lastName || ''));
+    return combined;
+  }, []);
 
   
   // Derived flags
@@ -522,9 +534,10 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
         listenersCleanupRef.current = () => {};
         return;
       }
-      // If we are in ministry context, temporarily target the default church for read listeners
+      // If we are in ministry context WITHOUT a selected ministry, temporarily target the default church for simple listeners
+      // When a ministry is selected (e.g., Ushers), we must keep the ministry church context so native members appear.
       const originalChurchId = firebaseUtils.getCurrentChurchId();
-  if (isMinistryContext) {
+      if (isMinistryContext && ((activeMinistryName || '').trim() === '')) {
         const defaultChurchId = userProfile?.contexts?.defaultChurchId || userProfile?.churchId;
         if (defaultChurchId && originalChurchId !== defaultChurchId) {
           firebaseUtils.setChurchContext(defaultChurchId);
@@ -540,7 +553,9 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
 
       if (isMinistryContext && (activeMinistryName || '').trim() !== '') {
         console.log('🔄 Setting up ministry data listeners for:', activeMinistryName);
-        const unsubscribeMinistryData = setupMinistryDataListeners(activeMinistryName, (data) => {
+  // Important: pass the ministry church id so native ministry members are included in normal mode
+  const ministryChurchId = userProfile?.contexts?.ministryChurchId || firebaseUtils.getCurrentChurchId() || undefined;
+  const unsubscribeMinistryData = setupMinistryDataListeners(activeMinistryName, (data) => {
           console.log('📊 Ministry listener data received:', {
             members: data.members.length,
             bacentas: data.bacentas.length,
@@ -582,7 +597,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
           setNewBelievers(data.newBelievers);
           setSundayConfirmations(data.sundayConfirmations);
           setGuests(data.guests);
-        }, optimisticUpdatesRef, userProfile?.churchId);
+  }, optimisticUpdatesRef, ministryChurchId);
         unsubscribers.push(unsubscribeMinistryData);
 
         // Even in ministry mode, listen to deletion requests tied to the current (active) church context
@@ -593,14 +608,42 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
       } else {
         // Normal mode or ministry mode without specific ministry
         const unsubscribeMembers = membersFirebaseService.onSnapshot((members) => {
-          if (isMinistryContext) {
-            // If ministry mode but no explicit ministry selected, limit to those with any ministry
-            setMembers(members.filter(m => (m.ministry || '').trim() !== ''));
+          // If the signed-in profile has a ministry church, compose base members with native
+          // ministry members regardless of the current context flag.
+          if (userProfile?.contexts?.ministryChurchId) {
+            baseMembersRef.current = members.filter(m => (m.ministry || '').trim() !== '');
+            setMembers(composeVisibleMembers(baseMembersRef.current, nativeMinistryMembersRef.current));
           } else {
-            setMembers(members);
+            baseMembersRef.current = members;
+            setMembers(composeVisibleMembers(baseMembersRef.current, []));
           }
         });
         unsubscribers.push(unsubscribeMembers);
+
+        // If this user has a ministry church, also listen to
+        // native ministry members from the ministry church and merge into the view.
+        if (userProfile?.contexts?.ministryChurchId) {
+          const ministryChurchId = userProfile.contexts.ministryChurchId;
+          if (ministryChurchId) {
+            try {
+              const qNative = fsQuery(
+                collection(db, `churches/${ministryChurchId}/members`),
+                fsWhere('isActive', '==', true),
+                fsWhere('isNativeMinistryMember', '==', true)
+              );
+              const unsubNativeMembers = onSnapshot(qNative, (snap) => {
+                const items = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) })) as Member[];
+                nativeMinistryMembersRef.current = items;
+                setMembers(composeVisibleMembers(baseMembersRef.current, nativeMinistryMembersRef.current));
+              }, (err) => {
+                console.warn('[Listeners] Native ministry members onSnapshot error', err);
+              });
+              unsubscribers.push(unsubNativeMembers);
+            } catch (e) {
+              console.warn('[Listeners] Failed to attach native ministry members listener', e);
+            }
+          }
+        }
         // Listen to bacentas (always; in ministry mode reads from default church due to switch above)
         const unsubscribeBacentas = bacentasFirebaseService.onSnapshot((bacentas) => {
           setBacentas(bacentas);
@@ -750,10 +793,10 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
         return;
       }
 
-      // If in ministry context, temporarily read from default church for initial fetch
+  // If in ministry context WITHOUT a selected ministry, temporarily read from default church for initial fetch
       const originalChurchId = firebaseUtils.getCurrentChurchId();
       let switchedForReads = false;
-      if (isMinistryContext) {
+  if (isMinistryContext && ((activeMinistryName || '').trim() === '')) {
         const defaultChurchId = userProfile?.contexts?.defaultChurchId || userProfile?.churchId;
         if (defaultChurchId && originalChurchId !== defaultChurchId) {
           firebaseUtils.setChurchContext(defaultChurchId);
@@ -773,7 +816,10 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
       if (isMinistryContext && (activeMinistryName || '').trim() !== '') {
         console.log('🔄 [Ministry Mode] Fetching cross-church data like SuperAdmin for:', activeMinistryName);
         try {
-          const ministryData = await getMinistryAggregatedData(activeMinistryName, userProfile?.churchId);
+          const ministryData = await getMinistryAggregatedData(
+            activeMinistryName,
+            userProfile?.contexts?.ministryChurchId || firebaseUtils.getCurrentChurchId() || undefined
+          );
 
           setMembers(ministryData.members);
           setBacentas(ministryData.bacentas);
@@ -834,7 +880,39 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
           meetingRecordsFirebaseService.getAll()
         ]);
 
-        setMembers(membersData);
+    // If profile has a ministry church, merge in native ministry members
+        // from the ministry church so they are also visible in normal mode.
+    if (userProfile?.contexts?.ministryChurchId) {
+          try {
+      const ministryChurchId = userProfile.contexts.ministryChurchId;
+            if (ministryChurchId) {
+              const qNative = fsQuery(
+                collection(db, `churches/${ministryChurchId}/members`),
+                fsWhere('isActive', '==', true),
+                fsWhere('isNativeMinistryMember', '==', true)
+              );
+              const snap = await getDocs(qNative);
+              const native = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) })) as Member[];
+              baseMembersRef.current = membersData.filter(m => (m.ministry || '').trim() !== '');
+              nativeMinistryMembersRef.current = native;
+              setMembers(composeVisibleMembers(baseMembersRef.current, native));
+            } else {
+              // Fallback to base members only
+              baseMembersRef.current = membersData;
+              nativeMinistryMembersRef.current = [];
+              setMembers(composeVisibleMembers(membersData, []));
+            }
+          } catch (e) {
+            console.warn('[fetchInitialData] Failed to fetch native ministry members', e);
+            baseMembersRef.current = membersData;
+            nativeMinistryMembersRef.current = [];
+            setMembers(composeVisibleMembers(membersData, []));
+          }
+        } else {
+          baseMembersRef.current = membersData;
+          nativeMinistryMembersRef.current = [];
+          setMembers(composeVisibleMembers(membersData, []));
+        }
         setBacentas(bacentasData);
         setAttendanceRecords(attendanceData);
         setNewBelievers(newBelieversData);

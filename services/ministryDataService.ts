@@ -252,8 +252,8 @@ export const getMinistryAggregatedData = async (ministryName: string, currentChu
       aggregatedData.guests.push(...churchData.guests);
     });
 
-    // Step 4: Add native ministry members from the current ministry church
-    if (currentChurchId) {
+  // Step 4: Add native ministry members from the current ministry church
+  if (currentChurchId) {
       console.log('📥 Fetching native ministry members from current ministry church...');
       try {
         // Fetch native ministry members (those with isNativeMinistryMember: true)
