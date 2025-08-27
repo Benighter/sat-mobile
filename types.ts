@@ -276,6 +276,23 @@ export interface User {
   churchId: string;
   churchName?: string;
   role: 'admin' | 'leader' | 'member';
+  /** True if this account is a Ministry Mode account (separate ministry church context) */
+  isMinistryAccount?: boolean;
+  /** Contextual church IDs e.g. default/ministry church associations */
+  contexts?: {
+    defaultChurchId?: string;
+    ministryChurchId?: string;
+  };
+  /** Access control for viewing cross-church data in Ministry Mode */
+  ministryAccess?: {
+    status: 'none' | 'pending' | 'approved' | 'revoked';
+    approvedBy?: string;
+    approvedByName?: string;
+    approvedAt?: string; // ISO timestamp
+    invitedBy?: string; // when approved via invite from ministry admin
+    invitedByName?: string;
+    notes?: string;
+  };
   preferences?: UserPreferences;
   notificationPreferences?: NotificationPreferences;
   createdAt: string;
@@ -453,7 +470,8 @@ export type NotificationActivityType =
   // Bacenta meeting record lifecycle
   | 'meeting_record_added'
   | 'meeting_record_updated'
-  | 'meeting_record_deleted';
+  | 'meeting_record_deleted'
+  | 'system_message';
 
 export interface AdminNotification {
   id: string; // Auto-generated document ID
@@ -483,4 +501,22 @@ export interface AdminNotification {
     attendanceCount?: number; // For attendance activities
     [key: string]: any; // Flexible metadata
   };
+}
+
+// Ministry Access Approval Flow
+export interface MinistryAccessRequest {
+  id: string; // Auto ID
+  requesterUid: string;
+  requesterName?: string;
+  requesterEmail?: string;
+  ministryName: string;
+  ministryChurchId?: string; // if known
+  status: 'pending' | 'approved' | 'rejected' | 'cancelled';
+  createdAt: string; // ISO
+  updatedAt?: string; // ISO
+  approvedBy?: string;
+  approvedByName?: string;
+  approvedAt?: string; // ISO
+  rejectionReason?: string;
+  approvalSource?: 'superadmin' | 'ministry_admin_invite';
 }

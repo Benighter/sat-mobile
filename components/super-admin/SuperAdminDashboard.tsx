@@ -6,6 +6,8 @@ import { db } from '../../firebase.config';
 import { useAppContext } from '../../contexts/FirebaseAppContext';
 import AdminChurchPreview from './AdminChurchPreview';
 import ConfirmationModal from '../modals/confirmations/ConfirmationModal';
+import { ministryAccessService } from '../../services/ministryAccessService';
+import { notificationService, setNotificationContext } from '../../services/notificationService';
 
 interface AdminUserRecord {
   id: string;
@@ -66,6 +68,10 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
   const [confirmDeleteCampus, setConfirmDeleteCampus] = useState(false);
   // Promotion flow
   const [pendingPromotion, setPendingPromotion] = useState<AdminUserRecord | null>(null);
+  // Ministry access requests
+  const [accessRequests, setAccessRequests] = useState<any[]>([]);
+  const [accessLoading, setAccessLoading] = useState(false);
+  const [accessError, setAccessError] = useState<string | null>(null);
 
   const campusAggregates = useMemo(() => {
     if (!campuses.length) return [] as Array<{ campus: CampusRecord; adminCount: number; constituencyCount: number; members: number }>;
@@ -230,6 +236,60 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
   useEffect(() => {
     fetchAdmins();
   }, [fetchAdmins]);
+
+  // Load ministry access requests (realtime)
+  useEffect(() => {
+    try {
+      setAccessLoading(true);
+      const qReq = query(
+        collection(db, 'ministryAccessRequests'),
+        where('status', '==', 'pending'),
+        limit(200)
+      );
+      const unsub = onSnapshot(qReq, snap => {
+        const items = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
+        items.sort((a,b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+        setAccessRequests(items);
+        setAccessLoading(false);
+      }, err => { setAccessError(err?.message || 'Failed to load access requests'); setAccessLoading(false); });
+      return () => { try { unsub(); } catch {} };
+    } catch (e:any) {
+      setAccessError(e.message || 'Failed to load access requests');
+      setAccessLoading(false);
+    }
+  }, []);
+
+  const approveAccess = useCallback(async (req: any) => {
+    try {
+      await ministryAccessService.approveRequest(req.id, { uid: 'superadmin', name: 'SuperAdmin' });
+      // Notify requester in their ministry church context if available, else admin's church
+      const churchId = req.ministryChurchId || req.requesterChurchId || (admins.find(a => a.uid === req.requesterUid)?.churchId) || null;
+      if (churchId) {
+        // Scope notifications to that church for delivery
+        setNotificationContext({} as any, churchId);
+        await notificationService.createForRecipients([
+          req.requesterUid
+        ], 'system_message' as any, 'Ministry access approved', { description: 'Your ministry account has been approved. You can now view cross-church ministry data.' }, undefined, { id: 'superadmin', name: 'SuperAdmin' });
+      }
+    } catch (e:any) {
+      setAccessError(e.message || 'Failed to approve request');
+    }
+  }, [admins]);
+
+  const rejectAccess = useCallback(async (req: any) => {
+    try {
+      await ministryAccessService.rejectRequest(req.id, { uid: 'superadmin', name: 'SuperAdmin' });
+      const churchId = req.ministryChurchId || req.requesterChurchId || (admins.find(a => a.uid === req.requesterUid)?.churchId) || null;
+      if (churchId) {
+        setNotificationContext({} as any, churchId);
+        await notificationService.createForRecipients([
+          req.requesterUid
+        ], 'system_message' as any, 'Ministry access rejected', { description: 'Your ministry access request was rejected. Contact SuperAdmin for details.' }, undefined, { id: 'superadmin', name: 'SuperAdmin' });
+      }
+    } catch (e:any) {
+      setAccessError(e.message || 'Failed to reject request');
+    }
+  }, [admins]);
 
   // Leaders realtime listener (enabled when viewing leaders)
   useEffect(() => {
@@ -762,7 +822,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
           </div>
         )}
 
-        {/* Global Stats */}
+  {/* Global Stats */}
         {!selectedCampus && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-10 mt-2">
             <div className="glass rounded-2xl p-5 shadow-lg hover:shadow-xl transition-shadow">
@@ -783,6 +843,39 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
                 <p className="text-[11px] uppercase tracking-wider font-semibold text-red-600 dark:text-red-400">Inactive</p>
                 <p className="mt-2 text-3xl font-bold text-red-600 dark:text-red-400 tracking-tight">{stats?.inactive ?? '-'}</p>
               </div>
+          </div>
+        )}
+
+        {/* Ministry Access Requests */}
+        {!selectedCampus && accessRequests.length > 0 && (
+          <div className="lg:col-span-3 mb-8">
+            <div className="bg-white dark:bg-dark-800 rounded-xl shadow-sm border border-gray-200/70 dark:border-dark-700 overflow-hidden">
+              <div className="px-4 sm:px-6 py-4 border-b border-gray-200/60 dark:border-dark-700 flex items-center justify-between">
+                <div>
+                  <h2 className="text-base sm:text-lg font-semibold">Ministry Access Requests</h2>
+                  <p className="text-xs text-gray-500">Approve or reject access to cross-church ministry data</p>
+                </div>
+                {accessLoading && <span className="text-xs text-gray-500">Loading…</span>}
+              </div>
+              {accessError && <div className="px-4 sm:px-6 py-2 text-sm text-red-600">{accessError}</div>}
+              <div className="divide-y divide-gray-100 dark:divide-dark-700">
+                {accessRequests.map(req => (
+                  <div key={req.id} className="px-4 sm:px-6 py-4 flex items-center justify-between gap-4">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium truncate">{req.requesterName || req.requesterEmail || req.requesterUid}</span>
+                        <span className={`text-[10px] px-2 py-0.5 rounded-full border bg-amber-50 text-amber-700 border-amber-200`}>PENDING</span>
+                      </div>
+                      <div className="text-xs text-gray-500 truncate">Ministry: {req.ministryName || '—'}</div>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button onClick={() => approveAccess(req)} className="px-3 py-1.5 text-xs rounded-md bg-green-600 text-white">Approve</button>
+                      <button onClick={() => rejectAccess(req)} className="px-3 py-1.5 text-xs rounded-md bg-red-600 text-white">Reject</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         )}
 
