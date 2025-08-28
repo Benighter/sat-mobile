@@ -34,7 +34,10 @@ const BacentaAttendanceForm: React.FC<BacentaAttendanceFormProps> = ({
   const [bacentaLeaderName, setBacentaLeaderName] = useState(existingRecord?.bacentaLeaderName || '');
   // New lightweight attendance/finance state
   const [firstTimerNames, setFirstTimerNames] = useState<string[]>(existingRecord?.guests || []);
+  // Separate list for visitors (guests/visitors) – use the term "visitors"
+  const [visitorNames, setVisitorNames] = useState<string[]>(existingRecord?.visitors || []);
   const [firstTimerInput, setFirstTimerInput] = useState('');
+  const [visitorInput, setVisitorInput] = useState('');
   const [cashOffering, setCashOffering] = useState<number>(Number(existingRecord?.cashOffering ?? 0));
   const [onlineOffering, setOnlineOffering] = useState<number>(Number(existingRecord?.onlineOffering ?? 0));
   const [converts, setConverts] = useState<number>(Number(existingRecord?.converts ?? 0));
@@ -182,7 +185,9 @@ const BacentaAttendanceForm: React.FC<BacentaAttendanceFormProps> = ({
       setDiscussionLedBy(existingRecord.discussionLedBy || '');
       setBacentaLeaderName(existingRecord.bacentaLeaderName || '');
   setFirstTimerNames(existingRecord.guests || []);
+  setVisitorNames(existingRecord.visitors || []);
   setFirstTimerInput('');
+  setVisitorInput('');
   setCashOffering(Number(existingRecord.cashOffering ?? 0));
   setOnlineOffering(Number(existingRecord.onlineOffering ?? 0));
   setConverts(Number(existingRecord.converts ?? 0));
@@ -230,7 +235,9 @@ const BacentaAttendanceForm: React.FC<BacentaAttendanceFormProps> = ({
   converts,
   firstTimers: firstTimerNames.length,
   testimonies,
-  guests: firstTimerNames,
+  guests: firstTimerNames, // keep legacy field for backward compatibility
+  visitors: visitorNames,  // new explicit visitors list
+  visitorsCount: visitorNames.length,
         createdAt: existingRecord?.createdAt ?? new Date().toISOString(),
         updatedAt: new Date().toISOString()
       };
@@ -281,7 +288,7 @@ const BacentaAttendanceForm: React.FC<BacentaAttendanceFormProps> = ({
   };
 
   const totalOffering = Number(cashOffering || 0) + Number(onlineOffering || 0);
-  const totalCount = presentMemberIds.length + firstTimerNames.length;
+  const totalCount = presentMemberIds.length + firstTimerNames.length + visitorNames.length;
   const attendeeMembers = useMemo(() => {
     return bacentaMembers
       .filter(m => presentMemberIds.includes(m.id))
@@ -299,6 +306,18 @@ const BacentaAttendanceForm: React.FC<BacentaAttendanceFormProps> = ({
 
   const removeFirstTimer = (index: number) => {
     setFirstTimerNames(prev => prev.filter((_, i) => i !== index));
+  };
+
+  // Visitors handlers
+  const addVisitor = () => {
+    const name = visitorInput.trim();
+    if (!name) return;
+    setVisitorNames(prev => [...prev, name]);
+    setVisitorInput('');
+  };
+
+  const removeVisitor = (index: number) => {
+    setVisitorNames(prev => prev.filter((_, i) => i !== index));
   };
 
   // Lightweight Zoom/Pan for fullscreen image
@@ -411,7 +430,7 @@ const BacentaAttendanceForm: React.FC<BacentaAttendanceFormProps> = ({
         </div>
 
         {/* Quick Stats */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-8">
           <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
             <div className="text-xs text-gray-500">Total Present</div>
             <div className="mt-1 text-2xl font-extrabold text-slate-900">{String(totalCount).padStart(2,'0')}</div>
@@ -423,6 +442,10 @@ const BacentaAttendanceForm: React.FC<BacentaAttendanceFormProps> = ({
           <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
             <div className="text-xs text-gray-500">Converts</div>
             <div className="mt-1 text-2xl font-extrabold text-slate-900">{String(converts).padStart(2,'0')}</div>
+          </div>
+          <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+            <div className="text-xs text-gray-500">Visitors</div>
+            <div className="mt-1 text-2xl font-extrabold text-slate-900">{String(visitorNames.length).padStart(2,'0')}</div>
           </div>
           <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
             <div className="text-xs text-gray-500">Offering</div>
@@ -760,6 +783,18 @@ const BacentaAttendanceForm: React.FC<BacentaAttendanceFormProps> = ({
                         </div>
                       </div>
                     )}
+                    {visitorNames.length > 0 && (
+                      <div>
+                        <h3 className="text-sm font-semibold text-gray-700 mb-2">Visitors</h3>
+                        <div className="flex flex-wrap gap-2">
+                          {visitorNames.map((name, idx) => (
+                            <span key={`${name}-${idx}`} className="inline-flex items-center px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                              {idx + 1}. {name}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <p className="text-center text-gray-600">No attendees recorded.</p>
@@ -843,6 +878,42 @@ const BacentaAttendanceForm: React.FC<BacentaAttendanceFormProps> = ({
                           <span key={`${name}-${idx}`} className="inline-flex items-center px-3 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
                             {idx + 1}. {name}
                             <button type="button" onClick={() => removeFirstTimer(idx)} className="ml-2 text-blue-600 hover:text-blue-800">
+                              <XMarkIcon className="w-4 h-4" />
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Visitors input */}
+                    <label className="block text-sm font-medium text-gray-700 mt-6 mb-2">
+                      Add visitors
+                    </label>
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="text"
+                        value={visitorInput}
+                        onChange={(e) => setVisitorInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            addVisitor();
+                          }
+                        }}
+                        placeholder="Type a name and press Enter"
+                        className="flex-1 px-3 py-2 border rounded-lg border-gray-300 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                      />
+                      <button type="button" onClick={addVisitor} className="inline-flex items-center px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg">
+                        <PlusIcon className="w-5 h-5" />
+                      </button>
+                    </div>
+
+                    {visitorNames.length > 0 && (
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {visitorNames.map((name, idx) => (
+                          <span key={`${name}-${idx}`} className="inline-flex items-center px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            {idx + 1}. {name}
+                            <button type="button" onClick={() => removeVisitor(idx)} className="ml-2 text-emerald-600 hover:text-emerald-800">
                               <XMarkIcon className="w-4 h-4" />
                             </button>
                           </span>

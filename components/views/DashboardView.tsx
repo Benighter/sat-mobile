@@ -310,9 +310,10 @@ const DashboardView: React.FC = memo(() => {
       const dayMeetingRecords = meetingRecords.filter(record => record.date === date);
       dayMeetingRecords.forEach(record => {
         // Attendance: presentMemberIds + firstTimers (fallbacks for legacy data)
-        const presentCount = Array.isArray(record.presentMemberIds) ? record.presentMemberIds.length : (Array.isArray((record as any).attendees) ? (record as any).attendees.length : 0);
-        const firstTimers = typeof record.firstTimers === 'number' ? record.firstTimers : (Array.isArray(record.guests) ? record.guests.length : 0);
-        totalAttendance += (presentCount + firstTimers);
+  const presentCount = Array.isArray(record.presentMemberIds) ? record.presentMemberIds.length : (Array.isArray((record as any).attendees) ? (record as any).attendees.length : 0);
+  const firstTimers = typeof record.firstTimers === 'number' ? record.firstTimers : (Array.isArray(record.guests) ? record.guests.length : 0);
+  const visitors = Array.isArray((record as any).visitors) ? (record as any).visitors.length : (typeof (record as any).visitorsCount === 'number' ? (record as any).visitorsCount : 0);
+  totalAttendance += (presentCount + firstTimers + visitors);
 
         // Income: prefer totalOffering, else cash + online
         const offering = typeof record.totalOffering === 'number' && !isNaN(record.totalOffering)
@@ -382,9 +383,13 @@ const DashboardView: React.FC = memo(() => {
     ...(isAdmin ? (['tithe'] as CardId[]) : [])
   ];
   const shouldShowSundayHeadCounts = isMinistryContext && (activeMinistryName || '').trim().toLowerCase() === 'ushers';
-  const defaultOrder: CardId[] = shouldShowSundayHeadCounts
-    ? (['sundayHeadCounts', ...baseDefaultOrder] as CardId[])
-    : baseDefaultOrder;
+  const defaultOrder: CardId[] = (() => {
+    const base = shouldShowSundayHeadCounts
+      ? (['sundayHeadCounts', ...baseDefaultOrder] as CardId[])
+      : baseDefaultOrder;
+    // For all ministry apps, remove Outreach and Bacenta Meetings
+    return isMinistryContext ? (base.filter((id) => id !== 'outreach' && id !== 'bacentaMeetings') as CardId[]) : base;
+  })();
   const [cardOrder, setCardOrder] = useState<CardId[]>(() => defaultOrder);
   const [rearrangeMode, setRearrangeMode] = useState<boolean>(false);
   const dragItemId = useRef<CardId | null>(null);
@@ -455,6 +460,10 @@ const DashboardView: React.FC = memo(() => {
         sanitized = (['sundayHeadCounts', ...sanitized]) as CardId[];
       }
     }
+    // For all ministry apps, remove Outreach and Bacenta Meetings
+    if (isMinistryContext) {
+      sanitized = sanitized.filter((id) => id !== 'outreach' && id !== 'bacentaMeetings') as CardId[];
+    }
   // Remove deprecated cards if present in persisted layouts
   sanitized = sanitized.filter((id) => id !== ('tongues' as any) && id !== ('baptized' as any)) as CardId[];
     setCardOrder(sanitized);
@@ -471,6 +480,10 @@ const DashboardView: React.FC = memo(() => {
     // Ensure Ushers-only card is not stored when not applicable
     if (!shouldShowSundayHeadCounts) {
       sanitized = sanitized.filter((id) => id !== 'sundayHeadCounts') as CardId[];
+    }
+    // For all ministry apps, remove Outreach and Bacenta Meetings
+    if (isMinistryContext) {
+      sanitized = sanitized.filter((id) => id !== 'outreach' && id !== 'bacentaMeetings') as CardId[];
     }
   // Remove deprecated cards
   sanitized = sanitized.filter((id) => id !== ('tongues' as any) && id !== ('baptized' as any)) as CardId[];
@@ -544,7 +557,7 @@ const DashboardView: React.FC = memo(() => {
             onClick={() => !rearrangeMode && switchTab({ id: 'all_members', name: 'Tithe & Transport', data: { isTithe: true } })}
           />
         );
-      }
+  }
       case 'confirmations':
         return (
           <EnhancedConfirmationCard
@@ -582,6 +595,7 @@ const DashboardView: React.FC = memo(() => {
           />
         );
       case 'outreach':
+        if (isMinistryContext) return null;
         return (
           <StatCard
             key={id}
@@ -594,6 +608,7 @@ const DashboardView: React.FC = memo(() => {
           />
         );
       case 'bacentaMeetings':
+        if (isMinistryContext) return null;
         return (
           <StatCard
             key={id}

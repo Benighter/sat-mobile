@@ -134,26 +134,29 @@ const BacentaMeetingsView: React.FC = () => {
     let cash = 0;
     let online = 0;
     let offering = 0;
-    let firstTimers = 0;
+  let firstTimers = 0;
+  let visitors = 0;
     let converts = 0;
 
     // Only count one record per bacenta per date (records are unique by id anyway)
     for (const rec of meetingRecords) {
       if (!includeDates.includes(rec.date)) continue;
       held += 1;
-      const ft = (rec.firstTimers ?? (Array.isArray(rec.guests) ? rec.guests.length : 0)) as number;
+  const ft = (rec.firstTimers ?? (Array.isArray(rec.guests) ? rec.guests.length : 0)) as number;
+  const vis = Array.isArray((rec as any).visitors) ? (rec as any).visitors.length : (typeof (rec as any).visitorsCount === 'number' ? (rec as any).visitorsCount : 0);
       const present = Array.isArray(rec.presentMemberIds) ? rec.presentMemberIds.length : 0;
-      attendance += present + ft;
+  attendance += present + ft + vis;
       const c = typeof rec.cashOffering === 'number' ? rec.cashOffering : 0;
       const o = typeof rec.onlineOffering === 'number' ? rec.onlineOffering : 0;
       cash += c; online += o;
       const tot = typeof rec.totalOffering === 'number' ? rec.totalOffering : (c + o);
       offering += tot;
       firstTimers += ft;
-      converts += (typeof rec.converts === 'number' ? rec.converts : 0);
+  converts += (typeof rec.converts === 'number' ? rec.converts : 0);
+  visitors += vis;
     }
 
-    return { held, attendance, offering, firstTimers, converts, cash, online, wednesday, thursday };
+  return { held, attendance, offering, firstTimers, converts, cash, online, wednesday, thursday, visitors };
   }, [meetingRecords, currentDate, currentDayName]);
 
   // Get member count for each bacenta
@@ -198,6 +201,7 @@ const BacentaMeetingsView: React.FC = () => {
   let overallCash = 0;
   let overallOnline = 0;
       let overallFirstTimers = 0;
+      let overallVisitors = 0;
       let overallNewBelievers = 0;
 
   const WHITE_FLOWER = '💮';
@@ -224,7 +228,8 @@ const BacentaMeetingsView: React.FC = () => {
         }
         // compute metrics with safe fallbacks
   const firstTimers = (record.firstTimers ?? record.guests?.length ?? 0) as number;
-  const attendance = (record.presentMemberIds?.length || 0) + firstTimers;
+  const visitors = Array.isArray((record as any).visitors) ? (record as any).visitors.length : (typeof (record as any).visitorsCount === 'number' ? (record as any).visitorsCount : 0);
+  const attendance = (record.presentMemberIds?.length || 0) + firstTimers + visitors;
   const cash = (typeof record.cashOffering === 'number' ? record.cashOffering : 0);
   const online = (typeof record.onlineOffering === 'number' ? record.onlineOffering : 0);
   const offering = (record.totalOffering ?? (cash + online)) as number;
@@ -233,7 +238,8 @@ const BacentaMeetingsView: React.FC = () => {
   overallOffering += offering;
   overallCash += cash;
   overallOnline += online;
-        overallFirstTimers += firstTimers;
+  overallFirstTimers += firstTimers;
+  overallVisitors += visitors;
         overallNewBelievers += converts;
         totalMeetingsRecorded += 1;
 
@@ -241,6 +247,7 @@ const BacentaMeetingsView: React.FC = () => {
   lines.push(`   • Attendance: ${attendance}`);
   lines.push(`   • Offering: R${offering.toFixed(2)}`);
   lines.push(`   • First Timers: ${firstTimers}`);
+  lines.push(`   • Visitors: ${visitors}`);
   lines.push(`   • New Believers: ${converts}`);
   lines.push('');
         idx++;
@@ -296,6 +303,7 @@ const BacentaMeetingsView: React.FC = () => {
   lines.push(`• Cash: R${overallCash.toFixed(2)}`);
   lines.push(`• Offering (Overall): R${overallOffering.toFixed(2)}`);
   lines.push(`• First Timers: ${overallFirstTimers}`);
+  lines.push(`• Visitors: ${overallVisitors}`);
   lines.push(`• New Believers: ${overallNewBelievers}`);
 
       const text = lines.join('\n');
@@ -426,7 +434,9 @@ const BacentaMeetingsView: React.FC = () => {
               const existingMeetingRecord: any = getMeetingRecord(bacenta.id, currentDate);
               const hasExistingRecord = !!existingMeetingRecord;
               const totals = hasExistingRecord ? {
-                attendance: (Number(existingMeetingRecord.presentMemberIds?.length || 0)) + Number(existingMeetingRecord.firstTimers ?? existingMeetingRecord.guests?.length ?? 0),
+                attendance: (Number(existingMeetingRecord.presentMemberIds?.length || 0))
+                  + Number(existingMeetingRecord.firstTimers ?? existingMeetingRecord.guests?.length ?? 0)
+                  + Number(Array.isArray(existingMeetingRecord.visitors) ? existingMeetingRecord.visitors.length : (typeof existingMeetingRecord.visitorsCount === 'number' ? existingMeetingRecord.visitorsCount : 0)),
                 offering: Number(
                   existingMeetingRecord.totalOffering ?? (
                     Number(existingMeetingRecord.cashOffering || 0) + Number(existingMeetingRecord.onlineOffering || 0)
