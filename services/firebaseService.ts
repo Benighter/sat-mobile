@@ -13,11 +13,13 @@ import {
   orderBy,
   onSnapshot,
   writeBatch,
+  runTransaction,
   enableNetwork,
   disableNetwork,
   Timestamp,
   Unsubscribe
 } from 'firebase/firestore';
+import type { Transaction } from 'firebase/firestore';
 import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
@@ -55,7 +57,6 @@ export interface FirebaseError {
 // Current user and church context
 let currentUser: FirebaseUser | null = null;
 let currentChurchId: string | null = null;
-export const getCurrentChurchId = (): string | null => currentChurchId;
 
 // Helper: map a real email to a ministry-only Auth email alias (same inbox for providers that support plus-addressing)
 const toMinistryAuthEmail = (email: string): string => {
@@ -905,29 +906,8 @@ export const membersFirebaseService = {
   add: async (member: Omit<Member, 'id' | 'createdDate' | 'lastUpdated'>): Promise<string> => {
     try {
       const membersRef = collection(db, getChurchCollectionPath('members'));
-      // Upload profile picture to Storage when provided as base64 data URL
-      let payload: any = { ...member };
-      try {
-        const { imageStorageService, isDataUrl } = await import('./imageStorageService');
-        if (currentChurchId && isDataUrl(member.profilePicture)) {
-          // Create a temporary doc to get an ID for pathing
-          const tempRef = await addDoc(membersRef, { createdDate: new Date().toISOString(), lastUpdated: new Date().toISOString(), isActive: true });
-          const uploadedUrl = await imageStorageService.uploadMemberProfilePicture(currentChurchId, tempRef.id, member.profilePicture as any);
-          payload.profilePicture = uploadedUrl;
-          // Update the temp doc with full payload below by reusing the temp ID
-          await updateDoc(tempRef, {
-            ...payload,
-            isActive: true,
-            createdDate: new Date().toISOString(),
-            lastUpdated: new Date().toISOString()
-          });
-          return tempRef.id;
-        }
-      } catch (e) {
-        // If upload fails, continue to store whatever is provided
-      }
       const docRef = await addDoc(membersRef, {
-        ...payload,
+        ...member,
         isActive: true,
         createdDate: new Date().toISOString(),
         lastUpdated: new Date().toISOString()
@@ -945,15 +925,6 @@ export const membersFirebaseService = {
       const memberRef = doc(db, getChurchCollectionPath('members'), memberId);
       // Remove undefined values to avoid Firestore updateDoc errors
       const sanitized: any = { ...updates };
-      try {
-        const { imageStorageService, isDataUrl } = await import('./imageStorageService');
-        if (currentChurchId && isDataUrl(updates.profilePicture)) {
-          const uploadedUrl = await imageStorageService.uploadMemberProfilePicture(currentChurchId, memberId, updates.profilePicture as any);
-          sanitized.profilePicture = uploadedUrl;
-        }
-      } catch (e) {
-        // ignore upload issues; fallback to provided value
-      }
       Object.keys(sanitized).forEach((k) => {
         if (sanitized[k] === undefined) delete sanitized[k];
       });
@@ -1512,6 +1483,106 @@ export const prayerFirebaseService = {
       })) as PrayerRecord[];
       callback(records);
     });
+  },
+
+  // Client-side fallback: auto-mark Missed shortly after session end (if due) without backend deployment
+  autoMarkMissedIfDue: async (): Promise<{ ran: boolean; marked: number; skipped: number }> => {
+    try {
+      // Determine local date and weekday
+      const now = new Date();
+      const ymd = now.toISOString().slice(0, 10);
+      const wk = now.toLocaleDateString(undefined, { weekday: 'short' }); // Mon, Tue, ...
+
+      // Only Tue–Sun
+      if (wk === 'Mon') return { ran: false, marked: 0, skipped: 0 };
+
+      // Session end minutes by weekday
+      const endMins = (() => {
+        if (wk === 'Tue' || wk === 'Fri') return 390; // 06:30
+        if (wk === 'Wed' || wk === 'Thu') return 360; // 06:00
+        if (wk === 'Sat' || wk === 'Sun') return 420; // 07:00
+        return null;
+      })();
+
+      if (endMins == null) return { ran: false, marked: 0, skipped: 0 };
+
+      const localMins = now.getHours() * 60 + now.getMinutes();
+      if (localMins < endMins + 1) {
+        // Not yet time
+        return { ran: false, marked: 0, skipped: 0 };
+      }
+
+      // Idempotency lock using a fixed doc id
+      // churches/{churchId}/locks/autoPrayerMissed_YYYY-MM-DD
+      const churchLocksDoc = doc(db, `churches/${currentChurchId}/locks/autoPrayerMissed_${ymd}`);
+
+      // Use a transaction to create lock only if absent
+  const marked = await runTransaction(db, async (tx: Transaction) => {
+        const lockSnap = await tx.get(churchLocksDoc);
+        if (lockSnap.exists()) {
+          return -1; // already processed
+        }
+        tx.set(churchLocksDoc, {
+          createdAt: Timestamp.now(),
+          sessionEndLocal: `${String(Math.floor(endMins / 60)).padStart(2, '0')}:${String(endMins % 60).padStart(2, '0')}`,
+          date: ymd,
+          source: 'client-fallback'
+        });
+        return 0;
+      });
+
+      if (marked === -1) {
+        return { ran: false, marked: 0, skipped: 0 };
+      }
+
+      // Fetch members (active, non-frozen)
+      const membersSnap = await getDocs(
+        query(collection(db, getChurchCollectionPath('members')), where('isActive', '!=', false))
+      );
+      const members = membersSnap.docs
+        .map(d => ({ id: d.id, ...(d.data() as any) }))
+        .filter(m => m.frozen !== true);
+
+      if (!members.length) return { ran: true, marked: 0, skipped: 0 };
+
+      // Fetch existing prayer records for today
+      const prayersSnap = await getDocs(
+        query(collection(db, getChurchCollectionPath('prayers')), where('date', '==', ymd))
+      );
+      const prayedSet = new Set<string>();
+      prayersSnap.docs.forEach(d => {
+        const r = d.data() as any;
+        if (r.status === 'Prayed' && r.memberId) prayedSet.add(r.memberId);
+      });
+
+      const toMiss = members.filter(m => !prayedSet.has(m.id));
+      if (!toMiss.length) return { ran: true, marked: 0, skipped: members.length };
+
+      let total = 0;
+      for (let i = 0; i < toMiss.length; i += 450) {
+        const chunk = toMiss.slice(i, i + 450);
+        const batch = writeBatch(db);
+        chunk.forEach(m => {
+          const id = `${m.id}_${ymd}`;
+          const ref = doc(db, getChurchCollectionPath('prayers'), id);
+          batch.set(ref, {
+            id,
+            memberId: m.id,
+            date: ymd,
+            status: 'Missed',
+            recordedAt: Timestamp.now(),
+            recordedBy: currentUser?.uid || 'client:auto-miss'
+          }, { merge: true });
+        });
+        await batch.commit();
+        total += chunk.length;
+      }
+
+      return { ran: true, marked: total, skipped: members.length - toMiss.length };
+    } catch (err) {
+      console.error('autoMarkMissedIfDue failed:', err);
+      return { ran: false, marked: 0, skipped: 0 };
+    }
   }
 };
 
@@ -2260,20 +2331,8 @@ export const meetingRecordsFirebaseService = {
       const meetingsRef = collection(db, getChurchCollectionPath('meetings'));
       const docRef = doc(meetingsRef, record.id);
 
-      // If meetingImage is a base64 data URL, upload to Storage and store URL
-      let payload: any = { ...record };
-      try {
-        const { imageStorageService, isDataUrl } = await import('./imageStorageService');
-        if (currentChurchId && isDataUrl(record.meetingImage)) {
-          const uploadedUrl = await imageStorageService.uploadMeetingImage(currentChurchId, record.id, record.meetingImage as any);
-          payload.meetingImage = uploadedUrl;
-        }
-      } catch (e) {
-        // ignore storage failures; keep original payload
-      }
-
       await setDoc(docRef, {
-        ...payload,
+        ...record,
         updatedAt: new Date().toISOString(),
         recordedBy: currentUser?.uid || 'unknown'
       }, { merge: true });

@@ -1009,6 +1009,173 @@ exports.cleanupOldTokens = functions.pubsub.schedule('0 2 * * *')
     console.log(`Cleaned up ${snapshot.size} old device tokens`);
   });
 
+// Auto-mark prayer "Missed" at 06:01 local time for each church
+// Runs every 5 minutes in UTC and gates by per-church timezone and local time window around 06:01
+exports.autoMarkPrayerMissed = functions.pubsub.schedule('*/1 * * * *')
+  .timeZone('UTC')
+  .onRun(async () => {
+    const db = admin.firestore();
+
+    // Fetch all churches
+    const churchesSnap = await db.collection('churches').get();
+    if (churchesSnap.empty) return null;
+
+    const nowUtc = new Date();
+
+  // Helper to get local HH:mm and YYYY-MM-DD for a given tz
+    const getLocalParts = (tz) => {
+      const timeFmt = new Intl.DateTimeFormat('en-GB', {
+        timeZone: tz,
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+      });
+      const dateFmt = new Intl.DateTimeFormat('en-CA', {
+        timeZone: tz,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+      });
+      const weekdayFmt = new Intl.DateTimeFormat('en-US', {
+        timeZone: tz,
+        weekday: 'short'
+      });
+
+      const timeParts = timeFmt.formatToParts(nowUtc);
+      const hh = parseInt(timeParts.find(p => p.type === 'hour')?.value || '0', 10);
+      const mm = parseInt(timeParts.find(p => p.type === 'minute')?.value || '0', 10);
+      const hhmm = `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+
+      // en-CA yields YYYY-MM-DD
+      const ymd = dateFmt.format(nowUtc);
+      const weekday = weekdayFmt.format(nowUtc); // e.g., Mon, Tue
+
+      return { hh, mm, hhmm, ymd, weekday };
+    };
+
+    // Check if a given weekday is a prayer day (Tue–Sun). Monday is not.
+    const isPrayerDay = (wk) => wk !== 'Mon';
+
+    // Returns session end time (in minutes after midnight) for a weekday short name
+    // Tue/Fri: 06:30 (390); Wed/Thu: 06:00 (360); Sat/Sun: 07:00 (420)
+    const getSessionEndMinutes = (wk) => {
+      if (wk === 'Tue' || wk === 'Fri') return 390;
+      if (wk === 'Wed' || wk === 'Thu') return 360;
+      if (wk === 'Sat' || wk === 'Sun') return 420;
+      return null; // Monday or unknown
+    };
+
+    const minutesToHHMM = (mins) => `${String(Math.floor(mins / 60)).padStart(2, '0')}:${String(mins % 60).padStart(2, '0')}`;
+
+    for (const churchDoc of churchesSnap.docs) {
+      const church = churchDoc.data() || {};
+      // Prefer explicit timezone; default to Africa/Johannesburg if not set, else UTC
+      const tz = church.settings?.timezone
+        || church.settings?.notificationSettings?.timezone
+        || 'Africa/Johannesburg';
+
+      const { hh, mm, hhmm, ymd, weekday } = getLocalParts(tz);
+
+  // Gate by prayer day and session end + 1 minute window (end+1 .. end+5)
+  if (!isPrayerDay(weekday)) continue;
+  const endMins = getSessionEndMinutes(weekday);
+  if (endMins == null) continue;
+  const localMins = hh * 60 + mm;
+  const sinceEndPlusOne = localMins - (endMins + 1);
+  if (sinceEndPlusOne < 0 || sinceEndPlusOne > 4) continue;
+
+      try {
+        const churchId = churchDoc.id;
+
+        // Optional kill switch: settings.prayer?.autoMarkMissedEnabled === false
+        if (church.settings?.prayer && church.settings.prayer.autoMarkMissedEnabled === false) {
+          console.log(`[autoMarkPrayerMissed] Skipping church ${churchId}: disabled in settings`);
+          continue;
+        }
+
+  // Idempotency lock: skip if already processed for this church and date
+  const lockRef = db.doc(`churches/${churchId}/locks/autoPrayerMissed_${ymd}`);
+        const lockSnap = await lockRef.get();
+        if (lockSnap.exists) {
+          console.log(`[autoMarkPrayerMissed] ${churchId} ${ymd} – already processed, skipping`);
+          continue;
+        }
+
+        // Fetch active, non-frozen members
+        const membersQuery = db
+          .collection(`churches/${churchId}/members`)
+          .where('isActive', '!=', false);
+        const membersSnap = await membersQuery.get();
+        if (membersSnap.empty) continue;
+
+        const members = membersSnap.docs
+          .map(d => ({ id: d.id, ...(d.data() || {}) }))
+          .filter(m => m.frozen !== true);
+
+        if (!members.length) continue;
+
+        // Fetch prayer records already set for local date
+        const prayersSnap = await db
+          .collection(`churches/${churchId}/prayers`)
+          .where('date', '==', ymd)
+          .get();
+
+        const statusByMember = new Map();
+        prayersSnap.forEach(doc => {
+          const r = doc.data() || {};
+          if (r.memberId && r.status) statusByMember.set(r.memberId, r.status);
+        });
+
+        // Prepare writes for members who are NOT marked 'Prayed' yet
+        const toMark = members.filter(m => statusByMember.get(m.id) !== 'Prayed');
+        if (!toMark.length) {
+          console.log(`[autoMarkPrayerMissed] ${churchId} ${ymd} – nothing to mark (time ${hhmm} ${tz})`);
+          continue;
+        }
+
+        // Batch in chunks of 450
+        const chunks = [];
+        for (let i = 0; i < toMark.length; i += 450) {
+          chunks.push(toMark.slice(i, i + 450));
+        }
+
+        let totalSet = 0;
+        for (const chunk of chunks) {
+          const batch = db.batch();
+          chunk.forEach(m => {
+            const id = `${m.id}_${ymd}`;
+            const ref = db.doc(`churches/${churchId}/prayers/${id}`);
+            batch.set(ref, {
+              id,
+              memberId: m.id,
+              date: ymd,
+              status: 'Missed',
+              recordedAt: admin.firestore.FieldValue.serverTimestamp(),
+              recordedBy: 'system:auto-miss@06:01'
+            }, { merge: true });
+          });
+          await batch.commit();
+          totalSet += chunk.length;
+        }
+
+        console.log(`[autoMarkPrayerMissed] ${churchId} ${ymd} – marked Missed for ${totalSet}/${toMark.length} members (local ${hhmm} ${tz}, session end ${minutesToHHMM(endMins)})`);
+
+        // Write lock
+        await lockRef.set({
+          processedAt: admin.firestore.FieldValue.serverTimestamp(),
+          sessionEndLocal: minutesToHHMM(endMins),
+          windowStartLocal: minutesToHHMM(endMins + 1),
+          windowEndLocal: minutesToHHMM(endMins + 5),
+          tz
+        }, { merge: true });
+      } catch (err) {
+        console.error('[autoMarkPrayerMissed] Error processing church', churchDoc.id, err);
+      }
+    }
+
+    return null;
+  });
+
 // HTTP endpoint for sending notifications (for development/testing)
 exports.sendNotificationHTTP = functions.https.onRequest(async (req, res) => {
   // Enable CORS

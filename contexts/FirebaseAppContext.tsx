@@ -679,6 +679,22 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
         });
         unsubscribers.push(unsubscribePrayer);
 
+        // Client-side auto-miss fallback: attempt once per day per church after listeners attach
+        try {
+          const churchId = firebaseUtils.getCurrentChurchId();
+          const today = new Date().toISOString().slice(0, 10);
+          const key = `autoMiss:${churchId}:${today}`;
+          if (churchId && !sessionStorage.getItem(key)) {
+            sessionStorage.setItem(key, '1');
+            // Fire and forget; we can optionally surface a toast for admins only
+            void prayerFirebaseService.autoMarkMissedIfDue().then((res) => {
+              if (res?.ran && res.marked > 0) {
+                console.log(`[AutoMiss Client] Marked ${res.marked} members as Missed for ${today}`);
+              }
+            }).catch(() => {});
+          }
+        } catch {}
+
         // Listen to new believers (filter by ministry in ministry mode)
         const unsubscribeNewBelievers = isMinistryContext && (activeMinistryName || '').trim() !== ''
           ? newBelieversFirebaseService.onSnapshotByMinistry(activeMinistryName, (items) => setNewBelievers(items))
