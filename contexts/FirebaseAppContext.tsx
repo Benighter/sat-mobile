@@ -556,10 +556,11 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
         willUseMinistryListeners: isMinistryContext && (activeMinistryName || '').trim() !== ''
       });
 
-      if (isMinistryContext && (activeMinistryName || '').trim() !== '') {
+    if (isMinistryContext && (activeMinistryName || '').trim() !== '') {
         console.log('🔄 Setting up ministry data listeners for:', activeMinistryName);
   // Important: pass the ministry church id so native ministry members are included in normal mode
   const ministryChurchId = userProfile?.contexts?.ministryChurchId || firebaseUtils.getCurrentChurchId() || undefined;
+  const defaultChurchId = userProfile?.contexts?.defaultChurchId || userProfile?.churchId || undefined;
   const unsubscribeMinistryData = setupMinistryDataListeners(activeMinistryName, (data) => {
           console.log('📊 Ministry listener data received:', {
             members: data.members.length,
@@ -602,7 +603,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
           setNewBelievers(data.newBelievers);
           setSundayConfirmations(data.sundayConfirmations);
           setGuests(data.guests);
-  }, optimisticUpdatesRef, ministryChurchId);
+  }, optimisticUpdatesRef, ministryChurchId, defaultChurchId);
         unsubscribers.push(unsubscribeMinistryData);
 
         // Even in ministry mode, listen to deletion requests tied to the current (active) church context
@@ -839,7 +840,8 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
         try {
           const ministryData = await getMinistryAggregatedData(
             activeMinistryName,
-            userProfile?.contexts?.ministryChurchId || firebaseUtils.getCurrentChurchId() || undefined
+            userProfile?.contexts?.ministryChurchId || firebaseUtils.getCurrentChurchId() || undefined,
+            userProfile?.contexts?.defaultChurchId || userProfile?.churchId || undefined
           );
 
           setMembers(ministryData.members);

@@ -198,7 +198,11 @@ const fetchMinistryMembersFromChurch = async (churchId: string, ministryName: st
 };
 
 // Get aggregated data for a specific ministry across all churches (SuperAdmin style)
-export const getMinistryAggregatedData = async (ministryName: string, currentChurchId?: string): Promise<MinistryAggregatedData> => {
+export const getMinistryAggregatedData = async (
+  ministryName: string,
+  currentChurchId?: string,
+  defaultChurchId?: string
+): Promise<MinistryAggregatedData> => {
   try {
     console.log(`🔍 [SuperAdmin Style] Fetching cross-church data for ministry: ${ministryName}`);
 
@@ -206,7 +210,13 @@ export const getMinistryAggregatedData = async (ministryName: string, currentChu
     const churchIds = await getChurchesWithMinistry(ministryName);
     console.log(`📍 [SuperAdmin Style] Found ${churchIds.length} churches with ${ministryName} ministry`);
 
-    if (churchIds.length === 0) {
+    // Ensure the leader's default church is included even if discovery missed it
+    const allChurchIds = Array.from(new Set([
+      ...churchIds,
+      ...(defaultChurchId ? [defaultChurchId] : [])
+    ]));
+
+    if (allChurchIds.length === 0) {
       console.log(`⚠️ No churches found with ${ministryName} ministry`);
       return {
         members: [],
@@ -220,8 +230,8 @@ export const getMinistryAggregatedData = async (ministryName: string, currentChu
     }
 
     // Step 2: Fetch data from all churches in parallel (like SuperAdmin does)
-    console.log(`🔄 [SuperAdmin Style] Fetching data from ${churchIds.length} churches in parallel...`);
-    const allPromises = churchIds.map(async (churchId) => {
+    console.log(`🔄 [SuperAdmin Style] Fetching data from ${allChurchIds.length} churches in parallel...`);
+    const allPromises = allChurchIds.map(async (churchId) => {
       console.log(`📥 Fetching data from church: ${churchId}`);
       const [members, bacentas, attendance, newBelievers, confirmations, guests] = await Promise.all([
         fetchMinistryMembersFromChurch(churchId, ministryName),
@@ -262,7 +272,7 @@ export const getMinistryAggregatedData = async (ministryName: string, currentChu
       newBelievers: [],
       sundayConfirmations: [],
       guests: [],
-      sourceChurches: churchIds
+  sourceChurches: allChurchIds
     };
 
     churchDataArray.forEach(churchData => {
@@ -312,7 +322,7 @@ export const getMinistryAggregatedData = async (ministryName: string, currentChu
       newBelievers: aggregatedData.newBelievers.length,
       confirmations: aggregatedData.sundayConfirmations.length,
       guests: aggregatedData.guests.length,
-      churches: churchIds.length,
+      churches: allChurchIds.length,
       sourceChurches: aggregatedData.sourceChurches,
       currentChurchId: currentChurchId || 'not provided'
     });
@@ -337,7 +347,8 @@ export const setupMinistryDataListeners = (
   ministryName: string,
   onDataUpdate: (data: MinistryAggregatedData) => void,
   optimisticUpdatesRef?: React.MutableRefObject<Set<string>>,
-  currentChurchId?: string
+  currentChurchId?: string,
+  defaultChurchId?: string
 ): (() => void) => {
   const unsubscribers: Unsubscribe[] = [];
   let currentData: MinistryAggregatedData = {
@@ -359,7 +370,7 @@ export const setupMinistryDataListeners = (
   };
 
   // Initialize with current data
-  getMinistryAggregatedData(ministryName, currentChurchId).then(data => {
+  getMinistryAggregatedData(ministryName, currentChurchId, defaultChurchId).then(data => {
     currentData = data;
     updateAggregatedData();
 
@@ -386,8 +397,8 @@ export const setupMinistryDataListeners = (
       unsubscribers.push(unsubOverrides);
     }
 
-    // Set up listeners for each church
-    data.sourceChurches.forEach(churchId => {
+  // Set up listeners for each church
+  data.sourceChurches.forEach(churchId => {
       try {
         // Listen to members with this ministry (same pattern as onSnapshotByMinistry)
         const membersQuery = query(
@@ -509,6 +520,45 @@ export const setupMinistryDataListeners = (
         console.warn(`Failed to set up listeners for church ${churchId}:`, e);
       }
     });
+
+    // Safety net: ensure we also listen to the leader's default church even if it wasn't discovered initially
+    if (defaultChurchId && !data.sourceChurches.includes(defaultChurchId)) {
+      try {
+        console.log(`🔒 Ensuring default church listener is attached: ${defaultChurchId}`);
+        const membersQuery = query(
+          collection(db, `churches/${defaultChurchId}/members`),
+          where('ministry', '==', ministryName)
+        );
+
+        const unsubMembers = onSnapshot(membersQuery, (snapshot) => {
+          const items = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+            sourceChurchId: defaultChurchId
+          } as any as Member));
+
+          const filtered = items.filter(m => m.isActive !== false);
+          filtered.sort((a, b) => (a.lastName || '').localeCompare(b.lastName || ''));
+
+          currentData.members = currentData.members.filter(m => {
+            const isFromThisChurch = (m as any).sourceChurchId === defaultChurchId;
+            const isNative = m.isNativeMinistryMember;
+            return !isFromThisChurch || isNative;
+          });
+          const allowed = filtered.filter(m => !excludedKeys.has(`${defaultChurchId}_${m.id}`));
+          const withOverrides = allowed.map(m => {
+            const ov = overridesMap.get(`${defaultChurchId}_${m.id}`);
+            return ov ? { ...m, ...ov } : m;
+          });
+          currentData.members.push(...withOverrides);
+          updateAggregatedData();
+        });
+
+        unsubscribers.push(unsubMembers);
+      } catch (e) {
+        console.warn('Failed to attach default church listener for ministry mode:', e);
+      }
+    }
 
     // Set up listener for ministry-church members in the current ministry church (include native + synced)
     if (currentChurchId && !data.sourceChurches.includes(currentChurchId)) {
