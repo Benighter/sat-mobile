@@ -15,6 +15,7 @@ export const LazyBacentaLeadersView = lazy(() => import('../bacentas/BacentaLead
 
 export const LazyWeeklyAttendanceView = lazy(() => import('../attendance/WeeklyAttendanceView'));
 export const LazySundayHeadCountsView = lazy(() => import('../attendance/SundayHeadCountsView.tsx'));
+export const LazySundayHeadCountSectionView = lazy(() => import('../attendance/SundayHeadCountSectionView'));
 export const LazySundayConfirmationsView = lazy(() => import('../attendance/SundayConfirmationsView'));
 export const LazyNewBelieversView = lazy(() => import('../new-believers/NewBelieversView'));
 export const LazyMyDeletionRequestsView = lazy(() => import('../members/MyDeletionRequestsView'));

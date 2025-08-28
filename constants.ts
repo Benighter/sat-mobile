@@ -10,6 +10,7 @@ export const FIXED_TABS: TabOption[] = [
   { id: TabKeys.ATTENDANCE_ANALYTICS, name: 'Attendance Analytics' },
   { id: TabKeys.WEEKLY_ATTENDANCE, name: 'Weekly Attendance' },
   { id: TabKeys.SUNDAY_HEAD_COUNTS, name: 'Sunday Head counts' },
+  { id: TabKeys.SUNDAY_HEAD_COUNT_SECTION, name: 'Head Count Section' },
   { id: TabKeys.SUNDAY_CONFIRMATIONS, name: 'Sunday Confirmations' },
   { id: TabKeys.PRAYER, name: 'Prayer' },
   { id: TabKeys.NEW_BELIEVERS, name: 'Born Again' },

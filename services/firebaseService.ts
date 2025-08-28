@@ -32,7 +32,19 @@ import {
   fetchSignInMethodsForEmail
 } from 'firebase/auth';
 import { db, auth } from '../firebase.config';
-import { Member, Bacenta, AttendanceRecord, NewBeliever, SundayConfirmation, Guest, MemberDeletionRequest, DeletionRequestStatus, OutreachBacenta, OutreachMember, PrayerRecord, MeetingRecord, TitheRecord, BussingRecord, TransportRecord } from '../types';
+import { Member, Bacenta, AttendanceRecord, NewBeliever, SundayConfirmation, Guest, MemberDeletionRequest, DeletionRequestStatus, OutreachBacenta, OutreachMember, PrayerRecord, MeetingRecord, TitheRecord, BussingRecord, TransportRecord, } from '../types';
+// Lightweight inline type to avoid circular heavy imports for new feature (kept local to service)
+export interface HeadCountRecord {
+  id: string; // `${date}_${section}`
+  date: string; // YYYY-MM-DD
+  section: string; // right | left | airport | media | overflow
+  count1?: number;
+  count2?: number;
+  count3?: number;
+  total?: number; // convenience aggregate
+  updatedAt?: string; // ISO
+  updatedBy?: string; // uid
+}
 
 // Types for Firebase operations
 export interface FirebaseUser {
@@ -485,6 +497,75 @@ export const authService = {
       return false;
     }
   }
+};
+
+// Head Count Service (per Sunday, per section). Stored under churches/{churchId}/headCounts
+export const headCountService = {
+  docId(date: string, section: string) {
+    const sec = (section || '').toLowerCase();
+    return `${date}_${sec}`;
+  },
+
+  async get(date: string, section: string): Promise<HeadCountRecord | null> {
+    const id = this.docId(date, section);
+    const ref = doc(db, getChurchCollectionPath('headCounts'), id);
+    const snap = await getDoc(ref);
+    if (!snap.exists()) return null;
+    return { id: snap.id, ...(snap.data() as any) } as HeadCountRecord;
+  },
+
+  async set(date: string, section: string, partial: Partial<HeadCountRecord>): Promise<HeadCountRecord> {
+    const id = this.docId(date, section);
+    const ref = doc(db, getChurchCollectionPath('headCounts'), id);
+    const c1 = Number((partial as any)?.count1 ?? 0) || 0;
+    const c2 = Number((partial as any)?.count2 ?? 0) || 0;
+    const c3 = Number((partial as any)?.count3 ?? 0) || 0;
+    const total = (c1 || 0) + (c2 || 0) + (c3 || 0);
+    const payload: any = {
+      id,
+      date,
+      section: (section || '').toLowerCase(),
+      ...partial,
+      count1: c1,
+      count2: c2,
+      count3: c3,
+      total,
+      updatedAt: new Date().toISOString(),
+      updatedBy: currentUser?.uid || 'system'
+    };
+    await setDoc(ref, payload, { merge: true });
+    return payload as HeadCountRecord;
+  },
+
+  async updateCounts(date: string, section: string, counts: { count1?: number; count2?: number; count3?: number }) {
+    const id = this.docId(date, section);
+    const ref = doc(db, getChurchCollectionPath('headCounts'), id);
+    const c1 = Number(counts.count1 ?? 0) || 0;
+    const c2 = Number(counts.count2 ?? 0) || 0;
+    const c3 = Number(counts.count3 ?? 0) || 0;
+    const total = (c1 || 0) + (c2 || 0) + (c3 || 0);
+    const payload: any = {
+      id,
+      date,
+      section: (section || '').toLowerCase(),
+      count1: c1,
+      count2: c2,
+      count3: c3,
+      total,
+      updatedAt: new Date().toISOString(),
+      updatedBy: currentUser?.uid || 'system'
+    };
+    await setDoc(ref, payload, { merge: true });
+  },
+
+  onValue(date: string, section: string, cb: (rec: HeadCountRecord | null) => void): Unsubscribe {
+    const id = this.docId(date, section);
+    const ref = doc(db, getChurchCollectionPath('headCounts'), id);
+    return onSnapshot(ref, (snap) => {
+      if (!snap.exists()) return cb(null);
+      cb({ id: snap.id, ...(snap.data() as any) } as HeadCountRecord);
+    });
+  },
 };
 
 // Switch the active data context (default vs ministry) after sign-in

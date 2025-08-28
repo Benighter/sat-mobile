@@ -6,7 +6,7 @@ import { PeopleIcon, AttendanceIcon, CalendarIcon, ChartBarIcon, PrayerIcon, Cur
 import { getMonthName, getCurrentOrMostRecentSunday, formatFullDate, getUpcomingSunday, getCurrentMeetingWeek, getMeetingWeekRange } from '../../utils/dateUtils';
 import { db } from '../../firebase.config';
 import { doc, getDoc } from 'firebase/firestore';
-import { firebaseUtils } from '../../services/firebaseService';
+import { firebaseUtils, headCountService } from '../../services/firebaseService';
 import { TabKeys } from '../../types';
 import { dashboardLayoutStorage } from '../../utils/localStorage';
 import { hasAdminPrivileges } from '../../utils/permissionUtils';
@@ -389,6 +389,48 @@ const DashboardView: React.FC = memo(() => {
   const [rearrangeMode, setRearrangeMode] = useState<boolean>(false);
   const dragItemId = useRef<CardId | null>(null);
 
+  // Combined Sunday Head Counts (for the current Sunday) for the Ushers card
+  const [currentSundayDate, setCurrentSundayDate] = useState<string>(() => getCurrentOrMostRecentSunday());
+  const [sundayHeadCountsCombined, setSundayHeadCountsCombined] = useState<number>(0);
+
+  // Keep the current Sunday date fresh; this naturally "resets" every Sunday at 00:00
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const next = getCurrentOrMostRecentSunday();
+      setCurrentSundayDate((prev) => (prev !== next ? next : prev));
+    }, 60 * 1000); // check every minute
+    return () => clearInterval(interval);
+  }, []);
+
+  // Subscribe to head counts for the current Sunday and sum per-section averages
+  useEffect(() => {
+    if (!shouldShowSundayHeadCounts || !currentSundayDate) return;
+    const sections: Array<'right' | 'left' | 'airport' | 'media' | 'overflow'> = ['right', 'left', 'airport', 'media', 'overflow'];
+    const values: Record<'right' | 'left' | 'airport' | 'media' | 'overflow', number> = {
+      right: 0,
+      left: 0,
+      airport: 0,
+      media: 0,
+      overflow: 0,
+    };
+    const recompute = () => {
+      const total = values.right + values.left + values.airport + values.media + values.overflow;
+      setSundayHeadCountsCombined(total);
+    };
+    const unsubs = sections.map((sec) =>
+      headCountService.onValue(currentSundayDate, sec, (rec) => {
+        const c1 = Number(rec?.count1 ?? 0) || 0;
+        const c2 = Number(rec?.count2 ?? 0) || 0;
+        const c3 = Number(rec?.count3 ?? 0) || 0;
+        values[sec] = Math.round((c1 + c2 + c3) / 3);
+        recompute();
+      })
+    );
+    return () => {
+      unsubs.forEach((u) => u && u());
+    };
+  }, [shouldShowSundayHeadCounts, currentSundayDate]);
+
   // Load/save personal order using user ID to keep it per-user and local only
   useEffect(() => {
     const uid = user?.uid ?? null;
@@ -481,10 +523,10 @@ const DashboardView: React.FC = memo(() => {
           <StatCard
             key={id}
             title="Sunday Head counts"
-            value={''}
+            value={sundayHeadCountsCombined}
             icon={<CalendarIcon className="w-full h-full" />}
             accentColor="indigo"
-            description={`For ${monthName}`}
+            description={`For Sunday`}
             onClick={() => !rearrangeMode && switchTab({ id: TabKeys.SUNDAY_HEAD_COUNTS, name: 'Sunday Head counts' })}
           />
         );

@@ -5,7 +5,7 @@ import { ThemeProvider } from './contexts/ThemeContext';
 import { AuthScreen } from './components/auth/AuthScreen';
 
 import DashboardView from './components/views/DashboardView';
-import LazyWrapper, { LazyMemberListView, LazyAttendanceAnalyticsView, LazyWeeklyAttendanceView, LazySundayConfirmationsView, LazyNewBelieversView, LazyOutreachView, LazyBacentaOutreachView, LazyPrayerView, LazyPrayerMemberDetailsView, LazyMinistriesView, LazyBacentaLeadersView, LazyMyDeletionRequestsView, LazyMemberDeletionRequestsView, LazyBacentaMeetingsView, LazySundayHeadCountsView } from './components/common/LazyWrapper';
+import LazyWrapper, { LazyMemberListView, LazyAttendanceAnalyticsView, LazyWeeklyAttendanceView, LazySundayConfirmationsView, LazyNewBelieversView, LazyOutreachView, LazyBacentaOutreachView, LazyPrayerView, LazyPrayerMemberDetailsView, LazyMinistriesView, LazyBacentaLeadersView, LazyMyDeletionRequestsView, LazyMemberDeletionRequestsView, LazyBacentaMeetingsView, LazySundayHeadCountsView, LazySundayHeadCountSectionView } from './components/common/LazyWrapper';
 import ProfileSettingsView from './components/views/ProfileSettingsView';
 import CopyMembersView from './components/views/CopyMembersView';
 import CopyAbsenteesView from './components/views/CopyAbsenteesView';
@@ -323,6 +323,12 @@ const AppContent: React.FC = memo(() => {
         return (
           <LazyWrapper>
             <LazySundayHeadCountsView />
+          </LazyWrapper>
+        );
+      case TabKeys.SUNDAY_HEAD_COUNT_SECTION:
+        return (
+          <LazyWrapper>
+            <LazySundayHeadCountSectionView />
           </LazyWrapper>
         );
       case TabKeys.SUNDAY_CONFIRMATIONS:
