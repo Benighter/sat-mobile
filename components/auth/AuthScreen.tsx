@@ -418,6 +418,11 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ children, showToast }) =
                   initialMessage={supportModalData.initialMessage}
                   supportPrompted={true}
                   contextMeta={supportModalData.contextMeta}
+                  onMessageSent={() => {
+                    // Clear the error and close the modal when message is sent successfully
+                    setError(null);
+                    setIsSupportModalOpen(false);
+                  }}
                 />
               </Modal>
 

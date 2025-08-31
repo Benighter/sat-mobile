@@ -415,6 +415,10 @@ const AppContent: React.FC = memo(() => {
               initialMessage={(currentTab as any)?.data?.initialMessage}
               supportPrompted={(currentTab as any)?.data?.supportPrompted}
               contextMeta={(currentTab as any)?.data?.contextMeta}
+              onClose={() => {
+                // Navigate back to dashboard when closing contact form
+                switchTab({ id: TabKeys.DASHBOARD, name: 'Dashboard' });
+              }}
             />
           </LazyWrapper>
         );

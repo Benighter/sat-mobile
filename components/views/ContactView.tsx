@@ -18,9 +18,11 @@ export interface ContactViewProps {
     errorMessage?: string;
     extra?: any;
   };
+  onMessageSent?: () => void; // callback when message is sent successfully
+  onClose?: () => void; // callback to close the form/modal
 }
 
-const ContactView: React.FC<ContactViewProps> = ({ initialEmail, initialMessage, supportPrompted = false, contextMeta }) => {
+const ContactView: React.FC<ContactViewProps> = ({ initialEmail, initialMessage, supportPrompted = false, contextMeta, onMessageSent, onClose }) => {
   const { showToast, user } = useAppContext();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -104,6 +106,7 @@ const ContactView: React.FC<ContactViewProps> = ({ initialEmail, initialMessage,
         setEmail('');
         setMessage('');
         setErrors({});
+        // Don't call the callback immediately - let user see the success message first
       } else {
         const message = (result && (result.message || result.error)) || `HTTP ${response.status}: Failed to send`;
         throw new Error(message);
@@ -123,23 +126,49 @@ const ContactView: React.FC<ContactViewProps> = ({ initialEmail, initialMessage,
             <CheckCircleIcon className="w-9 h-9 text-green-600" />
           </div>
         </div>
-        <h3 className="text-2xl font-bold text-gray-800 mb-2">Thank you!</h3>
-        <p className="text-gray-600 mb-6">{sent.message} We’ll get back to you shortly.</p>
-        <Button onClick={() => { try { (window as any).closeModal?.(); } catch {} }}>Close</Button>
+        <h3 className="text-2xl font-bold text-gray-800 dark:text-white mb-2">Thank you!</h3>
+        <p className="text-gray-600 dark:text-gray-300 mb-6">{sent.message} We’ll get back to you shortly.</p>
+        <Button
+          onClick={() => {
+            // Call the callback to clear error and close modal
+            onMessageSent?.();
+            // Fallback for other modal implementations
+            try { (window as any).closeModal?.(); } catch {}
+          }}
+          className="px-6 py-2"
+        >
+          Close
+        </Button>
       </div>
     );
   }
 
   return (
-    <div className="max-w-2xl mx-auto">
-      <div className="glass rounded-2xl p-6 sm:p-8 shadow-xl border border-gray-200/60 dark:border-dark-600/60 bg-white/70 dark:bg-dark-800/70">
-        <div className="mb-6">
-          <div className="flex items-start justify-between gap-4">
-            <div className="text-center mx-auto">
-              <h2 className="text-2xl font-extrabold text-gray-800">Contact Support</h2>
-              <p className="text-sm text-gray-600 dark:text-dark-300 mt-1">Have a question or need assistance? Send us a message and we’ll reply via email.</p>
-            </div>
-            {supportPrompted && (
+    <div className="max-w-md mx-auto px-4">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-xl border border-gray-200 dark:border-gray-700">
+        {/* Header Section */}
+        <div className="relative text-center mb-6">
+          {/* Close button */}
+          {onClose && (
+            <button
+              onClick={onClose}
+              className="absolute top-0 right-0 p-2 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 transition-colors duration-200"
+              aria-label="Close"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          )}
+
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Contact Support</h2>
+          <p className="text-gray-600 dark:text-gray-300 text-sm">
+            Have a question or need assistance? Send us a message and we’ll reply via email.
+          </p>
+
+          {/* Use Context Button */}
+          {supportPrompted && (
+            <div className="mt-4">
               <Button
                 variant="secondary"
                 size="sm"
@@ -156,17 +185,17 @@ const ContactView: React.FC<ContactViewProps> = ({ initialEmail, initialMessage,
               >
                 Use Context
               </Button>
-            )}
-          </div>
+            </div>
+          )}
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-1 gap-4">
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="space-y-5">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Name</label>
               <Input
                 name="name"
-                placeholder="Your name"
+                placeholder="Your full name"
                 value={name}
                 onChange={setName}
                 error={errors.name}
@@ -175,11 +204,11 @@ const ContactView: React.FC<ContactViewProps> = ({ initialEmail, initialMessage,
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Email</label>
               <Input
                 name="email"
                 type="email"
-                placeholder="email@example.com"
+                placeholder="your.email@example.com"
                 value={email}
                 onChange={(val) => setEmail(val)}
                 error={errors.email}
@@ -188,30 +217,49 @@ const ContactView: React.FC<ContactViewProps> = ({ initialEmail, initialMessage,
             </div>
 
             <div>
-              <label htmlFor="message" className="block text-sm font-medium text-gray-700 mb-1">Message</label>
+              <label htmlFor="message" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Message</label>
               <textarea
                 id="message"
                 name="message"
-                className={`w-full py-3 px-3 border ${errors.message ? 'border-red-500' : 'border-gray-300'} rounded-xl shadow-sm focus:outline-none focus:ring-2 ${errors.message ? 'focus:ring-red-500' : 'focus:ring-blue-500'} focus:border-transparent transition-colors text-base bg-white text-gray-900 placeholder-gray-500 min-h-[120px]`}
-                placeholder="Enter your message"
+                className={`w-full px-4 py-3 border ${errors.message ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'} rounded-xl shadow-sm focus:outline-none focus:ring-2 ${errors.message ? 'focus:ring-red-500' : 'focus:ring-blue-500 dark:focus:ring-blue-400'} focus:border-transparent transition-colors duration-200 text-base bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 min-h-[120px] resize-none`}
+                placeholder="Describe your question or issue in detail..."
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
                 required
               />
-              {errors.message && <p className="mt-1 text-xs text-red-600">{errors.message}</p>}
+              {errors.message && <p className="mt-2 text-sm text-red-600 dark:text-red-400">{errors.message}</p>}
             </div>
 
-            <div className="pt-2">
-              <Button type="submit" variant="primary" size="lg" loading={submitting} className="w-full">
-                {submitting ? 'Sending…' : 'Send Message'}
+            <div className="pt-6 flex gap-3">
+              {onClose && (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="lg"
+                  onClick={onClose}
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
+              )}
+              <Button
+                type="submit"
+                variant="primary"
+                size="lg"
+                loading={submitting}
+                className={onClose ? "flex-1" : "w-full"}
+              >
+                {submitting ? 'Sending Message...' : 'Send Message'}
               </Button>
             </div>
           </div>
         </form>
       </div>
 
-      <div className="mt-6 text-xs text-gray-500 text-center">
-        Powered by Web3Forms
+      <div className="mt-8 text-center">
+        <p className="text-xs text-gray-400 dark:text-gray-500">
+          Powered by Web3Forms
+        </p>
       </div>
     </div>
   );
