@@ -9,6 +9,8 @@ import ConfirmationModal from '../modals/confirmations/ConfirmationModal';
 import { ministryAccessService } from '../../services/ministryAccessService';
 import { notificationService, setNotificationContext } from '../../services/notificationService';
 import { userService } from '../../services/userService';
+import NotificationBadge from '../notifications/NotificationBadge';
+import { Member } from '../../types';
 
 interface AdminUserRecord {
   id: string;
@@ -43,8 +45,15 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
   const [admins, setAdmins] = useState<AdminUserRecord[]>([]);
   // Leaders state and view toggle
   const [leaders, setLeaders] = useState<AdminUserRecord[]>([]);
-  const [viewMode, setViewMode] = useState<'admins' | 'leaders'>('admins');
+  const [viewMode, setViewMode] = useState<'dashboard' | 'admins' | 'leaders' | 'newly_registered' | 'all_members'>('dashboard');
   const [leadersLoading, setLeadersLoading] = useState(false);
+  const [newlyRegistered, setNewlyRegistered] = useState<AdminUserRecord[]>([]);
+  const [newlyRegisteredLoading, setNewlyRegisteredLoading] = useState(false);
+
+  // All Members state
+  const [allMembers, setAllMembers] = useState<(Member & { constituencyName: string })[]>([]);
+  const [allMembersLoading, setAllMembersLoading] = useState(false);
+  const [allMembersError, setAllMembersError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [stats, setStats] = useState<{ total: number; active: number; inactive: number } | null>(null);
@@ -74,7 +83,6 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
   const [accessLoading, setAccessLoading] = useState(false);
   const [accessError, setAccessError] = useState<string | null>(null);
   const [superAdminNotifications, setSuperAdminNotifications] = useState<any[]>([]);
-  const [notificationsLoading, setNotificationsLoading] = useState(false);
 
   const campusAggregates = useMemo(() => {
     if (!campuses.length) return [] as Array<{ campus: CampusRecord; adminCount: number; constituencyCount: number; members: number }>;
@@ -98,9 +106,34 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
     }));
   }, [campuses, admins]);
 
-  const fetchAdmins = useCallback(async () => {
+  // Function to manually reload access requests
+  const loadAccessRequests = useCallback(async () => {
+    try {
+      setAccessLoading(true);
+      setAccessError(null);
+      const qReq = query(
+        collection(db, 'ministryAccessRequests'),
+        where('status', '==', 'pending'),
+        limit(200)
+      );
+      const snapshot = await getDocs(qReq);
+      const items = snapshot.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
+      items.sort((a,b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+      setAccessRequests(items);
+    } catch (e: any) {
+      console.error('Failed to load access requests', e);
+      setAccessError(e.message || 'Failed to load access requests');
+    } finally {
+      setAccessLoading(false);
+    }
+  }, []);
+
+  // Comprehensive refresh function that forces loading of all data
+  const refreshAllData = useCallback(async () => {
     setLoading(true);
     setError(null);
+    setMemberCountsLoading(true);
+
     try {
       // Fetch all admin users (role == 'admin') – limit high enough for now
       const adminsQuery = query(
@@ -109,7 +142,8 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
         limit(500)
       );
       const snapshot = await getDocs(adminsQuery);
-  const data: AdminUserRecord[] = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as any)).map(a => ({ ...a, memberCount: (a as any).membersCount }));
+      const data: AdminUserRecord[] = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as any)).map(a => ({ ...a, memberCount: (a as any).membersCount }));
+
       // Client-side sort by createdAt desc to avoid composite index requirement
       const getTime = (val: any): number => {
         if (!val) return 0;
@@ -121,6 +155,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
         }
         return 0;
       };
+
       const filtered = data.filter(a => !(a as any).isDeleted);
       filtered.sort((a, b) => getTime(b.createdAt) - getTime(a.createdAt));
       setAdmins(filtered);
@@ -129,15 +164,85 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
         active: filtered.filter(a => a.isActive !== false).length,
         inactive: filtered.filter(a => a.isActive === false).length
       });
-      // Kick off member counts after admins are loaded
-      computeMemberCounts(filtered);
+
+      // Force reload member counts and access requests in parallel
+      await Promise.all([
+        computeMemberCounts(filtered, true), // Force full recount
+        loadAccessRequests() // Reload access requests
+      ]);
+
     } catch (e: any) {
-      console.error('Failed to load admins', e);
-      setError(e.message || 'Failed to load admins');
+      console.error('Failed to refresh data', e);
+      setError(e.message || 'Failed to refresh data');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [loadAccessRequests]);
+
+  // Function to load all members across all constituencies
+  const loadAllMembers = useCallback(async () => {
+    setAllMembersLoading(true);
+    setAllMembersError(null);
+
+    try {
+      // Get all unique church IDs from admins
+      const uniqueChurchIds = Array.from(new Set(admins.map(a => a.churchId).filter((v): v is string => !!v)));
+
+      if (uniqueChurchIds.length === 0) {
+        setAllMembers([]);
+        return;
+      }
+
+      // Fetch members from all churches in parallel
+      const allMembersPromises = uniqueChurchIds.map(async (churchId) => {
+        try {
+          // Get constituency name from admin record
+          const admin = admins.find(a => a.churchId === churchId);
+          const constituencyName = admin?.churchName || admin?.displayName || 'Unknown Constituency';
+
+          // Fetch members from this church
+          const membersRef = collection(db, 'churches', churchId, 'members');
+          const membersQuery = query(membersRef, where('isActive', '==', true));
+          const snapshot = await getDocs(membersQuery);
+
+          // Map members with constituency info
+          return snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+            constituencyName
+          } as Member & { constituencyName: string }));
+        } catch (error) {
+          console.warn(`Failed to fetch members from church ${churchId}:`, error);
+          return [];
+        }
+      });
+
+      // Wait for all promises and flatten results
+      const results = await Promise.all(allMembersPromises);
+      const allMembersData = results.flat();
+
+      // Sort by constituency name, then by last name, then by first name
+      allMembersData.sort((a, b) => {
+        const constituencyCompare = a.constituencyName.localeCompare(b.constituencyName);
+        if (constituencyCompare !== 0) return constituencyCompare;
+
+        const lastNameCompare = (a.lastName || '').localeCompare(b.lastName || '');
+        if (lastNameCompare !== 0) return lastNameCompare;
+
+        return a.firstName.localeCompare(b.firstName);
+      });
+
+      setAllMembers(allMembersData);
+    } catch (error: any) {
+      console.error('Failed to load all members:', error);
+      setAllMembersError(error.message || 'Failed to load members');
+    } finally {
+      setAllMembersLoading(false);
+    }
+  }, [admins]);
+
+  // Keep the original fetchAdmins for backward compatibility
+  const fetchAdmins = refreshAllData;
 
   const computeMemberCounts = useCallback(async (adminsList: AdminUserRecord[], forceFullRecount: boolean = false) => {
     // Concurrency guard to avoid overlapping recounts which can amplify write attempts
@@ -265,7 +370,6 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
   // Load SuperAdmin notifications (realtime)
   useEffect(() => {
     try {
-      setNotificationsLoading(true);
       const qNotifications = query(
         collection(db, 'superAdminNotifications'),
         limit(50)
@@ -280,15 +384,12 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
           return (b.createdAt || '').localeCompare(a.createdAt || '');
         });
         setSuperAdminNotifications(items);
-        setNotificationsLoading(false);
       }, err => {
         console.error('Failed to load superAdmin notifications:', err);
-        setNotificationsLoading(false);
       });
       return () => { try { unsub(); } catch {} };
     } catch (e:any) {
       console.error('Failed to setup superAdmin notifications listener:', e);
-      setNotificationsLoading(false);
     }
   }, []);
 
@@ -373,6 +474,39 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
       }
     }, err => { setLeadersLoading(false); setError(err?.message || 'Failed to load leaders'); });
     return () => { try { unsubL(); } catch {} };
+  }, [viewMode]);
+
+  // Newly registered users realtime listener (enabled when viewing newly registered)
+  useEffect(() => {
+    if (viewMode !== 'newly_registered') return;
+    setNewlyRegisteredLoading(true);
+
+    // Get users registered in the last 30 days
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    const qNR = query(
+      collection(db, 'users'),
+      where('createdAt', '>=', Timestamp.fromDate(thirtyDaysAgo)),
+      limit(500)
+    );
+    const unsubNR = onSnapshot(qNR, snap => {
+      try {
+        const raw: AdminUserRecord[] = snap.docs.map(d => ({ id: d.id, ...d.data() } as any));
+        const filtered = raw.filter(a => !(a as any).isDeleted);
+        const getTime = (val: any): number => {
+          if (!val) return 0; if (typeof val.toMillis === 'function') return val.toMillis(); if (typeof val.toDate === 'function') return val.toDate().getTime(); if (typeof val === 'string') { const t = Date.parse(val); return isNaN(t) ? 0 : t; } return 0;
+        };
+        // Sort by creation date (newest first)
+        filtered.sort((a,b) => getTime(b.createdAt) - getTime(a.createdAt));
+        setNewlyRegistered(filtered);
+      } catch (e) {
+        console.warn('Newly registered snapshot processing failed', e);
+      } finally {
+        setNewlyRegisteredLoading(false);
+      }
+    }, err => { setNewlyRegisteredLoading(false); setError(err?.message || 'Failed to load newly registered users'); });
+    return () => { try { unsubNR(); } catch {} };
   }, [viewMode]);
 
   // Load campuses (realtime)
@@ -821,30 +955,46 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
                 <p className="text-[11px] sm:text-xs text-gray-600 dark:text-dark-300 font-medium tracking-wide">Global Constituency Management</p>
               </div>
             </button>
-            {/* Center (current context) */}
-            <div className="hidden md:flex items-center px-3 py-2 bg-white/60 dark:bg-dark-700/70 rounded-xl border border-gray-200/60 dark:border-dark-600/60 shadow-sm">
-              <span className="text-sm font-medium text-gray-700 dark:text-dark-100">Dashboard</span>
-            </div>
-            {/* Right actions */}
-            <div className="flex items-center gap-2 sm:gap-3">
+            {/* Center spacer for better layout */}
+            <div className="flex-1"></div>
+            {/* Right actions - centered and well-spaced */}
+            <div className="flex items-center gap-3 sm:gap-4">
+              {/* Notification Bell */}
+              <NotificationBadge />
+
               <button
-                onClick={fetchAdmins}
-                disabled={loading}
-                className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-xs sm:text-sm font-semibold bg-gradient-to-r from-indigo-500 to-blue-600 text-white shadow hover:shadow-md hover:from-indigo-600 hover:to-blue-700 focus:outline-none focus:ring-2 focus:ring-indigo-400 disabled:opacity-50"
+                onClick={refreshAllData}
+                disabled={loading || memberCountsLoading || accessLoading}
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold bg-gradient-to-r from-indigo-500 to-blue-600 text-white shadow-lg hover:shadow-xl hover:from-indigo-600 hover:to-blue-700 focus:outline-none focus:ring-2 focus:ring-indigo-400 disabled:opacity-50 transition-all duration-200"
+                title="Refresh all data including stats, member counts, and access requests"
               >
-                {loading && <span className="w-4 h-4 border-2 border-white/60 border-t-transparent rounded-full animate-spin"/>}
-                <span>{loading ? 'Refreshing…' : 'Refresh'}</span>
+                {(loading || memberCountsLoading || accessLoading) && (
+                  <span className="w-4 h-4 border-2 border-white/60 border-t-transparent rounded-full animate-spin"/>
+                )}
+                <span>{(loading || memberCountsLoading || accessLoading) ? 'Refreshing…' : 'Refresh'}</span>
               </button>
+
               {!selectedCampus && (
                 <button
                   onClick={() => setShowCampusModal(true)}
-                  className="hidden sm:inline-flex items-center gap-2 px-3 py-2 rounded-lg text-xs sm:text-sm font-semibold bg-indigo-600 text-white shadow hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-400"
-                >New Campus</button>
+                  className="hidden sm:inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-lg hover:shadow-xl hover:from-green-600 hover:to-emerald-700 focus:outline-none focus:ring-2 focus:ring-green-400 transition-all duration-200"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                  New Campus
+                </button>
               )}
+
               <button
                 onClick={onSignOut}
-                className="inline-flex items-center px-3 py-2 rounded-lg text-xs sm:text-sm font-semibold bg-red-600 text-white shadow hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-400"
-              >Sign Out</button>
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold bg-gradient-to-r from-red-500 to-red-600 text-white shadow-lg hover:shadow-xl hover:from-red-600 hover:to-red-700 focus:outline-none focus:ring-2 focus:ring-red-400 transition-all duration-200"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                </svg>
+                Sign Out
+              </button>
             </div>
           </div>
         </div>
@@ -863,48 +1013,192 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
           </div>
         )}
 
-        {/* View toggle */}
+        {/* Enhanced View Toggle with Modern Design */}
         {!selectedCampus && (
-          <div className="mb-4 flex items-center gap-2">
-            <div className="inline-flex rounded-lg overflow-hidden border border-gray-300 dark:border-dark-600 bg-white dark:bg-dark-700">
+          <div className="mb-8 flex justify-center">
+            <div className="flex items-center gap-1.5 p-1.5 bg-gradient-to-r from-gray-100 to-gray-50 dark:from-dark-700 dark:to-dark-600 rounded-2xl shadow-lg border border-white/20 dark:border-white/10">
+              <button
+                onClick={() => setViewMode('dashboard')}
+                className={`px-6 py-3 rounded-xl text-sm font-semibold transition-all duration-300 ${
+                  viewMode === 'dashboard'
+                    ? 'bg-gradient-to-r from-blue-500 to-cyan-600 text-white shadow-lg transform scale-105'
+                    : 'text-gray-600 dark:text-dark-300 hover:text-gray-900 dark:hover:text-white hover:bg-white/50 dark:hover:bg-dark-500/50'
+                }`}
+              >
+                <span className="flex items-center gap-2">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2V7zm0 0a2 2 0 012-2h6l2 2h6a2 2 0 012 2v2H3V7z" />
+                  </svg>
+                  Dashboard
+                </span>
+              </button>
               <button
                 onClick={() => setViewMode('admins')}
-                className={`px-3 py-1.5 text-[11px] font-semibold ${viewMode === 'admins' ? 'bg-indigo-600 text-white' : 'text-gray-700 dark:text-dark-200'}`}
-              >Admins</button>
+                className={`px-6 py-3 rounded-xl text-sm font-semibold transition-all duration-300 ${
+                  viewMode === 'admins'
+                    ? 'bg-gradient-to-r from-indigo-500 to-blue-600 text-white shadow-lg transform scale-105'
+                    : 'text-gray-600 dark:text-dark-300 hover:text-gray-900 dark:hover:text-white hover:bg-white/50 dark:hover:bg-dark-500/50'
+                }`}
+              >
+                <span className="flex items-center gap-2">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
+                  </svg>
+                  Admins ({admins.length})
+                </span>
+              </button>
               <button
                 onClick={() => setViewMode('leaders')}
-                className={`px-3 py-1.5 text-[11px] font-semibold ${viewMode === 'leaders' ? 'bg-indigo-600 text-white' : 'text-gray-700 dark:text-dark-200'}`}
-              >Leaders</button>
+                className={`px-6 py-3 rounded-xl text-sm font-semibold transition-all duration-300 ${
+                  viewMode === 'leaders'
+                    ? 'bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-lg transform scale-105'
+                    : 'text-gray-600 dark:text-dark-300 hover:text-gray-900 dark:hover:text-white hover:bg-white/50 dark:hover:bg-dark-500/50'
+                }`}
+              >
+                <span className="flex items-center gap-2">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                  </svg>
+                  Leaders ({leaders.length})
+                </span>
+              </button>
+              <button
+                onClick={() => setViewMode('newly_registered')}
+                className={`px-6 py-3 rounded-xl text-sm font-semibold transition-all duration-300 ${
+                  viewMode === 'newly_registered'
+                    ? 'bg-gradient-to-r from-purple-500 to-pink-600 text-white shadow-lg transform scale-105'
+                    : 'text-gray-600 dark:text-dark-300 hover:text-gray-900 dark:hover:text-white hover:bg-white/50 dark:hover:bg-dark-500/50'
+                }`}
+              >
+                <span className="flex items-center gap-2">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+                  </svg>
+                  New Users ({newlyRegistered.length})
+                </span>
+              </button>
+              <button
+                onClick={() => {
+                  setViewMode('all_members');
+                  loadAllMembers();
+                }}
+                className={`px-6 py-3 rounded-xl text-sm font-semibold transition-all duration-300 ${
+                  viewMode === 'all_members'
+                    ? 'bg-gradient-to-r from-blue-500 to-cyan-600 text-white shadow-lg transform scale-105'
+                    : 'text-gray-600 dark:text-dark-300 hover:text-gray-900 dark:hover:text-white hover:bg-white/50 dark:hover:bg-dark-500/50'
+                }`}
+              >
+                <span className="flex items-center gap-2">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                  </svg>
+                  All Members ({allMembers.length})
+                </span>
+              </button>
             </div>
           </div>
         )}
 
-  {/* Global Stats */}
-        {!selectedCampus && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-10 mt-2">
-            <div className="glass rounded-2xl p-5 shadow-lg hover:shadow-xl transition-shadow">
-              <div className="flex items-center justify-between">
-                <p className="text-[11px] uppercase tracking-wider font-semibold text-gray-500 dark:text-dark-300">Total Constituencies</p>
+  {/* Enhanced Dashboard Stats Grid - Only show on Dashboard tab */}
+        {!selectedCampus && viewMode === 'dashboard' && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-12 mt-4">
+            {/* Total Constituencies Card */}
+            <div className="group relative overflow-hidden">
+              <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/10 to-purple-600/10 rounded-3xl transform rotate-1 group-hover:rotate-2 transition-transform duration-300"></div>
+              <div className="relative glass rounded-3xl p-6 shadow-xl hover:shadow-2xl transition-all duration-300 group-hover:scale-[1.02] border border-white/20 dark:border-white/10">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="w-12 h-12 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl flex items-center justify-center shadow-lg">
+                    <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                    </svg>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs uppercase tracking-wider font-bold text-indigo-600 dark:text-indigo-400">Constituencies</p>
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-3xl font-bold text-black tracking-tight">{stats?.total ?? '-'}</p>
+                  <p className="text-sm text-gray-700">Total registered</p>
+                </div>
               </div>
-              <p className="mt-2 text-3xl font-bold text-indigo-600 dark:text-indigo-400 tracking-tight drop-shadow-sm">{stats?.total ?? '-'}</p>
             </div>
-            <div className="glass rounded-2xl p-5 shadow-lg hover:shadow-xl transition-shadow">
-              <p className="text-[11px] uppercase tracking-wider font-semibold text-blue-600 dark:text-blue-400">Total Members</p>
-              <p className="mt-2 text-3xl font-bold text-blue-600 dark:text-blue-400 tracking-tight">{totalMembers != null ? totalMembers : (memberCountsLoading ? '…' : '-')}</p>
+
+            {/* Total Members Card - Clickable */}
+            <div
+              className="group relative overflow-hidden cursor-pointer"
+              onClick={() => {
+                setViewMode('all_members');
+                loadAllMembers();
+              }}
+            >
+              <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-cyan-600/10 rounded-3xl transform -rotate-1 group-hover:-rotate-2 transition-transform duration-300"></div>
+              <div className="relative glass rounded-3xl p-6 shadow-xl hover:shadow-2xl transition-all duration-300 group-hover:scale-[1.02] border border-white/20 dark:border-white/10">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-cyan-600 rounded-2xl flex items-center justify-center shadow-lg">
+                    <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                    </svg>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs uppercase tracking-wider font-bold text-blue-600 dark:text-blue-400">Members</p>
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-3xl font-bold text-black tracking-tight">
+                    {totalMembers != null ? totalMembers.toLocaleString() : (memberCountsLoading ? '…' : '-')}
+                  </p>
+                  <p className="text-sm text-gray-700">Across all constituencies</p>
+                  <p className="text-xs text-blue-600 font-medium">Click to view all members</p>
+                </div>
+              </div>
             </div>
-              <div className="glass rounded-2xl p-5 shadow-lg hover:shadow-xl transition-shadow">
-                <p className="text-[11px] uppercase tracking-wider font-semibold text-green-600 dark:text-green-400">Active</p>
-                <p className="mt-2 text-3xl font-bold text-green-600 dark:text-green-400 tracking-tight">{stats?.active ?? '-'}</p>
+
+            {/* Active Constituencies Card */}
+            <div className="group relative overflow-hidden">
+              <div className="absolute inset-0 bg-gradient-to-br from-green-500/10 to-emerald-600/10 rounded-3xl transform rotate-1 group-hover:rotate-2 transition-transform duration-300"></div>
+              <div className="relative glass rounded-3xl p-6 shadow-xl hover:shadow-2xl transition-all duration-300 group-hover:scale-[1.02] border border-white/20 dark:border-white/10">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-600 rounded-2xl flex items-center justify-center shadow-lg">
+                    <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs uppercase tracking-wider font-bold text-green-600 dark:text-green-400">Active</p>
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-3xl font-bold text-black tracking-tight">{stats?.active ?? '-'}</p>
+                  <p className="text-sm text-gray-700">Operational constituencies</p>
+                </div>
               </div>
-              <div className="glass rounded-2xl p-5 shadow-lg hover:shadow-xl transition-shadow">
-                <p className="text-[11px] uppercase tracking-wider font-semibold text-red-600 dark:text-red-400">Inactive</p>
-                <p className="mt-2 text-3xl font-bold text-red-600 dark:text-red-400 tracking-tight">{stats?.inactive ?? '-'}</p>
+            </div>
+
+            {/* Inactive Constituencies Card */}
+            <div className="group relative overflow-hidden">
+              <div className="absolute inset-0 bg-gradient-to-br from-red-500/10 to-pink-600/10 rounded-3xl transform -rotate-1 group-hover:-rotate-2 transition-transform duration-300"></div>
+              <div className="relative glass rounded-3xl p-6 shadow-xl hover:shadow-2xl transition-all duration-300 group-hover:scale-[1.02] border border-white/20 dark:border-white/10">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="w-12 h-12 bg-gradient-to-br from-red-500 to-pink-600 rounded-2xl flex items-center justify-center shadow-lg">
+                    <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs uppercase tracking-wider font-bold text-red-600 dark:text-red-400">Inactive</p>
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-3xl font-bold text-black tracking-tight">{stats?.inactive ?? '-'}</p>
+                  <p className="text-sm text-gray-700">Require attention</p>
+                </div>
               </div>
+            </div>
           </div>
         )}
 
-        {/* Ministry Access Requests */}
-        {!selectedCampus && accessRequests.length > 0 && (
+        {/* Ministry Access Requests - Only show on Dashboard tab */}
+        {!selectedCampus && viewMode === 'dashboard' && accessRequests.length > 0 && (
           <div className="lg:col-span-3 mb-8">
             <div className="bg-white dark:bg-dark-800 rounded-xl shadow-sm border border-gray-200/70 dark:border-dark-700 overflow-hidden">
               <div className="px-4 sm:px-6 py-4 border-b border-gray-200/60 dark:border-dark-700 flex items-center justify-between">
@@ -936,89 +1230,9 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
           </div>
         )}
 
-        {/* SuperAdmin Notifications */}
-        {!selectedCampus && superAdminNotifications.length > 0 && (
-          <div className="lg:col-span-3 mb-8">
-            <div className="bg-white dark:bg-dark-800 rounded-xl shadow-sm border border-gray-200/70 dark:border-dark-700 overflow-hidden">
-              <div className="px-4 sm:px-6 py-4 border-b border-gray-200/60 dark:border-dark-700 flex items-center justify-between">
-                <div>
-                  <h2 className="text-base sm:text-lg font-semibold">Recent Notifications</h2>
-                  <p className="text-xs text-gray-500">Ministry access requests and system alerts</p>
-                  {superAdminNotifications.filter(n => !n.isRead).length > 0 && (
-                    <span className="text-xs text-blue-600 font-medium">
-                      {superAdminNotifications.filter(n => !n.isRead).length} unread
-                    </span>
-                  )}
-                </div>
-                {notificationsLoading && <span className="text-xs text-gray-500">Loading…</span>}
-              </div>
-              <div className="divide-y divide-gray-100 dark:divide-dark-700">
-                {superAdminNotifications.slice(0, 8).map(notification => (
-                  <div key={notification.id} className="px-4 sm:px-6 py-4 flex items-start justify-between gap-4">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="font-medium text-sm">{notification.title}</span>
-                        {!notification.isRead && (
-                          <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
-                        )}
-                        {notification.autoMarkedRead && (
-                          <span className="text-[10px] px-1.5 py-0.5 bg-gray-100 dark:bg-dark-600 text-gray-600 dark:text-dark-300 rounded">
-                            Auto-resolved
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-xs text-gray-600 dark:text-dark-300 mb-2">{notification.description}</p>
-                      <div className="text-[10px] text-gray-400">
-                        {new Date(notification.createdAt).toLocaleString()}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      {notification.type === 'ministry_access_request' && notification.requestId && !notification.isRead && (
-                        <>
-                          {(() => {
-                            const req = accessRequests.find(r => r.id === notification.requestId);
-                            if (req) {
-                              return (
-                                <>
-                                  <button
-                                    onClick={() => approveAccess(req)}
-                                    className="px-2 py-1 text-[10px] rounded-md bg-green-600 text-white hover:bg-green-700"
-                                  >
-                                    Approve
-                                  </button>
-                                  <button
-                                    onClick={() => rejectAccess(req)}
-                                    className="px-2 py-1 text-[10px] rounded-md bg-red-600 text-white hover:bg-red-700"
-                                  >
-                                    Reject
-                                  </button>
-                                </>
-                              );
-                            } else {
-                              return (
-                                <span className="text-[10px] text-gray-500 italic">
-                                  Request no longer available
-                                </span>
-                              );
-                            }
-                          })()}
-                        </>
-                      )}
-                      {!notification.isRead && (
-                        <button
-                          onClick={() => markNotificationAsRead(notification.id)}
-                          className="px-2 py-1 text-[10px] rounded-md bg-gray-200 dark:bg-dark-600 text-gray-700 dark:text-dark-200 hover:bg-gray-300 dark:hover:bg-dark-500"
-                        >
-                          Mark Read
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
+
+
+        {/* Notifications moved to bell icon in header - this section removed for cleaner dashboard */}
 
         {/* Campus Overview Cards */}
         {selectedCampus && (
@@ -1475,6 +1689,252 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
             </div>
           </div>
         )}
+
+        {/* Newly Registered People Table */}
+        {viewMode === 'newly_registered' && (
+          <div className="group relative overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 to-pink-600/5 rounded-3xl transform -rotate-1 group-hover:-rotate-2 transition-transform duration-500"></div>
+            <div className="relative glass rounded-3xl shadow-2xl overflow-hidden border border-white/30 dark:border-white/10 backdrop-blur-xl">
+              <div className="px-6 py-5 flex flex-col gap-3 border-b border-white/20 dark:border-white/10 bg-gradient-to-r from-white/80 to-white/60 dark:from-dark-800/80 dark:to-dark-800/60 backdrop-blur-sm">
+                <div className="flex items-center justify-between">
+                  <h2 className="font-bold text-gray-900 dark:text-white text-xl flex items-center gap-3">
+                    <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-600 rounded-2xl flex items-center justify-center shadow-lg">
+                      <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+                      </svg>
+                    </div>
+                    Newly Registered Users (Last 30 Days)
+                  </h2>
+                  <div className="flex items-center gap-3 text-sm font-semibold text-gray-600 dark:text-dark-300">
+                    <span className="hidden xs:inline">Total:</span>
+                    <span className="px-3 py-1.5 bg-gradient-to-r from-purple-100 to-pink-100 dark:from-purple-900/30 dark:to-pink-900/30 text-purple-700 dark:text-purple-300 rounded-xl font-bold shadow-sm">{newlyRegistered.length}</span>
+                  </div>
+                </div>
+              </div>
+              <div className="overflow-x-auto max-h-[70vh] custom-scrollbar">
+                <table className="min-w-full text-[13px]">
+                  <thead>
+                    <tr className="text-left text-[11px] uppercase tracking-wider text-gray-500 dark:text-dark-300 bg-gradient-to-r from-gray-50/70 to-gray-100/70 dark:from-dark-700/70 dark:to-dark-600/70">
+                      <th className="px-4 py-3 font-semibold w-10">#</th>
+                      <th className="px-5 py-3 font-semibold">Name</th>
+                      <th className="px-5 py-3 font-semibold">Email</th>
+                      <th className="px-5 py-3 font-semibold">Role</th>
+                      <th className="px-5 py-3 font-semibold">Church</th>
+                      <th className="px-5 py-3 font-semibold">Status</th>
+                      <th className="px-5 py-3 font-semibold">Registered</th>
+                      <th className="px-5 py-3 font-semibold">Last Login</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100/60 dark:divide-dark-600/40">
+                    {newlyRegistered.map((user, idx) => {
+                      const created = user.createdAt?.toDate?.();
+                      const lastLogin = user.lastLoginAt?.toDate?.();
+                      return (
+                        <tr key={user.id} className="group hover:bg-purple-50/60 dark:hover:bg-purple-900/20 transition-colors">
+                          <td className="px-4 py-3 text-right text-gray-500 dark:text-dark-300">{idx + 1}</td>
+                          <td className="px-5 py-3 font-medium text-gray-800 dark:text-dark-50 whitespace-nowrap">
+                            {user.displayName || `${user.firstName || ''} ${user.lastName || ''}`.trim() || '—'}
+                          </td>
+                          <td className="px-5 py-3 text-gray-600 dark:text-dark-200 whitespace-nowrap">{user.email || '—'}</td>
+                          <td className="px-5 py-3 text-gray-700 dark:text-dark-300">
+                            <span className="px-2 py-1 bg-gray-100 dark:bg-dark-600 text-gray-700 dark:text-dark-200 rounded-md text-xs font-medium">
+                              {user.role || 'member'}
+                            </span>
+                          </td>
+                          <td className="px-5 py-3 text-gray-700 dark:text-dark-300 min-w-[200px]">
+                            <div className="flex flex-col leading-tight">
+                              <span className="font-medium text-gray-800 dark:text-dark-100 truncate max-w-[180px]" title={user.churchName}>
+                                {user.churchName || '—'}
+                              </span>
+                              {user.churchId && <span className="text-[10px] text-gray-400 dark:text-dark-400 font-mono">{user.churchId}</span>}
+                            </div>
+                          </td>
+                          <td className="px-5 py-3"><StatusBadge active={user.isActive !== false} /></td>
+                          <td className="px-5 py-3 text-gray-500 dark:text-dark-400 whitespace-nowrap">
+                            <div className="flex flex-col">
+                              <span>{created ? created.toLocaleDateString() : '—'}</span>
+                              {created && <span className="text-xs text-purple-600 dark:text-purple-400">{created.toLocaleTimeString()}</span>}
+                            </div>
+                          </td>
+                          <td className="px-5 py-3 text-gray-500 dark:text-dark-400 whitespace-nowrap">{lastLogin ? lastLogin.toLocaleDateString() : 'Never'}</td>
+                        </tr>
+                      );
+                    })}
+                    {newlyRegistered.length === 0 && !newlyRegisteredLoading && (
+                      <tr>
+                        <td className="px-5 py-10 text-center text-gray-500 dark:text-dark-300" colSpan={8}>
+                          <div className="flex flex-col items-center gap-2">
+                            <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                            </svg>
+                            <span>No new users registered in the last 30 days</span>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+                {newlyRegisteredLoading && (
+                  <div className="p-4 text-center text-xs text-gray-500 dark:text-dark-300">Loading newly registered users...</div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* All Members Table */}
+        {viewMode === 'all_members' && (
+          <div className="group relative overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-cyan-600/5 rounded-3xl transform -rotate-1 group-hover:-rotate-2 transition-transform duration-500"></div>
+            <div className="relative glass rounded-3xl shadow-2xl overflow-hidden border border-white/30 dark:border-white/10 backdrop-blur-xl">
+              <div className="px-6 py-5 flex flex-col gap-3 border-b border-white/20 dark:border-white/10 bg-gradient-to-r from-white/80 to-white/60 dark:from-dark-800/80 dark:to-dark-800/60 backdrop-blur-sm">
+                <div className="flex items-center justify-between">
+                  <h2 className="font-bold text-black dark:text-white text-xl flex items-center gap-3">
+                    <span className="text-blue-600 dark:text-blue-400">👥</span> All Members
+                  </h2>
+                  <div className="flex items-center gap-3 text-xs font-medium text-gray-600 dark:text-dark-300">
+                    <span className="hidden xs:inline">Showing</span>
+                    <span className="px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full font-semibold">
+                      {allMembers.length} members
+                    </span>
+                    <span className="hidden xs:inline">across all constituencies</span>
+                  </div>
+                </div>
+                {allMembersError && (
+                  <div className="text-red-600 text-sm bg-red-50 dark:bg-red-900/20 px-3 py-2 rounded-lg">
+                    {allMembersError}
+                  </div>
+                )}
+              </div>
+
+              <div className="overflow-hidden">
+                {allMembersLoading ? (
+                  <div className="p-8 text-center">
+                    <div className="inline-flex items-center gap-2 text-blue-600">
+                      <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="m4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Loading members from all constituencies...
+                    </div>
+                  </div>
+                ) : allMembers.length === 0 ? (
+                  <div className="p-8 text-center text-gray-500">
+                    <div className="flex flex-col items-center gap-2">
+                      <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                      </svg>
+                      <span>No members found</span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto max-h-[600px]">
+                    <table className="min-w-full">
+                      <thead className="sticky top-0 bg-gradient-to-r from-gray-50 to-gray-100 dark:from-dark-700 dark:to-dark-600 border-b border-gray-200 dark:border-dark-500 z-10">
+                        <tr>
+                          <th className="px-5 py-3 text-left text-xs font-semibold text-gray-700 dark:text-dark-200 uppercase tracking-wider">#</th>
+                          <th className="px-5 py-3 text-left text-xs font-semibold text-gray-700 dark:text-dark-200 uppercase tracking-wider">Name</th>
+                          <th className="px-5 py-3 text-left text-xs font-semibold text-gray-700 dark:text-dark-200 uppercase tracking-wider">Constituency</th>
+                          <th className="px-5 py-3 text-left text-xs font-semibold text-gray-700 dark:text-dark-200 uppercase tracking-wider">Contact</th>
+                          <th className="px-5 py-3 text-left text-xs font-semibold text-gray-700 dark:text-dark-200 uppercase tracking-wider">Born Again</th>
+                          <th className="px-5 py-3 text-left text-xs font-semibold text-gray-700 dark:text-dark-200 uppercase tracking-wider">Water Baptism</th>
+                          <th className="px-5 py-3 text-left text-xs font-semibold text-gray-700 dark:text-dark-200 uppercase tracking-wider">Role</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100/60 dark:divide-dark-600/40">
+                        {allMembers.map((member, index) => (
+                          <tr
+                            key={member.id}
+                            className="group hover:bg-blue-50/60 dark:hover:bg-blue-900/20 transition-colors"
+                          >
+                            <td className="px-5 py-3 text-sm text-gray-600 dark:text-dark-300">
+                              {index + 1}
+                            </td>
+                            <td className="px-5 py-3">
+                              <div className="flex items-center gap-3">
+                                {member.profilePicture ? (
+                                  <img
+                                    src={member.profilePicture}
+                                    alt={member.firstName}
+                                    className="w-8 h-8 rounded-full object-cover border border-gray-200"
+                                  />
+                                ) : (
+                                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-cyan-600 flex items-center justify-center text-white text-sm font-semibold">
+                                    {member.firstName.charAt(0).toUpperCase()}
+                                  </div>
+                                )}
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-semibold text-gray-900 dark:text-dark-100 truncate">
+                                      {`${member.firstName} ${member.lastName || ''}`.trim()}
+                                    </span>
+                                    {member.bornAgainStatus && (
+                                      <span className="text-xs text-green-600" title="Born Again">⭐</span>
+                                    )}
+                                  </div>
+                                  {member.buildingAddress && (
+                                    <div className="text-xs text-gray-500 dark:text-dark-400 truncate">
+                                      {member.buildingAddress}
+                                      {member.roomNumber && ` - Room ${member.roomNumber}`}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-5 py-3">
+                              <span className="text-sm font-medium text-gray-900 dark:text-dark-100">
+                                {member.constituencyName}
+                              </span>
+                            </td>
+                            <td className="px-5 py-3">
+                              <div className="text-sm text-gray-600 dark:text-dark-300">
+                                {member.phoneNumber && member.phoneNumber !== '-' ? (
+                                  <div>{member.phoneNumber}</div>
+                                ) : (
+                                  <div className="text-gray-400">—</div>
+                                )}
+                              </div>
+                            </td>
+                            <td className="px-5 py-3">
+                              <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                                member.bornAgainStatus
+                                  ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
+                                  : 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-300'
+                              }`}>
+                                {member.bornAgainStatus ? 'Yes' : 'No'}
+                              </span>
+                            </td>
+                            <td className="px-5 py-3">
+                              <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                                member.baptized
+                                  ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300'
+                                  : 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-300'
+                              }`}>
+                                {member.baptized ? 'Yes' : 'No'}
+                              </span>
+                            </td>
+                            <td className="px-5 py-3">
+                              <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                                member.role === 'Bacenta Leader'
+                                  ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
+                                  : member.role === 'Fellowship Leader'
+                                  ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300'
+                                  : 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-300'
+                              }`}>
+                                {member.role || 'Member'}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
           {/* end of conditional sections */}
           </>
         )}

@@ -235,15 +235,7 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
                       onClose();
                     }}
                   />
-                  <NavigationItem
-                    icon={<CalendarIcon className="w-4 h-4" />}
-                    label="Bacenta Meetings"
-                    isActive={currentTab.id === TabKeys.BACENTA_MEETINGS}
-                    onClick={() => {
-                      switchTab({ id: TabKeys.BACENTA_MEETINGS, name: 'Bacenta Meetings' });
-                      onClose();
-                    }}
-                  />
+                  {/* Bacenta Meetings removed */}
                   <NavigationItem
                     icon={<CakeIcon className="w-4 h-4" />}
                     label="Birthdays"
@@ -365,15 +357,7 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
                   />
 
                   {/* Contact */}
-                  <NavigationItem
-                    icon={<InformationCircleIcon className="w-4 h-4" />}
-                    label="Contact"
-                    isActive={currentTab.id === TabKeys.CONTACT}
-                    onClick={() => {
-                      switchTab({ id: TabKeys.CONTACT, name: 'Contact', data: { initialEmail: userProfile?.email || (typeof window !== 'undefined' ? localStorage.getItem('last_known_email') || undefined : undefined) } });
-                      onClose();
-                    }}
-                  />
+                  {/* Contact removed */}
 
                 </>
               )}

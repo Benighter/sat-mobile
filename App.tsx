@@ -26,6 +26,7 @@ import MemberFormModal from './components/modals/forms/MemberFormModal';
 import BulkMemberAddModal from './components/members/BulkMemberAddModal';
 import BacentaFormModal from './components/modals/forms/BacentaFormModal'; // Import BacentaFormModal
 import BacentaDrawer from './components/bacentas/BacentaDrawer'; // Import BacentaDrawer
+import MinistryDrawer from './components/ministry/MinistryDrawer'; // Import MinistryDrawer
 import NewBelieverFormModal from './components/modals/forms/NewBelieverFormModal'; // Import NewBelieverFormModal
 import HierarchyModal from './components/modals/general/HierarchyModal';
 import DataManagement from './components/admin/DataManagement';
@@ -667,10 +668,17 @@ const AppContent: React.FC = memo(() => {
   />)}
 
       {/* Navigation Drawer (context-aware) */}
-      <BacentaDrawer
-        isOpen={isBacentaDrawerOpen}
-        onClose={closeBacentaDrawer}
-      />
+      {isMinistryContext ? (
+        <MinistryDrawer
+          isOpen={isBacentaDrawerOpen}
+          onClose={closeBacentaDrawer}
+        />
+      ) : (
+        <BacentaDrawer
+          isOpen={isBacentaDrawerOpen}
+          onClose={closeBacentaDrawer}
+        />
+      )}
 
       {/* Data Management Modal */}
       <DataManagement

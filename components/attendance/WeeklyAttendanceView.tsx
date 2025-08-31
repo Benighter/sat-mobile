@@ -17,6 +17,7 @@ import {
 } from '../icons';
 import { Member, NewBeliever, Bacenta } from '../../types';
 import { hasAdminPrivileges } from '../../utils/permissionUtils';
+import { MINISTRY_OPTIONS } from '../../constants';
 
 // New grouped structure types
 interface LinkedBacentaGroup {
@@ -50,7 +51,9 @@ const WeeklyAttendanceView: React.FC = () => {
     bacentas,
     attendanceRecords,
     showToast,
-    userProfile
+    userProfile,
+    isMinistryContext,
+    activeMinistryName
   } = useAppContext();
 
   const isAdmin = hasAdminPrivileges(userProfile);
@@ -69,6 +72,21 @@ const WeeklyAttendanceView: React.FC = () => {
   }, []);
 
   const [selectedSunday, setSelectedSunday] = useState<string>(getCurrentOrMostRecentSunday());
+  const [selectedMinistry, setSelectedMinistry] = useState<string>(''); // '' means all ministries
+
+  // Auto-set ministry filter when in ministry context
+  useEffect(() => {
+    if (isMinistryContext && activeMinistryName) {
+      setSelectedMinistry(activeMinistryName);
+    }
+  }, [isMinistryContext, activeMinistryName]);
+
+  // Auto-set ministry filter when in ministry context
+  useEffect(() => {
+    if (isMinistryContext && activeMinistryName) {
+      setSelectedMinistry(activeMinistryName);
+    }
+  }, [isMinistryContext, activeMinistryName]);
 
   // Calculate new grouped attendance data for the selected Sunday
   const groupedAttendance = useMemo(() => {
@@ -80,7 +98,15 @@ const WeeklyAttendanceView: React.FC = () => {
       sundayRecords.filter(r => r.newBelieverId).map(r => r.newBelieverId as string)
     );
 
-  const presentMembers = members.filter(m => !m.frozen && presentMemberIds.has(m.id));
+    // Filter members by ministry if selected, and exclude frozen members
+    let filteredMembers = members.filter(m => !m.frozen && presentMemberIds.has(m.id));
+    if (selectedMinistry) {
+      filteredMembers = filteredMembers.filter(m =>
+        m.ministry && m.ministry.toLowerCase() === selectedMinistry.toLowerCase()
+      );
+    }
+
+    const presentMembers = filteredMembers;
     const presentNewBelievers = newBelievers.filter(nb => presentNewBelieverIds.has(nb.id));
 
     // Helper lookups
@@ -178,7 +204,7 @@ const WeeklyAttendanceView: React.FC = () => {
     const grandTotal = presentMembers.length + presentNewBelievers.length; // unique counts
 
     return { groups, leftoverGroup, grandTotal };
-  }, [selectedSunday, attendanceRecords, members, newBelievers, bacentas]);
+  }, [selectedSunday, attendanceRecords, members, newBelievers, bacentas, selectedMinistry]);
 
   // Helper: format date as "10 August 2025"
   const formatDayMonthYear = (dateStr: string) => {
@@ -188,11 +214,50 @@ const WeeklyAttendanceView: React.FC = () => {
     return `${d.getDate()} ${d.toLocaleString(undefined, { month: 'long' })} ${d.getFullYear()}`;
   };
 
-  // Copy attendance data as formatted text
+  // Copy attendance data as formatted text (ministry-specific format when ministry is selected)
   const copyAttendanceText = async () => {
     try {
-      const dateText = formatFullDate(selectedSunday);
-      let text = `Weekly Attendance - ${dateText}\n\n`;
+      const dateText = formatDayMonthYear(selectedSunday);
+
+      // If ministry is selected, use the ministry-specific format
+      if (selectedMinistry) {
+        const ministryMembers = groupedAttendance.groups.flatMap(g => g.mainMembers)
+          .concat(groupedAttendance.groups.flatMap(g => g.fellowshipGroups.flatMap(fg => fg.members)))
+          .concat(groupedAttendance.groups.flatMap(g => g.linkedBacentaGroups.flatMap(lg => lg.members)))
+          .concat(groupedAttendance.leftoverGroup?.members || []);
+
+        // Get all members with the selected ministry (both present and absent)
+        const allMinistryMembers = members.filter(m =>
+          !m.frozen && m.ministry && m.ministry.toLowerCase() === selectedMinistry.toLowerCase()
+        );
+
+        const presentMemberIds = new Set(ministryMembers.map(m => m.id));
+        const absentMembers = allMinistryMembers.filter(m => !presentMemberIds.has(m.id));
+
+        let text = `*${selectedMinistry}'s attendance*\n`;
+        text += `*${dateText}*\n\n`;
+
+        ministryMembers.forEach((m, idx) => {
+          text += `${idx + 1}. ${m.firstName}${m.lastName ? ' ' + m.lastName : ''}\n`;
+        });
+
+        text += `\n*Total: ${ministryMembers.length}*\n\n`;
+        text += `Absentees\n`;
+
+        absentMembers.forEach((m, idx) => {
+          text += `${idx + 1}. ${m.firstName}${m.lastName ? ' ' + m.lastName : ''}\n`;
+        });
+
+        text += `\n*Total: ${absentMembers.length}*\n\n`;
+        text += `*Grand total: ${allMinistryMembers.length}*`;
+
+        await navigator.clipboard.writeText(text);
+        showToast('success', 'Copied!', `${selectedMinistry} attendance copied to clipboard`);
+        return;
+      }
+
+      // Default format for general attendance
+      let text = `Weekly Attendance - ${formatFullDate(selectedSunday)}\n\n`;
 
       if (groupedAttendance.groups.length === 0 && !groupedAttendance.leftoverGroup) {
         text += 'No attendance records for this Sunday.';
@@ -330,9 +395,33 @@ const WeeklyAttendanceView: React.FC = () => {
                   <CalendarIcon className="w-6 h-6 text-slate-600" />
                 </div>
               </div>
-              <h1 className="text-2xl font-bold text-gray-900">Weekly Attendance</h1>
-              <p className="text-gray-600 text-sm mt-1">Sunday attendance summary</p>
+              <h1 className="text-2xl font-bold text-gray-900">
+                {selectedMinistry ? `${selectedMinistry} Weekly Attendance` : 'Weekly Attendance'}
+              </h1>
+              <p className="text-gray-600 text-sm mt-1">
+                {selectedMinistry ? `${selectedMinistry} ministry attendance summary` : 'Sunday attendance summary'}
+              </p>
             </div>
+
+            {/* Ministry Filter - Only show if not in ministry context */}
+            {!isMinistryContext && (
+              <div className="mb-6">
+                <div className="flex justify-center">
+                  <div className="w-full max-w-xs">
+                    <select
+                      value={selectedMinistry}
+                      onChange={(e) => setSelectedMinistry(e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm bg-white text-gray-900 text-center cursor-pointer"
+                    >
+                      <option value="">All Ministries</option>
+                      {MINISTRY_OPTIONS.map(ministry => (
+                        <option key={ministry} value={ministry}>{ministry}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Professional Date Navigation - Optimized for Full Date Display */}
             <div className="flex items-center justify-center mb-4 px-2 sm:px-4">
@@ -371,12 +460,12 @@ const WeeklyAttendanceView: React.FC = () => {
               <button
                 onClick={copyAttendanceText}
                 className="inline-flex items-center space-x-2 px-4 py-2 bg-slate-600 hover:bg-slate-700 text-white rounded-lg transition-all duration-200 text-sm font-medium shadow-sm"
-                title="Copy attendance as text"
+                title={selectedMinistry ? `Copy ${selectedMinistry} attendance as text` : "Copy attendance as text"}
               >
                 <ClipboardIcon className="w-4 h-4" />
-                <span>Copy Attendance</span>
+                <span>{selectedMinistry ? `Copy ${selectedMinistry}` : 'Copy Attendance'}</span>
               </button>
-              {isAdmin && (
+              {isAdmin && !selectedMinistry && (
                 <button
                   onClick={copyCOsReportText}
                   className="inline-flex items-center space-x-2 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg transition-all duration-200 text-sm font-medium shadow-sm"
@@ -395,26 +484,113 @@ const WeeklyAttendanceView: React.FC = () => {
               <div className="text-center py-12">
                 <UsersIcon className="w-12 h-12 text-gray-300 mx-auto mb-4" />
                 <h3 className="text-lg font-medium text-gray-600 mb-1">No Attendance Records</h3>
-                <p className="text-gray-500 text-sm">No one was marked present for this Sunday.</p>
+                <p className="text-gray-500 text-sm">
+                  {selectedMinistry
+                    ? `No ${selectedMinistry} members were marked present for this Sunday.`
+                    : 'No one was marked present for this Sunday.'
+                  }
+                </p>
               </div>
             ) : (
               <>
-                {/* Grouped Attendance List */}
-                <div className="space-y-10">
-                  {groupedAttendance.groups.map(group => (
-                    <div key={group.bacentaLeader.id} className="border border-gray-200 rounded-xl p-4 shadow-sm">
-                      {/* Bacenta Leader Section */}
-                      <div className="mb-4">
-                        <h3 className="text-lg font-semibold text-gray-900 flex items-center">
-                          <span className="mr-2 text-xl">💚</span>
-                          Bacenta leader: {group.bacentaLeader.firstName} {group.bacentaLeader.lastName || ''} ({group.bacenta.name})
-                        </h3>
-                        <ol className="mt-2 space-y-1 list-decimal list-inside">
-                          {group.mainMembers.map(m => (
-                            <li key={m.id} className="text-gray-800">{m.firstName} {m.lastName}</li>
-                          ))}
-                        </ol>
+                {/* Ministry Mode: Flat List */}
+                {isMinistryContext ? (
+                  <div className="space-y-6">
+                    {/* Present Members */}
+                    <div>
+                      <ol className="space-y-1 list-decimal list-inside">
+                        {(() => {
+                          // Collect all present members from all groups
+                          const allPresentMembers = [
+                            ...groupedAttendance.groups.flatMap(g => g.mainMembers),
+                            ...groupedAttendance.groups.flatMap(g => g.fellowshipGroups.flatMap(fg => fg.members)),
+                            ...groupedAttendance.groups.flatMap(g => g.linkedBacentaGroups.flatMap(lg => lg.members)),
+                            ...(groupedAttendance.leftoverGroup?.members || [])
+                          ].sort((a, b) => (a.lastName || '').localeCompare(b.lastName || '') || a.firstName.localeCompare(b.firstName));
+
+                          return allPresentMembers.map(m => (
+                            <li key={m.id} className="text-gray-800">{m.firstName}{m.lastName ? ' ' + m.lastName : ''}</li>
+                          ));
+                        })()}
+                      </ol>
+                      <div className="mt-4 text-sm font-semibold text-gray-700">
+                        Total: {groupedAttendance.groups.reduce((sum, g) => sum + g.total, 0) + (groupedAttendance.leftoverGroup?.members.length || 0)}
                       </div>
+                    </div>
+
+                    {/* Absentees */}
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-900 mb-2">Absentees</h3>
+                      <ol className="space-y-1 list-decimal list-inside">
+                        {(() => {
+                          // Get all present member IDs
+                          const presentMemberIds = new Set([
+                            ...groupedAttendance.groups.flatMap(g => g.mainMembers.map(m => m.id)),
+                            ...groupedAttendance.groups.flatMap(g => g.fellowshipGroups.flatMap(fg => fg.members.map(m => m.id))),
+                            ...groupedAttendance.groups.flatMap(g => g.linkedBacentaGroups.flatMap(lg => lg.members.map(m => m.id))),
+                            ...(groupedAttendance.leftoverGroup?.members.map(m => m.id) || [])
+                          ]);
+
+                          // Get all ministry members (both present and absent)
+                          const allMinistryMembers = members.filter(m =>
+                            !m.frozen && m.ministry && m.ministry.toLowerCase() === (selectedMinistry || activeMinistryName || '').toLowerCase()
+                          );
+
+                          // Filter to get absent members
+                          const absentMembers = allMinistryMembers
+                            .filter(m => !presentMemberIds.has(m.id))
+                            .sort((a, b) => (a.lastName || '').localeCompare(b.lastName || '') || a.firstName.localeCompare(b.firstName));
+
+                          return absentMembers.map(m => (
+                            <li key={m.id} className="text-gray-800">{m.firstName}{m.lastName ? ' ' + m.lastName : ''}</li>
+                          ));
+                        })()}
+                      </ol>
+                      <div className="mt-4 text-sm font-semibold text-gray-700">
+                        Total: {(() => {
+                          const presentMemberIds = new Set([
+                            ...groupedAttendance.groups.flatMap(g => g.mainMembers.map(m => m.id)),
+                            ...groupedAttendance.groups.flatMap(g => g.fellowshipGroups.flatMap(fg => fg.members.map(m => m.id))),
+                            ...groupedAttendance.groups.flatMap(g => g.linkedBacentaGroups.flatMap(lg => lg.members.map(m => m.id))),
+                            ...(groupedAttendance.leftoverGroup?.members.map(m => m.id) || [])
+                          ]);
+                          const allMinistryMembers = members.filter(m =>
+                            !m.frozen && m.ministry && m.ministry.toLowerCase() === (selectedMinistry || activeMinistryName || '').toLowerCase()
+                          );
+                          return allMinistryMembers.filter(m => !presentMemberIds.has(m.id)).length;
+                        })()}
+                      </div>
+                    </div>
+
+                    {/* Grand Total */}
+                    <div className="border-t pt-4">
+                      <div className="text-lg font-bold text-gray-900">
+                        Grand total: {(() => {
+                          const allMinistryMembers = members.filter(m =>
+                            !m.frozen && m.ministry && m.ministry.toLowerCase() === (selectedMinistry || activeMinistryName || '').toLowerCase()
+                          );
+                          return allMinistryMembers.length;
+                        })()}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  /* Normal Mode: Grouped Attendance List */
+                  <div className="space-y-10">
+                    {groupedAttendance.groups.map(group => (
+                      <div key={group.bacentaLeader.id} className="border border-gray-200 rounded-xl p-4 shadow-sm">
+                        {/* Bacenta Leader Section */}
+                        <div className="mb-4">
+                          <h3 className="text-lg font-semibold text-gray-900 flex items-center">
+                            <span className="mr-2 text-xl">💚</span>
+                            Bacenta leader: {group.bacentaLeader.firstName} {group.bacentaLeader.lastName || ''} ({group.bacenta.name})
+                          </h3>
+                          <ol className="mt-2 space-y-1 list-decimal list-inside">
+                            {group.mainMembers.map(m => (
+                              <li key={m.id} className="text-gray-800">{m.firstName} {m.lastName}</li>
+                            ))}
+                          </ol>
+                        </div>
                       {/* Linked Bacentas under Bacenta Leader */}
                       {group.linkedBacentaGroups && group.linkedBacentaGroups.map(lg => (
                         <div key={lg.bacenta.id} className="mb-4">
@@ -471,29 +647,71 @@ const WeeklyAttendanceView: React.FC = () => {
                       <div className="mt-4 text-sm font-semibold text-gray-700">Total: {group.total}</div>
                     </div>
                   ))}
-                  {groupedAttendance.leftoverGroup && (
-                    <div className="border border-gray-200 rounded-xl p-4 shadow-sm">
-                      <h3 className="text-lg font-semibold text-gray-900 mb-2">Unassigned / No Leader</h3>
-                      <ol className="space-y-1 list-decimal list-inside">
-                        {groupedAttendance.leftoverGroup.members.map(m => (
-                          <li key={m.id} className="text-gray-800">{m.firstName} {m.lastName}</li>
-                        ))}
-                      </ol>
-                      <div className="mt-4 text-sm font-semibold text-gray-700">Total: {groupedAttendance.leftoverGroup.members.length}</div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Grand Total */}
-                <div className="mt-8 pt-6 border-t border-gray-200">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-lg font-semibold text-gray-900">Grand Total</h3>
-                    <span className="text-2xl font-bold text-slate-600">{groupedAttendance.grandTotal}</span>
+                    {groupedAttendance.leftoverGroup && (
+                      <div className="border border-gray-200 rounded-xl p-4 shadow-sm">
+                        <h3 className="text-lg font-semibold text-gray-900 mb-2">Unassigned / No Leader</h3>
+                        <ol className="space-y-1 list-decimal list-inside">
+                          {groupedAttendance.leftoverGroup.members.map(m => (
+                            <li key={m.id} className="text-gray-800">{m.firstName} {m.lastName}</li>
+                          ))}
+                        </ol>
+                        <div className="mt-4 text-sm font-semibold text-gray-700">Total: {groupedAttendance.leftoverGroup.members.length}</div>
+                      </div>
+                    )}
                   </div>
-                  <p className="text-sm text-gray-500 mt-1">
-                    Total attendance across all bacentas for {formatFullDate(selectedSunday)}
-                  </p>
-                </div>
+                )}
+
+                {/* Grand Total and Ministry-specific Stats - Hidden in Ministry Mode */}
+                {!isMinistryContext && (
+                  <div className="mt-8 pt-6 border-t border-gray-200">
+                    {selectedMinistry ? (
+                    <>
+                      {/* Ministry-specific totals */}
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                        <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-center">
+                          <h4 className="text-sm font-medium text-green-800 mb-1">Present</h4>
+                          <span className="text-2xl font-bold text-green-600">{groupedAttendance.grandTotal}</span>
+                        </div>
+                        <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-center">
+                          <h4 className="text-sm font-medium text-red-800 mb-1">Absent</h4>
+                          <span className="text-2xl font-bold text-red-600">
+                            {(() => {
+                              const allMinistryMembers = members.filter(m =>
+                                !m.frozen && m.ministry && m.ministry.toLowerCase() === selectedMinistry.toLowerCase()
+                              );
+                              return allMinistryMembers.length - groupedAttendance.grandTotal;
+                            })()}
+                          </span>
+                        </div>
+                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center">
+                          <h4 className="text-sm font-medium text-blue-800 mb-1">Total Members</h4>
+                          <span className="text-2xl font-bold text-blue-600">
+                            {(() => {
+                              const allMinistryMembers = members.filter(m =>
+                                !m.frozen && m.ministry && m.ministry.toLowerCase() === selectedMinistry.toLowerCase()
+                              );
+                              return allMinistryMembers.length;
+                            })()}
+                          </span>
+                        </div>
+                      </div>
+                      <p className="text-sm text-gray-500 text-center">
+                        {selectedMinistry} ministry attendance for {formatFullDate(selectedSunday)}
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-lg font-semibold text-gray-900">Grand Total</h3>
+                        <span className="text-2xl font-bold text-slate-600">{groupedAttendance.grandTotal}</span>
+                      </div>
+                      <p className="text-sm text-gray-500 mt-1">
+                        Total attendance across all bacentas for {formatFullDate(selectedSunday)}
+                      </p>
+                    </>
+                    )}
+                  </div>
+                )}
               </>
             )}
           </div>
