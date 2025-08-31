@@ -18,8 +18,15 @@ export default class ErrorBoundary extends React.Component<Props, State> {
   }
 
   componentDidCatch(error: any, info: any) {
-    // eslint-disable-next-line no-console
-    console.error('Unhandled UI error:', error, info);
+    // Log detailed info to help diagnose the exact source
+    try {
+      // eslint-disable-next-line no-console
+      console.error('[ErrorBoundary] Unhandled UI error:', error, info);
+      if (error?.stack) {
+        // eslint-disable-next-line no-console
+        console.error('[ErrorBoundary] Stack:', error.stack);
+      }
+    } catch {}
   }
 
   handleReload = () => {

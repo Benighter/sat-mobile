@@ -139,7 +139,7 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
             <XMarkIcon className="w-5 h-5" />
             <span>{cancelText}</span>
           </Button>
-          
+
           <Button
             onClick={handleConfirm}
             variant={styles.confirmVariant}
@@ -185,6 +185,30 @@ export const DeleteMemberModal: React.FC<{
     ]}
   />
 );
+
+export const DeleteUserAccountModal: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+  userLabel: string;
+}> = ({ isOpen, onClose, onConfirm, userLabel }) => (
+  <ConfirmationModal
+    isOpen={isOpen}
+    onClose={onClose}
+    onConfirm={onConfirm}
+    title="Delete Account"
+    message={`Permanently delete the account for ${userLabel}? This cannot be undone.`}
+    confirmText="Delete Account"
+    cancelText="Cancel"
+    type="danger"
+    details={[
+      "The user's profile and all related records will be removed",
+      "They will be able to register again with the same email",
+      "This operation cannot be undone"
+    ]}
+  />
+);
+
 
 export const DeleteBacentaModal: React.FC<{
   isOpen: boolean;

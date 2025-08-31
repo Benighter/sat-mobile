@@ -8,6 +8,7 @@ import AdminChurchPreview from './AdminChurchPreview';
 import ConfirmationModal from '../modals/confirmations/ConfirmationModal';
 import { ministryAccessService } from '../../services/ministryAccessService';
 import { notificationService, setNotificationContext } from '../../services/notificationService';
+import { userService } from '../../services/userService';
 
 interface AdminUserRecord {
   id: string;
@@ -72,6 +73,8 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
   const [accessRequests, setAccessRequests] = useState<any[]>([]);
   const [accessLoading, setAccessLoading] = useState(false);
   const [accessError, setAccessError] = useState<string | null>(null);
+  const [superAdminNotifications, setSuperAdminNotifications] = useState<any[]>([]);
+  const [notificationsLoading, setNotificationsLoading] = useState(false);
 
   const campusAggregates = useMemo(() => {
     if (!campuses.length) return [] as Array<{ campus: CampusRecord; adminCount: number; constituencyCount: number; members: number }>;
@@ -259,6 +262,48 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
     }
   }, []);
 
+  // Load SuperAdmin notifications (realtime)
+  useEffect(() => {
+    try {
+      setNotificationsLoading(true);
+      const qNotifications = query(
+        collection(db, 'superAdminNotifications'),
+        limit(50)
+      );
+      const unsub = onSnapshot(qNotifications, snap => {
+        const items = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
+        // Sort by read status (unread first) then by creation date (newest first)
+        items.sort((a,b) => {
+          if (a.isRead !== b.isRead) {
+            return a.isRead ? 1 : -1; // Unread items first
+          }
+          return (b.createdAt || '').localeCompare(a.createdAt || '');
+        });
+        setSuperAdminNotifications(items);
+        setNotificationsLoading(false);
+      }, err => {
+        console.error('Failed to load superAdmin notifications:', err);
+        setNotificationsLoading(false);
+      });
+      return () => { try { unsub(); } catch {} };
+    } catch (e:any) {
+      console.error('Failed to setup superAdmin notifications listener:', e);
+      setNotificationsLoading(false);
+    }
+  }, []);
+
+  const markNotificationAsRead = useCallback(async (notificationId: string) => {
+    try {
+      const notificationRef = doc(db, 'superAdminNotifications', notificationId);
+      await updateDoc(notificationRef, {
+        isRead: true,
+        readAt: new Date().toISOString()
+      });
+    } catch (e: any) {
+      console.error('Failed to mark notification as read:', e);
+    }
+  }, []);
+
   const approveAccess = useCallback(async (req: any) => {
     try {
       await ministryAccessService.approveRequest(req.id, { uid: 'superadmin', name: 'SuperAdmin' });
@@ -271,10 +316,16 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
           req.requesterUid
         ], 'system_message' as any, 'Ministry access approved', { description: 'Your ministry account has been approved. You can now view cross-church ministry data.' }, undefined, { id: 'superadmin', name: 'SuperAdmin' });
       }
+
+      // Mark related notification as read
+      const relatedNotification = superAdminNotifications.find(n => n.requestId === req.id);
+      if (relatedNotification) {
+        await markNotificationAsRead(relatedNotification.id);
+      }
     } catch (e:any) {
       setAccessError(e.message || 'Failed to approve request');
     }
-  }, [admins]);
+  }, [admins, superAdminNotifications, markNotificationAsRead]);
 
   const rejectAccess = useCallback(async (req: any) => {
     try {
@@ -286,10 +337,16 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
           req.requesterUid
         ], 'system_message' as any, 'Ministry access rejected', { description: 'Your ministry access request was rejected. Contact SuperAdmin for details.' }, undefined, { id: 'superadmin', name: 'SuperAdmin' });
       }
+
+      // Mark related notification as read
+      const relatedNotification = superAdminNotifications.find(n => n.requestId === req.id);
+      if (relatedNotification) {
+        await markNotificationAsRead(relatedNotification.id);
+      }
     } catch (e:any) {
       setAccessError(e.message || 'Failed to reject request');
     }
-  }, [admins]);
+  }, [admins, superAdminNotifications, markNotificationAsRead]);
 
   // Leaders realtime listener (enabled when viewing leaders)
   useEffect(() => {
@@ -417,10 +474,8 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
   const toggleActiveStatus = async (admin: AdminUserRecord) => {
     try {
       setUpdating(admin.id, true);
-      await updateDoc(doc(db, 'users', admin.id), {
-        isActive: admin.isActive === false,
-        lastUpdated: Timestamp.now()
-      });
+      // Use secure callable to update both Firestore and Auth, and revoke tokens
+      await userService.setUserActiveStatus(admin.id, admin.isActive === false);
       // Optimistic update
       setAdmins(prev => prev.map(a => a.id === admin.id ? { ...a, isActive: admin.isActive === false } : a));
       setStats(prev => prev ? {
@@ -436,10 +491,12 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
   };
 
   const softDeleteAdmin = async (admin: AdminUserRecord) => {
+    // Reuse the same state for hard-delete confirmation
     setPendingDeleteAdmin(admin);
   };
 
   const performSoftDeleteAdmin = async () => {
+    // Soft delete locally (Firestore only) to avoid CORS with callable
     const admin = pendingDeleteAdmin;
     if (!admin) return;
     try {
@@ -452,9 +509,9 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
       });
       setAdmins(prev => prev.filter(a => a.id !== admin.id));
       setStats(prev => prev ? {
-        total: prev.total - 1,
-        active: prev.active - (admin.isActive !== false ? 1 : 0),
-        inactive: prev.inactive - (admin.isActive === false ? 1 : 0)
+        total: Math.max(0, prev.total - 1),
+        active: Math.max(0, prev.active - (admin.isActive !== false ? 1 : 0)),
+        inactive: Math.max(0, prev.inactive - (admin.isActive === false ? 1 : 0))
       } : prev);
     } catch (e:any) {
       setError(e.message || 'Failed to delete admin');
@@ -871,6 +928,90 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
                     <div className="flex items-center gap-2 shrink-0">
                       <button onClick={() => approveAccess(req)} className="px-3 py-1.5 text-xs rounded-md bg-green-600 text-white">Approve</button>
                       <button onClick={() => rejectAccess(req)} className="px-3 py-1.5 text-xs rounded-md bg-red-600 text-white">Reject</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* SuperAdmin Notifications */}
+        {!selectedCampus && superAdminNotifications.length > 0 && (
+          <div className="lg:col-span-3 mb-8">
+            <div className="bg-white dark:bg-dark-800 rounded-xl shadow-sm border border-gray-200/70 dark:border-dark-700 overflow-hidden">
+              <div className="px-4 sm:px-6 py-4 border-b border-gray-200/60 dark:border-dark-700 flex items-center justify-between">
+                <div>
+                  <h2 className="text-base sm:text-lg font-semibold">Recent Notifications</h2>
+                  <p className="text-xs text-gray-500">Ministry access requests and system alerts</p>
+                  {superAdminNotifications.filter(n => !n.isRead).length > 0 && (
+                    <span className="text-xs text-blue-600 font-medium">
+                      {superAdminNotifications.filter(n => !n.isRead).length} unread
+                    </span>
+                  )}
+                </div>
+                {notificationsLoading && <span className="text-xs text-gray-500">Loading…</span>}
+              </div>
+              <div className="divide-y divide-gray-100 dark:divide-dark-700">
+                {superAdminNotifications.slice(0, 8).map(notification => (
+                  <div key={notification.id} className="px-4 sm:px-6 py-4 flex items-start justify-between gap-4">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="font-medium text-sm">{notification.title}</span>
+                        {!notification.isRead && (
+                          <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
+                        )}
+                        {notification.autoMarkedRead && (
+                          <span className="text-[10px] px-1.5 py-0.5 bg-gray-100 dark:bg-dark-600 text-gray-600 dark:text-dark-300 rounded">
+                            Auto-resolved
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-gray-600 dark:text-dark-300 mb-2">{notification.description}</p>
+                      <div className="text-[10px] text-gray-400">
+                        {new Date(notification.createdAt).toLocaleString()}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {notification.type === 'ministry_access_request' && notification.requestId && !notification.isRead && (
+                        <>
+                          {(() => {
+                            const req = accessRequests.find(r => r.id === notification.requestId);
+                            if (req) {
+                              return (
+                                <>
+                                  <button
+                                    onClick={() => approveAccess(req)}
+                                    className="px-2 py-1 text-[10px] rounded-md bg-green-600 text-white hover:bg-green-700"
+                                  >
+                                    Approve
+                                  </button>
+                                  <button
+                                    onClick={() => rejectAccess(req)}
+                                    className="px-2 py-1 text-[10px] rounded-md bg-red-600 text-white hover:bg-red-700"
+                                  >
+                                    Reject
+                                  </button>
+                                </>
+                              );
+                            } else {
+                              return (
+                                <span className="text-[10px] text-gray-500 italic">
+                                  Request no longer available
+                                </span>
+                              );
+                            }
+                          })()}
+                        </>
+                      )}
+                      {!notification.isRead && (
+                        <button
+                          onClick={() => markNotificationAsRead(notification.id)}
+                          className="px-2 py-1 text-[10px] rounded-md bg-gray-200 dark:bg-dark-600 text-gray-700 dark:text-dark-200 hover:bg-gray-300 dark:hover:bg-dark-500"
+                        >
+                          Mark Read
+                        </button>
+                      )}
                     </div>
                   </div>
                 ))}

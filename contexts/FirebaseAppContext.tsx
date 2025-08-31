@@ -1,6 +1,6 @@
 // Firebase-enabled App Context
 import React, { createContext, useState, useEffect, useCallback, ReactNode, useMemo, useRef } from 'react';
-import { collection, getDocs, onSnapshot, query as fsQuery, where as fsWhere } from 'firebase/firestore';
+import { collection, doc, getDocs, onSnapshot, query as fsQuery, where as fsWhere } from 'firebase/firestore';
 import { db } from '../firebase.config';
 import { Member, AttendanceRecord, Bacenta, TabOption, AttendanceStatus, NewBeliever, SundayConfirmation, ConfirmationStatus, Guest, MemberDeletionRequest, OutreachBacenta, OutreachMember, PrayerRecord, PrayerStatus, MeetingRecord, TitheRecord, TransportRecord, CrossTenantAccessLink, CrossTenantPermission } from '../types';
 import { FIXED_TABS, DEFAULT_TAB_ID } from '../constants';
@@ -322,7 +322,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     return combined;
   }, []);
 
-  
+
   // Derived flags
   const isMinistryContext = useMemo(() => {
     const ministryId = userProfile?.contexts?.ministryChurchId;
@@ -482,6 +482,24 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
             setGuests([]);
           }
           setIsLoading(false);
+
+        // Real-time guard: if the user's profile becomes inactive or deleted while logged in, sign out immediately
+        try {
+          const unsubUserDoc = onSnapshot(doc(db, 'users', user.uid), async (snap) => {
+            try {
+              if (!snap.exists()) return;
+              const data: any = snap.data();
+              if (data.isActive === false || data.isDeleted === true) {
+                try { await authService.signOut(); } catch {}
+                showToast('warning', 'Signed out', data.isDeleted ? 'Your account was deleted.' : 'Your account has been deactivated.');
+              }
+            } catch (e) { console.warn('Auto signout watcher error', e); }
+          });
+          // Attach to cleanup
+          const prevCleanup = listenersCleanupRef.current;
+          listenersCleanupRef.current = () => { try { unsubUserDoc(); } catch {}; prevCleanup?.(); };
+        } catch (e) { console.warn('Failed to attach auto signout watcher', e); }
+
         });
 
         return () => {

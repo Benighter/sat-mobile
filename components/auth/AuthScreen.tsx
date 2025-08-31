@@ -8,6 +8,9 @@ import RegisterForm from './RegisterForm';
 import OptimizedLoader from '../common/OptimizedLoader';
 import SuperAdminDashboard from '../super-admin/SuperAdminDashboard';
 import { getAppDisplayName } from '../../constants';
+import { TabKeys } from '../../types';
+import Modal from '../ui/Modal';
+import ContactView from '../views/ContactView';
 
 // Utility function to convert Firebase errors to user-friendly messages
 const getErrorMessage = (error: string): string => {
@@ -61,6 +64,33 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ children, showToast }) =
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   // Must come before any conditional return (Rules of Hooks)
   const { isImpersonating, stopImpersonation, switchTab } = useAppContext();
+
+  const [isSupportModalOpen, setIsSupportModalOpen] = useState(false);
+  const [supportModalData, setSupportModalData] = useState<{initialEmail?: string; initialMessage?: string; contextMeta?: any}>({});
+
+  const openSupport = (opts?: { email?: string; errorCode?: string; errorMessage?: string; screen?: string; feature?: string }) => {
+    const email = opts?.email || (typeof window !== 'undefined' ? localStorage.getItem('last_known_email') || undefined : undefined);
+    // Show a modal immediately (works even before full app nav is available)
+    setSupportModalData({
+      initialEmail: email,
+      initialMessage: opts?.errorMessage ? `I encountered an issue: ${opts.errorMessage}` : undefined,
+      contextMeta: { screen: opts?.screen || 'Login', feature: opts?.feature || 'Authentication', errorCode: opts?.errorCode, errorMessage: opts?.errorMessage }
+    });
+    setIsSupportModalOpen(true);
+
+    // Also push the Contact tab into nav stack for later use (non-blocking)
+    try {
+      switchTab({
+        id: TabKeys.CONTACT, name: 'Contact',
+        data: {
+          supportPrompted: true,
+          initialEmail: email,
+          initialMessage: opts?.errorMessage ? `I encountered an issue: ${opts.errorMessage}` : undefined,
+          contextMeta: { screen: opts?.screen || 'Login', feature: opts?.feature || 'Authentication', errorCode: opts?.errorCode, errorMessage: opts?.errorMessage }
+        }
+      });
+    } catch {}
+  };
 
   // Watchdog: if auth/loading persists beyond 5 seconds, notify user
   useEffect(() => {
@@ -359,6 +389,15 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ children, showToast }) =
                 loading={loading}
                 showToast={showToast}
                 ministryMode={ministryMode}
+                onEmailChange={(em) => {
+                  try { localStorage.setItem('last_known_email', em); } catch {}
+                }}
+                onContactSupport={() => openSupport({
+                  email: (typeof window !== 'undefined' ? localStorage.getItem('last_known_email') || undefined : undefined),
+                  errorMessage: error || undefined,
+                  screen: 'Login',
+                  feature: 'Authentication'
+                })}
               />
 
               {/* Switch to Register */}
@@ -371,6 +410,17 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ children, showToast }) =
                   >
                     Create one here
                   </button>
+
+              {/* Support modal for unauthenticated state */}
+              <Modal isOpen={isSupportModalOpen} onClose={() => setIsSupportModalOpen(false)} title="Contact Support" size="lg">
+                <ContactView
+                  initialEmail={supportModalData.initialEmail}
+                  initialMessage={supportModalData.initialMessage}
+                  supportPrompted={true}
+                  contextMeta={supportModalData.contextMeta}
+                />
+              </Modal>
+
                 </p>
               </div>
             </div>
@@ -439,12 +489,12 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ children, showToast }) =
           </button>
         </div>
       </div>
-      
+
       {/* Main app content */}
       <div className="pt-0">
         {children}
       </div>
-      
+
       {error && (
         <div className="fixed bottom-4 right-4 bg-red-500 text-white px-4 py-2 rounded-md shadow-lg z-50">
           {error}

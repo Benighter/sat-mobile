@@ -430,12 +430,12 @@ async function cleanupInvalidTokens(failedTokens, churchId) {
 
     for (const failed of failedTokens) {
       // Check if it's a token registration error (invalid token)
-      if (failed.error.includes('registration-token-not-registered') || 
+      if (failed.error.includes('registration-token-not-registered') ||
           failed.error.includes('invalid-registration-token')) {
-        
+
         const tokenRef = db.doc(`churches/${churchId}/deviceTokens/${failed.token}`);
-        batch.update(tokenRef, { 
-          isActive: false, 
+        batch.update(tokenRef, {
+          isActive: false,
           lastError: failed.error,
           lastErrorAt: admin.firestore.FieldValue.serverTimestamp()
         });
@@ -984,27 +984,27 @@ exports.cleanupOldTokens = functions.pubsub.schedule('0 2 * * *')
   .timeZone('UTC')
   .onRun(async (context) => {
     const db = admin.firestore();
-    
+
     // Remove tokens older than 30 days and inactive
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    
+
     const query = db.collectionGroup('deviceTokens')
       .where('isActive', '==', false)
       .where('lastUsed', '<', thirtyDaysAgo.toISOString());
-    
+
     const snapshot = await query.get();
-    
+
     if (snapshot.empty) {
       console.log('No old tokens to clean up');
       return;
     }
-    
+
     const batch = db.batch();
     snapshot.docs.forEach(doc => {
       batch.delete(doc.ref);
     });
-    
+
     await batch.commit();
     console.log(`Cleaned up ${snapshot.size} old device tokens`);
   });
@@ -1314,3 +1314,112 @@ exports.backfillMinistrySyncHttp = functions.https.onRequest(async (req, res) =>
     return res.status(500).json({ success: false, error: e?.message || 'Backfill failed' });
   }
 });
+
+// ----- Account administration: activate/deactivate/hard-delete users -----
+// Caller must be authenticated and have role 'admin' in users/{callerUid}
+exports.setUserActiveStatus = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'Authentication required');
+  }
+  const { uid, active } = data || {};
+  if (!uid || typeof active !== 'boolean') {
+    throw new functions.https.HttpsError('invalid-argument', 'uid and active(boolean) are required');
+  }
+  const db = admin.firestore();
+  // Permission check
+  const callerSnap = await db.doc(`users/${context.auth.uid}`).get();
+  const callerRole = callerSnap.exists ? (callerSnap.data().role || '') : '';
+  if (callerRole !== 'admin') {
+    throw new functions.https.HttpsError('permission-denied', 'Only admins can change account status');
+  }
+  // Update Firestore user profile
+  const updates = {
+    isActive: !!active,
+    lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
+    ...(active ? { reactivatedAt: admin.firestore.FieldValue.serverTimestamp() } : { deactivatedAt: admin.firestore.FieldValue.serverTimestamp(), isDeleted: false })
+  };
+  await db.doc(`users/${uid}`).set(updates, { merge: true });
+  // Update Auth disabled flag and revoke tokens if deactivating
+  await admin.auth().updateUser(uid, { disabled: !active });
+  if (!active) {
+    try { await admin.auth().revokeRefreshTokens(uid); } catch {}
+  }
+  return { success: true };
+});
+
+exports.hardDeleteUserAccount = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'Authentication required');
+  }
+  const { uid } = data || {};
+  if (!uid) {
+    throw new functions.https.HttpsError('invalid-argument', 'uid is required');
+  }
+  const db = admin.firestore();
+  // Permission check
+  const callerSnap = await db.doc(`users/${context.auth.uid}`).get();
+  const callerRole = callerSnap.exists ? (callerSnap.data().role || '') : '';
+  if (callerRole !== 'admin') {
+    throw new functions.https.HttpsError('permission-denied', 'Only admins can delete accounts');
+  }
+
+  // Fetch basic user doc for cleanup context
+  const userRef = db.doc(`users/${uid}`);
+  const userSnap = await userRef.get();
+  const userData = userSnap.exists ? (userSnap.data() || {}) : {};
+
+  // Best-effort cleanup in parallel
+  const batchDeletes = [];
+  try {
+    // Cross-tenant links/invites
+    const linksSnap = await db.collection('crossTenantAccessLinks').where('viewerUid', '==', uid).get();
+    linksSnap.forEach(d => batchDeletes.push(d.ref.delete()));
+    const linksSnap2 = await db.collection('crossTenantAccessLinks').where('ownerUid', '==', uid).get();
+    linksSnap2.forEach(d => batchDeletes.push(d.ref.delete()));
+    const invitesFrom = await db.collection('crossTenantInvites').where('fromAdminUid', '==', uid).get();
+    invitesFrom.forEach(d => batchDeletes.push(d.ref.delete()));
+    const invitesTo = await db.collection('crossTenantInvites').where('toAdminUid', '==', uid).get();
+    invitesTo.forEach(d => batchDeletes.push(d.ref.delete()));
+
+    // Ministry access requests
+    const reqs = await db.collection('ministryAccessRequests').where('requesterUid', '==', uid).get();
+    reqs.forEach(d => batchDeletes.push(d.ref.delete()));
+
+    // Super admin notifications referencing this requester
+    try {
+      const san = await db.collection('superAdminNotifications').where('requesterUid', '==', uid).get();
+      san.forEach(d => batchDeletes.push(d.ref.delete()));
+    } catch {}
+
+    // Device tokens across all churches
+    const tokenGroup = await db.collectionGroup('deviceTokens').where('userId', '==', uid).get();
+    tokenGroup.forEach(d => batchDeletes.push(d.ref.delete()));
+
+    // Admin notifications targeted to this user across churches
+    try {
+      const notifGroup = await db.collectionGroup('notifications').where('adminId', '==', uid).get();
+      notifGroup.forEach(d => batchDeletes.push(d.ref.delete()));
+    } catch {}
+
+  } catch (cleanupErr) {
+    console.warn('Partial cleanup errors during hard delete', cleanupErr);
+  }
+
+  // Delete Firestore user profile
+  if (userSnap.exists) {
+    batchDeletes.push(userRef.delete());
+  }
+
+  await Promise.all(batchDeletes).catch(err => console.warn('Cleanup promises error', err));
+
+  // Finally remove Auth account and revoke tokens
+  try {
+    await admin.auth().deleteUser(uid);
+  } catch (e) {
+    console.error('Failed deleting auth user', uid, e);
+    throw new functions.https.HttpsError('internal', 'Failed to delete authentication user');
+  }
+
+  return { success: true, deletedUid: uid };
+});
+

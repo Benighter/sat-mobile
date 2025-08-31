@@ -171,6 +171,9 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, size = 
     full: 'max-w-full h-full rounded-none',
   };
 
+  // Provide a simple close handle for children that may want to close programmatically
+  (window as any).closeModal = onClose;
+
   return (
     <div
       className="fixed modal-backdrop desktop-modal-backdrop z-[10000]"

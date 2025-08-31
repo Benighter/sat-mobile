@@ -89,8 +89,8 @@ export const authService = {
   // Sign in with email and password
   signIn: async (email: string, password: string): Promise<FirebaseUser> => {
     try {
-  const trimmedEmail = (email || '').trim().toLowerCase();
-  const userCredential = await signInWithEmailAndPassword(auth, trimmedEmail, password);
+      const trimmedEmail = (email || '').trim().toLowerCase();
+      const userCredential = await signInWithEmailAndPassword(auth, trimmedEmail, password);
       const user = userCredential.user;
 
       // Get user data from Firestore - first try direct lookup by UID
@@ -112,6 +112,20 @@ export const authService = {
           // Delete the old document with auto-generated ID
           await deleteDoc(legacyUserDoc.ref);
         }
+      }
+
+      // Block deactivated or deleted accounts from logging in (clear auth session immediately)
+      if (userData && (userData as any).isActive === false) {
+        try { await signOut(auth); } catch {}
+        const err: any = new Error('auth/user-disabled: Your account has been deactivated. Please contact support.');
+        err.code = 'auth/user-disabled';
+        throw err;
+      }
+      if (userData && (userData as any).isDeleted === true) {
+        try { await signOut(auth); } catch {}
+        const err: any = new Error('auth/user-not-found: This account has been deleted.');
+        err.code = 'auth/user-not-found';
+        throw err;
       }
 
       // Prefer Firestore profile values for display name and email (Auth may not have a name; email may be aliased)
@@ -152,6 +166,20 @@ export const authService = {
           await setDoc(doc(db, 'users', user.uid), userData);
           await deleteDoc(legacyUserDoc.ref);
         }
+      }
+
+      // Block if profile shows deactivated or deleted
+      if (userData && (userData as any).isActive === false) {
+        try { await signOut(auth); } catch {}
+        const err: any = new Error('auth/user-disabled: Your account has been deactivated. Please contact support.');
+        err.code = 'auth/user-disabled';
+        throw err;
+      }
+      if (userData && (userData as any).isDeleted === true) {
+        try { await signOut(auth); } catch {}
+        const err: any = new Error('auth/user-not-found: This account has been deleted.');
+        err.code = 'auth/user-not-found';
+        throw err;
       }
 
       currentUser = {
@@ -419,6 +447,18 @@ export const authService = {
             // Delete the old document with auto-generated ID
             await deleteDoc(legacyUserDoc.ref);
           }
+        }
+
+        // If the profile indicates disabled or deleted, sign out immediately
+        if (userData && (userData as any).isActive === false) {
+          try { await signOut(auth); } catch {}
+          callback(null);
+          return;
+        }
+        if (userData && (userData as any).isDeleted === true) {
+          try { await signOut(auth); } catch {}
+          callback(null);
+          return;
         }
 
         currentUser = {

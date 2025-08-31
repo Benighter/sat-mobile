@@ -13,7 +13,8 @@ import {
   ChartBarIcon,
   CakeIcon,
   BuildingOfficeIcon,
-  CalendarIcon
+  CalendarIcon,
+  InformationCircleIcon
 } from '../icons';
 import { PrayerIcon, CheckIcon, PeopleIcon } from '../icons';
 
@@ -40,7 +41,7 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
     isMinistryContext,
     activeMinistryName,
   } = useAppContext();
-  
+
   const [searchQuery, setSearchQuery] = useState('');
   const [recentBacentas, setRecentBacentas] = useState<string[]>([]);
   const [canScrollUp, setCanScrollUp] = useState(false);
@@ -89,7 +90,7 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
   // Filter bacentas based on search query
   const filteredBacentas = useMemo(() => {
     if (!searchQuery.trim()) return bacentas;
-    return bacentas.filter(bacenta => 
+    return bacentas.filter(bacenta =>
       bacenta.name.toLowerCase().includes(searchQuery.toLowerCase())
     );
   }, [bacentas, searchQuery]);
@@ -362,6 +363,18 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
                       onClose();
                     }}
                   />
+
+                  {/* Contact */}
+                  <NavigationItem
+                    icon={<InformationCircleIcon className="w-4 h-4" />}
+                    label="Contact"
+                    isActive={currentTab.id === TabKeys.CONTACT}
+                    onClick={() => {
+                      switchTab({ id: TabKeys.CONTACT, name: 'Contact', data: { initialEmail: userProfile?.email || (typeof window !== 'undefined' ? localStorage.getItem('last_known_email') || undefined : undefined) } });
+                      onClose();
+                    }}
+                  />
+
                 </>
               )}
             </div>

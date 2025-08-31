@@ -9,6 +9,8 @@ interface LoginFormProps {
   loading: boolean;
   showToast: (type: 'success' | 'error' | 'warning' | 'info', title: string, message?: string) => void;
   ministryMode?: boolean;
+  onEmailChange?: (email: string) => void; // bubble up for contextual support
+  onContactSupport?: () => void; // opens Contact with context
 }
 
 // Utility: map Firebase codes to friendly messages, otherwise pass through the given text
@@ -48,7 +50,7 @@ const getErrorMessage = (error: string): string => {
   return raw;
 };
 
-export const LoginForm: React.FC<LoginFormProps> = ({ onSignIn, error, loading, showToast, ministryMode = false }) => {
+export const LoginForm: React.FC<LoginFormProps> = ({ onSignIn, error, loading, showToast, ministryMode = false, onEmailChange, onContactSupport }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -155,6 +157,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSignIn, error, loading, 
   const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newEmail = e.target.value;
     setEmail(newEmail);
+    if (onEmailChange) onEmailChange(newEmail);
 
     // Clear error immediately when user starts typing
     if (validationErrors.email) {
@@ -219,6 +222,15 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSignIn, error, loading, 
         {error && (
           <div role="alert" className="mb-6 p-3 bg-red-50 border border-red-200 rounded-xl">
             <p className="text-sm text-red-600 text-center">{getErrorMessage(error)}</p>
+            {onContactSupport && /contact support/i.test(getErrorMessage(error)) && (
+              <button
+                type="button"
+                onClick={onContactSupport}
+                className="mt-3 w-full py-2.5 bg-gradient-to-r from-rose-500 to-fuchsia-600 text-white font-semibold rounded-lg shadow hover:shadow-md transition-all"
+              >
+                Contact Support
+              </button>
+            )}
           </div>
         )}
 

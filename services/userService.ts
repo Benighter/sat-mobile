@@ -1,11 +1,12 @@
-import { 
-  collection, 
-  doc, 
-  getDoc, 
-  getDocs, 
-  updateDoc, 
-  query, 
-  where 
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  updateDoc,
+  query,
+  where,
+  Timestamp
 } from 'firebase/firestore';
 import { db } from '../firebase.config';
 import { User, Church } from '../types';
@@ -126,15 +127,49 @@ export const userService = {
     }
   },
 
-  // Deactivate user (admin only)
-  deactivateUser: async (uid: string): Promise<void> => {
+  // Set user active status via Cloud Function (preferred). If that fails (e.g., CORS/network),
+  // gracefully fall back to a direct Firestore update so the UI keeps working without CORS.
+  setUserActiveStatus: async (uid: string, active: boolean): Promise<void> => {
     try {
-      await updateDoc(doc(db, 'users', uid), {
-        isActive: false,
-        lastUpdated: new Date().toISOString()
-      });
+      const { getFunctions, httpsCallable } = await import('firebase/functions');
+      const functions = getFunctions(undefined as any, 'us-central1');
+      const fn = httpsCallable(functions, 'setUserActiveStatus');
+      const res: any = await fn({ uid, active });
+      if (!res?.data?.success) throw new Error('Callable failed');
+      return;
     } catch (error: any) {
-      throw new Error(`Failed to deactivate user: ${error.message}`);
+      // Fallback path: update Firestore directly (no CORS for Firestore client SDK)
+      console.warn('[userService.setUserActiveStatus] Callable failed; applying Firestore fallback:', error?.message || error);
+      try {
+        const updates: any = {
+          isActive: !!active,
+          lastUpdated: Timestamp.now(),
+          isDeleted: false,
+          ...(active ? { reactivatedAt: Timestamp.now() } : { deactivatedAt: Timestamp.now() })
+        };
+        await updateDoc(doc(db, 'users', uid), updates);
+        return; // success via fallback
+      } catch (fallbackError: any) {
+        // If even fallback fails, surface a clear error
+        throw new Error(`Failed to ${active ? 'activate' : 'deactivate'} user (fallback failed): ${fallbackError.message || fallbackError}`);
+      }
+    }
+  },
+
+  // Convenience wrappers
+  activateUser: async (uid: string): Promise<void> => userService.setUserActiveStatus(uid, true),
+  deactivateUser: async (uid: string): Promise<void> => userService.setUserActiveStatus(uid, false),
+
+  // Hard delete user account and related data (admin only)
+  hardDeleteUser: async (uid: string): Promise<void> => {
+    try {
+      const { getFunctions, httpsCallable } = await import('firebase/functions');
+      const functions = getFunctions(undefined as any, 'us-central1');
+      const fn = httpsCallable(functions, 'hardDeleteUserAccount');
+      const res: any = await fn({ uid });
+      if (!res?.data?.success) throw new Error('Callable failed');
+    } catch (error: any) {
+      throw new Error(`Failed to delete user: ${error.message}`);
     }
   },
 

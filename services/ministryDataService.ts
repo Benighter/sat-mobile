@@ -28,26 +28,42 @@ export interface MinistryAggregatedData {
   sourceChurches: string[]; // List of church IDs that contributed data
 }
 
-// Helper: Dedupe members by ID across multiple churches. When the same ID exists
-// in both the ministry church and a source church, prefer the source-church copy
-// (so once sync completes, we show the canonical record without duplicates).
+// Helper: Dedupe members across multiple churches with safe rules:
+// - Always keep unique pairs by (sourceChurchId, id)
+// - If the same id appears both in the ministry church and a non-ministry church,
+//   prefer the non-ministry-church copy (so the canonical source record wins)
 const dedupeMembers = (items: Member[], currentChurchId?: string): Member[] => {
-  const byId = new Map<string, Member>();
+  const seenComposite = new Set<string>();
+  const nonMinistryById = new Map<string, Member>();
+
+  // First pass: index non-ministry copies by id
   for (const m of items) {
-    const key = m.id;
-    const existing = byId.get(key);
-    if (!existing) {
-      byId.set(key, m);
-      continue;
-    }
-    const existingFromMinistry = (existing as any).sourceChurchId === currentChurchId;
-    const nextFromMinistry = (m as any).sourceChurchId === currentChurchId;
-    // Prefer non-ministry-church copy when available; otherwise keep existing
-    if (existingFromMinistry && !nextFromMinistry) {
-      byId.set(key, m);
+    const src = (m as any).sourceChurchId;
+    const isMinistry = currentChurchId && src === currentChurchId;
+    if (!isMinistry) {
+      // Only set the first encountered non-ministry copy; order upstream is acceptable
+      if (!nonMinistryById.has(m.id)) nonMinistryById.set(m.id, m);
     }
   }
-  return Array.from(byId.values());
+
+  // Second pass: build output honoring preference rules
+  const result: Member[] = [];
+  for (const m of items) {
+    const src = (m as any).sourceChurchId || 'unknown';
+    const compositeKey = `${src}_${m.id}`;
+    if (seenComposite.has(compositeKey)) continue; // exact duplicate
+
+    const isMinistry = currentChurchId && src === currentChurchId;
+    const hasNonMinistry = nonMinistryById.has(m.id);
+
+    // If this is a ministry-church copy and we already have a non-ministry copy for same id, skip it
+    if (isMinistry && hasNonMinistry) continue;
+
+    seenComposite.add(compositeKey);
+    result.push(m);
+  }
+
+  return result;
 };
 
 // Get all churches that have members with a specific ministry (SuperAdmin style)
@@ -104,40 +120,19 @@ export const getChurchesWithMinistry = async (ministryName: string): Promise<str
       console.log(`🔍 Checking church ${churchId} for "${ministryName}" members...`);
 
       try {
-        // Step 3: Query members with ministry (same pattern as membersFirebaseService.getAllByMinistry)
+        // Step 3: Query for existence of any member with this ministry.
+        // Do NOT pre-filter by isActive here, because some datasets don't set isActive=true explicitly.
+        // We'll filter by isActive on the full fetch later.
         const membersQuery = query(
           collection(db, `churches/${churchId}/members`),
           where('ministry', '==', ministryName),
-          limit(5) // Get a few to check
+          limit(1) // Only need to know if at least one exists
         );
         const membersSnapshot = await getDocs(membersQuery);
 
-        console.log(`📋 Church ${churchId} has ${membersSnapshot.docs.length} members with ministry "${ministryName}"`);
-
         if (!membersSnapshot.empty) {
-          // Debug: Log found members
-          membersSnapshot.docs.forEach(doc => {
-            const memberData = doc.data();
-            console.log(`👥 Found member:`, {
-              id: doc.id,
-              name: `${memberData.firstName} ${memberData.lastName || ''}`,
-              ministry: memberData.ministry,
-              isActive: memberData.isActive
-            });
-          });
-
-          // Apply isActive filter client-side (same as existing service)
-          const hasActiveMembers = membersSnapshot.docs.some(doc => {
-            const memberData = doc.data();
-            return memberData.isActive !== false;
-          });
-
-          if (hasActiveMembers) {
-            churchIds.push(churchId);
-            console.log(`✅ Church ${churchId} has active ${ministryName} members`);
-          } else {
-            console.log(`⚠️ Church ${churchId} has ${ministryName} members but none are active`);
-          }
+          churchIds.push(churchId);
+          console.log(`✅ Church ${churchId} has ${ministryName} members (will filter active later)`);
         } else {
           console.log(`❌ Church ${churchId} has no members with ministry "${ministryName}"`);
         }

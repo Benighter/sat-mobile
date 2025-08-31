@@ -327,6 +327,22 @@ const EnhancedProfileDropdown: React.FC<EnhancedProfileDropdownProps> = ({
               </button>
             )}
 
+            {/* Contact Support */}
+            <button
+              onClick={() => {
+                switchTab({ id: TabKeys.CONTACT, name: 'Contact', data: { initialEmail: user?.email || (typeof window !== 'undefined' ? localStorage.getItem('last_known_email') || undefined : undefined) } });
+                setIsOpen(false);
+              }}
+              className="w-full flex items-center space-x-3 px-4 py-3 rounded-lg hover:bg-blue-50 dark:hover:bg-dark-700 transition-colors duration-200 group"
+            >
+              <InformationCircleIcon className="w-5 h-5 text-blue-500 group-hover:text-blue-700" />
+              <div className="text-left">
+                <div className="text-sm font-medium text-gray-800 dark:text-dark-100">Contact Support</div>
+                <div className="text-xs text-gray-500 dark:text-dark-300">Send us a message</div>
+              </div>
+            </button>
+
+
           </div>
 
           {/* Logout */}
@@ -346,9 +362,9 @@ const EnhancedProfileDropdown: React.FC<EnhancedProfileDropdownProps> = ({
       )}
 
       {/* About Modal */}
-      <AboutModal 
-        isOpen={isAboutModalOpen} 
-        onClose={() => setIsAboutModalOpen(false)} 
+      <AboutModal
+        isOpen={isAboutModalOpen}
+        onClose={() => setIsAboutModalOpen(false)}
       />
     </div>
   );

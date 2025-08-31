@@ -5,7 +5,7 @@ import { ThemeProvider } from './contexts/ThemeContext';
 import { AuthScreen } from './components/auth/AuthScreen';
 
 import DashboardView from './components/views/DashboardView';
-import LazyWrapper, { LazyMemberListView, LazyAttendanceAnalyticsView, LazyWeeklyAttendanceView, LazySundayConfirmationsView, LazyNewBelieversView, LazyOutreachView, LazyBacentaOutreachView, LazyPrayerView, LazyPrayerMemberDetailsView, LazyMinistriesView, LazyBacentaLeadersView, LazyMyDeletionRequestsView, LazyMemberDeletionRequestsView, LazyBacentaMeetingsView, LazySundayHeadCountsView, LazySundayHeadCountSectionView } from './components/common/LazyWrapper';
+import LazyWrapper, { LazyMemberListView, LazyAttendanceAnalyticsView, LazyWeeklyAttendanceView, LazySundayConfirmationsView, LazyNewBelieversView, LazyOutreachView, LazyBacentaOutreachView, LazyPrayerView, LazyPrayerMemberDetailsView, LazyMinistriesView, LazyBacentaLeadersView, LazyMyDeletionRequestsView, LazyMemberDeletionRequestsView, LazyBacentaMeetingsView, LazySundayHeadCountsView, LazySundayHeadCountSectionView, LazyContactView } from './components/common/LazyWrapper';
 import ProfileSettingsView from './components/views/ProfileSettingsView';
 import CopyMembersView from './components/views/CopyMembersView';
 import CopyAbsenteesView from './components/views/CopyAbsenteesView';
@@ -407,6 +407,18 @@ const AppContent: React.FC = memo(() => {
             <BidirectionalSyncTest />
           </LazyWrapper>
         );
+      case TabKeys.CONTACT:
+        return (
+          <LazyWrapper>
+            <LazyContactView
+              initialEmail={(currentTab as any)?.data?.initialEmail}
+              initialMessage={(currentTab as any)?.data?.initialMessage}
+              supportPrompted={(currentTab as any)?.data?.supportPrompted}
+              contextMeta={(currentTab as any)?.data?.contextMeta}
+            />
+          </LazyWrapper>
+        );
+
       default:
         return (
           <LazyWrapper>

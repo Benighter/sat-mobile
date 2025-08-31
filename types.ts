@@ -232,6 +232,7 @@ export enum TabKeys {
   BACENTA_OUTREACH = 'bacenta_outreach',
   MINISTRIES = 'ministries',
   BIDIRECTIONAL_SYNC_TEST = 'bidirectional_sync_test',
+  CONTACT = 'contact',
 }
 
 export interface NavigationHistoryItem {
