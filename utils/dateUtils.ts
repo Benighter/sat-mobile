@@ -302,6 +302,73 @@ export const getPreviousMeetingWeek = (currentWednesday: string): string => {
   return formatDateToYYYYMMDD(wed);
 };
 
+// WEEKLY TOTALS DATE UTILITIES - Monday to Sunday focused
+// These functions handle weekly totals that accumulate Monday through Sunday 23:59, then reset on Monday
+
+// Get the current week's Monday date (Monday-based week)
+export const getCurrentWeekMonday = (): string => {
+  const today = new Date();
+  const dayOfWeek = today.getDay(); // 0=Sunday, 1=Monday, ..., 6=Saturday
+
+  // Calculate days to get to this week's Monday
+  let daysToMonday: number;
+
+  switch (dayOfWeek) {
+    case 0: // Sunday - go back 6 days to Monday
+      daysToMonday = -6;
+      break;
+    case 1: // Monday - today is Monday
+      daysToMonday = 0;
+      break;
+    case 2: // Tuesday - go back 1 day to Monday
+      daysToMonday = -1;
+      break;
+    case 3: // Wednesday - go back 2 days to Monday
+      daysToMonday = -2;
+      break;
+    case 4: // Thursday - go back 3 days to Monday
+      daysToMonday = -3;
+      break;
+    case 5: // Friday - go back 4 days to Monday
+      daysToMonday = -4;
+      break;
+    case 6: // Saturday - go back 5 days to Monday
+      daysToMonday = -5;
+      break;
+    default:
+      daysToMonday = 0;
+  }
+
+  const monday = new Date(today);
+  monday.setDate(today.getDate() + daysToMonday);
+  monday.setHours(0, 0, 0, 0);
+
+  return formatDateToYYYYMMDD(monday);
+};
+
+// Get Monday through Sunday dates for a given Monday date
+export const getWeeklyTotalsDates = (mondayDate: string): { monday: string; tuesday: string; wednesday: string; thursday: string; friday: string; saturday: string; sunday: string } => {
+  const mon = new Date(mondayDate + 'T00:00:00');
+
+  const dates = {
+    monday: formatDateToYYYYMMDD(mon),
+    tuesday: formatDateToYYYYMMDD(new Date(mon.getTime() + 24 * 60 * 60 * 1000)),
+    wednesday: formatDateToYYYYMMDD(new Date(mon.getTime() + 2 * 24 * 60 * 60 * 1000)),
+    thursday: formatDateToYYYYMMDD(new Date(mon.getTime() + 3 * 24 * 60 * 60 * 1000)),
+    friday: formatDateToYYYYMMDD(new Date(mon.getTime() + 4 * 24 * 60 * 60 * 1000)),
+    saturday: formatDateToYYYYMMDD(new Date(mon.getTime() + 5 * 24 * 60 * 60 * 1000)),
+    sunday: formatDateToYYYYMMDD(new Date(mon.getTime() + 6 * 24 * 60 * 60 * 1000))
+  };
+
+  return dates;
+};
+
+// Get array of Monday through Sunday dates for a given Monday
+export const getWeeklyTotalsRange = (mondayDate: string): string[] => {
+  const dates = getWeeklyTotalsDates(mondayDate);
+  return [dates.monday, dates.tuesday, dates.wednesday, dates.thursday, dates.friday, dates.saturday, dates.sunday];
+};
+
 // Legacy functions for backward compatibility (redirecting to new functions)
 export const getWednesdayOfWeek = (anchor: string | Date = new Date()): string => {
   if (typeof anchor === 'string') {

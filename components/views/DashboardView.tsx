@@ -3,7 +3,7 @@ import React, { memo, useState, useEffect, useMemo, useRef, useCallback } from '
 import { useAppContext } from '../../contexts/FirebaseAppContext';
 // import { hasAdminPrivileges } from '../../utils/permissionUtils';
 import { PeopleIcon, AttendanceIcon, CalendarIcon, ChartBarIcon, PrayerIcon, CurrencyDollarIcon } from '../icons';
-import { getMonthName, getCurrentOrMostRecentSunday, formatFullDate, getUpcomingSunday, getCurrentMeetingWeek, getMeetingWeekRange } from '../../utils/dateUtils';
+import { getMonthName, getCurrentOrMostRecentSunday, formatFullDate, getUpcomingSunday, getCurrentMeetingWeek, getMeetingWeekRange, getCurrentWeekMonday, getWeeklyTotalsRange } from '../../utils/dateUtils';
 import { db } from '../../firebase.config';
 import { doc, getDoc } from 'firebase/firestore';
 import { firebaseUtils, headCountService } from '../../services/firebaseService';
@@ -298,10 +298,10 @@ const DashboardView: React.FC = memo(() => {
   const weeklyAttendance = getCurrentWeekAttendance();
   const upcomingConfirmations = getUpcomingSundayConfirmations();
 
-  // Calculate current week's bacenta meeting attendance and income (Wed + Thu)
+  // Calculate current week's bacenta meeting attendance and income (Monday through Sunday)
   const getCurrentWeekBacentaMeetingAttendance = () => {
-    const currentWeekWednesday = getCurrentMeetingWeek();
-    const meetingDates = getMeetingWeekRange(currentWeekWednesday);
+    const currentWeekMonday = getCurrentWeekMonday();
+    const meetingDates = getWeeklyTotalsRange(currentWeekMonday);
 
     let totalAttendance = 0;
     let totalIncome = 0;
@@ -323,10 +323,14 @@ const DashboardView: React.FC = memo(() => {
       });
     });
 
+    // Format the week range as "Mon DD - Sun DD"
+    const mondayFormatted = formatFullDate(meetingDates[0]).split(',')[0]; // Monday
+    const sundayFormatted = formatFullDate(meetingDates[6]).split(',')[0]; // Sunday
+
     return {
       total: totalAttendance,
       dates: meetingDates,
-      formattedWeek: `${formatFullDate(meetingDates[0]).split(',')[0]} - ${formatFullDate(meetingDates[1]).split(',')[0]}`,
+      formattedWeek: `${mondayFormatted} - ${sundayFormatted}`,
       totalIncome
     };
   };
