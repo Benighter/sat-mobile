@@ -42,6 +42,7 @@ import {
   ministryAttendanceService,
   ministryNewBelieversService
 } from '../services/ministryFirebaseService';
+import { pushNotificationService } from '../services/pushNotificationService';
 
 interface AppContextType {
   // Data
@@ -447,6 +448,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
                 setNotificationContext(profile, churchId);
                 setNotificationIntegrationContext(profile, churchId);
                 setEnhancedNotificationContext(profile, churchId);
+                try { pushNotificationService.setUserContext(profile, churchId); } catch {}
               }
 
               // Check if Firebase is ready (has church context) and set up data listeners
@@ -472,6 +474,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
             setNotificationContext(null, null);
             setNotificationIntegrationContext(null, null);
             setEnhancedNotificationContext(null, null);
+            try { pushNotificationService.setUserContext(null, null); } catch {}
             setAccessibleChurchLinks([]);
             setCurrentExternalPermission(null);
             setMembers([]);

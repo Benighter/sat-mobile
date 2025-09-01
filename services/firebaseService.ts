@@ -502,38 +502,19 @@ export const authService = {
     return null;
   },
 
-  // Check if email already exists in the system
+  // Check if email already exists in the system (pre-auth safe)
   checkEmailExists: async (email: string, opts?: { ministry?: boolean }): Promise<boolean> => {
     try {
       const trimmedEmail = email.trim().toLowerCase();
       if (!trimmedEmail) return false;
 
-      // 1) Check via Firebase Auth (handles case-insensitivity and aliasing)
-      if (opts?.ministry) {
-        const alias = toMinistryAuthEmail(trimmedEmail);
-        const methods = await fetchSignInMethodsForEmail(auth, alias);
-        if (methods && methods.length > 0) return true;
-      } else {
-        const methods = await fetchSignInMethodsForEmail(auth, trimmedEmail);
-        if (methods && methods.length > 0) return true;
-      }
-
-      // 2) Fallback to Firestore by exact email (case-sensitive). No isActive filter here.
-      const usersQuery = query(collection(db, 'users'), where('email', '==', trimmedEmail));
-      const snap = await getDocs(usersQuery);
-      if (snap.empty) return false;
-
-      if (typeof opts?.ministry !== 'boolean') return true;
-
-      const wantsMinistry = opts.ministry === true;
-      const anyMatch = snap.docs.some((d) => {
-        const data: any = d.data() || {};
-        const isMinistry = data?.isMinistryAccount === true;
-        return wantsMinistry ? isMinistry : !isMinistry; // undefined => normal
-      });
-      return anyMatch;
+      // Use Firebase Auth only. Avoid Firestore reads before authentication (blocked by rules).
+      const target = opts?.ministry ? toMinistryAuthEmail(trimmedEmail) : trimmedEmail;
+      const methods = await fetchSignInMethodsForEmail(auth, target);
+      return Array.isArray(methods) && methods.length > 0;
     } catch (error: any) {
-      console.error('Error checking email existence:', error);
+      // If Auth check fails, treat as non-existent but do not block login attempts
+      console.warn('checkEmailExists (Auth) failed:', error?.message || String(error));
       return false;
     }
   }

@@ -142,14 +142,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ children, showToast }) =
         showToast('success', 'Super Admin', 'Signed in as Super Admin');
         return; // Skip firebase auth
       }
-      // Proactively check for account (filter by mode)
-      const exists = await authService.checkEmailExists(email.trim(), { ministry: ministryMode });
-      if (!exists) {
-        const msg = 'No account found with this email address. Please check your email or create a new account.';
-        setError(msg);
-        showToast('warning', 'Account Not Found', msg);
-        return;
-      }
+      // Attempt sign-in directly; rely on Auth errors to guide UX
 
       const user = ministryMode
         ? await authService.signInMinistry(email, password)

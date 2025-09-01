@@ -14,7 +14,8 @@ import {
   CakeIcon,
   BuildingOfficeIcon,
   CalendarIcon,
-  InformationCircleIcon
+  InformationCircleIcon,
+  ChatBubbleLeftRightIcon
 } from '../icons';
 import { PrayerIcon, CheckIcon, PeopleIcon } from '../icons';
 
@@ -355,6 +356,18 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
                       onClose();
                     }}
                   />
+
+                  {/* Chat */}
+                  <NavigationItem
+                    icon={<ChatBubbleLeftRightIcon className="w-4 h-4" />}
+                    label="Chat"
+                    isActive={currentTab.id === TabKeys.CHAT}
+                    onClick={() => {
+                      switchTab({ id: TabKeys.CHAT, name: 'Chat' });
+                      onClose();
+                    }}
+                  />
+
 
                   {/* Contact */}
                   {/* Contact removed */}
@@ -739,6 +752,12 @@ const NavigationItem: React.FC<NavigationItemProps> = ({
           {icon}
         </div>
         <span className={`font-medium text-sm sm:text-base truncate ${isActive ? colors.text : 'text-gray-800 dark:text-dark-100'} transition-colors duration-200`}>
+        {typeof badge === 'number' && badge > 0 && (
+          <span className="ml-2 inline-flex items-center justify-center min-w-[18px] h-[18px] text-[10px] font-bold rounded-full bg-red-500 text-white px-1 shadow ring-1 ring-white">
+            {badge > 99 ? '99+' : badge}
+          </span>
+        )}
+
           {label}
         </span>
       </div>

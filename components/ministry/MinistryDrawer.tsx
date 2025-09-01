@@ -8,6 +8,7 @@ import {
   ChartBarIcon,
   CakeIcon,
   CalendarIcon,
+  ChatBubbleLeftRightIcon,
 } from '../icons';
 import { PrayerIcon, CheckIcon, PeopleIcon } from '../icons';
 
@@ -93,7 +94,7 @@ const MinistryDrawer: React.FC<MinistryDrawerProps> = ({ isOpen, onClose }) => {
                   onClose();
                 }}
               />
-              
+
               <NavigationItem
                 icon={<CakeIcon className="w-4 h-4" />}
                 label="Birthdays"
@@ -104,7 +105,18 @@ const MinistryDrawer: React.FC<MinistryDrawerProps> = ({ isOpen, onClose }) => {
                   onClose();
                 }}
               />
-              
+
+              <NavigationItem
+                icon={<ChatBubbleLeftRightIcon className="w-4 h-4" />}
+                label="Chat"
+                isActive={currentTab.id === TabKeys.CHAT}
+                onClick={() => {
+                  switchTab({ id: TabKeys.CHAT, name: 'Chat' });
+                  onClose();
+                }}
+              />
+
+
               <NavigationItem
                 icon={<PrayerIcon className="w-4 h-4" />}
                 label="Prays in Tongues"

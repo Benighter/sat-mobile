@@ -233,6 +233,7 @@ export enum TabKeys {
   MINISTRIES = 'ministries',
   BIDIRECTIONAL_SYNC_TEST = 'bidirectional_sync_test',
   CONTACT = 'contact',
+  CHAT = 'chat',
 }
 
 export interface NavigationHistoryItem {

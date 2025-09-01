@@ -147,10 +147,11 @@ export const getTuesdayOfWeek = (anchor: string | Date = new Date()): string => 
   const d = typeof anchor === 'string' ? new Date(anchor + 'T00:00:00') : new Date(anchor);
   const day = d.getDay(); // 0..6 (Sun..Sat)
   // Compute offset from current day to Tuesday (2)
-  // For Sunday(0) and Monday(1), go back to previous Tuesday (-5 and -6 respectively)
+  // Sunday stays in the current Tue–Sun week (use previous Tuesday);
+  // Monday starts the new week at 00:00 (use next Tuesday)
   let diff = 2 - day;
-  if (day === 0) diff = -5; // Sun -> previous Tue
-  if (day === 1) diff = -6; // Mon -> previous Tue
+  if (day === 0) diff = -5; // Sun -> previous Tue (end of current week)
+  else if (day === 1) diff = 1; // Mon -> next Tue (start of new week)
   const tuesday = new Date(d);
   tuesday.setDate(d.getDate() + diff);
   return formatDateToYYYYMMDD(tuesday);

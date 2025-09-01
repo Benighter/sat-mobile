@@ -5,7 +5,7 @@ import { ThemeProvider } from './contexts/ThemeContext';
 import { AuthScreen } from './components/auth/AuthScreen';
 
 import DashboardView from './components/views/DashboardView';
-import LazyWrapper, { LazyMemberListView, LazyAttendanceAnalyticsView, LazyWeeklyAttendanceView, LazySundayConfirmationsView, LazyNewBelieversView, LazyOutreachView, LazyBacentaOutreachView, LazyPrayerView, LazyPrayerMemberDetailsView, LazyMinistriesView, LazyBacentaLeadersView, LazyMyDeletionRequestsView, LazyMemberDeletionRequestsView, LazyBacentaMeetingsView, LazySundayHeadCountsView, LazySundayHeadCountSectionView, LazyContactView } from './components/common/LazyWrapper';
+import LazyWrapper, { LazyMemberListView, LazyAttendanceAnalyticsView, LazyWeeklyAttendanceView, LazySundayConfirmationsView, LazyNewBelieversView, LazyOutreachView, LazyBacentaOutreachView, LazyPrayerView, LazyPrayerMemberDetailsView, LazyMinistriesView, LazyBacentaLeadersView, LazyMyDeletionRequestsView, LazyMemberDeletionRequestsView, LazyBacentaMeetingsView, LazySundayHeadCountsView, LazySundayHeadCountSectionView, LazyContactView, LazyChatView } from './components/common/LazyWrapper';
 import ProfileSettingsView from './components/views/ProfileSettingsView';
 import CopyMembersView from './components/views/CopyMembersView';
 import CopyAbsenteesView from './components/views/CopyAbsenteesView';
@@ -35,6 +35,7 @@ import OfflineIndicator from './components/common/OfflineIndicator';
 import PendingInviteNotification from './components/notifications/PendingInviteNotification';
 import NotificationBadge from './components/notifications/NotificationBadge';
 import DeletionRequestNotificationBadge from './components/notifications/DeletionRequestNotificationBadge';
+import ChatBadge from './components/notifications/ChatBadge';
 import { DeleteMemberModal, DeleteBacentaModal, DeleteNewBelieverModal, ClearAllDataModal, ClearSelectedDataModal, CreateDeletionRequestModal, ClearAllNewBelieversModal } from './components/modals/confirmations/ConfirmationModal';
 import WhatsNewModal from './components/modals/general/WhatsNewModal';
 import { useWhatsNew } from './hooks/useWhatsNew';
@@ -110,6 +111,23 @@ const AppContent: React.FC = memo(() => {
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Handle deep links like #/chat/{threadId}
+  useEffect(() => {
+    const handleHash = () => {
+      try {
+        const hash = window.location.hash || '';
+        const m = hash.match(/#\/?chat\/(.+)$/);
+        if (m && m[1]) {
+          switchTab({ id: TabKeys.CHAT, name: 'Chat', data: { threadId: m[1] } });
+        }
+      } catch { /* ignore */ }
+    };
+    window.addEventListener('hashchange', handleHash);
+    handleHash();
+    return () => window.removeEventListener('hashchange', handleHash);
+  }, [switchTab]);
+
 
   // Ensure main content clears the fixed header (and impersonation banner) height
   useEffect(() => {
@@ -423,6 +441,12 @@ const AppContent: React.FC = memo(() => {
             />
           </LazyWrapper>
         );
+      case TabKeys.CHAT:
+        return (
+          <LazyWrapper>
+            <LazyChatView />
+          </LazyWrapper>
+        );
 
       default:
         return (
@@ -569,6 +593,12 @@ const AppContent: React.FC = memo(() => {
               {/* Deletion Request Notification Badge */}
               <div className="flex-shrink-0">
                 <DeletionRequestNotificationBadge />
+              </div>
+
+
+              {/* Chat Unread Badge */}
+              <div className="flex-shrink-0">
+                <ChatBadge />
               </div>
 
               {/* Enhanced Profile Dropdown */}

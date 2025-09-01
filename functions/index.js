@@ -1423,3 +1423,62 @@ exports.hardDeleteUserAccount = functions.https.onCall(async (data, context) => 
   return { success: true, deletedUid: uid };
 });
 
+
+
+// Chat message trigger: update thread metadata, unread counts, and push to recipients
+exports.onMessageCreated = functions.firestore
+  .document('churches/{churchId}/chatThreads/{threadId}/messages/{messageId}')
+  .onCreate(async (snap, context) => {
+    const { churchId, threadId } = context.params;
+    const data = snap.data() || {};
+    const senderId = data.senderId;
+    const text = (data.text || '').toString();
+
+    const db = admin.firestore();
+    const threadRef = db.doc(`churches/${churchId}/chatThreads/${threadId}`);
+    const threadSnap = await threadRef.get();
+    if (!threadSnap.exists) return;
+    const thread = threadSnap.data() || {};
+    const participants = Array.isArray(thread.participants) ? thread.participants : [];
+
+    // Update thread metadata and unread counts
+    const updates = {
+      lastMessage: { text: text.slice(0, 500), senderId, at: admin.firestore.FieldValue.serverTimestamp() },
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    };
+    participants.forEach((uid) => {
+      if (uid !== senderId) {
+        updates[`unreadCounts.${uid}`] = admin.firestore.FieldValue.increment(1);
+      }
+    });
+    await threadRef.set(updates, { merge: true });
+
+    // Send FCM push to recipients (for up to 10 users per query limitation)
+    try {
+      const recipients = participants.filter((p) => p !== senderId).slice(0, 10);
+      if (recipients.length === 0) return;
+
+      const tokensSnap = await db
+        .collection(`churches/${churchId}/deviceTokens`)
+        .where('userId', 'in', recipients)
+        .where('isActive', '==', true)
+        .get();
+
+      const tokens = tokensSnap.docs.map((d) => (d.data() || {}).id).filter(Boolean);
+      if (tokens.length === 0) return;
+
+      const senderName = (thread.participantProfiles && thread.participantProfiles[senderId]?.name) || 'New message';
+      const title = thread.type === 'group' ? (thread.name || 'Group') : senderName;
+      const body = thread.type === 'group' ? `${senderName}: ${text}` : text;
+
+      await admin.messaging().sendEachForMulticast({
+        tokens,
+        notification: { title, body: body.slice(0, 180) },
+        data: { deepLink: `/chat/${threadId}`, threadId },
+        android: { priority: 'high', notification: { channelId: 'sat_mobile_notifications', sound: 'default' } },
+        apns: { payload: { aps: { sound: 'default', badge: 1 } } },
+      });
+    } catch (e) {
+      console.error('Chat push send failed', e);
+    }
+  });
