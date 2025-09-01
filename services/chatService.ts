@@ -1,7 +1,7 @@
 // Chat service for real-time messaging using Firestore (no CORS required)
 // Provides helpers to create threads, list threads, subscribe to messages, and send messages
 
-import { addDoc, collection, doc, getDoc, getDocs, onSnapshot, orderBy, query, serverTimestamp, setDoc, Timestamp, Unsubscribe, updateDoc, where, writeBatch, increment } from 'firebase/firestore';
+import { addDoc, collection, doc, getDoc, getDocs, onSnapshot, orderBy, query, serverTimestamp, setDoc, Timestamp, Unsubscribe, updateDoc, where, writeBatch, increment, deleteDoc, limit, startAfter } from 'firebase/firestore';
 import { db } from '../firebase.config';
 import { firebaseUtils } from './firebaseService';
 import type { User } from '../types';
@@ -20,6 +20,8 @@ export interface ChatThread {
   lastMessage?: { text: string; senderId: string; at: any } | null;
   unreadCounts?: Record<string, number>;
   lastReadAt?: Record<string, any>;
+  archived?: boolean; // soft-archive flag
+  deletedBy?: Record<string, boolean>; // per-user soft-delete (hide for that user)
 }
 
 export interface ChatMessage {
@@ -94,9 +96,11 @@ export const chatService = {
     );
     return onSnapshot(q, (snap) => {
       const items = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) })) as ChatThread[];
+      // Filter out per-user deleted threads and optionally archived; keep both and let UI choose view
+      const visible = items.filter(t => !(t.deletedBy && t.deletedBy[uid]));
       // Client-side sort to avoid composite index requirement
-      items.sort((a, b) => (b.updatedAt?.toMillis?.() || 0) - (a.updatedAt?.toMillis?.() || 0));
-      callback(items);
+      visible.sort((a, b) => (b.updatedAt?.toMillis?.() || 0) - (a.updatedAt?.toMillis?.() || 0));
+      callback(visible);
     });
   },
 
@@ -141,6 +145,52 @@ export const chatService = {
       [`unreadCounts.${uid}`]: 0,
       [`lastReadAt.${uid}`]: serverTimestamp()
     });
+  },
+
+  async archiveThread(threadId: string): Promise<void> {
+    const churchId = firebaseUtils.getCurrentChurchId();
+    if (!churchId) throw new Error('No church context');
+    const ref = doc(db, `${threadsPath(churchId)}/${threadId}`);
+    await updateDoc(ref, { archived: true, updatedAt: serverTimestamp() });
+  },
+
+  async unarchiveThread(threadId: string): Promise<void> {
+    const churchId = firebaseUtils.getCurrentChurchId();
+    if (!churchId) throw new Error('No church context');
+    const ref = doc(db, `${threadsPath(churchId)}/${threadId}`);
+    await updateDoc(ref, { archived: false, updatedAt: serverTimestamp() });
+  },
+
+  // Soft delete per-user: hide the thread for this user, but keep data for others
+  async softDeleteForUser(threadId: string, uid: string): Promise<void> {
+    const churchId = firebaseUtils.getCurrentChurchId();
+    if (!churchId) throw new Error('No church context');
+    const ref = doc(db, `${threadsPath(churchId)}/${threadId}`);
+    await updateDoc(ref, { [`deletedBy.${uid}`]: true, updatedAt: serverTimestamp() });
+  },
+
+  // Hard delete: remove thread and all its messages. Use with caution.
+  async hardDeleteThread(threadId: string): Promise<void> {
+    const churchId = firebaseUtils.getCurrentChurchId();
+    if (!churchId) throw new Error('No church context');
+    const basePath = `${threadsPath(churchId)}/${threadId}`;
+
+    // Delete messages in batches
+    let lastDoc: any = null;
+    while (true) {
+      const q = lastDoc
+        ? query(collection(db, `${basePath}/messages`), orderBy('createdAt'), startAfter(lastDoc), limit(200))
+        : query(collection(db, `${basePath}/messages`), orderBy('createdAt'), limit(200));
+      const snap = await getDocs(q);
+      if (snap.empty) break;
+      const batch = writeBatch(db);
+      snap.docs.forEach(d => batch.delete(d.ref));
+      await batch.commit();
+      lastDoc = snap.docs[snap.docs.length - 1];
+    }
+
+    // Delete the thread
+    await deleteDoc(doc(db, basePath));
   }
 };
 

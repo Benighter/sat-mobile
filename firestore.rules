@@ -36,6 +36,7 @@ service cloud.firestore {
         allow read: if isParticipant();
         allow create: if isParticipantOnCreate();
         allow update: if isParticipant();
+        allow delete: if isParticipant(); // allow participants to hard-delete threads
 
         // Messages: validate against parent thread's participants
         match /messages/{messageId} {
@@ -45,6 +46,7 @@ service cloud.firestore {
           }
           allow read: if isThreadParticipant();
           allow create: if isThreadParticipant();
+          allow delete: if isThreadParticipant(); // allow bulk/hard delete of messages by participants
         }
       }
 
