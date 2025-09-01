@@ -41,7 +41,9 @@ export const db = initializeFirestore(app, {
   // Avoid crashing on undefined properties in updates
   ignoreUndefinedProperties: true,
   // Work around restrictive networks/proxies that break GRPC-Web streaming
-  experimentalAutoDetectLongPolling: true,
+  // Use ONE of these. We force long polling for maximum compatibility.
+  experimentalForceLongPolling: true,
+  // useFetchStreams: false, // uncomment if needed in your environment
 });
 // Reduce noisy Firestore debug logs in production
 setLogLevel(process.env.NODE_ENV === 'development' ? 'error' : 'error');

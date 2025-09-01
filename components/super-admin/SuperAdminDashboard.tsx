@@ -1,8 +1,8 @@
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
-import { collection, getDocs, getDoc, query, where, limit, updateDoc, doc, Timestamp, onSnapshot, addDoc, setDoc } from 'firebase/firestore';
+import { collection, getDocs, getDoc, query, where, limit, updateDoc, doc, Timestamp, onSnapshot, addDoc, setDoc, deleteDoc } from 'firebase/firestore';
 // NOTE: Removed getFunctions/httpsCallable usage for member counts due to CORS issues on callable function.
 // import { getFunctions, httpsCallable } from 'firebase/functions';
-import { db } from '../../firebase.config';
+import { db, auth } from '../../firebase.config';
 import { useAppContext } from '../../contexts/FirebaseAppContext';
 import AdminChurchPreview from './AdminChurchPreview';
 import ConfirmationModal from '../modals/confirmations/ConfirmationModal';
@@ -629,18 +629,13 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
     setPendingDeleteAdmin(admin);
   };
 
-  const performSoftDeleteAdmin = async () => {
-    // Soft delete locally (Firestore only) to avoid CORS with callable
+  const performDeleteAdmin = async () => {
+    // Prefer Cloud Function to remove Auth user and related data with admin privileges
     const admin = pendingDeleteAdmin;
     if (!admin) return;
     try {
       setUpdating(admin.id, true);
-      await updateDoc(doc(db, 'users', admin.id), {
-        isDeleted: true,
-        isActive: false,
-        deletedAt: Timestamp.now(),
-        lastUpdated: Timestamp.now()
-      });
+      await userService.hardDeleteUser(admin.id);
       setAdmins(prev => prev.filter(a => a.id !== admin.id));
       setStats(prev => prev ? {
         total: Math.max(0, prev.total - 1),
@@ -793,8 +788,8 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
     if (!editingCampus) return;
     try {
       setDeletingCampus(true);
-      // Soft delete campus
-      await updateDoc(doc(db, 'campuses', editingCampus.id), { isDeleted: true, deletedAt: Timestamp.now() });
+      // Hard delete campus document from Firestore
+      await deleteDoc(doc(db, 'campuses', editingCampus.id));
       // Detach campusId from related users (admins & members) and churches
       (async () => {
         try {
@@ -1351,7 +1346,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
                                 onClick={() => softDeleteAdmin(a)}
                                 disabled={updatingIds[a.id]}
                                 className="px-2.5 py-1 rounded-md text-[11px] font-semibold bg-red-600 hover:bg-red-700 text-white shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                                title="Soft delete admin"
+                                title="Delete admin"
                               >
                                 {updatingIds[a.id] ? '...' : 'Delete'}
                               </button>
@@ -1577,7 +1572,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
                             onClick={() => softDeleteAdmin(a)}
                             disabled={updatingIds[a.id]}
                             className="px-2.5 py-1 rounded-md text-[11px] font-semibold bg-red-600 hover:bg-red-700 text-white shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                            title="Soft delete admin"
+                            title="Delete admin"
                           >
                             {updatingIds[a.id] ? '...' : 'Delete'}
                           </button>
@@ -2018,9 +2013,9 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
         <ConfirmationModal
           isOpen={!!pendingDeleteAdmin}
           onClose={() => setPendingDeleteAdmin(null)}
-          onConfirm={performSoftDeleteAdmin}
+          onConfirm={performDeleteAdmin}
           title="Delete Admin"
-          message={pendingDeleteAdmin ? `Soft delete admin "${pendingDeleteAdmin.displayName || pendingDeleteAdmin.email}"? They will be marked deleted and removed from this list.` : ''}
+          message={pendingDeleteAdmin ? `Permanently delete admin "${pendingDeleteAdmin.displayName || pendingDeleteAdmin.email}"? Their profile document will be removed and they will no longer appear in any lists. This action cannot be undone.` : ''}
           confirmText="Delete"
           cancelText="Cancel"
           type="danger"

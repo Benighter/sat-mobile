@@ -1039,19 +1039,14 @@ export const membersFirebaseService = {
     }
   },
 
-  // Delete member (hard delete). If hard delete fails, fall back to soft delete.
+  // Delete member (hard delete only)
   delete: async (memberId: string): Promise<void> => {
     try {
       const memberRef = doc(db, getChurchCollectionPath('members'), memberId);
       await deleteDoc(memberRef);
-    } catch (hardErr: any) {
-      console.warn('Hard delete failed, attempting soft delete fallback', hardErr?.message);
-      try {
-        const memberRef = doc(db, getChurchCollectionPath('members'), memberId);
-        await updateDoc(memberRef, { isActive: false, lastUpdated: new Date().toISOString() });
-      } catch (softErr: any) {
-        throw new Error(`Failed to delete member (hard+soft): ${softErr.message}`);
-      }
+    } catch (error: any) {
+      // Surface the error to caller instead of soft-deleting
+      throw new Error(`Failed to delete member: ${error.message || String(error)}`);
     }
   },
 
@@ -1348,14 +1343,11 @@ export const newBelieversFirebaseService = {
     }
   },
 
-  // Delete new believer (soft delete)
+  // Delete new believer (hard delete)
   delete: async (newBelieverId: string): Promise<void> => {
     try {
       const newBelieverRef = doc(db, getChurchCollectionPath('newBelievers'), newBelieverId);
-      await updateDoc(newBelieverRef, {
-        isActive: false,
-        lastUpdated: new Date().toISOString()
-      });
+      await deleteDoc(newBelieverRef);
     } catch (error: any) {
       throw new Error(`Failed to delete new believer: ${error.message}`);
     }

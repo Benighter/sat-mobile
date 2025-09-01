@@ -135,12 +135,23 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ children, showToast }) =
     try {
       setError(null);
       setLoading(true);
-      // Hardcoded Super Admin credentials (temporary prototype)
+      // Hardcoded Super Admin credentials - now properly authenticate with Firebase
       if (email.trim().toLowerCase() === 'admin@gmail.com' && password === 'Admin@123') {
-        setIsSuperAdmin(true);
-  try { localStorage.setItem('superadmin_session', 'true'); } catch {}
-        showToast('success', 'Super Admin', 'Signed in as Super Admin');
-        return; // Skip firebase auth
+        try {
+          // Try to sign in with Firebase Auth first
+          const user = await authService.signIn(email, password);
+          setUser(user);
+          setIsSuperAdmin(true);
+          try { localStorage.setItem('superadmin_session', 'true'); } catch {}
+          showToast('success', 'Super Admin', 'Signed in as Super Admin');
+          return;
+        } catch (authError: any) {
+          // If auth fails, it means the SuperAdmin user doesn't exist yet
+          console.log('SuperAdmin user not found, will need to be created manually');
+          setError('SuperAdmin user not found. Please create the admin@gmail.com user with superAdmin flag in Firestore.');
+          showToast('error', 'SuperAdmin Setup Required', 'Please create the admin@gmail.com user with superAdmin: true in Firestore users collection.');
+          return;
+        }
       }
       // Attempt sign-in directly; rely on Auth errors to guide UX
 

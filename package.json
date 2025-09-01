@@ -23,7 +23,10 @@
     "migration:guide": "echo 'See FIREBASE_MIGRATION_GUIDE.md for detailed migration instructions'",
     "migrate:auth-links": "node scripts/migrate-auth-links.js migrate",
     "rollback:auth-links": "node scripts/migrate-auth-links.js rollback",
-    "migration:dynamic-links": "echo 'See FIREBASE_DYNAMIC_LINKS_MIGRATION.md for Dynamic Links migration guide'"
+    "migration:dynamic-links": "echo 'See FIREBASE_DYNAMIC_LINKS_MIGRATION.md for Dynamic Links migration guide'",
+    "setup:superadmin": "node scripts/setup-superadmin.js",
+    "create:superadmin": "node scripts/create-superadmin-simple.js",
+    "deploy:dev-rules": "node scripts/deploy-dev-rules.js"
   },
   "dependencies": {
     "@capacitor/android": "^7.4.1",

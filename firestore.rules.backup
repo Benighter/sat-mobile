@@ -7,22 +7,15 @@ service cloud.firestore {
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.superAdmin == true;
     }
 
-    // DEVELOPMENT ONLY: Allow unauthenticated access to SuperAdmin collections
-    // This is for the SuperAdmin prototype mode during development
-    // REMOVE THIS IN PRODUCTION and use proper SuperAdmin authentication
-    function isDevSuperAdminAccess() {
-      return request.auth == null; // Unauthenticated access for dev prototype
-    }
-
     // Users can read own doc OR any user in the same church; only self can create/update
     match /users/{userId} {
       allow read: if request.auth != null && (
         request.auth.uid == userId ||
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.churchId == resource.data.churchId ||
         isSuperAdmin()
-      ) || isDevSuperAdminAccess(); // DEV ONLY
-      allow create, update: if request.auth != null && request.auth.uid == userId || isSuperAdmin() || isDevSuperAdminAccess(); // DEV ONLY
-      allow delete: if isSuperAdmin() || isDevSuperAdminAccess(); // DEV ONLY
+      );
+      allow create, update: if request.auth != null && request.auth.uid == userId || isSuperAdmin();
+      allow delete: if isSuperAdmin();
     }
 
     // Church-scoped data
@@ -32,54 +25,54 @@ service cloud.firestore {
           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.churchId == churchId;
       }
 
-      allow read: if isInChurch() || isSuperAdmin() || isDevSuperAdminAccess(); // DEV ONLY
-      allow write: if isInChurch() || isSuperAdmin() || isDevSuperAdminAccess(); // DEV ONLY
+      allow read: if isInChurch() || isSuperAdmin();
+      allow write: if isInChurch() || isSuperAdmin();
 
       // Chat threads — participants only
       match /chatThreads/{threadId} {
         function isParticipant() {
-          return (isInChurch() || isSuperAdmin() || isDevSuperAdminAccess()) &&
+          return (isInChurch() || isSuperAdmin()) &&
             request.auth.uid in resource.data.participants;
         }
         function isParticipantOnCreate() {
-          return (isInChurch() || isSuperAdmin() || isDevSuperAdminAccess()) &&
+          return (isInChurch() || isSuperAdmin()) &&
             request.auth.uid in request.resource.data.participants;
         }
 
-        allow read: if isParticipant() || isDevSuperAdminAccess(); // DEV ONLY
-        allow create: if isParticipantOnCreate() || isDevSuperAdminAccess(); // DEV ONLY
-        allow update: if isParticipant() || isDevSuperAdminAccess(); // DEV ONLY
-        allow delete: if isParticipant() || isDevSuperAdminAccess(); // DEV ONLY
+        allow read: if isParticipant();
+        allow create: if isParticipantOnCreate();
+        allow update: if isParticipant();
+        allow delete: if isParticipant(); // allow participants to hard-delete threads
 
         // Messages: validate against parent thread's participants
         match /messages/{messageId} {
           function isThreadParticipant() {
-            return (isInChurch() || isSuperAdmin() || isDevSuperAdminAccess()) &&
+            return (isInChurch() || isSuperAdmin()) &&
               request.auth.uid in get(/databases/$(database)/documents/churches/$(churchId)/chatThreads/$(threadId)).data.participants;
           }
-          allow read: if isThreadParticipant() || isDevSuperAdminAccess(); // DEV ONLY
-          allow create: if isThreadParticipant() || isDevSuperAdminAccess(); // DEV ONLY
-          allow delete: if isThreadParticipant() || isDevSuperAdminAccess(); // DEV ONLY
+          allow read: if isThreadParticipant();
+          allow create: if isThreadParticipant();
+          allow delete: if isThreadParticipant(); // allow bulk/hard delete of messages by participants
         }
       }
 
       // Other church subcollections: same isInChurch guard
       match /{collection}/{docId} {
-        allow read, write: if isInChurch() || isSuperAdmin() || isDevSuperAdminAccess(); // DEV ONLY
+        allow read, write: if isInChurch() || isSuperAdmin();
       }
     }
 
     // Root-level special collections
     match /campuses/{campusId} {
-      allow read, write: if isSuperAdmin() || isDevSuperAdminAccess(); // DEV ONLY
+      allow read, write: if isSuperAdmin();
     }
 
     match /ministryAccessRequests/{requestId} {
-      allow read, write: if isSuperAdmin() || isDevSuperAdminAccess(); // DEV ONLY
+      allow read, write: if isSuperAdmin();
     }
 
     match /superAdminNotifications/{notificationId} {
-      allow read, write: if isSuperAdmin() || isDevSuperAdminAccess(); // DEV ONLY
+      allow read, write: if isSuperAdmin();
     }
 
     // Root-level: Admin invites and cross-tenant links
@@ -95,7 +88,7 @@ service cloud.firestore {
           resource.data.ownerUid == request.auth.uid
         )) ||
         isSuperAdmin()
-      ) || isDevSuperAdminAccess(); // DEV ONLY
+      );
 
       // Create access
       allow create: if request.auth != null && (
@@ -104,7 +97,7 @@ service cloud.firestore {
         (rootCollection == 'crossTenantAccessLinks' &&
           request.resource.data.viewerUid == request.auth.uid) ||
         isSuperAdmin()
-      ) || isDevSuperAdminAccess(); // DEV ONLY
+      );
 
       // Update/Delete access
       allow update, delete: if request.auth != null && (
@@ -117,7 +110,7 @@ service cloud.firestore {
           resource.data.ownerUid == request.auth.uid
         )) ||
         isSuperAdmin()
-      ) || isDevSuperAdminAccess(); // DEV ONLY
+      );
     }
   }
 }

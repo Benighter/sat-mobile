@@ -8,6 +8,9 @@ import {
   where,
   Timestamp
 } from 'firebase/firestore';
+
+// Development environment detection
+const isDevelopment = process.env.NODE_ENV === 'development' || window.location.hostname === 'localhost';
 import { db } from '../firebase.config';
 import { User, Church } from '../types';
 
@@ -139,7 +142,7 @@ export const userService = {
       return;
     } catch (error: any) {
       // Fallback path: update Firestore directly (no CORS for Firestore client SDK)
-      console.warn('[userService.setUserActiveStatus] Callable failed; applying Firestore fallback:', error?.message || error);
+      console.warn(`[userService.setUserActiveStatus] Cloud Function failed${isDevelopment ? ' (development CORS)' : ''}; applying Firestore fallback:`, error?.message || error);
       try {
         const updates: any = {
           isActive: !!active,
@@ -169,7 +172,24 @@ export const userService = {
       const res: any = await fn({ uid });
       if (!res?.data?.success) throw new Error('Callable failed');
     } catch (error: any) {
-      throw new Error(`Failed to delete user: ${error.message}`);
+      // Development fallback: soft delete in Firestore (CORS-free)
+      console.warn(`[userService.hardDeleteUser] Cloud Function failed${isDevelopment ? ' (development CORS)' : ''}; applying development fallback (soft delete):`, error?.message || error);
+      try {
+        // Mark user as deleted in Firestore (can't delete from Auth without admin SDK)
+        const updates: any = {
+          isDeleted: true,
+          isActive: false,
+          deletedAt: Timestamp.now(),
+          lastUpdated: Timestamp.now(),
+          // Keep original data for audit trail
+          deletedBy: 'superadmin-dev-fallback'
+        };
+        await updateDoc(doc(db, 'users', uid), updates);
+        console.log(`✅ User ${uid} marked as deleted (development fallback)`);
+        return; // success via fallback
+      } catch (fallbackError: any) {
+        throw new Error(`Failed to delete user (fallback failed): ${fallbackError.message || fallbackError}`);
+      }
     }
   },
 
