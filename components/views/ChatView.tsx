@@ -3,7 +3,52 @@ import { useAppContext } from '../../contexts/FirebaseAppContext';
 import { chatService, ChatThread, ChatMessage } from '../../services/chatService';
 import { userService } from '../../services/userService';
 import { TabKeys, User } from '../../types';
-import { ChatBubbleLeftRightIcon, ArrowRightIcon, ArrowLeftIcon, EllipsisVerticalIcon } from '../icons';
+import { ChatBubbleLeftRightIcon, ArrowRightIcon, ArrowLeftIcon, EllipsisVerticalIcon, XMarkIcon, SmileIcon } from '../icons';
+
+
+// Host component to use emoji-picker-element web component safely in React 19
+const EmojiPickerHost: React.FC<{ onEmoji: (val: string) => void; onClose: () => void; }> = ({ onEmoji, onClose }) => {
+  const hostRef = useRef<HTMLDivElement | null>(null);
+  const onEmojiRef = useRef(onEmoji);
+  const onCloseRef = useRef(onClose);
+
+  // Keep refs updated without re-running mount effect
+  useEffect(() => { onEmojiRef.current = onEmoji; }, [onEmoji]);
+  useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
+
+  useEffect(() => {
+    let pickerEl: any;
+
+    (async () => {
+      await import('emoji-picker-element');
+      const host = hostRef.current;
+      if (!host) return;
+
+      // Clear any previous children to avoid duplicates (StrictMode/dev)
+      while (host.firstChild) host.removeChild(host.firstChild);
+
+      pickerEl = document.createElement('emoji-picker');
+      pickerEl.setAttribute('class', 'max-h-[320px] w-[320px]');
+      pickerEl.addEventListener('emoji-click', (e: any) => {
+        const char = e?.detail?.unicode || e?.detail?.emoji?.unicode || '';
+        if (char) {
+          onEmojiRef.current?.(char);
+          onCloseRef.current?.();
+        }
+      });
+      host.appendChild(pickerEl);
+    })();
+
+    return () => {
+      try {
+        const host = hostRef.current;
+        if (pickerEl && host?.contains(pickerEl)) host.removeChild(pickerEl);
+      } catch {}
+    };
+  }, []);
+
+  return <div ref={hostRef} />;
+};
 
 const ChatView: React.FC = () => {
   const { userProfile, currentChurchId, currentTab, showToast } = useAppContext();
@@ -20,6 +65,37 @@ const ChatView: React.FC = () => {
   const [showArchived, setShowArchived] = useState(false);
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const endRef = useRef<HTMLDivElement | null>(null);
+  const textAreaRef = useRef<HTMLTextAreaElement | null>(null);
+  const [previewPhoto, setPreviewPhoto] = useState<string | null>(null);
+
+  // Emoji picker state
+  const [isEmojiOpen, setIsEmojiOpen] = useState(false);
+  const emojiPopoverRef = useRef<HTMLDivElement | null>(null);
+
+  // Close emoji picker on outside click or Escape
+  useEffect(() => {
+    if (!isEmojiOpen) return;
+    const onClick = (e: MouseEvent) => {
+      const target = e.target as Node | null;
+      if (
+        emojiPopoverRef.current &&
+        !emojiPopoverRef.current.contains(target) &&
+        !(textAreaRef.current && textAreaRef.current.contains(target))
+      ) {
+        setIsEmojiOpen(false);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setIsEmojiOpen(false);
+    };
+    document.addEventListener('mousedown', onClick);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onClick);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [isEmojiOpen]);
+
 
   // Load users for participant picker and name resolution
   useEffect(() => {
@@ -74,6 +150,15 @@ const ChatView: React.FC = () => {
     const deepLinkThreadId = (currentTab.data as any)?.threadId;
     if (deepLinkThreadId) setActiveThreadId(deepLinkThreadId);
   }, [currentTab.id]);
+
+  // Auto-size message textarea when content changes or thread switches
+  useEffect(() => {
+    const el = textAreaRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    const max = 160; // px max height (~8 lines)
+    el.style.height = Math.min(el.scrollHeight, max) + 'px';
+  }, [messageText, activeThreadId]);
 
   const findExistingDmWith = (uid: string) => {
     const me = userProfile?.uid;
@@ -182,7 +267,12 @@ const ChatView: React.FC = () => {
                     <button onClick={()=>setActiveThreadId(t.id)} className="flex items-center gap-3 flex-1 text-left">
                       <div className="flex-shrink-0">
                         {photo ? (
-                          <img src={photo} alt={title} className="w-11 h-11 rounded-full object-cover shadow" />
+                          <img
+                            src={photo}
+                            alt={title}
+                            className="w-11 h-11 rounded-full object-cover shadow cursor-zoom-in"
+                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); setPreviewPhoto(photo); }}
+                          />
                         ) : (
                           <div className="w-11 h-11 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex items-center justify-center shadow text-sm font-semibold">{initialsForName(title)}</div>
                         )}
@@ -301,7 +391,18 @@ const ChatView: React.FC = () => {
                 const photo = avatarForUid(otherId);
                 return (
                   <>
-                    {photo ? <img src={photo} alt={title} className="w-8 h-8 rounded-full object-cover"/> : <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex items-center justify-center text-xs font-semibold">{initialsForName(title)}</div>}
+                    {photo ? (
+                      <img
+                        src={photo}
+                        alt={title}
+                        className="w-8 h-8 rounded-full object-cover cursor-zoom-in"
+                        onClick={() => setPreviewPhoto(photo)}
+                      />
+                    ) : (
+                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex items-center justify-center text-xs font-semibold">
+                        {initialsForName(title)}
+                      </div>
+                    )}
                     <div className="font-semibold text-gray-800 dark:text-dark-100 truncate">{title}</div>
                   </>
                 );
@@ -312,7 +413,7 @@ const ChatView: React.FC = () => {
               <div className="space-y-2 pb-10">
                 {messages.map(m => (
                   <div key={m.id} className={`max-w-[86%] sm:max-w-[78%] px-3 py-2 rounded-2xl shadow-sm text-sm leading-relaxed ${m.senderId===userProfile?.uid ? 'ml-auto bg-blue-600 text-white rounded-br-md' : 'bg-white dark:bg-dark-700 border border-gray-200 dark:border-dark-600 text-gray-900 dark:text-dark-100 rounded-bl-md'}`}>
-                    <div>{m.text}</div>
+                    <div className="whitespace-pre-wrap">{m.text}</div>
                     <div className={`mt-1 text-[10px] ${m.senderId===userProfile?.uid ? 'text-blue-100' : 'text-gray-500'}`}>{formatTime((m as any).createdAt)}</div>
                   </div>
                 ))}
@@ -321,15 +422,62 @@ const ChatView: React.FC = () => {
             </div>
 
             <div className="p-2 sm:p-3 border-t border-gray-200 dark:border-dark-600 sticky bottom-0 bg-white/90 dark:bg-dark-800/90 backdrop-blur supports-[backdrop-filter]:bg-white/70">
-              <div className="max-w-3xl mx-auto flex gap-2">
-                <input
+              <div className="max-w-3xl mx-auto flex items-end gap-2 relative">
+                {/* Emoji popover */}
+                {isEmojiOpen && (
+                  <div ref={emojiPopoverRef} className="absolute bottom-12 left-2 z-[2000] bg-white dark:bg-dark-800 border border-gray-200 dark:border-dark-600 rounded-xl shadow-xl p-1">
+                    {/* Lazy-load the web component */}
+                    <EmojiPickerHost onEmoji={(emoji) => {
+                      // Insert emoji at caret
+                      const el = textAreaRef.current;
+                      if (!el) return;
+                      const start = el.selectionStart || messageText.length;
+                      const end = el.selectionEnd || messageText.length;
+                      const next = messageText.slice(0, start) + emoji + messageText.slice(end);
+                      setMessageText(next);
+                      requestAnimationFrame(() => {
+                        el.focus();
+                        const pos = start + emoji.length;
+                        el.setSelectionRange(pos, pos);
+                        // trigger autosize
+                        el.style.height = 'auto';
+                        const max = 160;
+                        el.style.height = Math.min(el.scrollHeight, max) + 'px';
+                      });
+                    }} onClose={() => setIsEmojiOpen(false)} />
+                  </div>
+                )}
+
+                <textarea
+                  ref={textAreaRef}
+
+
                   value={messageText}
                   onChange={(e) => setMessageText(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
+
+                  onKeyDown={(e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); send(); } }}
                   placeholder="Type a message"
-                  className="flex-1 rounded-full border border-gray-300 dark:border-dark-600 bg-white dark:bg-dark-800 px-4 py-2 outline-none focus:ring-2 focus:ring-blue-300"
+                  rows={1}
+                  className="flex-1 rounded-xl border border-gray-300 dark:border-dark-600 bg-white dark:bg-dark-800 px-4 py-2 outline-none focus:ring-2 focus:ring-blue-300 resize-none max-h-40"
+                  style={{ height: 'auto' }}
+                  onInput={() => {
+                    const el = textAreaRef.current;
+                    if (el) {
+                      el.style.height = 'auto';
+                      const max = 160;
+                      el.style.height = Math.min(el.scrollHeight, max) + 'px';
+                    }
+                  }}
                 />
-                <button onClick={send} className="px-4 py-2 rounded-full bg-blue-600 text-white shadow hover:bg-blue-700 flex items-center gap-1">
+                <button
+                  type="button"
+                  className="self-end h-10 w-10 inline-flex items-center justify-center rounded-full border border-gray-300 dark:border-dark-600 bg-white dark:bg-dark-800 text-gray-700 hover:bg-slate-50 dark:hover:bg-dark-700 shadow-sm"
+                  aria-label="Emoji"
+                  onClick={() => setIsEmojiOpen((v) => !v)}
+                >
+                  <SmileIcon className="w-5 h-5" />
+                </button>
+                <button onClick={send} className="self-end h-10 px-4 rounded-full bg-blue-600 text-white shadow hover:bg-blue-700 flex items-center gap-1 shrink-0">
                   Send <ArrowRightIcon className="w-4 h-4" />
                 </button>
               </div>
@@ -347,9 +495,23 @@ const ChatView: React.FC = () => {
           </div>
         )}
       </div>
+      {previewPhoto && (
+        <div className="fixed inset-0 z-[11000] bg-black/80 backdrop-blur-sm flex items-center justify-center" onClick={() => setPreviewPhoto(null)}>
+          <button
+            className="absolute top-3 right-3 sm:top-4 sm:right-4 text-white/80 hover:text-white p-2 rounded-full hover:bg-white/10"
+            onClick={(e) => { e.stopPropagation(); setPreviewPhoto(null); }}
+            aria-label="Close"
+          >
+            <XMarkIcon className="w-6 h-6" />
+          </button>
+          <img src={previewPhoto} alt="Profile" className="max-w-[92vw] max-h-[85vh] rounded-xl shadow-2xl object-contain" />
+        </div>
+      )}
+
 
 
     </div>
+
   );
 };
 

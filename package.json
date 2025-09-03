@@ -39,6 +39,7 @@
     "chartjs-to-image": "^1.2.2",
     "cli-cursor": "^5.0.0",
     "date-fns": "^4.1.0",
+    "emoji-picker-element": "^1.26.3",
     "exceljs": "^4.4.0",
     "firebase": "^11.9.1",
     "framer-motion": "^12.18.1",
