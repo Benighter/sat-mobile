@@ -18,20 +18,32 @@ const ChatBadge: React.FC = () => {
     const uid = userProfile?.uid;
     if (!uid) return 0;
     return threads.reduce((sum, t) => {
-      const count = t.unreadCounts?.[uid];
-      if (typeof count === 'number' && count > 0) return sum + count;
-      // Fallback (when Cloud Function hasn’t populated unreadCounts yet):
-      // if lastMessage is newer than lastReadAt for this user and was sent by someone else, count 1
-      try {
-        const lm = t.lastMessage as any;
-        const lastRead = (t.lastReadAt || ({} as any))[uid];
-        const lmAt = lm?.at?.toMillis ? lm.at.toMillis() : (lm?.at?.seconds ? lm.at.seconds * 1000 : 0);
-        const lrAt = lastRead?.toMillis ? lastRead.toMillis() : (lastRead?.seconds ? lastRead.seconds * 1000 : 0);
-        const hasUnread = !!lm && lm.senderId !== uid && (!lrAt || lmAt > lrAt);
-        return sum + (hasUnread ? 1 : 0);
-      } catch {
-        return sum;
+      const countRaw = t.unreadCounts?.[uid];
+      const count = typeof countRaw === 'number' ? countRaw : undefined;
+
+      const computePredicted = () => {
+        try {
+          const lm = t.lastMessage as any;
+          const lastRead = (t.lastReadAt || ({} as any))[uid];
+          const lmAt = lm?.at?.toMillis ? lm.at.toMillis() : (lm?.at?.seconds ? lm.at.seconds * 1000 : 0);
+          const lrAt = lastRead?.toMillis ? lastRead.toMillis() : (lastRead?.seconds ? lastRead.seconds * 1000 : 0);
+          const bufferMs = 2000; // 2s buffer to avoid flip-flop races
+          return !!lm && lm.senderId !== uid && (!lrAt || (lmAt > (lrAt + bufferMs)));
+        } catch {
+          return false;
+        }
+      };
+
+      const predicted = computePredicted();
+
+      // If CF-provided count is missing, rely on predicted (legacy / emulator cases)
+      if (count === undefined) {
+        return sum + (predicted ? 1 : 0);
       }
+
+      // Otherwise, use the max of authoritative count and prediction (never sum),
+      // which prevents 1→2→1 bounce while still surfacing unread in CF lag.
+      return sum + Math.max(count, predicted ? 1 : 0);
     }, 0);
   }, [threads, userProfile?.uid]);
 
