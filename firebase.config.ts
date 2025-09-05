@@ -1,6 +1,7 @@
 // Firebase Configuration for SAT Mobile
 import { initializeApp } from 'firebase/app';
 import { initializeFirestore, connectFirestoreEmulator, setLogLevel } from 'firebase/firestore';
+import { getStorage } from 'firebase/storage';
 import { getAuth, connectAuthEmulator, setPersistence, browserLocalPersistence } from 'firebase/auth';
 import { getMessaging, isSupported } from 'firebase/messaging';
 
@@ -14,7 +15,10 @@ const SAT_FB = {
   apiKey: env.VITE_FIREBASE_API_KEY || process.env.REACT_APP_FIREBASE_API_KEY || "AIzaSyDkyjDhyz_LCbUpRgftD2qo31e5SteAiKg",
   authDomain: env.VITE_FIREBASE_AUTH_DOMAIN || process.env.REACT_APP_FIREBASE_AUTH_DOMAIN || "sat-mobile-de6f1.firebaseapp.com",
   projectId: env.VITE_FIREBASE_PROJECT_ID || process.env.REACT_APP_FIREBASE_PROJECT_ID || "sat-mobile-de6f1",
-  storageBucket: env.VITE_FIREBASE_STORAGE_BUCKET || process.env.REACT_APP_FIREBASE_STORAGE_BUCKET || "sat-mobile-de6f1.firebasestorage.app",
+  // IMPORTANT: storageBucket must be the canonical bucket name (<project-id>.appspot.com),
+  // not the newer download domain. Using the wrong value causes failed uploads that
+  // surface as CORS / preflight errors (HTTP not ok on the underlying request).
+  storageBucket: env.VITE_FIREBASE_STORAGE_BUCKET || process.env.REACT_APP_FIREBASE_STORAGE_BUCKET || "sat-mobile-de6f1.appspot.com",
   messagingSenderId: env.VITE_FIREBASE_MESSAGING_SENDER_ID || process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID || "1076014285349",
   appId: env.VITE_FIREBASE_APP_ID || process.env.REACT_APP_FIREBASE_APP_ID || "1:1076014285349:web:d72d460aefe5ca8d76b5cc",
   measurementId: env.VITE_FIREBASE_MEASUREMENT_ID || process.env.REACT_APP_FIREBASE_MEASUREMENT_ID || "G-XSWJRZZ751"
@@ -35,6 +39,9 @@ console.log('🔥 Firebase Config:', {
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
+
+// Initialize Storage (for chat image uploads & other media)
+export const storage = getStorage(app);
 
 // Initialize Firestore with robust transport + settings to avoid network quirks (e.g. 400 on terminate)
 export const db = initializeFirestore(app, {

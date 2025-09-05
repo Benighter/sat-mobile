@@ -138,6 +138,53 @@ exports.sendPushNotification = functions.https.onCall(async (data, context) => {
   }
 });
 
+// Callable: relayUploadChatImage (CORS workaround for Storage uploads)
+// data: { threadId, churchId, data (base64 string), mimeType, caption }
+exports.relayUploadChatImage = functions.https.onCall(async (data, context) => {
+  if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Auth required');
+  const { threadId, churchId, data: b64, mimeType, caption } = data || {};
+  if (!threadId || !churchId || !b64) {
+    throw new functions.https.HttpsError('invalid-argument', 'threadId, churchId and data required');
+  }
+  try {
+    const uid = context.auth.uid;
+    const db = admin.firestore();
+    // Verify user is participant of thread
+    const threadRef = db.doc(`churches/${churchId}/chatThreads/${threadId}`);
+    const threadSnap = await threadRef.get();
+    if (!threadSnap.exists) throw new functions.https.HttpsError('not-found', 'Thread not found');
+    const thread = threadSnap.data() || {};
+    const participants = thread.participants || [];
+    if (!participants.includes(uid)) throw new functions.https.HttpsError('permission-denied', 'Not a participant');
+
+    const buffer = Buffer.from(b64, 'base64');
+    const storagePath = `chat/${churchId}/${threadId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${(mimeType||'image/png').split('/').pop()}`;
+    const bucket = admin.storage().bucket();
+    const file = bucket.file(storagePath);
+    await file.save(buffer, { contentType: mimeType || 'image/png', resumable: false, public: false });
+    const [signedUrl] = await file.getSignedUrl({ action: 'read', expires: Date.now() + 1000*60*60*24*30 }); // 30 days
+
+    // Write message
+    const msgRef = db.collection(`churches/${churchId}/chatThreads/${threadId}/messages`).doc();
+    await msgRef.set({
+      senderId: uid,
+      text: caption || '',
+      attachments: [{ type: 'image', url: signedUrl, name: file.name }],
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+    // Optimistic thread update
+    await threadRef.set({
+      lastMessage: { text: (caption || '📷 Photo').slice(0,120), senderId: uid, at: admin.firestore.FieldValue.serverTimestamp() },
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+    return { url: signedUrl };
+  } catch (e) {
+    console.error('relayUploadChatImage failed', e);
+    if (e instanceof functions.https.HttpsError) throw e;
+    throw new functions.https.HttpsError('internal', e?.message || 'Upload failed');
+  }
+});
+
 // Shared provider-based email sender
 async function sendEmailWithProviders({ to, subject, html, text, from }) {
   const fromAddress = from || 'no-reply@sat-mobile.app';

@@ -2,8 +2,8 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useAppContext } from '../../contexts/FirebaseAppContext';
 import { chatService, ChatThread, ChatMessage } from '../../services/chatService';
 import { userService } from '../../services/userService';
-import { TabKeys, User } from '../../types';
-import { ChatBubbleLeftRightIcon, ArrowRightIcon, ArrowLeftIcon, EllipsisVerticalIcon, XMarkIcon, SmileIcon } from '../icons';
+import { User } from '../../types';
+import { ChatBubbleLeftRightIcon, ArrowRightIcon, ArrowLeftIcon, EllipsisVerticalIcon, XMarkIcon, SmileIcon, PhotoIcon } from '../icons';
 
 
 // Host component to use emoji-picker-element web component safely in React 19
@@ -67,6 +67,9 @@ const ChatView: React.FC = () => {
   const endRef = useRef<HTMLDivElement | null>(null);
   const textAreaRef = useRef<HTMLTextAreaElement | null>(null);
   const [previewPhoto, setPreviewPhoto] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [pendingImage, setPendingImage] = useState<{ file: File; url: string } | null>(null);
 
   // Emoji picker state
   const [isEmojiOpen, setIsEmojiOpen] = useState(false);
@@ -196,6 +199,31 @@ const ChatView: React.FC = () => {
       await chatService.sendMessage(activeThreadId, text, userProfile.uid);
     } catch (e: any) {
       showToast('error', 'Failed to send', e?.message || '');
+    }
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      showToast('error', 'Unsupported', 'Please choose an image file');
+      return;
+    }
+    const url = URL.createObjectURL(file);
+    setPendingImage({ file, url });
+  };
+
+  const sendImage = async () => {
+    if (!pendingImage || !activeThreadId || !userProfile) return;
+    setUploading(true);
+    try {
+      await chatService.sendImageMessage(activeThreadId, pendingImage.file, userProfile.uid, { caption: messageText.trim() || '' });
+      setMessageText('');
+      setPendingImage(null);
+    } catch (e: any) {
+      showToast('error', 'Upload failed', e?.message || '');
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -413,7 +441,16 @@ const ChatView: React.FC = () => {
               <div className="space-y-2 pb-10">
                 {messages.map(m => (
                   <div key={m.id} className={`max-w-[86%] sm:max-w-[78%] px-3 py-2 rounded-2xl shadow-sm text-sm leading-relaxed ${m.senderId===userProfile?.uid ? 'ml-auto bg-blue-600 text-white rounded-br-md' : 'bg-white dark:bg-dark-700 border border-gray-200 dark:border-dark-600 text-gray-900 dark:text-dark-100 rounded-bl-md'}`}>
-                    <div className="whitespace-pre-wrap">{m.text}</div>
+                    {m.attachments?.length ? (
+                      <div className="space-y-2">
+                        {m.attachments.filter(a=>a.type==='image').map((a,i)=>(
+                          <img key={i} src={a.url} alt={a.name||'image'} className="max-h-64 rounded-lg object-cover cursor-zoom-in" onClick={()=> setPreviewPhoto(a.url)} />
+                        ))}
+                        {m.text && <div className="whitespace-pre-wrap">{m.text}</div>}
+                      </div>
+                    ) : (
+                      <div className="whitespace-pre-wrap">{m.text}</div>
+                    )}
                     <div className={`mt-1 text-[10px] ${m.senderId===userProfile?.uid ? 'text-blue-100' : 'text-gray-500'}`}>{formatTime((m as any).createdAt)}</div>
                   </div>
                 ))}
@@ -448,6 +485,13 @@ const ChatView: React.FC = () => {
                   </div>
                 )}
 
+                {pendingImage && (
+                  <div className="absolute -top-24 left-0 w-full flex items-center gap-3 bg-white dark:bg-dark-800 p-2 rounded-lg border border-gray-300 dark:border-dark-600 mb-2 shadow">
+                    <img src={pendingImage.url} alt="preview" className="h-16 w-16 object-cover rounded" />
+                    <div className="flex-1 text-xs text-gray-600 dark:text-dark-300 truncate">{pendingImage.file.name}</div>
+                    <button className="text-xs text-red-600 hover:underline" onClick={()=>{ setPendingImage(null); }}>Remove</button>
+                  </div>
+                )}
                 <textarea
                   ref={textAreaRef}
 
@@ -469,6 +513,16 @@ const ChatView: React.FC = () => {
                     }
                   }}
                 />
+                <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
+                <button
+                  type="button"
+                  className="self-end h-10 w-10 inline-flex items-center justify-center rounded-full border border-gray-300 dark:border-dark-600 bg-white dark:bg-dark-800 text-gray-700 hover:bg-slate-50 dark:hover:bg-dark-700 shadow-sm"
+                  aria-label="Image"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploading}
+                >
+                  <PhotoIcon className="w-5 h-5" />
+                </button>
                 <button
                   type="button"
                   className="self-end h-10 w-10 inline-flex items-center justify-center rounded-full border border-gray-300 dark:border-dark-600 bg-white dark:bg-dark-800 text-gray-700 hover:bg-slate-50 dark:hover:bg-dark-700 shadow-sm"
@@ -477,8 +531,8 @@ const ChatView: React.FC = () => {
                 >
                   <SmileIcon className="w-5 h-5" />
                 </button>
-                <button onClick={send} className="self-end h-10 px-4 rounded-full bg-blue-600 text-white shadow hover:bg-blue-700 flex items-center gap-1 shrink-0">
-                  Send <ArrowRightIcon className="w-4 h-4" />
+                <button onClick={pendingImage ? sendImage : send} disabled={uploading} className="self-end h-10 px-4 rounded-full bg-blue-600 text-white shadow hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1 shrink-0">
+                  {uploading ? 'Uploading' : (pendingImage ? 'Send Photo' : 'Send')} <ArrowRightIcon className="w-4 h-4" />
                 </button>
               </div>
             </div>

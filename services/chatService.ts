@@ -1,8 +1,10 @@
 // Chat service for real-time messaging using Firestore (no CORS required)
 // Provides helpers to create threads, list threads, subscribe to messages, and send messages
 
-import { addDoc, collection, doc, getDoc, getDocs, onSnapshot, orderBy, query, serverTimestamp, setDoc, Timestamp, Unsubscribe, updateDoc, where, writeBatch, increment, deleteDoc, limit, startAfter } from 'firebase/firestore';
-import { db } from '../firebase.config';
+import { addDoc, collection, doc, getDocs, onSnapshot, orderBy, query, serverTimestamp, Timestamp, Unsubscribe, updateDoc, where, writeBatch, deleteDoc, limit, startAfter } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { getFunctions, httpsCallable } from 'firebase/functions';
+import { db, storage } from '../firebase.config';
 import { firebaseUtils } from './firebaseService';
 import type { User } from '../types';
 
@@ -135,6 +137,61 @@ export const chatService = {
         updatedAt: serverTimestamp(),
       });
     } catch {}
+  },
+
+  /**
+   * Upload an image (File/Blob) to Firebase Storage and send as a chat message with attachment metadata.
+   * Returns the download URL.
+   */
+  async sendImageMessage(threadId: string, file: File | Blob, senderId: string, options?: { caption?: string }): Promise<string> {
+    const churchId = firebaseUtils.getCurrentChurchId();
+    if (!churchId) throw new Error('No church context');
+    if (!file) throw new Error('No file provided');
+
+    const ext = (file instanceof File && file.name.split('.').pop()) || 'jpg';
+    const path = `chat/${churchId}/${threadId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+    const storageRef = ref(storage, path);
+    let url: string | null = null;
+    try {
+      await uploadBytes(storageRef, file);
+      url = await getDownloadURL(storageRef);
+    } catch (directErr) {
+      // Fallback: use callable relay if direct upload fails (e.g., corporate proxy/CORS)
+      try {
+        const arrayBuf = await file.arrayBuffer();
+        const b64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuf)));
+        const functions = getFunctions(undefined as any, 'us-central1');
+        const relay = httpsCallable<any, { url: string }>(functions as any, 'relayUploadChatImage');
+        const res = await relay({ threadId, churchId, data: b64, mimeType: (file as any).type || 'image/jpeg', caption: options?.caption || '' });
+        url = res.data?.url;
+      } catch (relayErr) {
+        console.error('Direct + relay upload both failed', relayErr);
+        throw directErr; // surface original error for context
+      }
+    }
+    if (!url) throw new Error('Upload failed');
+
+    const msgRef = collection(db, `${threadsPath(churchId)}/${threadId}/messages`);
+    const caption = options?.caption || '';
+    await addDoc(msgRef, {
+      senderId,
+      text: caption, // keep caption in text for backwards compatibility
+      attachments: [
+        { type: 'image', url, name: (file as any).name || undefined, size: (file as any).size || undefined }
+      ],
+      createdAt: serverTimestamp()
+    });
+
+    // Optimistic thread metadata update (Cloud Function will also handle)
+    try {
+      const threadRef = doc(db, `${threadsPath(churchId)}/${threadId}`);
+      const short = caption || '📷 Photo';
+      await updateDoc(threadRef, {
+        lastMessage: { text: short.slice(0, 120), senderId, at: serverTimestamp() },
+        updatedAt: serverTimestamp(),
+      });
+    } catch {}
+  return url;
   },
 
   async markThreadRead(threadId: string, uid: string): Promise<void> {
