@@ -3,7 +3,7 @@ import { useAppContext } from '../../contexts/FirebaseAppContext';
 import { chatService, ChatThread, ChatMessage } from '../../services/chatService';
 import { userService } from '../../services/userService';
 import { User } from '../../types';
-import { ChatBubbleLeftRightIcon, ArrowRightIcon, ArrowLeftIcon, EllipsisVerticalIcon, XMarkIcon, SmileIcon, PhotoIcon } from '../icons';
+import { ChatBubbleLeftRightIcon, ArrowRightIcon, ArrowLeftIcon, EllipsisVerticalIcon, XMarkIcon, SmileIcon, PhotoIcon, CheckIcon } from '../icons';
 
 
 // Host component to use emoji-picker-element web component safely in React 19
@@ -439,8 +439,24 @@ const ChatView: React.FC = () => {
 
             <div className="flex-1 overflow-y-auto p-3 sm:p-4" style={{minHeight: 0}}>
               <div className="space-y-2 pb-10">
-                {messages.map(m => (
-                  <div key={m.id} className={`max-w-[86%] sm:max-w-[78%] px-3 py-2 rounded-2xl shadow-sm text-sm leading-relaxed ${m.senderId===userProfile?.uid ? 'ml-auto bg-blue-600 text-white rounded-br-md' : 'bg-white dark:bg-dark-700 border border-gray-200 dark:border-dark-600 text-gray-900 dark:text-dark-100 rounded-bl-md'}`}>
+                {messages.map(m => {
+                  const mine = m.senderId===userProfile?.uid;
+                  // Determine status ticks for my messages only
+                  let ticks: 'one' | 'two' | 'three' | null = null;
+                  if (mine) {
+                    // 1 tick (sent/offline) when pending write or from cache
+                    if ((m as any)._pending || (m as any)._fromCache) {
+                      ticks = 'one';
+                    } else {
+                      // Check if any other participant has read after message time
+                      const created = (m as any).createdAt?.toMillis?.() || 0;
+                      const others = (activeThread?.participants || []).filter(p => p !== userProfile?.uid);
+                      const anyRead = others.some(p => (activeThread?.lastReadAt?.[p]?.toMillis?.() || 0) >= created);
+                      ticks = anyRead ? 'three' : 'two';
+                    }
+                  }
+                  return (
+                  <div key={m.id} className={`max-w-[86%] sm:max-w-[78%] px-3 py-2 rounded-2xl shadow-sm text-sm leading-relaxed ${mine ? 'ml-auto bg-blue-600 text-white rounded-br-md' : 'bg-white dark:bg-dark-700 border border-gray-200 dark:border-dark-600 text-gray-900 dark:text-dark-100 rounded-bl-md'}`}>
                     {m.attachments?.length ? (
                       <div className="space-y-2">
                         {m.attachments.filter(a=>a.type==='image').map((a,i)=>(
@@ -451,9 +467,31 @@ const ChatView: React.FC = () => {
                     ) : (
                       <div className="whitespace-pre-wrap">{m.text}</div>
                     )}
-                    <div className={`mt-1 text-[10px] ${m.senderId===userProfile?.uid ? 'text-blue-100' : 'text-gray-500'}`}>{formatTime((m as any).createdAt)}</div>
+                    <div className={`mt-1 text-[10px] flex items-center gap-1 ${mine ? 'text-blue-100' : 'text-gray-500'}`}>
+                      <span>{formatTime((m as any).createdAt)}</span>
+                      {mine && (
+                        <span className="inline-flex items-center ml-1">
+                          {ticks === 'one' && (
+                            <CheckIcon className="w-3.5 h-3.5 text-gray-200" />
+                          )}
+                          {ticks === 'two' && (
+                            <>
+                              <CheckIcon className="w-3.5 h-3.5 -mr-1 text-emerald-300" />
+                              <CheckIcon className="w-3.5 h-3.5 text-emerald-300" />
+                            </>
+                          )}
+                          {ticks === 'three' && (
+                            <>
+                              <CheckIcon className="w-3.5 h-3.5 -mr-1 text-sky-300" />
+                              <CheckIcon className="w-3.5 h-3.5 -mr-1 text-sky-300" />
+                              <CheckIcon className="w-3.5 h-3.5 text-sky-300" />
+                            </>
+                          )}
+                        </span>
+                      )}
+                    </div>
                   </div>
-                ))}
+                );})}
                 <div ref={endRef} />
               </div>
             </div>

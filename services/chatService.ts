@@ -32,6 +32,9 @@ export interface ChatMessage {
   text: string;
   attachments?: Array<{ type: 'image' | 'file'; url: string; name?: string; size?: number }>;
   createdAt: any;
+  // Client-only flags (not stored) to help the UI display message state
+  _pending?: boolean; // true if write hasn't been committed to server yet (offline/optimistic)
+  _fromCache?: boolean; // snapshot came from local cache
 }
 
 const threadsPath = (churchId: string) => `churches/${churchId}/chatThreads`;
@@ -113,8 +116,14 @@ export const chatService = {
       collection(db, `${threadsPath(churchId)}/${threadId}/messages`),
       orderBy('createdAt', 'asc')
     );
-    return onSnapshot(q, (snap) => {
-      const items = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) })) as ChatMessage[];
+    // Include metadata so we can expose pending writes to the UI (to show a single tick for "sent/offline")
+    return onSnapshot(q, { includeMetadataChanges: true } as any, (snap: any) => {
+      const items = snap.docs.map((d: any) => ({
+        id: d.id,
+        ...(d.data() as any),
+        _pending: d.metadata.hasPendingWrites,
+        _fromCache: d.metadata.fromCache,
+      })) as ChatMessage[];
       callback(items);
     });
   },
