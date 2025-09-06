@@ -9,6 +9,7 @@ import {
   query,
   where,
   limit,
+  setDoc,
   // Timestamp
 } from 'firebase/firestore';
 import { db } from '../firebase.config';
@@ -223,6 +224,18 @@ export const inviteService = {
           createdAt: new Date().toISOString()
         } as any;
         await addDoc(collection(db, 'crossTenantAccessLinks'), linkPayload);
+        // Also write deterministic index doc enabling security rules for cross-tenant reads
+        try {
+          const indexId = `${(linkPayload as any).viewerUid}_${(linkPayload as any).ownerChurchId}`;
+          await setDoc(doc(db, 'crossTenantAccessIndex', indexId), {
+            viewerUid: (linkPayload as any).viewerUid,
+            ownerUid: (linkPayload as any).ownerUid,
+            ownerChurchId: (linkPayload as any).ownerChurchId,
+            permission: (linkPayload as any).permission,
+            createdAt: (linkPayload as any).createdAt,
+            revoked: false
+          });
+        } catch {}
 
         // Mark invite as accepted without role change
         const inviteDocRef = doc(db, 'adminInvites', inviteId);

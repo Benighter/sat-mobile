@@ -1,6 +1,6 @@
 // Firebase-enabled App Context
 import React, { createContext, useState, useEffect, useCallback, ReactNode, useMemo, useRef } from 'react';
-import { collection, doc, getDocs, onSnapshot, query as fsQuery, where as fsWhere } from 'firebase/firestore';
+import { collection, doc, getDocs, onSnapshot, query as fsQuery, where as fsWhere, setDoc } from 'firebase/firestore';
 import { db } from '../firebase.config';
 import { Member, AttendanceRecord, Bacenta, TabOption, AttendanceStatus, NewBeliever, SundayConfirmation, ConfirmationStatus, Guest, MemberDeletionRequest, OutreachBacenta, OutreachMember, PrayerRecord, PrayerStatus, MeetingRecord, TitheRecord, TransportRecord, CrossTenantAccessLink, CrossTenantPermission } from '../types';
 import { FIXED_TABS, DEFAULT_TAB_ID } from '../constants';
@@ -377,12 +377,26 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
   useEffect(() => {
     if (!user?.uid) return;
     const q = fsQuery(collection(db, 'crossTenantAccessLinks'), fsWhere('viewerUid', '==', user.uid));
-    const unsub = onSnapshot(q, (snap) => {
+    const unsub = onSnapshot(q, async (snap) => {
       try {
         let items = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) })) as any[];
         items = items.filter(i => !(i as any).revoked);
         items.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
         setAccessibleChurchLinks(items as any);
+        // Backfill deterministic cross-tenant access index docs so rules can allow reads
+        try {
+          await Promise.all(items.map(async (i:any) => {
+            const indexId = `${i.viewerUid}_${i.ownerChurchId}`;
+            await setDoc(doc(db, 'crossTenantAccessIndex', indexId), {
+              viewerUid: i.viewerUid,
+              ownerUid: i.ownerUid,
+              ownerChurchId: i.ownerChurchId,
+              permission: i.permission || 'read-only',
+              createdAt: i.createdAt || new Date().toISOString(),
+              revoked: !!i.revoked
+            }, { merge: true } as any);
+          }));
+        } catch {}
       } catch (e) {
         console.warn('crossTenantAccessLinks onSnapshot parse failed', e);
       }

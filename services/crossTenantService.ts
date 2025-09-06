@@ -6,7 +6,8 @@ import {
 	getDocs,
 	query,
 	updateDoc,
-	where
+	where,
+	setDoc
 } from 'firebase/firestore';
 import { db } from '../firebase.config';
 import { CrossTenantInvite, CrossTenantAccessLink, CrossTenantPermission } from '../types';
@@ -97,6 +98,19 @@ export const crossTenantService = {
 
 		const linkRef = await addDoc(collection(db, ACCESS_LINKS_COLLECTION), linkPayload as any);
 
+		// Maintain deterministic index doc to enable Firestore security rules for cross-tenant reads
+		try {
+			const indexId = `${(linkPayload as any).viewerUid}_${(linkPayload as any).ownerChurchId}`;
+			await setDoc(doc(db, 'crossTenantAccessIndex', indexId), {
+				viewerUid: (linkPayload as any).viewerUid,
+				ownerUid: (linkPayload as any).ownerUid,
+				ownerChurchId: (linkPayload as any).ownerChurchId,
+				permission: (linkPayload as any).permission,
+				createdAt: (linkPayload as any).createdAt,
+				revoked: false
+			});
+		} catch {}
+
 		await updateDoc(doc(db, INVITES_COLLECTION, inviteId), { status: 'accepted', respondedAt: new Date().toISOString() });
 		return { link: { id: linkRef.id, ...(linkPayload as any) } };
 	},
@@ -118,6 +132,15 @@ export const crossTenantService = {
 
 	async revokeAccess(linkId: string): Promise<void> {
 		await updateDoc(doc(db, ACCESS_LINKS_COLLECTION, linkId), { revoked: true, revokedAt: new Date().toISOString() });
+		// Also revoke deterministic index if we can resolve it
+		try {
+			const snap = await getDoc(doc(db, ACCESS_LINKS_COLLECTION, linkId));
+			if (snap.exists()) {
+				const d: any = snap.data();
+				const indexId = `${d.viewerUid}_${d.ownerChurchId}`;
+				await updateDoc(doc(db, 'crossTenantAccessIndex', indexId), { revoked: true, revokedAt: new Date().toISOString() });
+			}
+		} catch {}
 	},
 
 	// Update permission on an existing access link (e.g., upgrade to read-write)
