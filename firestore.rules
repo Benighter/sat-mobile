@@ -2,6 +2,18 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // Helper: is signed-in user a ministry account?
+    function isMinistryAccount() {
+      return request.auth != null &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isMinistryAccount == true;
+    }
+
+    // Helper: the signed-in user's selected ministry name
+    function userMinistryName() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.preferences.ministryName;
+    }
+
+
     function isSuperAdmin() {
       return request.auth != null &&
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.superAdmin == true;
@@ -14,30 +26,11 @@ service cloud.firestore {
       return request.auth == null; // Unauthenticated access for dev prototype
     }
 
-    // Cross-tenant access via deterministic index doc: crossTenantAccessIndex/{viewerUid}_{churchId}
-    function hasCrossTenantRead(churchId) {
-      let idx = get(/databases/$(database)/documents/crossTenantAccessIndex/$(request.auth.uid + '_' + churchId));
-      return request.auth != null && idx.data != null &&
-        idx.data.viewerUid == request.auth.uid &&
-        idx.data.ownerChurchId == churchId &&
-        !(idx.data.revoked == true) &&
-        (idx.data.permission == 'read-only' || idx.data.permission == 'read-write');
-    }
-    function hasCrossTenantWrite(churchId) {
-      let idx = get(/databases/$(database)/documents/crossTenantAccessIndex/$(request.auth.uid + '_' + churchId));
-      return request.auth != null && idx != null &&
-        idx.data.viewerUid == request.auth.uid &&
-        idx.data.ownerChurchId == churchId &&
-        !(idx.data.revoked == true) &&
-        idx.data.permission == 'read-write';
-    }
-
     // Users can read own doc OR any user in the same church; only self can create/update
     match /users/{userId} {
       allow read: if request.auth != null && (
         request.auth.uid == userId ||
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.churchId == resource.data.churchId ||
-        hasCrossTenantRead(resource.data.churchId) ||
         isSuperAdmin()
       ) || isDevSuperAdminAccess(); // DEV ONLY
       allow create, update: if request.auth != null && request.auth.uid == userId || isSuperAdmin() || isDevSuperAdminAccess(); // DEV ONLY
@@ -51,41 +44,53 @@ service cloud.firestore {
           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.churchId == churchId;
       }
 
-      allow read: if isInChurch() || hasCrossTenantRead(churchId) || isSuperAdmin() || isDevSuperAdminAccess(); // DEV ONLY
-      allow write: if isInChurch() || hasCrossTenantWrite(churchId) || isSuperAdmin() || isDevSuperAdminAccess(); // DEV ONLY
+      // Allow access if user's ministry church context matches this church
+      function isInMinistryChurchContext() {
+        return request.auth != null &&
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.contexts.ministryChurchId == churchId;
+      }
+
+
+      allow read: if isInChurch() || isInMinistryChurchContext() || isSuperAdmin() || isDevSuperAdminAccess(); // DEV ONLY
+      allow write: if isInChurch() || isInMinistryChurchContext() || isSuperAdmin() || isDevSuperAdminAccess(); // DEV ONLY
 
       // Chat threads — participants only
       match /chatThreads/{threadId} {
         function isParticipant() {
-          return (isInChurch() || hasCrossTenantRead(churchId) || isSuperAdmin() || isDevSuperAdminAccess()) &&
+          return (isInChurch() || isSuperAdmin() || isDevSuperAdminAccess()) &&
             request.auth.uid in resource.data.participants;
         }
         function isParticipantOnCreate() {
-          return (isInChurch() || hasCrossTenantRead(churchId) || isSuperAdmin() || isDevSuperAdminAccess()) &&
+          return (isInChurch() || isSuperAdmin() || isDevSuperAdminAccess()) &&
             request.auth.uid in request.resource.data.participants;
         }
 
         allow read: if isParticipant() || isDevSuperAdminAccess(); // DEV ONLY
-        allow create: if (isParticipantOnCreate() && (isInChurch() || hasCrossTenantWrite(churchId) || isSuperAdmin())) || isDevSuperAdminAccess(); // DEV ONLY
-        allow update: if (isParticipant() && (isInChurch() || hasCrossTenantWrite(churchId) || isSuperAdmin())) || isDevSuperAdminAccess(); // DEV ONLY
-        allow delete: if (isParticipant() && (isInChurch() || hasCrossTenantWrite(churchId) || isSuperAdmin())) || isDevSuperAdminAccess(); // DEV ONLY
+        allow create: if isParticipantOnCreate() || isDevSuperAdminAccess(); // DEV ONLY
+        allow update: if isParticipant() || isDevSuperAdminAccess(); // DEV ONLY
+
+      // Collection-group access for ministry accounts to read members of their ministry across all churches
+      match /{path=**}/members/{memberId} {
+        allow read: if isMinistryAccount() && resource.data.ministry == userMinistryName() || isSuperAdmin() || isDevSuperAdminAccess();
+      }
+
+        allow delete: if isParticipant() || isDevSuperAdminAccess(); // DEV ONLY
 
         // Messages: validate against parent thread's participants
         match /messages/{messageId} {
           function isThreadParticipant() {
-            return (isInChurch() || hasCrossTenantRead(churchId) || isSuperAdmin() || isDevSuperAdminAccess()) &&
+            return (isInChurch() || isSuperAdmin() || isDevSuperAdminAccess()) &&
               request.auth.uid in get(/databases/$(database)/documents/churches/$(churchId)/chatThreads/$(threadId)).data.participants;
           }
           allow read: if isThreadParticipant() || isDevSuperAdminAccess(); // DEV ONLY
-          allow create: if (isThreadParticipant() && (isInChurch() || hasCrossTenantWrite(churchId) || isSuperAdmin())) || isDevSuperAdminAccess(); // DEV ONLY
-          allow delete: if (isThreadParticipant() && (isInChurch() || hasCrossTenantWrite(churchId) || isSuperAdmin())) || isDevSuperAdminAccess(); // DEV ONLY
+          allow create: if isThreadParticipant() || isDevSuperAdminAccess(); // DEV ONLY
+          allow delete: if isThreadParticipant() || isDevSuperAdminAccess(); // DEV ONLY
         }
       }
 
       // Other church subcollections: same isInChurch guard
       match /{collection}/{docId} {
-        allow read: if isInChurch() || hasCrossTenantRead(churchId) || isSuperAdmin() || isDevSuperAdminAccess(); // DEV ONLY
-        allow write: if isInChurch() || hasCrossTenantWrite(churchId) || isSuperAdmin() || isDevSuperAdminAccess(); // DEV ONLY
+        allow read, write: if isInChurch() || isInMinistryChurchContext() || isSuperAdmin() || isDevSuperAdminAccess(); // DEV ONLY
       }
     }
 
@@ -95,14 +100,17 @@ service cloud.firestore {
     }
 
     match /ministryAccessRequests/{requestId} {
-      allow read, write: if isSuperAdmin() || isDevSuperAdminAccess(); // DEV ONLY
+      // Requester can create and read their own request; SuperAdmin has full access
+      allow create: if request.auth != null && request.resource.data.requesterUid == request.auth.uid;
+      allow read: if request.auth != null && (resource.data.requesterUid == request.auth.uid || isSuperAdmin()) || isDevSuperAdminAccess(); // DEV ONLY
+      allow update, delete: if isSuperAdmin() || isDevSuperAdminAccess(); // DEV ONLY
     }
 
     match /superAdminNotifications/{notificationId} {
       allow read, write: if isSuperAdmin() || isDevSuperAdminAccess(); // DEV ONLY
     }
 
-    // Root-level: Admin invites, cross-tenant links, and cross-tenant access index
+    // Root-level: Admin invites and cross-tenant links
     match /{rootCollection}/{docId} {
       // Read access
       allow read: if request.auth != null && (
@@ -111,10 +119,6 @@ service cloud.firestore {
           resource.data.createdBy == request.auth.uid
         )) ||
         (rootCollection == 'crossTenantAccessLinks' && (
-          resource.data.viewerUid == request.auth.uid ||
-          resource.data.ownerUid == request.auth.uid
-        )) ||
-        (rootCollection == 'crossTenantAccessIndex' && (
           resource.data.viewerUid == request.auth.uid ||
           resource.data.ownerUid == request.auth.uid
         )) ||
@@ -127,9 +131,6 @@ service cloud.firestore {
           request.resource.data.createdBy == request.auth.uid) ||
         (rootCollection == 'crossTenantAccessLinks' &&
           request.resource.data.viewerUid == request.auth.uid) ||
-        (rootCollection == 'crossTenantAccessIndex' &&
-          request.resource.data.viewerUid == request.auth.uid &&
-          docId == request.auth.uid + '_' + request.resource.data.ownerChurchId) ||
         isSuperAdmin()
       ) || isDevSuperAdminAccess(); // DEV ONLY
 
@@ -140,10 +141,6 @@ service cloud.firestore {
           resource.data.createdBy == request.auth.uid
         )) ||
         (rootCollection == 'crossTenantAccessLinks' && (
-          resource.data.viewerUid == request.auth.uid ||
-          resource.data.ownerUid == request.auth.uid
-        )) ||
-        (rootCollection == 'crossTenantAccessIndex' && (
           resource.data.viewerUid == request.auth.uid ||
           resource.data.ownerUid == request.auth.uid
         )) ||

@@ -1008,12 +1008,23 @@ export const membersFirebaseService = {
   add: async (member: Omit<Member, 'id' | 'createdDate' | 'lastUpdated'>): Promise<string> => {
     try {
       const membersRef = collection(db, getChurchCollectionPath('members'));
-      const docRef = await addDoc(membersRef, {
+      const nowIso = new Date().toISOString();
+      const payload = {
         ...member,
         isActive: true,
-        createdDate: new Date().toISOString(),
-        lastUpdated: new Date().toISOString()
-      });
+        createdDate: nowIso,
+        lastUpdated: nowIso
+      } as any;
+      const docRef = await addDoc(membersRef, payload);
+
+      // Best-effort local simulation of Cloud Function sync (admin → ministry)
+      try {
+        const { simulateMemberSyncTrigger } = await import('./ministrySimulationService');
+        const currentChurchId = firebaseUtils.getCurrentChurchId();
+        await simulateMemberSyncTrigger(docRef.id, { id: docRef.id, ...(payload as any) } as Member, null, currentChurchId || '');
+      } catch (e) {
+        // non-fatal
+      }
 
       return docRef.id;
     } catch (error: any) {
@@ -1030,10 +1041,29 @@ export const membersFirebaseService = {
       Object.keys(sanitized).forEach((k) => {
         if (sanitized[k] === undefined) delete sanitized[k];
       });
-      await updateDoc(memberRef, {
+      const payload = {
         ...sanitized,
         lastUpdated: new Date().toISOString()
-      });
+      } as any;
+      await updateDoc(memberRef, payload);
+
+      // Reload after update so simulation receives the latest 'after' state
+      let afterDoc: Member | null = null;
+      try {
+        const snapAfter = await getDoc(memberRef);
+        if (snapAfter.exists()) afterDoc = { id: snapAfter.id, ...(snapAfter.data() as any) } as Member;
+      } catch {}
+
+      // Best-effort local simulation of Cloud Function sync (admin → ministry)
+      try {
+        const { firebaseUtils } = await import('./firebaseService');
+        const { simulateMemberSyncTrigger } = await import('./ministrySimulationService');
+        const currentChurchId = firebaseUtils.getCurrentChurchId();
+        const before = null; // we already applied the update; treat as write with afterDoc
+        await simulateMemberSyncTrigger(memberId, (afterDoc || (payload as any)) as any, before as any, currentChurchId || '');
+      } catch (e) {
+        // non-fatal
+      }
     } catch (error: any) {
       throw new Error(`Failed to update member: ${error.message}`);
     }
@@ -1043,7 +1073,22 @@ export const membersFirebaseService = {
   delete: async (memberId: string): Promise<void> => {
     try {
       const memberRef = doc(db, getChurchCollectionPath('members'), memberId);
+      // Load before snapshot for simulation
+      let beforeDoc: Member | null = null;
+      try {
+        const snapBefore = await getDoc(memberRef);
+        if (snapBefore.exists()) beforeDoc = { id: snapBefore.id, ...(snapBefore.data() as any) } as Member;
+      } catch {}
+
       await deleteDoc(memberRef);
+
+      // Best-effort local simulation of Cloud Function sync (admin → ministry) for delete
+      try {
+        const { firebaseUtils } = await import('./firebaseService');
+        const { simulateMemberSyncTrigger } = await import('./ministrySimulationService');
+        const currentChurchId = firebaseUtils.getCurrentChurchId();
+        await simulateMemberSyncTrigger(memberId, null, beforeDoc, currentChurchId || '');
+      } catch {}
     } catch (error: any) {
       // Surface the error to caller instead of soft-deleting
       throw new Error(`Failed to delete member: ${error.message || String(error)}`);

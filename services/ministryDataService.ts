@@ -1,15 +1,18 @@
 /**
  * Ministry Data Service
- * 
+ *
  * This service fetches data across all churches for ministry mode,
  * similar to how SuperAdmin aggregates data from multiple constituencies.
  */
 
 import {
   collection,
+  collectionGroup,
   query,
   where,
   getDocs,
+  getDoc,
+  doc,
   onSnapshot,
   limit,
   Unsubscribe
@@ -35,6 +38,8 @@ export interface MinistryAggregatedData {
 const dedupeMembers = (items: Member[], currentChurchId?: string): Member[] => {
   const seenComposite = new Set<string>();
   const nonMinistryById = new Map<string, Member>();
+
+
 
   // First pass: index non-ministry copies by id
   for (const m of items) {
@@ -85,6 +90,28 @@ export const getChurchesWithMinistry = async (ministryName: string): Promise<str
 
     // Debug: Log all admin users
     usersSnapshot.docs.forEach(doc => {
+// Fetch ministry members across ALL churches using collection group (requires rules)
+const fetchMinistryMembersViaCollectionGroup = async (ministryName: string): Promise<Member[]> => {
+  try {
+    const q = query(collectionGroup(db, 'members'), where('ministry', '==', ministryName));
+    const snapshot = await getDocs(q);
+    const items = snapshot.docs.map(snap => {
+      const churchId = (snap.ref.parent.parent && (snap.ref.parent.parent as any).id) || 'unknown';
+      return {
+        id: snap.id,
+        ...snap.data(),
+        sourceChurchId: churchId
+      } as any as Member;
+    });
+    const filtered = items.filter(m => m.isActive !== false);
+    filtered.sort((a, b) => (a.lastName || '').localeCompare(b.lastName || ''));
+    return filtered;
+  } catch (e) {
+    console.warn('⚠️ Collection group fetch failed (members):', e);
+    return [];
+  }
+};
+
       const userData = doc.data();
       console.log(`👤 Admin user:`, {
         id: doc.id,
@@ -152,6 +179,13 @@ export const getChurchesWithMinistry = async (ministryName: string): Promise<str
 // Fetch data from a specific church collection
 const fetchChurchCollection = async (churchId: string, collectionName: string): Promise<any[]> => {
   try {
+    // Only fetch if caller has access to this church
+    const churchSnap = await getDoc(doc(db, `churches/${churchId}`));
+    if (!churchSnap.exists()) {
+      console.warn(`Skip ${collectionName} fetch — church ${churchId} not readable or does not exist`);
+      return [];
+    }
+
     const snapshot = await getDocs(collection(db, `churches/${churchId}/${collectionName}`));
     return snapshot.docs.map(doc => ({
       id: doc.id,
@@ -167,11 +201,20 @@ const fetchChurchCollection = async (churchId: string, collectionName: string): 
 // Fetch members with specific ministry from a church (same pattern as membersFirebaseService.getAllByMinistry)
 const fetchMinistryMembersFromChurch = async (churchId: string, ministryName: string): Promise<Member[]> => {
   try {
+    // Only fetch if caller has access to this church
+    const churchSnap = await getDoc(doc(db, `churches/${churchId}`));
+    if (!churchSnap.exists()) {
+      console.warn(`Skip members fetch — church ${churchId} not readable or does not exist`);
+      return [];
+    }
+
     // Use exact same query pattern as membersFirebaseService.getAllByMinistry
     const membersQuery = query(
       collection(db, `churches/${churchId}/members`),
       where('ministry', '==', ministryName)
     );
+
+
     const snapshot = await getDocs(membersQuery);
 
     // Apply isActive filter client-side (same as existing service)
@@ -190,29 +233,50 @@ const fetchMinistryMembersFromChurch = async (churchId: string, ministryName: st
     console.warn(`⚠️ Failed to fetch ministry members from church ${churchId}:`, e);
     return [];
   }
+  // Safety net: if ministry church has zero members but default church exists,
+  // try to backfill from default church into ministry church using client-side simulation.
+  // This helps when Cloud Functions aren’t deployed.
+  try {
+    const ministryHasMembers = async () => {
+      if (!currentChurchId) return false;
+      try {
+        const snap = await getDocs(query(collection(db, `churches/${currentChurchId}/members`), limit(1)));
+        return !snap.empty;
+      } catch { return false; }
+    };
+
+    if (currentChurchId && !(await ministryHasMembers()) && defaultChurchId) {
+      console.log('🧪 [Ministry Aggregation] Ministry church appears empty; attempting local backfill...');
+      try {
+        const { simulateBackfillMinistrySync } = await import('./ministrySimulationService');
+        await simulateBackfillMinistrySync(defaultChurchId, currentChurchId);
+      } catch (e) {
+        console.warn('Backfill simulation failed (non-fatal):', e);
+      }
+    }
+  } catch {}
+
 };
 
-// Get aggregated data for a specific ministry across all churches (SuperAdmin style)
+// Get aggregated data for a specific ministry across the user’s accessible scope (no superadmin discovery)
 export const getMinistryAggregatedData = async (
   ministryName: string,
   currentChurchId?: string,
   defaultChurchId?: string
 ): Promise<MinistryAggregatedData> => {
   try {
-    console.log(`🔍 [SuperAdmin Style] Fetching cross-church data for ministry: ${ministryName}`);
+    console.log(`🔍 [Ministry Aggregation] Fetching data for ministry: ${ministryName}`);
 
-    // Step 1: Get all churches that have members with this ministry (like SuperAdmin gets all admin churches)
-    const churchIds = await getChurchesWithMinistry(ministryName);
-    console.log(`📍 [SuperAdmin Style] Found ${churchIds.length} churches with ${ministryName} ministry`);
-
-    // Ensure the leader's default church is included even if discovery missed it
+    // Aggregate from both where available (no global scan)
+    // 1) Current ministry church (native + synced)
+    // 2) User’s default church (source data)
     const allChurchIds = Array.from(new Set([
-      ...churchIds,
+      ...(currentChurchId ? [currentChurchId] : []),
       ...(defaultChurchId ? [defaultChurchId] : [])
     ]));
 
     if (allChurchIds.length === 0) {
-      console.log(`⚠️ No churches found with ${ministryName} ministry`);
+      console.log(`⚠️ No accessible churches resolved for ${ministryName}`);
       return {
         members: [],
         bacentas: [],
@@ -224,8 +288,8 @@ export const getMinistryAggregatedData = async (
       };
     }
 
-    // Step 2: Fetch data from all churches in parallel (like SuperAdmin does)
-    console.log(`🔄 [SuperAdmin Style] Fetching data from ${allChurchIds.length} churches in parallel...`);
+    // Fetch data from the resolved churches (avoid global discovery that violates rules)
+    console.log(`🔄 [Ministry Aggregation] Fetching data from:`, allChurchIds);
     const allPromises = allChurchIds.map(async (churchId) => {
       console.log(`📥 Fetching data from church: ${churchId}`);
       const [members, bacentas, attendance, newBelievers, confirmations, guests] = await Promise.all([
@@ -259,7 +323,7 @@ export const getMinistryAggregatedData = async (
 
     const churchDataArray = await Promise.all(allPromises);
 
-    // Step 3: Aggregate all data (like SuperAdmin aggregates admin data)
+    // Step 3: Aggregate all data (no superadmin-level global scan)
     const aggregatedData: MinistryAggregatedData = {
       members: [],
       bacentas: [],
@@ -267,8 +331,22 @@ export const getMinistryAggregatedData = async (
       newBelievers: [],
       sundayConfirmations: [],
       guests: [],
-  sourceChurches: allChurchIds
+      sourceChurches: allChurchIds
     };
+
+    // If no members found at all after per-church fetch, attempt a collection-group search
+    if (aggregatedData.members.length === 0) {
+      try {
+        console.log('🌐 [Ministry Aggregation] Trying collection-group members fetch as a last resort');
+        const cgMembers = await fetchMinistryMembersViaCollectionGroup(ministryName);
+        if (cgMembers.length) {
+          aggregatedData.members.push(...cgMembers);
+          aggregatedData.members = dedupeMembers(aggregatedData.members, currentChurchId);
+        }
+      } catch (e) {
+        console.warn('Collection-group fallback failed:', e);
+      }
+    }
 
     churchDataArray.forEach(churchData => {
       aggregatedData.members.push(...churchData.members);
@@ -283,21 +361,26 @@ export const getMinistryAggregatedData = async (
   if (currentChurchId) {
       console.log('📥 Fetching native ministry members from current ministry church...');
       try {
-        // Fetch ALL ministry members in the ministry church (include native + those pending/after sync)
-        // We intentionally do not filter by isNativeMinistryMember here so added members never disappear
-        const nativeMembersQuery = query(
-          collection(db, `churches/${currentChurchId}/members`),
-          where('ministry', '==', ministryName)
-        );
-        const nativeSnapshot = await getDocs(nativeMembersQuery);
-        const nativeMembers = nativeSnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data(),
-          sourceChurchId: currentChurchId // Mark as coming from ministry church
-        } as any as Member)).filter(m => m.isActive !== false);
+        // Check church doc first; if not readable, skip silently to avoid errors
+        const churchSnap = await getDoc(doc(db, `churches/${currentChurchId}`));
+        if (churchSnap.exists()) {
+          // Fetch ALL ministry members in the ministry church (include native + those pending/after sync)
+          const nativeMembersQuery = query(
+            collection(db, `churches/${currentChurchId}/members`),
+            where('ministry', '==', ministryName)
+          );
+          const nativeSnapshot = await getDocs(nativeMembersQuery);
+          const nativeMembers = nativeSnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+            sourceChurchId: currentChurchId // Mark as coming from ministry church
+          } as any as Member)).filter(m => m.isActive !== false);
 
-        console.log(`✅ Found ${nativeMembers.length} ministry-church members (native + synced)`);
-        aggregatedData.members.push(...nativeMembers);
+          console.log(`✅ Found ${nativeMembers.length} ministry-church members (native + synced)`);
+          aggregatedData.members.push(...nativeMembers);
+        } else {
+          console.warn('Skip native members — ministry church doc not readable');
+        }
       } catch (e) {
         console.warn('Failed to fetch native ministry members:', e);
       }
@@ -428,6 +511,8 @@ export const setupMinistryDataListeners = (
           });
           currentData.members.push(...withOverrides);
           updateAggregatedData();
+        }, (err) => {
+          console.warn(`[Ministry Data] Members listener error for ${churchId} — skipping`, err?.message || err);
         });
 
         unsubscribers.push(unsubMembers);
@@ -508,6 +593,8 @@ export const setupMinistryDataListeners = (
 
             updateAggregatedData();
           }, 100); // 100ms debounce to allow optimistic updates to settle
+        }, (err) => {
+          console.warn(`[Ministry Data] Attendance listener error for ${churchId} — skipping`, err?.message || err);
         });
 
         unsubscribers.push(unsubAttendance);
@@ -547,6 +634,8 @@ export const setupMinistryDataListeners = (
           });
           currentData.members.push(...withOverrides);
           updateAggregatedData();
+        }, (err) => {
+          console.warn(`[Ministry Data] Default church members listener error for ${defaultChurchId} — skipping`, err?.message || err);
         });
 
         unsubscribers.push(unsubMembers);
@@ -589,6 +678,8 @@ export const setupMinistryDataListeners = (
           });
           currentData.members.push(...withOverrides);
           updateAggregatedData();
+        }, (err) => {
+          console.warn(`[Ministry Data] Native members listener error for ${currentChurchId} — skipping`, err?.message || err);
         });
 
         unsubscribers.push(unsubNativeMembers);
