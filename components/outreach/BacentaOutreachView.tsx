@@ -6,7 +6,8 @@ import Button from '../ui/Button';
 import ConfirmationModal from '../modals/confirmations/ConfirmationModal';
 // removed inline form components after switching to modal
 import Badge from '../ui/Badge';
-import { CalendarIcon, PlusIcon, CheckIcon, ExclamationTriangleIcon, ChevronLeftIcon, ChevronRightIcon, TrashIcon, UserIcon, PhoneIcon } from '../icons';
+import { CalendarIcon, PlusIcon, CheckIcon, ExclamationTriangleIcon, ChevronLeftIcon, ChevronRightIcon, TrashIcon, UserIcon, PhoneIcon, XMarkIcon, FilterIcon } from '../icons';
+import Input from '../ui/Input';
 import BulkOutreachAddModal from './BulkOutreachAddModal';
 import AddOutreachMemberModal from './AddOutreachMemberModal';
 import EditOutreachMemberModal from './EditOutreachMemberModal';
@@ -146,6 +147,27 @@ const BacentaOutreachView: React.FC<BacentaOutreachViewProps> = ({ bacentaId }) 
     }
   };
 
+  // Filtering state
+  const [search, setSearch] = useState('');
+  const [showSonsOfGod, setShowSonsOfGod] = useState(false);
+  const [showComingOnly, setShowComingOnly] = useState(false);
+
+  const filteredMembers = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    return weeklyMembers.filter(m => {
+      if (showSonsOfGod && !m.sonOfGodId) return false;
+      if (showComingOnly && !m.comingStatus) return false;
+      if (!term) return true;
+      const haystack = [
+        m.name,
+        m.roomNumber || '',
+        (m.phoneNumbers||[]).join(' '),
+        m.notComingReason || ''
+      ].join(' ').toLowerCase();
+      return haystack.includes(term);
+    });
+  }, [weeklyMembers, search, showSonsOfGod, showComingOnly]);
+
   if (!bacenta) {
     return <div className="p-8 text-center text-gray-500">Bacenta not found</div>;
   }
@@ -180,12 +202,62 @@ const BacentaOutreachView: React.FC<BacentaOutreachViewProps> = ({ bacentaId }) 
         </Button>
       </div>
 
-      {/* Members table */}
+      {/* Members table with filters */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
-          <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold text-gray-900">Outreach Members ({weeklyMembers.length})</h3>
+        <div className="px-6 py-4 border-b border-gray-200 bg-gray-50 space-y-3">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+            <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+              <span>Outreach Members</span>
+              <span className="text-sm font-normal text-gray-500">{filteredMembers.length} / {weeklyMembers.length}</span>
+            </h3>
             <div className="text-xs text-gray-500">Week starting {new Date(weekStart).toLocaleDateString()}</div>
+          </div>
+          {/* Filter Bar */}
+          <div className="flex flex-col lg:flex-row gap-3 items-stretch lg:items-center">
+            <div className="flex-1 flex items-center gap-2">
+              <div className="relative w-full">
+                <Input
+                  value={search}
+                  onChange={setSearch}
+                  placeholder="Search name, room, phone, reason..."
+                  aria-label="Search outreach members"
+                />
+                {search && (
+                  <button
+                    onClick={() => setSearch('')}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    aria-label="Clear search"
+                  >
+                    <XMarkIcon className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setShowSonsOfGod(s => !s)}
+                className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-colors ${showSonsOfGod ? 'bg-purple-100 border-purple-300 text-purple-700' : 'bg-white hover:bg-gray-100 border-gray-300 text-gray-600'}`}
+              >
+                Sons of God
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowComingOnly(s => !s)}
+                className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-colors ${showComingOnly ? 'bg-green-100 border-green-300 text-green-700' : 'bg-white hover:bg-gray-100 border-gray-300 text-gray-600'}`}
+              >
+                Coming
+              </button>
+              {(showSonsOfGod || showComingOnly || search) && (
+                <button
+                  type="button"
+                  onClick={() => { setSearch(''); setShowSonsOfGod(false); setShowComingOnly(false); }}
+                  className="px-3 py-1.5 rounded-full text-sm font-medium border bg-gray-50 hover:bg-gray-100 text-gray-600 border-gray-300"
+                >
+                  Reset
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
@@ -194,6 +266,12 @@ const BacentaOutreachView: React.FC<BacentaOutreachViewProps> = ({ bacentaId }) 
             <UserIcon className="w-12 h-12 mx-auto mb-4 text-gray-300" />
             <p className="text-lg font-medium mb-2">No outreach members yet</p>
             <p className="text-sm">Add some members using the button above!</p>
+          </div>
+        ) : filteredMembers.length === 0 ? (
+          <div className="text-center py-10 text-gray-500">
+            <FilterIcon className="w-10 h-10 mx-auto mb-3 text-gray-300" />
+            <p className="font-medium">No matches for current filters</p>
+            <p className="text-xs mt-1">Adjust or clear filters to see members.</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -212,7 +290,7 @@ const BacentaOutreachView: React.FC<BacentaOutreachViewProps> = ({ bacentaId }) 
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {weeklyMembers.map((member, index) => (
+                {filteredMembers.map((member, index) => (
                   <tr key={member.id} className={`${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'} hover:bg-blue-50/50 transition-colors duration-200`}>
                     {/* Sticky number cell */}
                     <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 text-center w-12 sticky left-0 z-10 bg-white">

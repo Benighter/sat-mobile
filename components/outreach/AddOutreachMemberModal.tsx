@@ -5,7 +5,7 @@ import Select from '../ui/Select';
 import Checkbox from '../ui/Checkbox';
 import Button from '../ui/Button';
 import { useAppContext } from '../../contexts/FirebaseAppContext';
-import { membersFirebaseService } from '../../services/firebaseService';
+import { sonsOfGodFirebaseService } from '../../services/firebaseService';
 
 interface Props {
   isOpen: boolean;
@@ -46,31 +46,21 @@ const AddOutreachMemberModal: React.FC<Props> = ({ isOpen, onClose, bacentaId, w
     }
   setSubmitting(true);
     try {
-      // If born again, create a Member first (unassigned, outreach origin)
-      let bornAgainMemberId: string | undefined;
+      // If marked born again, create a SonOfGod record instead of immediate Member creation
+      let sonOfGodId: string | undefined;
       if (bornAgain) {
-        // Duplicate guard: if phone provided, try find an existing born-again member with same phone
-        if (normalizedPhone) {
-          try {
-            const allMembers = await membersFirebaseService.getAll();
-            const existing = allMembers.find(m => m.phoneNumber && normalizePhone(m.phoneNumber) === normalizedPhone && m.bornAgainStatus);
-            if (existing) {
-              bornAgainMemberId = existing.id;
-            }
-          } catch {}
-        }
-        if (!bornAgainMemberId) {
-          bornAgainMemberId = await membersFirebaseService.add({
-          firstName: trimmed,
-          lastName: '',
-          phoneNumber: normalizedPhone || '',
-          buildingAddress: '',
-          roomNumber: room || '',
-          bornAgainStatus: true,
-          outreachOrigin: true,
-          bacentaId: '', // keep unassigned until conversion
-          role: 'Member',
+        try {
+          sonOfGodId = await sonsOfGodFirebaseService.add({
+            name: trimmed,
+            phoneNumber: normalizedPhone || undefined,
+            roomNumber: room || undefined,
+            outreachDate: weekStart,
+            bacentaId,
+            notes: '',
+            integrated: false
           } as any);
+        } catch (e) {
+          console.warn('Failed to create SonOfGod record', e);
         }
       }
 
@@ -83,7 +73,7 @@ const AddOutreachMemberModal: React.FC<Props> = ({ isOpen, onClose, bacentaId, w
         comingStatus: coming === 'yes',
         notComingReason: coming === 'no' && reason ? reason : undefined,
         outreachDate: weekStart,
-        ...(bornAgain && bornAgainMemberId ? { bornAgainMemberId } : {}),
+  ...(bornAgain && sonOfGodId ? { sonOfGodId } : {}),
       } as any);
 
       reset();

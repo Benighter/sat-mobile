@@ -5,7 +5,7 @@ import Button from '../ui/Button';
 import Input from '../ui/Input';
 import Select from '../ui/Select';
 import Badge from '../ui/Badge';
-import { UsersIcon, PlusIcon, CheckIcon, ExclamationTriangleIcon, ChevronLeftIcon, PeopleIcon, TrashIcon } from '../icons';
+import { UsersIcon, PlusIcon, CheckIcon, ExclamationTriangleIcon, ChevronLeftIcon, PeopleIcon, TrashIcon, XMarkIcon, FilterIcon } from '../icons';
 import AllBacentasView from '../bacentas/AllBacentasView';
 import BulkOutreachAddModal from './BulkOutreachAddModal';
 import AddOutreachMemberModal from './AddOutreachMemberModal';
@@ -28,6 +28,21 @@ const BacentaDetail: React.FC<{
   const [reason, setReason] = useState('');
   const [showBulk, setShowBulk] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
+
+  // Filters
+  const [search, setSearch] = useState('');
+  const [showSonsOfGod, setShowSonsOfGod] = useState(false);
+  const [showComingOnly, setShowComingOnly] = useState(false);
+  const filteredMembers = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    return members.filter(m => {
+      if (showSonsOfGod && !m.sonOfGodId) return false;
+      if (showComingOnly && !m.comingStatus) return false;
+      if (!term) return true;
+      const haystack = [m.name, m.roomNumber || '', (m.phoneNumbers||[]).join(' '), m.notComingReason || ''].join(' ').toLowerCase();
+      return haystack.includes(term);
+    });
+  }, [members, search, showSonsOfGod, showComingOnly]);
 
   // inline add handler replaced by modal
 
@@ -159,7 +174,50 @@ const BacentaDetail: React.FC<{
 
             {members.length > 0 ? (
               <div className="grid gap-4">
-                {members.map(m => (
+                {/* Filter bar */}
+                <div className="bg-white/70 dark:bg-dark-800/60 backdrop-blur p-4 rounded-xl border border-gray-200 dark:border-dark-600 flex flex-col md:flex-row gap-3 items-stretch md:items-center">
+                  <div className="flex-1 relative">
+                    <Input
+                      value={search}
+                      onChange={setSearch}
+                      placeholder="Search name, room, phone, reason..."
+                    />
+                    {search && (
+                      <button onClick={()=>setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600" aria-label="Clear search">
+                        <XMarkIcon className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      onClick={()=>setShowSonsOfGod(s=>!s)}
+                      className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-colors ${showSonsOfGod ? 'bg-purple-100 border-purple-300 text-purple-700' : 'bg-white dark:bg-dark-700 border-gray-300 dark:border-dark-500 text-gray-600 dark:text-dark-300 hover:bg-gray-100 dark:hover:bg-dark-600'}`}
+                    >
+                      Sons of God
+                    </button>
+                    <button
+                      onClick={()=>setShowComingOnly(s=>!s)}
+                      className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-colors ${showComingOnly ? 'bg-green-100 border-green-300 text-green-700' : 'bg-white dark:bg-dark-700 border-gray-300 dark:border-dark-500 text-gray-600 dark:text-dark-300 hover:bg-gray-100 dark:hover:bg-dark-600'}`}
+                    >
+                      Coming
+                    </button>
+                    {(showSonsOfGod || showComingOnly || search) && (
+                      <button
+                        onClick={()=>{setSearch(''); setShowSonsOfGod(false); setShowComingOnly(false);}}
+                        className="px-3 py-1.5 rounded-full text-sm font-medium border bg-gray-50 dark:bg-dark-700 hover:bg-gray-100 text-gray-600 dark:text-dark-300 border-gray-300 dark:border-dark-500"
+                      >Reset</button>
+                    )}
+                  </div>
+                  <div className="text-xs text-gray-500 dark:text-dark-400 font-medium">{filteredMembers.length} / {members.length}</div>
+                </div>
+        {filteredMembers.length === 0 && (
+                  <div className="text-center py-10 text-gray-500 dark:text-dark-400">
+          <FilterIcon className="w-10 h-10 mx-auto mb-3 text-gray-300 dark:text-dark-500" />
+                    <p className="font-medium">No matches for current filters</p>
+                    <p className="text-xs mt-1">Adjust or clear filters to see members.</p>
+                  </div>
+                )}
+                {filteredMembers.map(m => (
                   <div key={m.id} className="group relative">
                     <div className="absolute -inset-0.5 bg-gradient-to-r from-gray-200 to-gray-300 dark:from-dark-600 dark:to-dark-500 rounded-2xl opacity-0 group-hover:opacity-100 transition duration-300 blur-sm"></div>
                     <div className="relative glass p-6 rounded-2xl border border-white/20 dark:border-dark-600/50 backdrop-blur-xl">

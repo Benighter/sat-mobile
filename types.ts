@@ -165,6 +165,23 @@ export interface OutreachMember {
   guestId?: string; // Linked guest (for confirmations/migration)
   /** If set, links to the created 'Born Again' member record */
   bornAgainMemberId?: string;
+  /** New flow: if set, this outreach contact is a Son of God awaiting integration */
+  sonOfGodId?: string;
+}
+
+// Sons of God (born again from outreach but not yet integrated as full members)
+export interface SonOfGod {
+  id: string;
+  name: string;
+  phoneNumber?: string;
+  roomNumber?: string;
+  outreachMemberId?: string; // link back to outreach record
+  outreachDate: string; // YYYY-MM-DD
+  bacentaId: string; // outreach bacenta context
+  integrated?: boolean; // once true, has been turned into a Member
+  integratedMemberId?: string; // resulting member id after integration
+  createdDate: string; // ISO
+  lastUpdated: string; // ISO
 }
 
 // Bacenta Meetings types

@@ -32,7 +32,7 @@ import {
   fetchSignInMethodsForEmail
 } from 'firebase/auth';
 import { db, auth } from '../firebase.config';
-import { Member, Bacenta, AttendanceRecord, NewBeliever, SundayConfirmation, Guest, MemberDeletionRequest, DeletionRequestStatus, OutreachBacenta, OutreachMember, PrayerRecord, MeetingRecord, TitheRecord, BussingRecord, TransportRecord, } from '../types';
+import { Member, Bacenta, AttendanceRecord, NewBeliever, SundayConfirmation, Guest, MemberDeletionRequest, DeletionRequestStatus, OutreachBacenta, OutreachMember, PrayerRecord, MeetingRecord, TitheRecord, BussingRecord, TransportRecord, SonOfGod } from '../types';
 // Lightweight inline type to avoid circular heavy imports for new feature (kept local to service)
 export interface HeadCountRecord {
   id: string; // `${date}_${section}`
@@ -1304,6 +1304,54 @@ export const outreachMembersFirebaseService = {
     return onSnapshot(ref, (snap) => {
       const items = snap.docs.map(doc => ({ ...doc.data(), id: doc.id })) as OutreachMember[];
       items.sort((a, b) => (b.outreachDate || '').localeCompare(a.outreachDate || ''));
+      callback(items);
+    });
+  }
+};
+
+// Sons of God Service (holds born again outreach contacts awaiting integration to Members)
+export const sonsOfGodFirebaseService = {
+  getAll: async (): Promise<SonOfGod[]> => {
+    try {
+      const ref = collection(db, getChurchCollectionPath('sonsOfGod'));
+      const snap = await getDocs(ref);
+      const items = snap.docs.map(d => ({ id: d.id, ...d.data() })) as SonOfGod[];
+      items.sort((a,b)=> (b.outreachDate||'').localeCompare(a.outreachDate||''));
+      return items;
+    } catch (e: any) {
+      throw new Error(`Failed to fetch Sons of God: ${e.message}`);
+    }
+  },
+  add: async (data: Omit<SonOfGod, 'id' | 'createdDate' | 'lastUpdated'>): Promise<string> => {
+    try {
+      const ref = collection(db, getChurchCollectionPath('sonsOfGod'));
+      const docRef = await addDoc(ref, { ...data, integrated: false, createdDate: new Date().toISOString(), lastUpdated: new Date().toISOString() });
+      return docRef.id;
+    } catch (e: any) {
+      throw new Error(`Failed to add Son of God: ${e.message}`);
+    }
+  },
+  update: async (id: string, updates: Partial<SonOfGod>): Promise<void> => {
+    try {
+      const refDoc = doc(db, getChurchCollectionPath('sonsOfGod'), id);
+      await updateDoc(refDoc, { ...updates, lastUpdated: new Date().toISOString() });
+    } catch (e: any) {
+      throw new Error(`Failed to update Son of God: ${e.message}`);
+    }
+  },
+  delete: async (id: string): Promise<void> => {
+    try {
+      const refDoc = doc(db, getChurchCollectionPath('sonsOfGod'), id);
+      await deleteDoc(refDoc);
+    } catch (e: any) {
+      throw new Error(`Failed to delete Son of God: ${e.message}`);
+    }
+  },
+  onSnapshot: (callback: (items: SonOfGod[]) => void): Unsubscribe => {
+    const ref = collection(db, getChurchCollectionPath('sonsOfGod'));
+    return onSnapshot(ref, snap => {
+      const items = snap.docs.map(d => ({ id: d.id, ...d.data() })) as SonOfGod[];
+      items.sort((a,b)=> (b.outreachDate||'').localeCompare(a.outreachDate||''));
       callback(items);
     });
   }

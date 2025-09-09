@@ -2,7 +2,7 @@
 import React, { createContext, useState, useEffect, useCallback, ReactNode, useMemo, useRef } from 'react';
 import { collection, doc, getDocs, onSnapshot, query as fsQuery, where as fsWhere, setDoc } from 'firebase/firestore';
 import { db } from '../firebase.config';
-import { Member, AttendanceRecord, Bacenta, TabOption, AttendanceStatus, NewBeliever, SundayConfirmation, ConfirmationStatus, Guest, MemberDeletionRequest, OutreachBacenta, OutreachMember, PrayerRecord, PrayerStatus, MeetingRecord, TitheRecord, TransportRecord, CrossTenantAccessLink, CrossTenantPermission } from '../types';
+import { Member, AttendanceRecord, Bacenta, TabOption, AttendanceStatus, NewBeliever, SundayConfirmation, ConfirmationStatus, Guest, MemberDeletionRequest, OutreachBacenta, OutreachMember, PrayerRecord, PrayerStatus, MeetingRecord, TitheRecord, TransportRecord, CrossTenantAccessLink, CrossTenantPermission, SonOfGod } from '../types';
 import { FIXED_TABS, DEFAULT_TAB_ID } from '../constants';
 import { sessionStateStorage } from '../utils/localStorage';
 import { getSundaysOfMonth } from '../utils/dateUtils';
@@ -233,6 +233,8 @@ interface AppContextType {
   outreachMembers: OutreachMember[];
   allOutreachMembers: OutreachMember[];
   outreachMonth: string;
+  // Sons of God (born again outreach contacts not yet integrated)
+  sonsOfGod?: SonOfGod[];
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -277,6 +279,8 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
   });
+  // Sons of God collection (born again outreach contacts awaiting integration)
+  const [sonsOfGod, setSonsOfGod] = useState<SonOfGod[]>([]);
 
 
   // Confirmation modal
@@ -502,6 +506,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
 
         // Real-time guard: if the user's profile becomes inactive or deleted while logged in, sign out immediately
         try {
+          if(!user) return; // narrow for TS
           const unsubUserDoc = onSnapshot(doc(db, 'users', user.uid), async (snap) => {
             try {
               if (!snap.exists()) return;
@@ -702,6 +707,21 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
           setAllOutreachMembers(items);
         });
         unsubscribers.push(unsubscribeAllOutreachMembers);
+
+        // Listen to Sons of God
+        try {
+          (async () => {
+            try {
+              const { sonsOfGodFirebaseService } = await import('../services/firebaseService');
+              const unsubSons = sonsOfGodFirebaseService.onSnapshot(items => setSonsOfGod(items));
+              unsubscribers.push(unsubSons);
+            } catch (inner) {
+              console.warn('[Listeners] SonsOfGod listener failed inner', inner);
+            }
+          })();
+        } catch (e) {
+          console.warn('[Listeners] SonsOfGod listener failed', e);
+        }
 
         // Listen to attendance
         const unsubscribeAttendance = attendanceFirebaseService.onSnapshot((records) => {
@@ -1819,10 +1839,8 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
         }
       }
 
-      // If a born again member was created from outreach and this person was NOT converted,
-      // also remove them from Sons of God per requirement
+      // Legacy clean-up path: if a bornAgainMemberId (old flow) exists and not converted, delete that member record
       if (om?.bornAgainMemberId && !om?.convertedMemberId) {
-        // Only delete the linked born-again member if it still exists
         const linkedExists = members.some(m => m.id === om.bornAgainMemberId);
         if (linkedExists) {
           try {
@@ -1830,6 +1848,16 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
           } catch (delErr) {
             console.warn('Failed to delete linked born-again member during outreach deletion', delErr);
           }
+        }
+      }
+
+      // New flow clean-up: if a SonOfGod record exists and the outreach member was never converted, delete the SonOfGod entry
+      if (om?.sonOfGodId && !om?.convertedMemberId) {
+        try {
+          const { sonsOfGodFirebaseService } = await import('../services/firebaseService');
+          await sonsOfGodFirebaseService.delete(om.sonOfGodId);
+        } catch (sogErr) {
+          console.warn('Failed to delete linked SonOfGod during outreach deletion', sogErr);
         }
       }
 
@@ -1851,41 +1879,76 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
       const om = outreachMembers.find(o => o.id === outreachMemberId);
       if (!om) throw new Error('Outreach member not found');
 
-      let newMemberId: string | undefined = om.bornAgainMemberId;
+      let newMemberId: string | undefined = undefined;
 
-      // If we have a bornAgainMemberId but the actual member is missing (deleted earlier), recreate
-      const existing = newMemberId ? members.find(m => m.id === newMemberId) : undefined;
-      if (newMemberId && !existing) {
-        newMemberId = undefined; // force recreation below
+      // New preferred flow: SonOfGod integration
+      if (om.sonOfGodId) {
+        try {
+          const { sonsOfGodFirebaseService } = await import('../services/firebaseService');
+          const sons = await sonsOfGodFirebaseService.getAll(); // quick fetch; collection is usually small
+          const sog = sons.find(s => s.id === om.sonOfGodId);
+          if (sog && sog.integrated && sog.integratedMemberId) {
+            newMemberId = sog.integratedMemberId; // already integrated previously; just sync outreach
+          } else {
+            // Create member from SonOfGod record
+            const memberData: Omit<Member, 'id' | 'createdDate' | 'lastUpdated'> = {
+              firstName: (sog?.name || om.name).trim(),
+              lastName: '',
+              phoneNumber: sog?.phoneNumber || (om.phoneNumbers && om.phoneNumbers[0]) || '',
+              buildingAddress: '',
+              roomNumber: sog?.roomNumber || om.roomNumber || '',
+              bornAgainStatus: true,
+              outreachOrigin: true,
+              bacentaId: sog?.bacentaId || om.bacentaId,
+              linkedBacentaIds: [],
+              bacentaLeaderId: '',
+              role: 'Member'
+            };
+            newMemberId = await membersFirebaseService.add(memberData);
+            // Mark SonOfGod as integrated
+            if (sog) {
+              await sonsOfGodFirebaseService.update(sog.id, { integrated: true, integratedMemberId: newMemberId });
+            }
+          }
+        } catch (sogErr) {
+          console.warn('Failed SonOfGod integration path, falling back to legacy path', sogErr);
+        }
       }
 
+      // Legacy path (bornAgainMemberId) retained for backward compatibility
       if (!newMemberId) {
-        // Create a new born-again member now that they are converted
-        const memberData: Omit<Member, 'id' | 'createdDate' | 'lastUpdated'> = {
-          firstName: om.name.trim(),
-          lastName: '',
-          phoneNumber: (om.phoneNumbers && om.phoneNumbers[0]) || '',
-          buildingAddress: '',
-          roomNumber: om.roomNumber || '',
-          bornAgainStatus: true,
-          outreachOrigin: true,
-          bacentaId: om.bacentaId,
-          linkedBacentaIds: [],
-          bacentaLeaderId: '',
-          role: 'Member'
-        };
-        newMemberId = await membersFirebaseService.add(memberData);
-        await outreachMembersFirebaseService.update(outreachMemberId, { bornAgainMemberId: newMemberId });
-      } else {
-        // Ensure the existing born-again member is assigned and up to date
-        await membersFirebaseService.update(newMemberId, {
-          bacentaId: om.bacentaId,
-          roomNumber: om.roomNumber || undefined,
-          phoneNumber: (om.phoneNumbers && om.phoneNumbers[0]) || undefined,
-          bornAgainStatus: true,
-          outreachOrigin: true,
-          role: 'Member'
-        });
+        let legacyId = om.bornAgainMemberId;
+        const existingLegacy = legacyId ? members.find(m => m.id === legacyId) : undefined;
+        if (legacyId && !existingLegacy) {
+          legacyId = undefined; // force recreation
+        }
+        if (!legacyId) {
+          const memberData: Omit<Member, 'id' | 'createdDate' | 'lastUpdated'> = {
+            firstName: om.name.trim(),
+            lastName: '',
+            phoneNumber: (om.phoneNumbers && om.phoneNumbers[0]) || '',
+            buildingAddress: '',
+            roomNumber: om.roomNumber || '',
+            bornAgainStatus: true,
+            outreachOrigin: true,
+            bacentaId: om.bacentaId,
+            linkedBacentaIds: [],
+            bacentaLeaderId: '',
+            role: 'Member'
+          };
+            legacyId = await membersFirebaseService.add(memberData);
+            await outreachMembersFirebaseService.update(outreachMemberId, { bornAgainMemberId: legacyId });
+        } else {
+          await membersFirebaseService.update(legacyId, {
+            bacentaId: om.bacentaId,
+            roomNumber: om.roomNumber || undefined,
+            phoneNumber: (om.phoneNumbers && om.phoneNumbers[0]) || undefined,
+            bornAgainStatus: true,
+            outreachOrigin: true,
+            role: 'Member'
+          });
+        }
+        newMemberId = legacyId;
       }
 
       // If there is a linked guest, transfer confirmations
@@ -1906,7 +1969,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
         await guestFirebaseService.delete(om.guestId);
       }
 
-      // Mark outreach member as converted
+      // Mark outreach member as converted (store convertedMemberId)
       await outreachMembersFirebaseService.update(outreachMemberId, { convertedMemberId: newMemberId });
 
       // Notify linked admins that the leader converted someone to member
@@ -3634,6 +3697,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     outreachMembers,
     allOutreachMembers,
     outreachMonth,
+  sonsOfGod,
     addOutreachBacentaHandler,
     updateOutreachBacentaHandler,
     deleteOutreachBacentaHandler,

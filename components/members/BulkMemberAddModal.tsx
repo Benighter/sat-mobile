@@ -25,6 +25,21 @@ const BulkMemberAddModal: React.FC<BulkMemberAddModalProps> = ({
   const [step, setStep] = useState<'input' | 'preview' | 'processing' | 'complete'>('input');
   const [addedCount, setAddedCount] = useState(0);
   const [errors, setErrors] = useState<string[]>([]);
+  
+  // Editable state for preview step
+  interface EditableMember {
+    original: ParseResult['members'][number];
+    current: {
+      firstName: string;
+      lastName: string;
+      phoneNumber?: string;
+      buildingAddress?: string;
+    };
+    isEditing: boolean;
+    modified: boolean; // differs from original
+    errors: Partial<Record<'firstName' | 'phoneNumber' | 'buildingAddress', string>>;
+  }
+  const [editableMembers, setEditableMembers] = useState<EditableMember[]>([]);
 
   useEffect(() => {
     if (isOpen) {
@@ -68,6 +83,21 @@ const BulkMemberAddModal: React.FC<BulkMemberAddModalProps> = ({
 
   const handlePreview = () => {
     if (parseResult && parseResult.members.length > 0) {
+      // Initialize editable copies
+      setEditableMembers(
+        parseResult.members.map(m => ({
+          original: m,
+            current: {
+              firstName: m.firstName || '',
+              lastName: m.lastName || '',
+              phoneNumber: m.phoneNumber || '',
+              buildingAddress: m.buildingAddress || ''
+            },
+            isEditing: false,
+            modified: false,
+            errors: {}
+        }))
+      );
       setStep('preview');
     }
   };
@@ -109,6 +139,44 @@ const BulkMemberAddModal: React.FC<BulkMemberAddModalProps> = ({
   };
 
   const selectedBacenta = bacentas.find(b => b.id === selectedBacentaId);
+
+  // Validation helpers
+  const phoneRegex = /^\+?\d{8,15}$/; // Simplified phone validation
+  const validateMember = (m: EditableMember['current']) => {
+    const errs: EditableMember['errors'] = {};
+    if (!m.firstName.trim()) errs.firstName = 'First name required';
+    const phone = (m.phoneNumber || '').replace(/[\s-]/g, '');
+    if (phone && !phoneRegex.test(phone)) errs.phoneNumber = 'Invalid phone';
+    return errs;
+  };
+
+  const beginEdit = (index: number) => {
+    setEditableMembers(prev => prev.map((em,i)=> i===index ? { ...em, isEditing: true } : em));
+  };
+  const cancelEdit = (index: number) => {
+    setEditableMembers(prev => prev.map((em,i)=> i===index ? { ...em, current: { firstName: em.original.firstName || '', lastName: em.original.lastName || '', phoneNumber: em.original.phoneNumber || '', buildingAddress: em.original.buildingAddress || '' }, errors: {}, isEditing: false, modified: false } : em));
+  };
+  const updateField = (index: number, field: keyof EditableMember['current'], value: string) => {
+    setEditableMembers(prev => prev.map((em,i)=> {
+      if (i!==index) return em;
+      const current = { ...em.current, [field]: value };
+      const errors = validateMember(current);
+      // Determine modified status
+      const modified = (
+        current.firstName !== (em.original.firstName || '') ||
+        current.lastName !== (em.original.lastName || '') ||
+        (current.phoneNumber || '') !== (em.original.phoneNumber || '') ||
+        (current.buildingAddress || '') !== (em.original.buildingAddress || '')
+      );
+      return { ...em, current, errors, modified };
+    }));
+  };
+  const saveEdit = (index: number) => {
+    setEditableMembers(prev => prev.map((em,i)=> i===index ? { ...em, isEditing: false } : em));
+  };
+  const removeEntry = (index: number) => {
+    setEditableMembers(prev => prev.filter((_,i)=> i!==index));
+  };
 
   return (
     <Modal 
@@ -276,7 +344,7 @@ const BulkMemberAddModal: React.FC<BulkMemberAddModalProps> = ({
           <>
             <div className="bg-green-50 border border-green-200 rounded-xl p-4">
               <h4 className="font-medium text-green-800 mb-1">
-                Ready to Add {parseResult.members.length} Members
+                Ready to Add {editableMembers.length} Member{editableMembers.length !== 1 ? 's' : ''}
               </h4>
               <p className="text-sm text-green-700">
                 Review the parsed information below. Members will be added to{' '}
@@ -285,46 +353,99 @@ const BulkMemberAddModal: React.FC<BulkMemberAddModalProps> = ({
             </div>
 
             <div className="max-h-96 overflow-y-auto space-y-3">
-              {parseResult.members.map((member, index) => (
-                <div key={index} className="border border-gray-200 rounded-lg p-4">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center space-x-2 mb-2">
-                        <h5 className="font-medium text-gray-800">
-                          {member.firstName} {member.lastName}
-                        </h5>
-                        {getConfidenceIcon(member.confidence)}
-                        <span className={`text-xs font-medium ${getConfidenceColor(member.confidence)}`}>
-                          {Math.round(member.confidence * 100)}% confidence
-                        </span>
+              {editableMembers.map((em, index) => {
+                const member = em.original;
+                return (
+                  <div key={index} className={`border rounded-lg p-4 relative ${em.modified ? 'border-blue-400 ring-1 ring-blue-300' : 'border-gray-200'}`}>
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center space-x-2 mb-2">
+                          {em.isEditing ? (
+                            <>
+                              <input
+                                value={em.current.firstName}
+                                onChange={e=>updateField(index,'firstName', e.target.value)}
+                                placeholder="First name"
+                                className="px-2 py-1 border rounded text-sm w-32"
+                              />
+                              <input
+                                value={em.current.lastName}
+                                onChange={e=>updateField(index,'lastName', e.target.value)}
+                                placeholder="Last name"
+                                className="px-2 py-1 border rounded text-sm w-32"
+                              />
+                            </>
+                          ) : (
+                            <h5 className="font-medium text-gray-800">
+                              {em.current.firstName} {em.current.lastName}
+                            </h5>
+                          )}
+                          {getConfidenceIcon(member.confidence)}
+                          <span className={`text-xs font-medium ${getConfidenceColor(member.confidence)}`}>
+                            {Math.round(member.confidence * 100)}% confidence
+                          </span>
+                          {em.modified && <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">Edited</span>}
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
+                          <div>
+                            <span className="text-gray-600">Phone:</span>
+                            {em.isEditing ? (
+                              <input
+                                value={em.current.phoneNumber}
+                                onChange={e=>updateField(index,'phoneNumber', e.target.value)}
+                                placeholder="Phone"
+                                className="ml-2 px-2 py-1 border rounded w-40"
+                              />
+                            ) : (
+                              <span className="ml-2">{em.current.phoneNumber || 'Not detected'}</span>
+                            )}
+                            {em.errors.phoneNumber && <span className="block text-xs text-red-600">{em.errors.phoneNumber}</span>}
+                          </div>
+                          <div>
+                            <span className="text-gray-600">Address:</span>
+                            {em.isEditing ? (
+                              <input
+                                value={em.current.buildingAddress}
+                                onChange={e=>updateField(index,'buildingAddress', e.target.value)}
+                                placeholder="Address"
+                                className="ml-2 px-2 py-1 border rounded w-48"
+                              />
+                            ) : (
+                              <span className="ml-2">{em.current.buildingAddress || 'Not detected'}</span>
+                            )}
+                          </div>
+                        </div>
+                        {member.issues.length > 0 && !em.isEditing && (
+                          <div className="mt-2">
+                            <p className="text-xs text-yellow-600 mb-1">Issues:</p>
+                            <ul className="text-xs text-yellow-600">
+                              {member.issues.map((issue, i) => (
+                                <li key={i}>• {issue}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                        {em.errors.firstName && <p className="text-xs text-red-600 mt-1">{em.errors.firstName}</p>}
                       </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
-                        <div>
-                          <span className="text-gray-600">Phone:</span>
-                          <span className="ml-2">{member.phoneNumber || 'Not detected'}</span>
-                        </div>
-                        <div>
-                          <span className="text-gray-600">Address:</span>
-                          <span className="ml-2">{member.buildingAddress || 'Not detected'}</span>
-                        </div>
+                      <div className="flex flex-col space-y-1 ml-4">
+                        {!em.isEditing && (
+                          <Button type="button" size="xs" variant="secondary" onClick={()=>beginEdit(index)}>Edit</Button>
+                        )}
+                        {em.isEditing && (
+                          <>
+                            <Button type="button" size="xs" variant="primary" onClick={()=>saveEdit(index)} disabled={Object.keys(em.errors).length>0}>Save</Button>
+                            <Button type="button" size="xs" variant="secondary" onClick={()=>cancelEdit(index)}>Cancel</Button>
+                          </>
+                        )}
+                        <Button type="button" size="xs" variant="danger" onClick={()=>removeEntry(index)}>Remove</Button>
                       </div>
-                      {member.issues.length > 0 && (
-                        <div className="mt-2">
-                          <p className="text-xs text-yellow-600 mb-1">Issues:</p>
-                          <ul className="text-xs text-yellow-600">
-                            {member.issues.map((issue, i) => (
-                              <li key={i}>• {issue}</li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
+                    </div>
+                    <div className="mt-2 text-xs text-gray-500 bg-gray-50 p-2 rounded">
+                      <strong>Original:</strong> {member.rawText}
                     </div>
                   </div>
-                  <div className="mt-2 text-xs text-gray-500 bg-gray-50 p-2 rounded">
-                    <strong>Original:</strong> {member.rawText}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
 
             <div className="flex justify-end space-x-3">
@@ -334,9 +455,15 @@ const BulkMemberAddModal: React.FC<BulkMemberAddModalProps> = ({
               <Button
                 type="button"
                 variant="primary"
-                onClick={handleAddMembers}
+                onClick={async () => {
+                  // Re-run simple validation before submit
+                  const validated = editableMembers.map(em => ({ ...em, errors: validateMember(em.current) }));
+                  const hasErrors = validated.some(v => Object.keys(v.errors).length>0);
+                  if (hasErrors) { setEditableMembers(validated); return; }
+                  await handleAddMembers();
+                }}
               >
-                Add All Members
+                Add All ({editableMembers.length})
               </Button>
             </div>
           </>

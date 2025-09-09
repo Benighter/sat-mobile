@@ -3,7 +3,7 @@ import React from 'react';
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'primary' | 'secondary' | 'danger' | 'ghost' | 'success';
-  size?: 'sm' | 'md' | 'lg';
+  size?: 'xs' | 'sm' | 'md' | 'lg';
   leftIcon?: React.ReactNode;
   rightIcon?: React.ReactNode;
   loading?: boolean;
@@ -30,10 +30,11 @@ const Button: React.FC<ButtonProps> = ({
   };
 
   const sizeStyles = {
+    xs: "px-2 py-1 text-xs min-h-[32px]",
     sm: "px-3 py-2 text-sm",
     md: "px-4 py-2.5 text-sm sm:text-base",
     lg: "px-6 py-3 text-base sm:text-lg",
-  };
+  } as const;
 
   return (
     <button

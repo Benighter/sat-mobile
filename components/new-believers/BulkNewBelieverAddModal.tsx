@@ -20,6 +20,15 @@ const BulkNewBelieverAddModal: React.FC<BulkNewBelieverAddModalProps> = ({
   const [step, setStep] = useState<'input' | 'preview' | 'processing' | 'complete'>('input');
   const [addedCount, setAddedCount] = useState(0);
   const [errors, setErrors] = useState<string[]>([]);
+  
+  interface EditableNB {
+    original: NewBelieverParseResult['newBelievers'][number];
+    current: { name: string; surname: string; contact?: string };
+    isEditing: boolean;
+    modified: boolean;
+    errors: Partial<Record<'name' | 'surname' | 'contact', string>>;
+  }
+  const [editableBelievers, setEditableBelievers] = useState<EditableNB[]>([]);
 
   useEffect(() => {
     if (isOpen) {
@@ -61,6 +70,13 @@ const BulkNewBelieverAddModal: React.FC<BulkNewBelieverAddModalProps> = ({
 
   const handlePreview = () => {
     if (parseResult && parseResult.newBelievers.length > 0) {
+      setEditableBelievers(parseResult.newBelievers.map(nb => ({
+        original: nb,
+        current: { name: nb.name || '', surname: nb.surname || '', contact: nb.contact || '' },
+        isEditing: false,
+        modified: false,
+        errors: {}
+      })));
       setStep('preview');
     }
   };
@@ -98,6 +114,31 @@ const BulkNewBelieverAddModal: React.FC<BulkNewBelieverAddModalProps> = ({
     if (confidence >= 0.6) return <ExclamationTriangleIcon className="w-4 h-4 text-yellow-600" />;
     return <XCircleIcon className="w-4 h-4 text-red-600" />;
   };
+
+  // Inline edit helpers
+  const contactRegex = /^(\+?\d{8,15}|[^@\s]+@[^@\s]+\.[^@\s]+)$/; // phone or email basic
+  const validate = (c: EditableNB['current']) => {
+    const errs: EditableNB['errors'] = {};
+    if (!c.name.trim()) errs.name = 'Name required';
+    if (!c.surname.trim()) errs.surname = 'Surname required';
+    if (c.contact && !contactRegex.test(c.contact.trim())) errs.contact = 'Invalid contact';
+    return errs;
+  };
+  const beginEdit = (i: number) => setEditableBelievers(prev => prev.map((eb,idx)=> idx===i ? { ...eb, isEditing: true } : eb));
+  const cancelEdit = (i: number) => setEditableBelievers(prev => prev.map((eb,idx)=> idx===i ? { ...eb, current: { name: eb.original.name || '', surname: eb.original.surname || '', contact: eb.original.contact || '' }, modified: false, errors: {}, isEditing:false } : eb));
+  const updateField = (i: number, field: keyof EditableNB['current'], value: string) => setEditableBelievers(prev => prev.map((eb,idx)=>{
+    if (idx!==i) return eb;
+    const current = { ...eb.current, [field]: value };
+    const errors = validate(current);
+    const modified = (
+      current.name !== (eb.original.name || '') ||
+      current.surname !== (eb.original.surname || '') ||
+      (current.contact||'') !== (eb.original.contact||'')
+    );
+    return { ...eb, current, errors, modified };
+  }));
+  const saveEdit = (i: number) => setEditableBelievers(prev => prev.map((eb,idx)=> idx===i ? { ...eb, isEditing:false } : eb));
+  const removeEntry = (i: number) => setEditableBelievers(prev => prev.filter((_,idx)=> idx!==i));
 
   return (
     <Modal 
@@ -219,51 +260,81 @@ const BulkNewBelieverAddModal: React.FC<BulkNewBelieverAddModalProps> = ({
             </div>
 
             <div className="space-y-3 max-h-96 overflow-y-auto">
-              {parseResult.newBelievers.map((believer, index) => (
-                <div key={index} className="bg-white border border-gray-200 rounded-lg p-4">
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center space-x-2 mb-2">
-                      {getConfidenceIcon(believer.confidence)}
-                      <span className="font-medium text-gray-900">
-                        {believer.name} {believer.surname}
-                      </span>
-                      <span className={`text-xs px-2 py-1 rounded-full ${getConfidenceColor(believer.confidence)}`}>
-                        {Math.round(believer.confidence * 100)}% confident
-                      </span>
+              {editableBelievers.map((eb,index)=> {
+                const believer = eb.original;
+                return (
+                  <div key={index} className={`bg-white border rounded-lg p-4 ${eb.modified ? 'border-blue-400 ring-1 ring-blue-300' : 'border-gray-200'}`}>
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-center space-x-2 mb-2">
+                        {getConfidenceIcon(believer.confidence)}
+                        {eb.isEditing ? (
+                          <>
+                            <input value={eb.current.name} onChange={e=>updateField(index,'name', e.target.value)} placeholder="Name" className="px-2 py-1 border rounded text-sm w-28" />
+                            <input value={eb.current.surname} onChange={e=>updateField(index,'surname', e.target.value)} placeholder="Surname" className="px-2 py-1 border rounded text-sm w-32" />
+                          </>
+                        ) : (
+                          <span className="font-medium text-gray-900">{eb.current.name} {eb.current.surname}</span>
+                        )}
+                        <span className={`text-xs px-2 py-1 rounded-full ${getConfidenceColor(believer.confidence)}`}>
+                          {Math.round(believer.confidence * 100)}% confident
+                        </span>
+                        {eb.modified && <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">Edited</span>}
+                      </div>
+                      <div className="flex flex-col space-y-1 ml-2">
+                        {!eb.isEditing && <Button size="xs" variant="secondary" onClick={()=>beginEdit(index)}>Edit</Button>}
+                        {eb.isEditing && (
+                          <>
+                            <Button size="xs" variant="primary" disabled={Object.keys(eb.errors).length>0} onClick={()=>saveEdit(index)}>Save</Button>
+                            <Button size="xs" variant="secondary" onClick={()=>cancelEdit(index)}>Cancel</Button>
+                          </>
+                        )}
+                        <Button size="xs" variant="danger" onClick={()=>removeEntry(index)}>Remove</Button>
+                      </div>
                     </div>
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <span className="text-gray-600">Contact:</span>
+                        {eb.isEditing ? (
+                          <input value={eb.current.contact} onChange={e=>updateField(index,'contact', e.target.value)} placeholder="Phone or Email" className="ml-2 px-2 py-1 border rounded w-40" />
+                        ) : <span className="ml-2 text-gray-900">{eb.current.contact || 'Not provided'}</span>}
+                        {eb.errors.contact && <span className="block text-xs text-red-600">{eb.errors.contact}</span>}
+                      </div>
+                      <div>
+                        <span className="text-gray-600">Original:</span>
+                        <span className="ml-2 text-gray-500 italic">{believer.rawText}</span>
+                      </div>
+                    </div>
+                    {(believer.issues.length > 0 && !eb.isEditing) && (
+                      <div className="mt-2 p-2 bg-yellow-50 rounded border border-yellow-200">
+                        <h6 className="text-xs font-medium text-yellow-800">Potential Issues:</h6>
+                        <ul className="text-xs text-yellow-700 mt-1">
+                          {believer.issues.map((issue, issueIndex) => (
+                            <li key={issueIndex}>• {issue}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    {eb.errors.name && <p className="text-xs text-red-600 mt-1">{eb.errors.name}</p>}
+                    {eb.errors.surname && <p className="text-xs text-red-600">{eb.errors.surname}</p>}
                   </div>
-                  
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <span className="text-gray-600">Contact:</span>
-                      <span className="ml-2 text-gray-900">{believer.contact || 'Not provided'}</span>
-                    </div>
-                    <div>
-                      <span className="text-gray-600">Original:</span>
-                      <span className="ml-2 text-gray-500 italic">{believer.rawText}</span>
-                    </div>
-                  </div>
-
-                  {believer.issues.length > 0 && (
-                    <div className="mt-2 p-2 bg-yellow-50 rounded border border-yellow-200">
-                      <h6 className="text-xs font-medium text-yellow-800">Potential Issues:</h6>
-                      <ul className="text-xs text-yellow-700 mt-1">
-                        {believer.issues.map((issue, issueIndex) => (
-                          <li key={issueIndex}>• {issue}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                </div>
-              ))}
+                );
+              })}
             </div>
 
             <div className="flex justify-between pt-4">
               <Button onClick={() => setStep('input')} variant="secondary">
                 Back to Edit
               </Button>
-              <Button onClick={handleAddNewBelievers} variant="primary">
-                Add {parseResult.newBelievers.length} New Believers
+              <Button onClick={async()=> {
+                const validated = editableBelievers.map(eb => ({ ...eb, errors: validate(eb.current) }));
+                const hasErrors = validated.some(v=> Object.keys(v.errors).length>0);
+                if (hasErrors) { setEditableBelievers(validated); return; }
+                if (parseResult) {
+                  parseResult.newBelievers = validated.map(v => ({ ...v.original, name: v.current.name, surname: v.current.surname, contact: v.current.contact }));
+                }
+                await handleAddNewBelievers();
+              }} variant="primary">
+                Add {editableBelievers.length} New Believer{editableBelievers.length!==1?'s':''}
               </Button>
             </div>
           </>
