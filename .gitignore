@@ -24,3 +24,12 @@ dist-ssr
 *.sw?
 
 .vercel
+
+# Environment / secrets (do not commit real env files)
+.env
+.env.*
+!.env.example
+functions/.env
+
+# Firebase emulator debug logs (optional noise)
+firebase-debug.log
