@@ -18,6 +18,28 @@ import {
   Unsubscribe
 } from 'firebase/firestore';
 import { db } from '../firebase.config';
+// Fetch ministry members across ALL churches using collection group (requires rules)
+const fetchMinistryMembersViaCollectionGroup = async (ministryName: string): Promise<Member[]> => {
+  try {
+    const q = query(collectionGroup(db, 'members'), where('ministry', '==', ministryName));
+    const snapshot = await getDocs(q);
+    const items = snapshot.docs.map(snap => {
+      const churchId = (snap.ref.parent.parent && (snap.ref.parent.parent as any).id) || 'unknown';
+      return {
+        id: snap.id,
+        ...snap.data(),
+        sourceChurchId: churchId
+      } as any as Member;
+    });
+    const filtered = items.filter(m => m.isActive !== false);
+    filtered.sort((a, b) => (a.lastName || '').localeCompare(b.lastName || ''));
+    return filtered;
+  } catch (e) {
+    console.warn('⚠️ Collection group fetch failed (members):', e);
+    return [];
+  }
+};
+
 import { Member, Bacenta, AttendanceRecord, NewBeliever, SundayConfirmation, Guest } from '../types';
 import { ministryExclusionsService, ministryMemberOverridesService } from './firebaseService';
 
@@ -179,13 +201,7 @@ const fetchMinistryMembersViaCollectionGroup = async (ministryName: string): Pro
 // Fetch data from a specific church collection
 const fetchChurchCollection = async (churchId: string, collectionName: string): Promise<any[]> => {
   try {
-    // Only fetch if caller has access to this church
-    const churchSnap = await getDoc(doc(db, `churches/${churchId}`));
-    if (!churchSnap.exists()) {
-      console.warn(`Skip ${collectionName} fetch — church ${churchId} not readable or does not exist`);
-      return [];
-    }
-
+    // Directly query subcollection; Firestore rules gate access per ministry scope
     const snapshot = await getDocs(collection(db, `churches/${churchId}/${collectionName}`));
     return snapshot.docs.map(doc => ({
       id: doc.id,
@@ -201,13 +217,6 @@ const fetchChurchCollection = async (churchId: string, collectionName: string): 
 // Fetch members with specific ministry from a church (same pattern as membersFirebaseService.getAllByMinistry)
 const fetchMinistryMembersFromChurch = async (churchId: string, ministryName: string): Promise<Member[]> => {
   try {
-    // Only fetch if caller has access to this church
-    const churchSnap = await getDoc(doc(db, `churches/${churchId}`));
-    if (!churchSnap.exists()) {
-      console.warn(`Skip members fetch — church ${churchId} not readable or does not exist`);
-      return [];
-    }
-
     // Use exact same query pattern as membersFirebaseService.getAllByMinistry
     const membersQuery = query(
       collection(db, `churches/${churchId}/members`),
@@ -267,10 +276,13 @@ export const getMinistryAggregatedData = async (
   try {
     console.log(`🔍 [Ministry Aggregation] Fetching data for ministry: ${ministryName}`);
 
-    // Aggregate from both where available (no global scan)
-    // 1) Current ministry church (native + synced)
-    // 2) User’s default church (source data)
+    // Discover churches that currently have members in this ministry using a collection-group query
+    const cgMembers = await fetchMinistryMembersViaCollectionGroup(ministryName);
+    const discoveredChurchIds = Array.from(new Set((cgMembers || []).map(m => (m as any).sourceChurchId).filter(Boolean)));
+
+    // Aggregate from discovered churches plus the user's current and default churches (for native/sync coverage)
     const allChurchIds = Array.from(new Set([
+      ...discoveredChurchIds,
       ...(currentChurchId ? [currentChurchId] : []),
       ...(defaultChurchId ? [defaultChurchId] : [])
     ]));
@@ -334,18 +346,10 @@ export const getMinistryAggregatedData = async (
       sourceChurches: allChurchIds
     };
 
-    // If no members found at all after per-church fetch, attempt a collection-group search
-    if (aggregatedData.members.length === 0) {
-      try {
-        console.log('🌐 [Ministry Aggregation] Trying collection-group members fetch as a last resort');
-        const cgMembers = await fetchMinistryMembersViaCollectionGroup(ministryName);
-        if (cgMembers.length) {
-          aggregatedData.members.push(...cgMembers);
-          aggregatedData.members = dedupeMembers(aggregatedData.members, currentChurchId);
-        }
-      } catch (e) {
-        console.warn('Collection-group fallback failed:', e);
-      }
+    // Seed with collection-group members first (covers cross-constituency scope by ministry)
+    if (cgMembers.length) {
+      aggregatedData.members.push(...cgMembers);
+      aggregatedData.members = dedupeMembers(aggregatedData.members, currentChurchId);
     }
 
     churchDataArray.forEach(churchData => {

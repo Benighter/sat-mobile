@@ -1491,7 +1491,7 @@ export const attendanceFirebaseService = {
     }
   },
 
-  // Delete attendance record
+  // Delete attendance record (idempotent: succeeds even if the document is missing)
   delete: async (recordId: string): Promise<void> => {
     try {
       const recordRef = doc(db, getChurchCollectionPath('attendance'), recordId);
@@ -1504,8 +1504,8 @@ export const attendanceFirebaseService = {
         await deleteDoc(recordRef);
         console.log('✅ Document deleted successfully');
       } else {
-        console.log('⚠️ Document does not exist:', recordId);
-        throw new Error(`Attendance record not found: ${recordId}`);
+        // Treat missing document as a successful no-op to support idempotent clears
+        console.log('ℹ️ Attendance document not found; treating delete as no-op:', recordId);
       }
     } catch (error: any) {
       console.error('❌ Delete error:', error);

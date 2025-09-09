@@ -6,7 +6,7 @@ import { inviteService } from '../../services/inviteService';
 import { getDefaultNotificationPreferences } from '../../utils/notificationUtils';
 // import { emailServiceClient } from '../../services/emailServiceClient'; // Email feature on hold
 // Ministry feature removed – no MINISTRY_OPTIONS import
-import { NotificationPreferences, CrossTenantInvite, CrossTenantPermission } from '../../types';
+import { NotificationPreferences, CrossTenantInvite } from '../../types';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
 import Badge from '../ui/Badge';
@@ -57,7 +57,6 @@ const ProfileSettingsView: React.FC = () => {
     switchToExternalChurch,
     switchBackToOwnChurch,
     isImpersonating,
-    currentExternalPermission,
     currentChurchId
   } = useAppContext();
   // const { theme, setTheme } = useTheme(); // Theme selection disabled
@@ -398,9 +397,7 @@ const ProfileSettingsView: React.FC = () => {
                 <div className="flex items-center justify-between">
                   <div>
                     <span className="font-medium">Currently viewing an external constituency</span>
-                    {currentExternalPermission && (
-                      <span className="ml-2 inline-block px-2 py-0.5 rounded bg-indigo-600 text-white text-xs align-middle">{currentExternalPermission === 'read-only' ? 'Read-only' : 'Read & Write'}</span>
-                    )}
+
                   </div>
                   <button
                     onClick={() => switchBackToOwnChurch()}
@@ -792,28 +789,13 @@ const ProfileSettingsView: React.FC = () => {
         links={accessibleChurchLinks || []}
         isImpersonating={isImpersonating}
         currentChurchId={currentChurchId || ''}
-        onSwitch={async (link, mode) => {
+        onSwitch={async (link) => {
           setIsConstituencyManagerOpen(false);
-          const selected = mode || 'read-write';
-          if (selected === 'read-write' && link.permission === 'read-only') {
-            try {
-              // Try upgrading the link in backend so subsequent loads reflect full access
-              const { crossTenantService } = await import('../../services/crossTenantService');
-              await crossTenantService.updateAccessPermission(link.id, 'read-write');
-              // Optimistically reflect the upgrade and switch
-              switchToExternalChurch({ ...link, permission: 'read-write' });
-              try { await refreshAccessibleChurchLinks?.(); } catch {}
-              return;
-            } catch (e:any) {
-              try { showToast('warning', 'Full access unavailable', 'Opening in view-only mode. Ask the owner to grant edit access.'); } catch {}
-              switchToExternalChurch({ ...link, permission: 'read-only' });
-              return;
-            }
-          }
-          switchToExternalChurch({ ...link, permission: selected });
+          // Always grant full access during cross-tenant impersonation
+          switchToExternalChurch({ ...link, permission: 'read-write' });
+          try { await refreshAccessibleChurchLinks?.(); } catch {}
         }}
         onSwitchBack={switchBackToOwnChurch}
-        currentExternalPermission={currentExternalPermission}
       />
     </div>
   );
@@ -866,7 +848,7 @@ const ConstituenciesList: React.FC<ConstituenciesListProps> = ({ links, isImpers
     <div className="space-y-5">
       {/* Simple header note */}
       <div className="text-center text-sm text-gray-600">
-        Tap a card for Full Access, or choose View Only.
+        Tap a card to open the constituency.
       </div>
 
       {/* Empty state */}
@@ -911,10 +893,6 @@ const ConstituenciesList: React.FC<ConstituenciesListProps> = ({ links, isImpers
                   </div>
                   <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-gray-600">
                     <span className="truncate">Admin: {link.ownerName}</span>
-                    <span className="text-gray-300">•</span>
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs ${link.permission === 'read-only' ? 'bg-gray-100 text-gray-700' : 'bg-green-100 text-green-700'}`}>
-                      {link.permission === 'read-only' ? 'Read-only' : 'Read & Write'}
-                    </span>
                   </div>
                 </div>
                 <div className="flex-shrink-0 flex flex-col sm:flex-row gap-2">
@@ -926,14 +904,7 @@ const ConstituenciesList: React.FC<ConstituenciesListProps> = ({ links, isImpers
                   >
                     Full Access
                   </Button>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    onClick={(e) => { e.stopPropagation(); onSwitch(link, 'read-only'); }}
-                    className="h-10 px-4 rounded-xl bg-white border border-gray-300 text-gray-800 hover:bg-gray-50"
-                  >
-                    View Only
-                  </Button>
+
                   <Button
                     type="button"
                     variant="ghost"
@@ -1003,7 +974,7 @@ interface ConstituencyManagerScreenProps {
   links: ConstituenciesListProps['links'];
   isImpersonating: boolean;
   currentChurchId: string;
-  currentExternalPermission?: 'read-only' | 'read-write' | null;
+
   onSwitch: (link: any, mode: 'read-only' | 'read-write') => void;
   onSwitchBack: () => void;
 }
@@ -1014,15 +985,12 @@ const ConstituencyManagerScreen: React.FC<ConstituencyManagerScreenProps> = ({
   links,
   isImpersonating,
   currentChurchId,
-  currentExternalPermission,
   onSwitch,
   onSwitchBack
 }) => {
-  if (!isOpen) return null;
-
   const { user, userProfile, showToast } = useAppContext();
   const [inviteEmail, setInviteEmail] = useState('');
-  const [invitePermission, setInvitePermission] = useState<CrossTenantPermission>('read-only');
+
   const [isInviting, setIsInviting] = useState(false);
   const [pendingInvites, setPendingInvites] = useState<CrossTenantInvite[]>([]);
 
@@ -1072,7 +1040,7 @@ const ConstituencyManagerScreen: React.FC<ConstituencyManagerScreenProps> = ({
         toAdminUid: target.uid!,
         toAdminEmail: target.email,
         toAdminName: target.displayName || `${target.firstName || ''} ${target.lastName || ''}`.trim() || undefined,
-        permission: invitePermission
+        permission: 'read-write'
       });
       setInviteEmail('');
       showToast('success', 'Invite sent', 'They’ll see your request to grant access');
@@ -1110,7 +1078,7 @@ const ConstituencyManagerScreen: React.FC<ConstituencyManagerScreenProps> = ({
     };
   }, []);
 
-  return (
+  return (isOpen ?
     <div
       className="fixed bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 z-50 overflow-hidden"
       style={{
@@ -1154,11 +1122,7 @@ const ConstituencyManagerScreen: React.FC<ConstituencyManagerScreenProps> = ({
           <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between text-sm text-indigo-800">
             <div>
               <span className="font-medium">Currently viewing an external constituency</span>
-              {currentExternalPermission && (
-                <span className="ml-2 inline-block px-2 py-0.5 rounded bg-indigo-600 text-white text-xs align-middle">
-                  {currentExternalPermission === 'read-only' ? 'Read-only' : 'Read & Write'}
-                </span>
-              )}
+
             </div>
             <button
               onClick={() => {
@@ -1193,15 +1157,7 @@ const ConstituencyManagerScreen: React.FC<ConstituencyManagerScreenProps> = ({
                 placeholder="Admin email (example@domain.com)"
                 className="h-11 flex-1"
               />
-              <select
-                value={invitePermission}
-                onChange={(e) => setInvitePermission(e.target.value as CrossTenantPermission)}
-                className="h-11 rounded-xl border border-gray-300 px-3 text-gray-800 bg-white"
-                title="Requested access level"
-              >
-                <option value="read-only">View only</option>
-                <option value="read-write">Full access</option>
-              </select>
+
               <Button
                 type="button"
                 variant="primary"
@@ -1220,7 +1176,7 @@ const ConstituencyManagerScreen: React.FC<ConstituencyManagerScreenProps> = ({
                     <div key={inv.id} className="flex items-center justify-between rounded-xl border border-gray-200 p-3">
                       <div className="min-w-0">
                         <div className="font-medium text-gray-900 truncate">{inv.toAdminName || inv.toAdminEmail}</div>
-                        <div className="text-xs text-gray-500">{inv.permission === 'read-only' ? 'View only' : 'Full access'} • {inv.toAdminEmail}</div>
+                        <div className="text-xs text-gray-500">Full access • {inv.toAdminEmail}</div>
                       </div>
                       <Button
                         type="button"
@@ -1246,5 +1202,5 @@ const ConstituencyManagerScreen: React.FC<ConstituencyManagerScreenProps> = ({
         </div>
       </div>
     </div>
-  );
+  : null);
 };

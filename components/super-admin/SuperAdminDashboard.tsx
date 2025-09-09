@@ -40,7 +40,7 @@ const StatusBadge: React.FC<{ active: boolean }> = ({ active }) => (
 );
 
 export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSignOut }) => {
-  const { isImpersonating, startImpersonation } = useAppContext();
+  const { isImpersonating, startImpersonation, userProfile } = useAppContext();
   const [previewAdmin, setPreviewAdmin] = useState<AdminUserRecord | null>(null);
   const [admins, setAdmins] = useState<AdminUserRecord[]>([]);
   // Leaders state and view toggle
@@ -83,6 +83,11 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
   const [accessLoading, setAccessLoading] = useState(false);
   const [accessError, setAccessError] = useState<string | null>(null);
   const [superAdminNotifications, setSuperAdminNotifications] = useState<any[]>([]);
+  // Ministry accounts needing (re)approval fix
+  const [ministryAccountsNeedingApproval, setMinistryAccountsNeedingApproval] = useState<any[]>([]);
+  const [reapproveWorkingUid, setReapproveWorkingUid] = useState<string | null>(null);
+  const [reapproveAllLoading, setReapproveAllLoading] = useState(false);
+
 
   const campusAggregates = useMemo(() => {
     if (!campuses.length) return [] as Array<{ campus: CampusRecord; adminCount: number; constituencyCount: number; members: number }>;
@@ -127,6 +132,27 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
       setAccessLoading(false);
     }
   }, []);
+  // Load ministry accounts that have a ministry selected but are not approved
+  const loadMinistryAccountsNeedingApproval = useCallback(async () => {
+    try {
+      const q = query(
+        collection(db, 'users'),
+        where('isMinistryAccount', '==', true),
+        limit(500)
+      );
+      const snap = await getDocs(q);
+      const users = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
+      const needing = users.filter(u => {
+        const status = u?.ministryAccess?.status || 'none';
+        const ministryName = (u?.preferences?.ministryName || '').trim();
+        return !!ministryName && status !== 'approved';
+      });
+      setMinistryAccountsNeedingApproval(needing);
+    } catch (e) {
+      console.error('Failed to load ministry accounts needing approval', e);
+    }
+  }, []);
+
 
   // Comprehensive refresh function that forces loading of all data
   const refreshAllData = useCallback(async () => {
@@ -366,6 +392,11 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
       setAccessLoading(false);
     }
   }, []);
+  // Load list of ministry accounts needing (re)approval on mount
+  useEffect(() => {
+    loadMinistryAccountsNeedingApproval();
+  }, [loadMinistryAccountsNeedingApproval]);
+
 
   // Load SuperAdmin notifications (realtime)
   useEffect(() => {
@@ -404,6 +435,42 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
       console.error('Failed to mark notification as read:', e);
     }
   }, []);
+  // Reapprove a single ministry account (force set status=approved)
+  const reapproveMinistryUser = useCallback(async (u: any) => {
+    try {
+      setReapproveWorkingUid(u.id);
+      const userRef = doc(db, 'users', u.id);
+      await updateDoc(userRef, {
+        'ministryAccess.status': 'approved',
+        'ministryAccess.approvedAt': new Date().toISOString(),
+        'ministryAccess.updatedAt': new Date().toISOString(),
+        'ministryAccess.approvedBy': userProfile?.uid || 'superadmin',
+        'ministryAccess.approvedByName': userProfile?.displayName || 'SuperAdmin'
+      } as any);
+      setMinistryAccountsNeedingApproval(prev => prev.filter(x => x.id !== u.id));
+    } catch (e) {
+      console.error('Failed to reapprove ministry user', e);
+    } finally {
+      setReapproveWorkingUid(null);
+    }
+  }, [userProfile?.uid, userProfile?.displayName]);
+
+  // Reapprove all listed ministry accounts
+  const reapproveAllMinistryUsers = useCallback(async () => {
+    if (!ministryAccountsNeedingApproval.length) return;
+    setReapproveAllLoading(true);
+    try {
+      for (const u of ministryAccountsNeedingApproval) {
+        // eslint-disable-next-line no-await-in-loop
+        await reapproveMinistryUser(u);
+      }
+    } catch (e) {
+      console.error('Failed to reapprove all ministry users', e);
+    } finally {
+      setReapproveAllLoading(false);
+    }
+  }, [ministryAccountsNeedingApproval, reapproveMinistryUser]);
+
 
   const approveAccess = useCallback(async (req: any) => {
     try {
@@ -1188,6 +1255,59 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
                   <p className="text-sm text-gray-700">Require attention</p>
                 </div>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Ministry Accounts Not Fetching (Reapprove) - Dashboard */}
+        {!selectedCampus && viewMode === 'dashboard' && (
+          <div className="lg:col-span-3 mb-8">
+            <div className="bg-white dark:bg-dark-800 rounded-xl shadow-sm border border-gray-200/70 dark:border-dark-700 overflow-hidden">
+              <div className="px-4 sm:px-6 py-4 border-b border-gray-200/60 dark:border-dark-700 flex items-center justify-between">
+                <div>
+                  <h2 className="text-base sm:text-lg font-semibold">Fix Ministry Accounts Not Fetching</h2>
+                  <p className="text-xs text-gray-500">Reapprove ministry accounts that have a ministry selected but are not approved</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-500">{ministryAccountsNeedingApproval.length} to fix</span>
+                  <button
+                    onClick={reapproveAllMinistryUsers}
+                    disabled={!ministryAccountsNeedingApproval.length || reapproveAllLoading}
+                    className={`px-3 py-1.5 text-xs rounded-md ${(!ministryAccountsNeedingApproval.length || reapproveAllLoading) ? 'bg-gray-300 text-gray-600' : 'bg-blue-600 text-white'}`}
+                  >
+                    {reapproveAllLoading ? 'Reapproving…' : 'Reapprove All'}
+                  </button>
+                </div>
+              </div>
+              {ministryAccountsNeedingApproval.length === 0 ? (
+                <div className="px-4 sm:px-6 py-6 text-sm text-gray-500">All ministry accounts look good.</div>
+              ) : (
+                <div className="divide-y divide-gray-100 dark:divide-dark-700">
+                  {ministryAccountsNeedingApproval.slice(0, 10).map(u => (
+                    <div key={u.id} className="px-4 sm:px-6 py-4 flex items-center justify-between gap-4">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium truncate">{u.displayName || u.email || u.id}</span>
+                          <span className="text-[10px] px-2 py-0.5 rounded-full border bg-red-50 text-red-700 border-red-200">NOT APPROVED</span>
+                        </div>
+                        <div className="text-xs text-gray-500 truncate">Ministry: {u?.preferences?.ministryName || '—'}</div>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          onClick={() => reapproveMinistryUser(u)}
+                          disabled={reapproveWorkingUid === u.id}
+                          className={`px-3 py-1.5 text-xs rounded-md ${reapproveWorkingUid === u.id ? 'bg-gray-300 text-gray-600' : 'bg-green-600 text-white'}`}
+                        >
+                          {reapproveWorkingUid === u.id ? 'Working…' : 'Reapprove'}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                  {ministryAccountsNeedingApproval.length > 10 && (
+                    <div className="px-4 sm:px-6 py-3 text-xs text-gray-500">Showing first 10 of {ministryAccountsNeedingApproval.length}. Use Reapprove All to fix the rest.</div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         )}
