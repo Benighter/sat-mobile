@@ -5,7 +5,7 @@ import { ThemeProvider } from './contexts/ThemeContext';
 import { AuthScreen } from './components/auth/AuthScreen';
 
 import DashboardView from './components/views/DashboardView';
-import LazyWrapper, { LazyMemberListView, LazyAttendanceAnalyticsView, LazyWeeklyAttendanceView, LazySundayConfirmationsView, LazyNewBelieversView, LazyOutreachView, LazyBacentaOutreachView, LazyPrayerView, LazyPrayerMemberDetailsView, LazyMinistriesView, LazyBacentaLeadersView, LazyMyDeletionRequestsView, LazyMemberDeletionRequestsView, LazyBacentaMeetingsView, LazySundayHeadCountsView, LazySundayHeadCountSectionView, LazyContactView, LazyChatView } from './components/common/LazyWrapper';
+import LazyWrapper, { LazyMemberListView, LazyAttendanceAnalyticsView, LazyWeeklyAttendanceView, LazySundayConfirmationsView, LazyNewBelieversView, LazySonsOfGodView, LazyOutreachView, LazyBacentaOutreachView, LazyPrayerView, LazyPrayerMemberDetailsView, LazyMinistriesView, LazyBacentaLeadersView, LazyMyDeletionRequestsView, LazyMemberDeletionRequestsView, LazyBacentaMeetingsView, LazySundayHeadCountsView, LazySundayHeadCountSectionView, LazyContactView, LazyChatView } from './components/common/LazyWrapper';
 import ProfileSettingsView from './components/views/ProfileSettingsView';
 import CopyMembersView from './components/views/CopyMembersView';
 import CopyAbsenteesView from './components/views/CopyAbsenteesView';
@@ -360,6 +360,12 @@ const AppContent: React.FC = memo(() => {
         return (
           <LazyWrapper>
             <LazyNewBelieversView />
+          </LazyWrapper>
+        );
+      case TabKeys.SONS_OF_GOD:
+        return (
+          <LazyWrapper>
+            <LazySonsOfGodView />
           </LazyWrapper>
         );
       case TabKeys.OUTREACH:

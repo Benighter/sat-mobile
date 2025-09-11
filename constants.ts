@@ -14,6 +14,7 @@ export const FIXED_TABS: TabOption[] = [
   { id: TabKeys.SUNDAY_CONFIRMATIONS, name: 'Sunday Confirmations' },
   { id: TabKeys.PRAYER, name: 'Prayer' },
   { id: TabKeys.NEW_BELIEVERS, name: 'Born Again' },
+  { id: TabKeys.SONS_OF_GOD, name: 'Sons of God' },
   { id: TabKeys.OUTREACH, name: 'Outreach' },
   { id: TabKeys.BACENTA_MEETINGS, name: 'Bacenta Meetings' },
   { id: TabKeys.BIRTHDAYS, name: 'Birthdays' },

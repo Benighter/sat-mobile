@@ -236,6 +236,7 @@ export enum TabKeys {
   SUNDAY_HEAD_COUNT_SECTION = 'sunday_head_count_section',
   SUNDAY_CONFIRMATIONS = 'sunday_confirmations',
   NEW_BELIEVERS = 'new_believers',
+  SONS_OF_GOD = 'sons_of_god',
   OUTREACH = 'outreach',
   PRAYER = 'prayer',
   PRAYER_MEMBER_DETAILS = 'prayer_member_details',

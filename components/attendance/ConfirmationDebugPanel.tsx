@@ -69,12 +69,22 @@ const ConfirmationDebugPanel: React.FC = () => {
 
   const handleCleanup = async () => {
     try {
-      const cleanedCount = await cleanupOrphanedConfirmations();
+      const cleanedCount = await cleanupOrphanedConfirmations(true); // Force run
       if (cleanedCount === 0) {
         showToast('info', 'No orphaned records found', 'All confirmation records are valid');
       }
     } catch (error) {
       console.error('Cleanup failed:', error);
+    }
+  };
+
+  const handleDebugState = () => {
+    // Call the global debug function if available
+    if ((window as any).debugGuestConfirmationState) {
+      (window as any).debugGuestConfirmationState();
+      showToast('info', 'Debug info logged', 'Check browser console for detailed guest-confirmation state');
+    } else {
+      showToast('warning', 'Debug function not available', 'Debug function not loaded yet');
     }
   };
 
@@ -167,11 +177,19 @@ const ConfirmationDebugPanel: React.FC = () => {
         <div className="text-sm text-gray-600">
           Dashboard should show: <span className="font-mono font-bold">{confirmationStats.validTotal}</span>
         </div>
-        <Button
-          onClick={handleCleanup}
-          variant="secondary"
-          size="sm"
-          disabled={confirmationStats.orphanedTotal === 0}
+        <div className="flex gap-2">
+          <Button
+            onClick={handleDebugState}
+            variant="secondary"
+            size="sm"
+          >
+            🔍 Debug State
+          </Button>
+          <Button
+            onClick={handleCleanup}
+            variant="secondary"
+            size="sm"
+            disabled={confirmationStats.orphanedTotal === 0}
         >
           Clean Up Orphaned Records
         </Button>

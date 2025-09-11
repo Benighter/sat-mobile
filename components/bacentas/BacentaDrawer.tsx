@@ -229,10 +229,19 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
                 <>
                   <NavigationItem
                     icon={<UsersIcon className="w-4 h-4" />}
-                    label="Sons of God"
+                    label="Born Again"
                     isActive={currentTab.id === TabKeys.NEW_BELIEVERS}
                     onClick={() => {
-                      switchTab({ id: TabKeys.NEW_BELIEVERS, name: 'New Believers' });
+                      switchTab({ id: TabKeys.NEW_BELIEVERS, name: 'Born Again' });
+                      onClose();
+                    }}
+                  />
+                  <NavigationItem
+                    icon={<UsersIcon className="w-4 h-4" />}
+                    label="Sons of God"
+                    isActive={currentTab.id === TabKeys.SONS_OF_GOD}
+                    onClick={() => {
+                      switchTab({ id: TabKeys.SONS_OF_GOD, name: 'Sons of God' });
                       onClose();
                     }}
                   />
@@ -292,10 +301,19 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
 
                   <NavigationItem
                     icon={<UsersIcon className="w-4 h-4" />}
-                    label="Sons of God"
+                    label="Born Again"
                     isActive={currentTab.id === TabKeys.NEW_BELIEVERS}
                     onClick={() => {
-                      switchTab({ id: TabKeys.NEW_BELIEVERS, name: 'New Believers' });
+                      switchTab({ id: TabKeys.NEW_BELIEVERS, name: 'Born Again' });
+                      onClose();
+                    }}
+                  />
+                  <NavigationItem
+                    icon={<UsersIcon className="w-4 h-4" />}
+                    label="Sons of God"
+                    isActive={currentTab.id === TabKeys.SONS_OF_GOD}
+                    onClick={() => {
+                      switchTab({ id: TabKeys.SONS_OF_GOD, name: 'Sons of God' });
                       onClose();
                     }}
                   />

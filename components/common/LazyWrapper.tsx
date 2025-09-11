@@ -18,6 +18,7 @@ export const LazySundayHeadCountsView = lazy(() => import('../attendance/SundayH
 export const LazySundayHeadCountSectionView = lazy(() => import('../attendance/SundayHeadCountSectionView'));
 export const LazySundayConfirmationsView = lazy(() => import('../attendance/SundayConfirmationsView'));
 export const LazyNewBelieversView = lazy(() => import('../new-believers/NewBelieversView'));
+export const LazySonsOfGodView = lazy(() => import('../outreach/SonsOfGodView'));
 export const LazyMyDeletionRequestsView = lazy(() => import('../members/MyDeletionRequestsView'));
 export const LazyMemberDeletionRequestsView = lazy(() => import('../members/MemberDeletionRequestsView'));
 export const LazyOutreachView = lazy(() => import('../outreach/OutreachView'));

@@ -784,12 +784,21 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
 
         // Listen to confirmations
         const unsubscribeConfirmations = confirmationFirebaseService.onSnapshot((confirmations) => {
+          console.log('🔄 [Data Loading] Confirmations updated:', {
+            count: confirmations.length,
+            guestConfirmations: confirmations.filter(c => c.guestId).length,
+            memberConfirmations: confirmations.filter(c => c.memberId).length
+          });
           setSundayConfirmations(confirmations);
         });
         unsubscribers.push(unsubscribeConfirmations);
 
         // Listen to guests
         const unsubscribeGuests = guestFirebaseService.onSnapshot((guests) => {
+          console.log('🔄 [Data Loading] Guests updated:', {
+            count: guests.length,
+            guestIds: guests.map(g => g.id).slice(0, 5) // Log first 5 IDs for debugging
+          });
           setGuests(guests);
         });
         unsubscribers.push(unsubscribeGuests);
@@ -1464,6 +1473,13 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
 
   // Helper function to find or create guest with deduplication
   const findOrCreateGuest = useCallback(async (guestData: Omit<Guest, 'id' | 'createdDate' | 'lastUpdated' | 'createdBy'>): Promise<string> => {
+    console.log('🔍 [Guest] Finding or creating guest:', {
+      firstName: guestData.firstName,
+      lastName: guestData.lastName,
+      bacentaId: guestData.bacentaId,
+      currentGuestsCount: guests.length
+    });
+
     // Check for existing guest with same name in same bacenta to prevent duplicates
     const existingGuest = guests.find(g =>
       g.bacentaId === guestData.bacentaId &&
@@ -1472,7 +1488,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     );
 
     if (existingGuest) {
-      console.log(`Using existing guest: ${existingGuest.firstName} ${existingGuest.lastName || ''} (ID: ${existingGuest.id})`);
+      console.log(`✅ [Guest] Using existing guest: ${existingGuest.firstName} ${existingGuest.lastName || ''} (ID: ${existingGuest.id})`);
       return existingGuest.id;
     } else {
       // Create new guest
@@ -1484,10 +1500,41 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
         createdBy: userProfile?.uid || 'system'
       } as any;
       const guestId = await guestFirebaseService.add(fullGuest as any);
-      console.log(`Created new guest: ${guestData.firstName} ${guestData.lastName || ''} (ID: ${guestId})`);
+      console.log(`✅ [Guest] Created new guest: ${guestData.firstName} ${guestData.lastName || ''} (ID: ${guestId})`);
       return guestId;
     }
   }, [guests, userProfile]);
+
+  // Debug function to track guest-confirmation relationships
+  const debugGuestConfirmationState = useCallback(() => {
+    const { getUpcomingSunday } = require('../utils/dateUtils');
+    const upcomingSunday = getUpcomingSunday();
+
+    const guestConfirmations = sundayConfirmations.filter(c => c.guestId && c.date === upcomingSunday);
+    const guestIds = new Set(guests.map(g => g.id));
+
+    console.log('🔍 [Debug] Guest-Confirmation State:', {
+      totalGuests: guests.length,
+      totalConfirmations: sundayConfirmations.length,
+      guestConfirmationsForUpcomingSunday: guestConfirmations.length,
+      upcomingSunday,
+      orphanedGuestConfirmations: guestConfirmations.filter(c => !guestIds.has(c.guestId!)).length,
+      guestConfirmationDetails: guestConfirmations.map(c => ({
+        id: c.id,
+        guestId: c.guestId,
+        guestExists: guestIds.has(c.guestId!),
+        guestName: guests.find(g => g.id === c.guestId)?.firstName || 'NOT_FOUND'
+      }))
+    });
+  }, [guests, sundayConfirmations]);
+
+  // Expose debug function globally for troubleshooting
+  useEffect(() => {
+    (window as any).debugGuestConfirmationState = debugGuestConfirmationState;
+    return () => {
+      delete (window as any).debugGuestConfirmationState;
+    };
+  }, [debugGuestConfirmationState]);
 
   // Helper function to clean up duplicate guests
   const cleanupDuplicateGuests = useCallback(async () => {
@@ -1659,6 +1706,13 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
         const { getUpcomingSunday } = await import('../utils/dateUtils');
         const upcomingSunday = getUpcomingSunday();
 
+        console.log('🎯 [Outreach] Creating guest and confirmation for outreach member:', {
+          outreachMemberId,
+          name: data.name,
+          bacentaId: data.bacentaId,
+          upcomingSunday
+        });
+
         // create a lightweight guest record to track confirmation separate from members
         const guestPayload: Omit<Guest, 'id' | 'createdDate' | 'lastUpdated' | 'createdBy'> = {
           firstName: data.name,
@@ -1667,6 +1721,8 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
           phoneNumber: (data.phoneNumbers && data.phoneNumbers[0]) || ''
         };
         const guestId = await findOrCreateGuest(guestPayload);
+
+        console.log('✅ [Outreach] Guest created/found:', { guestId, name: data.name });
 
         // Save link back to outreach member for possible conversion flow
   await outreachMembersFirebaseService.update(outreachMemberId, { guestId });
@@ -1681,6 +1737,8 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
           confirmedBy: userProfile?.uid
         };
         await confirmationFirebaseService.addOrUpdate(record);
+
+        console.log('✅ [Outreach] Guest confirmation created:', { recordId, guestId, upcomingSunday });
       }
 
       showToast('success', 'Outreach member added');
@@ -1705,12 +1763,15 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
       // Apply primary update
       await outreachMembersFirebaseService.update(id, updates);
 
-      // If comingStatus changed, sync confirmations accordingly (bidirectional)
-      if (existing && typeof updates.comingStatus === 'boolean' && existing.comingStatus !== updates.comingStatus) {
+      // If comingStatus changed OR newly marked as born again while coming, sync confirmations accordingly (bidirectional)
+      const comingStatusChanged = existing && typeof updates.comingStatus === 'boolean' && existing.comingStatus !== updates.comingStatus;
+      const newlyBornAgainAndComing = existing && updates.sonOfGodId && !existing.sonOfGodId && (updates.comingStatus === true || existing.comingStatus === true);
+
+      if (comingStatusChanged || newlyBornAgainAndComing) {
         const { getUpcomingSunday } = await import('../utils/dateUtils');
         const upcomingSunday = getUpcomingSunday();
 
-        if (updates.comingStatus === false) {
+        if (comingStatusChanged && updates.comingStatus === false) {
           // If newly marked not coming, remove confirmation for member/guest
           try {
             if (existing.convertedMemberId) {
@@ -1730,7 +1791,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
           } catch (syncError) {
             console.warn('⚠️ Failed to remove confirmation during outreach toggle:', syncError);
           }
-        } else if (updates.comingStatus === true) {
+        } else if ((comingStatusChanged && updates.comingStatus === true) || newlyBornAgainAndComing) {
           // If newly marked coming, create/ensure confirmation
           try {
             if (existing.convertedMemberId) {
@@ -2555,26 +2616,64 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
   }, [showToast, userProfile, members, outreachMembers]);
 
   // Clean up orphaned confirmation records
-  const cleanupOrphanedConfirmations = useCallback(async () => {
+  const cleanupOrphanedConfirmations = useCallback(async (forceRun = false) => {
     if (isImpersonating && currentExternalPermission === 'read-only') {
       // Do not perform data cleanup when viewing external church in read-only mode
       console.log('🔒 Skipping orphaned confirmation cleanup in read-only external context');
       return 0;
     }
+
+    // Enhanced data loading validation to prevent premature cleanup
+    if (!forceRun) {
+      // Check if we have meaningful data loaded (not just empty arrays)
+      const hasMembers = members.length > 0;
+      const hasGuests = guests.length > 0; // Changed from >= 0 to > 0 for better validation
+      const hasConfirmations = sundayConfirmations.length > 0;
+
+      // Only proceed if we have actual data or if we're certain data loading is complete
+      if (!hasMembers && !hasGuests && !hasConfirmations) {
+        console.log('🔄 Skipping cleanup - no data loaded yet');
+        return 0;
+      }
+
+      // Additional safety check: if we have confirmations but no guests/members,
+      // it's likely a loading race condition
+      if (hasConfirmations && !hasMembers && !hasGuests) {
+        console.log('🔄 Skipping cleanup - confirmations loaded but no members/guests yet (likely race condition)');
+        return 0;
+      }
+    }
+
     try {
-      console.log('🧹 Starting cleanup of orphaned confirmation records...');
+      console.log('🧹 Starting cleanup of orphaned confirmation records...', {
+        membersCount: members.length,
+        guestsCount: guests.length,
+        confirmationsCount: sundayConfirmations.length,
+        forceRun
+      });
       let cleanedCount = 0;
 
       const orphanedConfirmations = sundayConfirmations.filter(confirmation => {
         if (confirmation.memberId) {
           // Check if member still exists
-          return !members.some(member => member.id === confirmation.memberId);
+          const memberExists = members.some(member => member.id === confirmation.memberId);
+          if (!memberExists) {
+            console.log(`🔍 Found orphaned member confirmation: ${confirmation.id} (member ${confirmation.memberId} not found)`);
+          }
+          return !memberExists;
         } else if (confirmation.guestId) {
           // Check if guest still exists
-          return !guests.some(guest => guest.id === confirmation.guestId);
+          const guestExists = guests.some(guest => guest.id === confirmation.guestId);
+          if (!guestExists) {
+            console.log(`🔍 Found orphaned guest confirmation: ${confirmation.id} (guest ${confirmation.guestId} not found)`);
+          }
+          return !guestExists;
         }
-        return false; // Invalid confirmation record
+        console.log(`🔍 Found invalid confirmation record (no memberId or guestId): ${confirmation.id}`);
+        return true; // Invalid confirmation record
       });
+
+      console.log(`🔍 Found ${orphanedConfirmations.length} potentially orphaned confirmations`);
 
       for (const orphanedConfirmation of orphanedConfirmations) {
         try {
@@ -2599,7 +2698,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
       showToast('error', 'Cleanup failed', error.message);
       throw error;
     }
-  }, [sundayConfirmations, members, guests, showToast]);
+  }, [sundayConfirmations, members, guests, showToast, isImpersonating, currentExternalPermission]);
 
   // Guest handlers
   const addGuestHandler = useCallback(async (guestData: Omit<Guest, 'id' | 'createdDate' | 'lastUpdated' | 'createdBy'>) => {
@@ -3302,27 +3401,79 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     }
   }, [user, userProfile, members.length, refreshUserProfile]);
 
-  // One-time cleanup of orphaned confirmation records after initial data load
+  // Enhanced data loading state tracking
+  const [dataLoadingState, setDataLoadingState] = useState({
+    membersLoaded: false,
+    guestsLoaded: false,
+    confirmationsLoaded: false,
+    initialCleanupRun: false
+  });
+
+  // Track when each data type has been loaded
   useEffect(() => {
-    if (members.length > 0 && guests.length >= 0 && sundayConfirmations.length > 0) {
-      // Run cleanup once after initial data is loaded
+    setDataLoadingState(prev => ({
+      ...prev,
+      membersLoaded: members.length > 0 || prev.membersLoaded
+    }));
+  }, [members.length]);
+
+  useEffect(() => {
+    setDataLoadingState(prev => ({
+      ...prev,
+      guestsLoaded: guests.length > 0 || prev.guestsLoaded
+    }));
+  }, [guests.length]);
+
+  useEffect(() => {
+    setDataLoadingState(prev => ({
+      ...prev,
+      confirmationsLoaded: sundayConfirmations.length > 0 || prev.confirmationsLoaded
+    }));
+  }, [sundayConfirmations.length]);
+
+  // Enhanced cleanup logic with better data loading validation
+  useEffect(() => {
+    const { membersLoaded, guestsLoaded, confirmationsLoaded, initialCleanupRun } = dataLoadingState;
+
+    // Only run cleanup if we have meaningful data and haven't run initial cleanup yet
+    const shouldRunCleanup = !initialCleanupRun && (
+      // Case 1: We have all types of data loaded
+      (membersLoaded && guestsLoaded && confirmationsLoaded) ||
+      // Case 2: We have confirmations and at least one of members/guests (but wait longer)
+      (confirmationsLoaded && (membersLoaded || guestsLoaded)) ||
+      // Case 3: We have been waiting long enough and have some data
+      (membersLoaded || guestsLoaded || confirmationsLoaded)
+    );
+
+    if (shouldRunCleanup) {
       const runInitialCleanup = async () => {
         try {
-          console.log('🧹 Running initial cleanup of orphaned confirmation records...');
+          console.log('🧹 Running enhanced initial cleanup of orphaned confirmation records...', {
+            dataLoadingState,
+            membersCount: members.length,
+            guestsCount: guests.length,
+            confirmationsCount: sundayConfirmations.length
+          });
+
+          // Mark cleanup as run to prevent multiple executions
+          setDataLoadingState(prev => ({ ...prev, initialCleanupRun: true }));
+
           const cleanedCount = await cleanupOrphanedConfirmations();
           if (cleanedCount > 0) {
-            console.log(`✅ Initial cleanup completed: ${cleanedCount} orphaned records removed`);
+            console.log(`✅ Enhanced initial cleanup completed: ${cleanedCount} orphaned records removed`);
           }
         } catch (error) {
-          console.warn('⚠️ Initial cleanup failed:', error);
+          console.warn('⚠️ Enhanced initial cleanup failed:', error);
+          // Reset the flag so cleanup can be retried
+          setDataLoadingState(prev => ({ ...prev, initialCleanupRun: false }));
         }
       };
 
-      // Run cleanup after a short delay to ensure all data is loaded
-      const timeout = setTimeout(runInitialCleanup, 2000);
+      // Use a longer delay to ensure data loading is complete
+      const timeout = setTimeout(runInitialCleanup, 5000);
       return () => clearTimeout(timeout);
     }
-  }, [members.length, guests.length, sundayConfirmations.length, cleanupOrphanedConfirmations]);
+  }, [dataLoadingState, members.length, guests.length, sundayConfirmations.length, cleanupOrphanedConfirmations]);
 
   // Ministry mode now uses direct Firestore queries like SuperAdmin - no sync needed
 

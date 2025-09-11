@@ -19,7 +19,7 @@ interface Props {
 const normalizePhone = (p: string) => p.replace(/\s+/g, '').replace(/^\+?233/, '0');
 
 const EditOutreachMemberModal: React.FC<Props> = ({ isOpen, onClose, member, bacentaName }) => {
-  const { updateOutreachMemberHandler, showToast } = useAppContext();
+  const { updateOutreachMemberHandler, showToast, sonsOfGod } = useAppContext();
 
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
@@ -37,7 +37,7 @@ const EditOutreachMemberModal: React.FC<Props> = ({ isOpen, onClose, member, bac
     setRoom(member.roomNumber || '');
     setComing(member.comingStatus ? 'yes' : 'no');
   setReason(member.notComingReason || '');
-  setBornAgain(!!member.bornAgainMemberId);
+  setBornAgain(!!member.sonOfGodId || !!member.bornAgainMemberId);
   }, [member, isOpen]);
 
   const reset = () => {
@@ -46,6 +46,7 @@ const EditOutreachMemberModal: React.FC<Props> = ({ isOpen, onClose, member, bac
     setRoom('');
     setComing('no');
     setReason('');
+    setBornAgain(false);
   };
 
   const handleSave = async () => {
@@ -58,53 +59,66 @@ const EditOutreachMemberModal: React.FC<Props> = ({ isOpen, onClose, member, bac
     }
     setSaving(true);
     try {
+
+
       const normalizedPhone = phone ? normalizePhone(phone) : '';
 
-      // Handle Born Again link creation/clearing
-  let bornAgainMemberId: string | undefined = member.bornAgainMemberId || undefined;
-      if (bornAgain && !member.bornAgainMemberId) {
-        // If ticking born again and no link yet, create or reuse a born-again Member
+      // Handle Born Again - use Sons of God system instead of creating members directly
+      let sonOfGodId: string | undefined = member.sonOfGodId || undefined;
+      let bornAgainMemberId: string | undefined = member.bornAgainMemberId || undefined;
+
+      if (bornAgain && !member.sonOfGodId) {
+        // If ticking born again and no Sons of God record yet, create one
         try {
-          let existingId: string | undefined;
-          if (normalizedPhone) {
-            try {
-              const allMembers = await membersFirebaseService.getAll();
-              const existing = allMembers.find(m => m.phoneNumber && normalizePhone(m.phoneNumber) === normalizedPhone && m.bornAgainStatus);
-              if (existing) existingId = existing.id;
-            } catch {}
-          }
-          bornAgainMemberId = existingId || await membersFirebaseService.add({
-            firstName: trimmed,
-            lastName: '',
-            phoneNumber: normalizedPhone || '',
-            buildingAddress: '',
-            roomNumber: room || '',
-            bornAgainStatus: true,
-            outreachOrigin: true,
-            bacentaId: '',
-            role: 'Member',
+          const { sonsOfGodFirebaseService } = await import('../../services/firebaseService');
+          sonOfGodId = await sonsOfGodFirebaseService.add({
+            name: trimmed,
+            phoneNumber: normalizedPhone || undefined,
+            roomNumber: room || undefined,
+            outreachDate: member.outreachDate,
+            bacentaId: member.bacentaId,
+            notes: '',
+            integrated: false
           } as any);
-        } catch {
-          // If for some reason this fails, still proceed with outreach update without the link
-          bornAgainMemberId = undefined;
+        } catch (e) {
+          console.error('Failed to create SonOfGod record', e);
+          sonOfGodId = undefined;
         }
-      } else if (!bornAgain && member.bornAgainMemberId) {
-        // If unchecking, clear the link (do not delete the member)
+      } else if (!bornAgain && member.sonOfGodId) {
+        // If unchecking born again, clear the Sons of God link
+        console.log('🗑️ Clearing Sons of God link...');
+        sonOfGodId = '';
+      }
+
+      // Legacy: clear bornAgainMemberId if unchecking born again
+      if (!bornAgain && member.bornAgainMemberId) {
         bornAgainMemberId = '';
       }
 
-      await updateOutreachMemberHandler(member.id, {
+      const updateData: any = {
         name: trimmed,
         phoneNumbers: normalizedPhone ? [normalizedPhone] : [],
         roomNumber: room || undefined,
         comingStatus: coming === 'yes',
         notComingReason: coming === 'no' && reason ? reason : undefined,
-        ...(bornAgainMemberId !== undefined ? { bornAgainMemberId } : {}),
-      });
+      };
+
+      // Only include sonOfGodId if it has a meaningful value
+      if (sonOfGodId !== undefined) {
+        updateData.sonOfGodId = sonOfGodId;
+      }
+
+      // Only include bornAgainMemberId if it has a meaningful value
+      if (bornAgainMemberId !== undefined) {
+        updateData.bornAgainMemberId = bornAgainMemberId;
+      }
+
+      await updateOutreachMemberHandler(member.id, updateData);
       showToast('success', 'Outreach member updated');
       reset();
       onClose();
     } catch (e) {
+      console.error('❌ Save failed:', e);
       showToast('error', 'Failed to update outreach member');
     } finally {
       setSaving(false);
