@@ -465,42 +465,44 @@ export const inviteService = {
     }
   },
 
-  // Reinvite: refresh an existing expired/removed invite IN-PLACE (no duplicate documents)
+  // Reinvite: create a fresh invite and delete the old one atomically (no duplicates)
   reinviteInvite: async (inviteId: string, expirationHours: number = 168): Promise<AdminInvite> => {
     try {
-      const inviteDocRef = doc(db, 'adminInvites', inviteId);
-      const snap = await getDoc(inviteDocRef);
+      const oldRef = doc(db, 'adminInvites', inviteId);
+      const snap = await getDoc(oldRef);
       if (!snap.exists()) throw new Error('Invite not found');
-      const data = snap.data() as any;
+      const old = snap.data() as any;
 
       const now = new Date();
       const expiresAt = new Date(now.getTime() + expirationHours * 60 * 60 * 1000);
 
-      const updated: any = {
-        // core fields (preserved or ensured)
-        invitedUserEmail: data.invitedUserEmail,
-        invitedUserId: data.invitedUserId,
-        invitedUserName: data.invitedUserName,
-        invitedUserChurchId: data.invitedUserChurchId || '',
-        invitedUserChurchName: data.invitedUserChurchName || '',
-        createdBy: data.createdBy,
-        createdByName: data.createdByName,
-        churchId: data.churchId,
-        accessChurchId: data.accessChurchId || data.churchId,
-        targetRole: data.targetRole || 'leader',
-        // refreshed state
+      const newInvite: any = {
+        invitedUserEmail: old.invitedUserEmail,
+        invitedUserId: old.invitedUserId,
+        invitedUserName: old.invitedUserName,
+        invitedUserChurchId: old.invitedUserChurchId || '',
+        invitedUserChurchName: old.invitedUserChurchName || '',
+        createdBy: old.createdBy,
+        createdByName: old.createdByName,
+        churchId: old.churchId,
+        accessChurchId: old.accessChurchId || old.churchId,
+        targetRole: old.targetRole || 'leader',
         status: 'pending',
         createdAt: now.toISOString(),
         expiresAt: expiresAt.toISOString(),
-        respondedAt: null,
-        revokedAt: null,
-        reinviteCount: (data.reinviteCount || 0) + 1,
+        reinviteOf: inviteId,
+        reinviteCount: (old.reinviteCount || 0) + 1,
         lastReinvitedAt: now.toISOString()
       };
 
-      await updateDoc(inviteDocRef, updated);
+      // Atomically create new doc and delete old doc
+      const newRef = doc(collection(db, 'adminInvites'));
+      const batch = (await import('firebase/firestore')).writeBatch(db as any);
+      batch.set(newRef, newInvite);
+      batch.delete(oldRef);
+      await batch.commit();
 
-      return { id: inviteId, ...(data as any), ...(updated as any) } as AdminInvite;
+      return { id: newRef.id, ...(newInvite as any) } as AdminInvite;
     } catch (error: any) {
       throw new Error(`Failed to reinvite: ${error.message}`);
     }
