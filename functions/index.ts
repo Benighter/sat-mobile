@@ -14,3 +14,4 @@ export const backfillMinistrySync = legacy.backfillMinistrySync;
 export const backfillMinistrySyncHttp = legacy.backfillMinistrySyncHttp;
 export const crossMinistrySync = legacy.crossMinistrySync;
 export const crossMinistrySyncHttp = legacy.crossMinistrySyncHttp;
+export const searchAdminUserByEmail = legacy.searchAdminUserByEmail;

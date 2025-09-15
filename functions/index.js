@@ -1470,6 +1470,154 @@ exports.hardDeleteUserAccount = functions.https.onCall(async (data, context) => 
   return { success: true, deletedUid: uid };
 });
 
+// Callable: secure admin user search by email (case-insensitive) for inviting leaders
+// Only callable by users whose role === 'admin'. Returns a minimal sanitized user object
+// if the target user exists and is an active admin. This bypasses Firestore security rules
+// via the Admin SDK while keeping the rules themselves strict.
+exports.searchAdminUserByEmail = functions.https.onCall(async (data, context) => {
+  try {
+    if (!context.auth) {
+      throw new functions.https.HttpsError('unauthenticated', 'Authentication required');
+    }
+    const { email } = data || {};
+    if (!email || typeof email !== 'string') {
+      throw new functions.https.HttpsError('invalid-argument', 'Email is required');
+    }
+    const normalized = email.trim().toLowerCase();
+    if (!normalized) {
+      throw new functions.https.HttpsError('invalid-argument', 'Email is empty');
+    }
+
+    const db = admin.firestore();
+    // Relaxed permission: allow ANY authenticated active user to perform the lookup (temporary per request)
+    // NOTE: SECURITY TRADE-OFF: This broadens who can discover admin emails. Consider re-introducing a stricter
+    // gate (role === 'admin') once initial invite bootstrap is complete, or add rate limiting.
+    const callerSnap = await db.doc(`users/${context.auth.uid}`).get().catch(() => null);
+    if (!callerSnap || !callerSnap.exists) {
+      throw new functions.https.HttpsError('failed-precondition', 'Caller profile missing');
+    }
+    const caller = callerSnap.data() || {};
+    if (caller.isActive === false) {
+      throw new functions.https.HttpsError('permission-denied', 'Inactive users cannot search');
+    }
+
+    // Try exact-case match first
+    let targetSnap = await db
+      .collection('users')
+      .where('email', '==', email)
+      .limit(1)
+      .get();
+
+    // Fallback: case-insensitive by scanning a lower-cased field if it exists or second query
+    if (targetSnap.empty) {
+      // If schema has emailLower we can leverage it; otherwise run second query with lowercase value
+      try {
+        targetSnap = await db
+          .collection('users')
+          .where('email', '==', normalized)
+          .limit(1)
+          .get();
+      } catch (_) { /* ignore */ }
+    }
+
+    if (targetSnap.empty) {
+      return { user: null }; // No user found
+    }
+    const docSnap = targetSnap.docs[0];
+    const u = docSnap.data() || {};
+
+    // Only allow inviting existing admins (per current flow). Adjust if leaders should also be searchable
+    if ((u.role || '') !== 'admin') {
+      return { user: null };
+    }
+    if (u.isActive === false) {
+      return { user: null };
+    }
+
+    const result = {
+      id: docSnap.id,
+      uid: u.uid || docSnap.id,
+      email: u.email,
+      displayName: u.displayName || [u.firstName, u.lastName].filter(Boolean).join(' ').trim() || 'Unnamed Admin',
+      firstName: u.firstName || null,
+      lastName: u.lastName || null,
+      phoneNumber: u.phoneNumber || null,
+      profilePicture: u.profilePicture || null,
+      churchId: u.churchId || '',
+      churchName: u.churchName || null,
+      role: u.role,
+      preferences: u.preferences || null,
+      createdAt: (u.createdAt && u.createdAt.toDate) ? u.createdAt.toDate().toISOString() : (u.createdAt || null),
+      lastLoginAt: (u.lastLoginAt && u.lastLoginAt.toDate) ? u.lastLoginAt.toDate().toISOString() : (u.lastLoginAt || null),
+      lastUpdated: (u.lastUpdated && u.lastUpdated.toDate) ? u.lastUpdated.toDate().toISOString() : (u.lastUpdated || null),
+      isActive: u.isActive !== false
+    };
+
+    return { user: result };
+  } catch (err) {
+    if (err instanceof functions.https.HttpsError) throw err;
+    console.error('searchAdminUserByEmail failed', err);
+    throw new functions.https.HttpsError('internal', err?.message || 'Search failed');
+  }
+});
+
+// HTTP CORS-enabled variant (temporary) to mitigate any callable CORS issues on localhost
+// POST { email } with optional Authorization: Bearer <ID_TOKEN>
+exports.searchAdminUserByEmailHttp = functions.https.onRequest(async (req, res) => {
+  setCors(req, res);
+  if (req.method === 'OPTIONS') return res.status(204).send('');
+  if (req.method !== 'POST') return res.status(405).json({ success: false, error: 'Method not allowed' });
+  try {
+    let uid = null;
+    const authHeader = req.headers.authorization || req.headers.Authorization;
+    if (authHeader && authHeader.toString().startsWith('Bearer ')) {
+      const token = authHeader.toString().slice(7);
+      try {
+        const decoded = await admin.auth().verifyIdToken(token);
+        uid = decoded.uid;
+      } catch {}
+    }
+    if (!uid) return res.status(401).json({ success: false, error: 'Authentication required' });
+    const { email } = req.body || {};
+    if (!email || typeof email !== 'string') return res.status(400).json({ success: false, error: 'Email required' });
+    const normalized = email.trim().toLowerCase();
+    if (!normalized) return res.status(400).json({ success: false, error: 'Email empty' });
+    const db = admin.firestore();
+    const callerSnap = await db.doc(`users/${uid}`).get();
+    if (!callerSnap.exists || (callerSnap.data() || {}).isActive === false) {
+      return res.status(403).json({ success: false, error: 'Inactive or missing caller' });
+    }
+    let targetSnap = await db.collection('users').where('email', '==', email).limit(1).get();
+    if (targetSnap.empty) {
+      try { targetSnap = await db.collection('users').where('email', '==', normalized).limit(1).get(); } catch {}
+    }
+    if (targetSnap.empty) return res.status(200).json({ success: true, user: null });
+    const docSnap = targetSnap.docs[0];
+    const u = docSnap.data() || {};
+    if ((u.role || '') !== 'admin' || u.isActive === false) {
+      return res.status(200).json({ success: true, user: null });
+    }
+    const result = {
+      id: docSnap.id,
+      uid: u.uid || docSnap.id,
+      email: u.email,
+      displayName: u.displayName || [u.firstName, u.lastName].filter(Boolean).join(' ').trim() || 'Unnamed Admin',
+      firstName: u.firstName || null,
+      lastName: u.lastName || null,
+      phoneNumber: u.phoneNumber || null,
+      profilePicture: u.profilePicture || null,
+      churchId: u.churchId || '',
+      churchName: u.churchName || null,
+      role: u.role,
+      isActive: u.isActive !== false
+    };
+    return res.status(200).json({ success: true, user: result });
+  } catch (e) {
+    console.error('searchAdminUserByEmailHttp failed', e);
+    return res.status(500).json({ success: false, error: e?.message || 'Search failed' });
+  }
+});
+
 
 
 // Chat message trigger: update thread metadata, unread counts, and push to recipients

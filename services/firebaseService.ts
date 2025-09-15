@@ -199,10 +199,29 @@ export const authService = {
 
 
 
-  // Sign up new user
+  // Sign up new user (basic path - keep for legacy callers)
   signUp: async (email: string, password: string, displayName: string, churchId: string): Promise<FirebaseUser> => {
     try {
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const trimmedEmail = (email || '').trim().toLowerCase();
+      if (!trimmedEmail) {
+        const err: any = new Error('auth/invalid-email');
+        err.code = 'auth/invalid-email';
+        throw err;
+      }
+
+      // Avoid Identity Toolkit 400s by pre-checking for existing accounts
+      try {
+        const methods = await fetchSignInMethodsForEmail(auth, trimmedEmail);
+        if (methods && methods.length > 0) {
+          const err: any = new Error('auth/email-already-in-use');
+          err.code = 'auth/email-already-in-use';
+          throw err;
+        }
+      } catch (precheckErr: any) {
+        // If pre-check fails due to network/key issues, proceed to create and let SDK surface precise error
+      }
+
+      const userCredential = await createUserWithEmailAndPassword(auth, trimmedEmail, password);
       const user = userCredential.user;
 
       // Create user document in Firestore with user UID as document ID
@@ -227,7 +246,7 @@ export const authService = {
       currentChurchId = churchId;
       return currentUser;
     } catch (error: any) {
-      // Pass through the original Firebase error for better error handling
+      // Do not wrap the error; preserve Firebase error codes for UI handling
       throw error;
     }
   },
@@ -373,7 +392,8 @@ export const authService = {
       currentChurchId = currentUser.churchId || null;
       return currentUser;
     } catch (error: any) {
-      throw new Error(`Registration failed: ${error.message}`);
+      // Preserve original Firebase error (e.g., auth/email-already-in-use, auth/operation-not-allowed, auth/weak-password)
+      throw error;
     }
   },
 
@@ -428,37 +448,42 @@ export const authService = {
   onAuthStateChanged: (callback: (user: FirebaseUser | null) => void): Unsubscribe => {
     return onAuthStateChanged(auth, async (user) => {
       if (user) {
-        // Get user data from Firestore - first try direct lookup by UID
-        let userDoc = await getDoc(doc(db, 'users', user.uid));
-        let userData = userDoc.data();
+        let userData: any = null;
+        try {
+          // Try to load profile (may fail if rules reference resource.data on missing doc)
+          const userDoc = await getDoc(doc(db, 'users', user.uid));
+          userData = userDoc.data();
 
-        // If not found, try fallback search for legacy users (created with auto-generated IDs)
-        if (!userData) {
-          const usersRef = collection(db, 'users');
-          const q = query(usersRef, where('uid', '==', user.uid));
-          const querySnapshot = await getDocs(q);
+          // If not found, try fallback search for legacy users (created with auto-generated IDs)
+          if (!userData) {
+            const usersRef = collection(db, 'users');
+            const q = query(usersRef, where('uid', '==', user.uid));
+            const querySnapshot = await getDocs(q);
 
-          if (!querySnapshot.empty) {
-            const legacyUserDoc = querySnapshot.docs[0];
-            userData = legacyUserDoc.data();
+            if (!querySnapshot.empty) {
+              const legacyUserDoc = querySnapshot.docs[0];
+              userData = legacyUserDoc.data();
 
-            // Migrate legacy user document to use UID as document ID
-            await setDoc(doc(db, 'users', user.uid), userData);
-            // Delete the old document with auto-generated ID
-            await deleteDoc(legacyUserDoc.ref);
+              // Migrate legacy user document to use UID as document ID
+              try { await setDoc(doc(db, 'users', user.uid), userData); } catch {}
+              try { await deleteDoc(legacyUserDoc.ref); } catch {}
+            }
           }
-        }
 
-        // If the profile indicates disabled or deleted, sign out immediately
-        if (userData && (userData as any).isActive === false) {
-          try { await signOut(auth); } catch {}
-          callback(null);
-          return;
-        }
-        if (userData && (userData as any).isDeleted === true) {
-          try { await signOut(auth); } catch {}
-          callback(null);
-          return;
+          // If the profile indicates disabled or deleted, sign out immediately
+          if (userData && (userData as any).isActive === false) {
+            try { await signOut(auth); } catch {}
+            callback(null);
+            return;
+          }
+          if (userData && (userData as any).isDeleted === true) {
+            try { await signOut(auth); } catch {}
+            callback(null);
+            return;
+          }
+        } catch (e: any) {
+          // Permission issues or unavailable profile: fall back to Auth-only identity
+          console.warn('[auth.onAuthStateChanged] Profile fetch failed, using Auth user only:', e?.code || e?.message || String(e));
         }
 
         currentUser = {

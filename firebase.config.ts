@@ -4,6 +4,7 @@ import { initializeFirestore, connectFirestoreEmulator, setLogLevel } from 'fire
 import { getStorage } from 'firebase/storage';
 import { getAuth, connectAuthEmulator, setPersistence, browserLocalPersistence } from 'firebase/auth';
 import { getMessaging, isSupported } from 'firebase/messaging';
+import { getFunctions, httpsCallable, connectFunctionsEmulator } from 'firebase/functions';
 
 // Ministry variant removed – single SAT project only
 
@@ -42,6 +43,9 @@ const app = initializeApp(firebaseConfig);
 
 // Initialize Storage (for chat image uploads & other media)
 export const storage = getStorage(app);
+
+// Initialize Cloud Functions (region default). Export for callables (e.g., searchAdminUserByEmail)
+export const functions = getFunctions(app);
 
 // Initialize Firestore with robust transport + settings to avoid network quirks (e.g. 400 on terminate)
 export const db = initializeFirestore(app, {
@@ -120,6 +124,7 @@ if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_USE_FIREBASE
 
     // Connect to Auth emulator
     connectAuthEmulator(auth, 'http://localhost:9099');
+    try { connectFunctionsEmulator(functions, 'localhost', 5001); } catch {}
   } catch (error) {
     console.warn('Firebase emulators already connected or not available');
   }

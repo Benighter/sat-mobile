@@ -10,77 +10,58 @@ import {
   where,
   limit,
   setDoc,
-  // Timestamp
 } from 'firebase/firestore';
 import { db } from '../firebase.config';
 import { AdminInvite, User } from '../types';
 
 export const inviteService = {
-  // Search for users by email in the users collection (across all churches)
+  // Search directly in Firestore to avoid any Cloud Functions/CORS dependency
   searchUserByEmail: async (email: string): Promise<User | null> => {
     try {
-      // Search for users with the exact email (across all churches)
-      const usersQuery = query(
-        collection(db, 'users'),
-        where('email', '==', email),
-        where('isActive', '==', true)
-      );
+      const trimmed = (email || '').trim();
+      if (!trimmed) return null;
+      const normalized = trimmed.toLowerCase();
 
-      let usersSnapshot = await getDocs(usersQuery);
+      // Try exact match on email
+      let snap = await getDocs(query(collection(db, 'users'), where('email', '==', trimmed), limit(1)));
 
-      // If no results, try with lowercase email
-      if (usersSnapshot.empty) {
-        const lowercaseQuery = query(
-          collection(db, 'users'),
-          where('email', '==', email.toLowerCase()),
-          where('isActive', '==', true)
-        );
-
-        usersSnapshot = await getDocs(lowercaseQuery);
+      // Fallback: try lowercased value (supports schemas that store lowercased email)
+      if (snap.empty) {
+        try {
+          snap = await getDocs(query(collection(db, 'users'), where('email', '==', normalized), limit(1)));
+        } catch {}
       }
 
-      // If still no results, get all users and filter manually
-      if (usersSnapshot.empty) {
-        const allUsersQuery = query(
-          collection(db, 'users'),
-          where('isActive', '==', true)
-        );
-
-        usersSnapshot = await getDocs(allUsersQuery);
+      // Fallback: if schema has emailLower, try that
+      if (snap.empty) {
+        try {
+          snap = await getDocs(query(collection(db, 'users'), where('emailLower', '==', normalized), limit(1)));
+        } catch {}
       }
 
-      // Find user with matching email (case-insensitive)
-      const matchingUser = usersSnapshot.docs.find(doc => {
-        const userData = doc.data();
-        return userData.email && userData.email.toLowerCase() === email.toLowerCase();
-      });
+      if (snap.empty) return null;
+      const docSnap = snap.docs[0];
+      const u: any = docSnap.data() || {};
 
-      if (matchingUser) {
-        const userData = matchingUser.data();
+      // Only allow inviting Admins; treat inactive as not found
+      if ((u.role || '') !== 'admin' || u.isActive === false) return null;
 
-        return {
-          id: matchingUser.id,
-          uid: userData.uid,
-          email: userData.email,
-          displayName: userData.displayName,
-          firstName: userData.firstName,
-          lastName: userData.lastName,
-          phoneNumber: userData.phoneNumber,
-          profilePicture: userData.profilePicture,
-          churchId: userData.churchId,
-          churchName: userData.churchName,
-          role: userData.role,
-          preferences: userData.preferences,
-          createdAt: userData.createdAt?.toDate?.() ? userData.createdAt.toDate().toISOString() : userData.createdAt,
-          lastLoginAt: userData.lastLoginAt?.toDate?.() ? userData.lastLoginAt.toDate().toISOString() : userData.lastLoginAt,
-          lastUpdated: userData.lastUpdated,
-          isActive: userData.isActive
-        } as User;
-      }
-
-      return null;
+      const result: User = {
+        uid: u.uid || docSnap.id,
+        id: docSnap.id,
+        email: u.email,
+        displayName: u.displayName || [u.firstName, u.lastName].filter(Boolean).join(' ').trim(),
+        firstName: u.firstName || undefined as any,
+        lastName: u.lastName || undefined as any,
+        phoneNumber: u.phoneNumber || undefined as any,
+        profilePicture: u.profilePicture || undefined as any,
+        churchId: u.churchId || '',
+        churchName: u.churchName || undefined as any,
+        role: u.role,
+      } as any;
+      return result;
     } catch (error: any) {
-      throw new Error(`Failed to search user: ${error.message}`);
+      throw new Error(`Failed to search user: ${error?.message || 'search failed'}`);
     }
   },
 

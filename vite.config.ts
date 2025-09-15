@@ -45,7 +45,16 @@ export default defineConfig(({ mode }) => {
       server: {
         port: 3000,
         host: true,
-        strictPort: true
+        strictPort: true,
+        proxy: {
+          // Local dev proxy to Cloud Functions to avoid browser CORS
+          '/api/search-admin': {
+            target: 'https://us-central1-sat-mobile-de6f1.cloudfunctions.net',
+            changeOrigin: true,
+            secure: true,
+            rewrite: (p) => p.replace(/^\/api\/search-admin/, '/searchAdminUserByEmailHttp'),
+          }
+        }
       },
       preview: {
         port: 3000,
