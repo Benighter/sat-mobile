@@ -465,6 +465,47 @@ export const inviteService = {
     }
   },
 
+  // Reinvite: refresh an existing expired/removed invite IN-PLACE (no duplicate documents)
+  reinviteInvite: async (inviteId: string, expirationHours: number = 168): Promise<AdminInvite> => {
+    try {
+      const inviteDocRef = doc(db, 'adminInvites', inviteId);
+      const snap = await getDoc(inviteDocRef);
+      if (!snap.exists()) throw new Error('Invite not found');
+      const data = snap.data() as any;
+
+      const now = new Date();
+      const expiresAt = new Date(now.getTime() + expirationHours * 60 * 60 * 1000);
+
+      const updated: any = {
+        // core fields (preserved or ensured)
+        invitedUserEmail: data.invitedUserEmail,
+        invitedUserId: data.invitedUserId,
+        invitedUserName: data.invitedUserName,
+        invitedUserChurchId: data.invitedUserChurchId || '',
+        invitedUserChurchName: data.invitedUserChurchName || '',
+        createdBy: data.createdBy,
+        createdByName: data.createdByName,
+        churchId: data.churchId,
+        accessChurchId: data.accessChurchId || data.churchId,
+        targetRole: data.targetRole || 'leader',
+        // refreshed state
+        status: 'pending',
+        createdAt: now.toISOString(),
+        expiresAt: expiresAt.toISOString(),
+        respondedAt: null,
+        revokedAt: null,
+        reinviteCount: (data.reinviteCount || 0) + 1,
+        lastReinvitedAt: now.toISOString()
+      };
+
+      await updateDoc(inviteDocRef, updated);
+
+      return { id: inviteId, ...(data as any), ...(updated as any) } as AdminInvite;
+    } catch (error: any) {
+      throw new Error(`Failed to reinvite: ${error.message}`);
+    }
+  },
+
   // Delete an invite permanently
   deleteInvite: async (inviteId: string): Promise<void> => {
     try {
