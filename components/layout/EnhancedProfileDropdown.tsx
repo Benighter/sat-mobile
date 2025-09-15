@@ -240,7 +240,16 @@ const EnhancedProfileDropdown: React.FC<EnhancedProfileDropdownProps> = ({
     );
   };
 
-  if (!user) return null;
+  if (!user) {
+    // Render a fallback button for debugging
+    return (
+      <div className="relative">
+        <button className="flex items-center space-x-2 px-3 py-2 rounded-lg bg-red-500 text-white shadow-lg">
+          <span>No User</span>
+        </button>
+      </div>
+    );
+  }
 
   // Derive role label once profile is available; fallback while loading
   const roleLabel = useMemo(() => {
@@ -269,7 +278,7 @@ const EnhancedProfileDropdown: React.FC<EnhancedProfileDropdownProps> = ({
           }
           setIsOpen(next);
         }}
-        className="flex items-center space-x-1 xs:space-x-2 px-1.5 xs:px-2 sm:px-3 py-1.5 xs:py-2 rounded-lg xs:rounded-xl glass hover:glass-dark transition-all duration-300 group shadow-lg touch-manipulation"
+        className="flex items-center space-x-1 xs:space-x-2 px-1.5 xs:px-2 sm:px-3 py-1.5 xs:py-2 rounded-lg xs:rounded-xl bg-white/95 border border-gray-200 hover:bg-white hover:shadow-lg transition-all duration-300 group shadow-md touch-manipulation min-w-[40px]"
         aria-label="Open profile menu"
       >
         <ProfileAvatar size="sm" />
@@ -288,19 +297,17 @@ const EnhancedProfileDropdown: React.FC<EnhancedProfileDropdownProps> = ({
       {isOpen && (
         <div 
           ref={menuRef}
-          className={`bg-white rounded-2xl shadow-2xl border border-gray-200 z-50 overflow-hidden overflow-y-auto ${
-            dropdownPosition?.positioning === 'fixed' 
-              ? 'fixed mobile-profile-dropdown mobile-dropdown-content' 
-              : 'absolute right-0 top-full mt-2 w-80 sm:w-96'
-          }`}
-          style={dropdownPosition ? {
-            position: dropdownPosition.positioning,
+          className={
+            getViewportSize().isMobile
+              ? 'fixed mobile-profile-dropdown mobile-dropdown-content bg-white rounded-2xl shadow-2xl border border-gray-200 z-50 overflow-hidden overflow-y-auto'
+              : 'absolute right-0 top-full mt-2 w-80 sm:w-96 bg-white rounded-2xl shadow-2xl border border-gray-200 z-50 overflow-hidden overflow-y-auto'
+          }
+          style={getViewportSize().isMobile && dropdownPosition ? {
+            position: 'fixed',
             top: `${dropdownPosition.top}px`,
             left: `${dropdownPosition.left}px`,
             maxHeight: `${dropdownPosition.maxHeight}px`,
-            width: getViewportSize().isMobile ? 
-              (getViewportSize().isSmallMobile ? 'calc(100vw - 1rem)' : 'calc(100vw - 2rem)') : 
-              '24rem'
+            width: getViewportSize().isSmallMobile ? 'calc(100vw - 1rem)' : 'calc(100vw - 2rem)'
           } : {}}
         >
           {/* Profile Header */}
