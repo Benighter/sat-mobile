@@ -465,49 +465,6 @@ export const inviteService = {
     }
   },
 
-  // Reinvite: create a fresh invite and delete the old one atomically (no duplicates)
-  reinviteInvite: async (inviteId: string, expirationHours: number = 168): Promise<AdminInvite> => {
-    try {
-      const oldRef = doc(db, 'adminInvites', inviteId);
-      const snap = await getDoc(oldRef);
-      if (!snap.exists()) throw new Error('Invite not found');
-      const old = snap.data() as any;
-
-      const now = new Date();
-      const expiresAt = new Date(now.getTime() + expirationHours * 60 * 60 * 1000);
-
-      const newInvite: any = {
-        invitedUserEmail: old.invitedUserEmail,
-        invitedUserId: old.invitedUserId,
-        invitedUserName: old.invitedUserName,
-        invitedUserChurchId: old.invitedUserChurchId || '',
-        invitedUserChurchName: old.invitedUserChurchName || '',
-        createdBy: old.createdBy,
-        createdByName: old.createdByName,
-        churchId: old.churchId,
-        accessChurchId: old.accessChurchId || old.churchId,
-        targetRole: old.targetRole || 'leader',
-        status: 'pending',
-        createdAt: now.toISOString(),
-        expiresAt: expiresAt.toISOString(),
-        reinviteOf: inviteId,
-        reinviteCount: (old.reinviteCount || 0) + 1,
-        lastReinvitedAt: now.toISOString()
-      };
-
-      // Atomically create new doc and delete old doc
-      const newRef = doc(collection(db, 'adminInvites'));
-      const batch = (await import('firebase/firestore')).writeBatch(db as any);
-      batch.set(newRef, newInvite);
-      batch.delete(oldRef);
-      await batch.commit();
-
-      return { id: newRef.id, ...(newInvite as any) } as AdminInvite;
-    } catch (error: any) {
-      throw new Error(`Failed to reinvite: ${error.message}`);
-    }
-  },
-
   // Delete an invite permanently
   deleteInvite: async (inviteId: string): Promise<void> => {
     try {

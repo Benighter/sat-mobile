@@ -197,17 +197,6 @@ const AdminInviteScreen: React.FC<AdminInviteScreenProps> = ({ isOpen, onClose }
     }
   };
 
-  const handleReinvite = async (invite: AdminInvite) => {
-    try {
-      await inviteService.reinviteInvite(invite.id);
-      showToast('success', `Reinvited ${invite.invitedUserName}`);
-      loadInvites();
-    } catch (error: any) {
-      console.error('Error reinviting:', error);
-      showToast('error', 'Failed to reinvite', error.message);
-    }
-  };
-
   const getStatusText = (status: string, expiresAt: string) => {
     if (status === 'accepted') return 'Accepted';
     if (status === 'rejected') return 'Rejected';
@@ -244,7 +233,7 @@ const AdminInviteScreen: React.FC<AdminInviteScreenProps> = ({ isOpen, onClose }
 
   return (
     <div 
-      className="fixed bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 z-50 overflow-hidden"
+      className="fixed bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 z-50 admin-invite-screen"
       style={{
         top: 'calc(var(--navbar-height, 0px) + env(safe-area-inset-top, 0px))',
         left: 'env(safe-area-inset-left, 0px)',
@@ -316,13 +305,8 @@ const AdminInviteScreen: React.FC<AdminInviteScreenProps> = ({ isOpen, onClose }
       </div>
 
       {/* Content Area */}
-      <div 
-        className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-6 scroll-smooth scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent touch-pan-y" 
-        style={{ 
-          height: 'calc(100% - 140px)',
-          paddingBottom: 'calc(1.5rem + env(safe-area-inset-bottom, 0px))'
-        }}
-      >
+      <div className="admin-invite-content">
+        <div className="admin-invite-content-inner">
         {activeTab === 'search' ? (
           <div className="max-w-2xl mx-auto space-y-6">
             {/* Search Section */}
@@ -545,8 +529,7 @@ const AdminInviteScreen: React.FC<AdminInviteScreenProps> = ({ isOpen, onClose }
                         </div>
 
                         {/* Action Buttons - Consistent positioning */}
-                        <div className="flex justify-end gap-2">
-                          {/* Pending and not expired: allow cancel */}
+                        <div className="flex justify-end">
                           {invite.status === 'pending' && !isExpired(invite.expiresAt) && (
                             <Button
                               variant="ghost"
@@ -558,30 +541,6 @@ const AdminInviteScreen: React.FC<AdminInviteScreenProps> = ({ isOpen, onClose }
                               Cancel Invite
                             </Button>
                           )}
-
-                          {/* Expired invite: allow reinvite and delete */}
-                          {invite.status === 'pending' && isExpired(invite.expiresAt) && (
-                            <>
-                              <Button
-                                variant="primary"
-                                size="sm"
-                                onClick={() => handleReinvite(invite)}
-                                className="h-7 px-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-medium transition-all duration-200"
-                              >
-                                Reinvite
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleDeleteInvite(invite)}
-                                className="h-7 px-3 bg-gray-50 hover:bg-gray-100 text-gray-700 border border-gray-200 rounded-lg text-xs font-medium transition-all duration-200"
-                              >
-                                Delete
-                              </Button>
-                            </>
-                          )}
-
-                          {/* Accepted: allow remove leader */}
                           {invite.status === 'accepted' && (
                             <Button
                               variant="ghost"
@@ -591,18 +550,6 @@ const AdminInviteScreen: React.FC<AdminInviteScreenProps> = ({ isOpen, onClose }
                             >
                               <XMarkIcon className="w-3 h-3 mr-1" />
                               Remove Leader
-                            </Button>
-                          )}
-
-                          {/* Removed or Rejected: allow delete */}
-                          {(invite.status === 'revoked' || invite.status === 'rejected') && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleDeleteInvite(invite)}
-                              className="h-7 px-3 bg-gray-50 hover:bg-gray-100 text-gray-700 border border-gray-200 rounded-lg text-xs font-medium transition-all duration-200"
-                            >
-                              Delete
                             </Button>
                           )}
                         </div>
@@ -615,6 +562,7 @@ const AdminInviteScreen: React.FC<AdminInviteScreenProps> = ({ isOpen, onClose }
             )}
           </div>
         )}
+        </div>
       </div>
     </div>
   );

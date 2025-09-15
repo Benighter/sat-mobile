@@ -1192,3 +1192,238 @@ select:focus-visible {
     margin-top: 1rem !important;
   }
 }
+
+/* ===== MOBILE DROPDOWN RESPONSIVE STYLES ===== */
+
+/* Mobile dropdown container with responsive behavior */
+.mobile-dropdown-container {
+  /* Enable smooth scrolling and touch optimization */
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  /* Hardware acceleration for smooth performance */
+  -webkit-transform: translate3d(0, 0, 0);
+  transform: translate3d(0, 0, 0);
+  /* Touch optimization */
+  touch-action: auto;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Mobile dropdown positioning and sizing for small screens */
+@media (max-width: 414px) {
+  .mobile-dropdown-menu {
+    /* Constrain width to screen with safe margins */
+    max-width: calc(100vw - 2rem) !important;
+    /* Limit height to prevent overflow beyond viewport */
+    max-height: calc(100vh - 8rem) !important;
+    /* Enable scrolling when content exceeds max height */
+    overflow-y: auto !important;
+    /* Touch-friendly scrolling */
+    -webkit-overflow-scrolling: touch !important;
+    /* Prevent scroll chaining to parent */
+    overscroll-behavior: contain !important;
+    /* Position properly on mobile */
+    position: fixed !important;
+    z-index: 9999 !important;
+    /* Mobile-friendly border radius */
+    border-radius: 1rem !important;
+    /* Enhanced shadow for mobile */
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3) !important;
+    /* Hardware acceleration */
+    -webkit-transform: translate3d(0, 0, 0);
+    transform: translate3d(0, 0, 0);
+  }
+
+  /* Mobile dropdown content padding adjustment */
+  .mobile-dropdown-content {
+    padding: 0.75rem !important;
+  }
+
+  /* Mobile dropdown items with larger touch targets */
+  .mobile-dropdown-item {
+    min-height: 44px !important; /* iOS recommended minimum touch target */
+    padding: 0.75rem 1rem !important;
+    touch-action: manipulation !important;
+    -webkit-tap-highlight-color: transparent !important;
+  }
+
+  /* Profile dropdown specific mobile styles */
+  .mobile-profile-dropdown {
+    /* Take most of screen width on very small devices */
+    width: calc(100vw - 1.5rem) !important;
+    max-width: 24rem !important;
+    /* Responsive height constraint */
+    max-height: calc(100vh - 6rem) !important;
+    /* Position from top on mobile */
+    top: 4rem !important;
+    left: 50% !important;
+    transform: translateX(-50%) !important;
+    /* Enhanced mobile styling */
+    border-radius: 1.25rem !important;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4) !important;
+  }
+
+  /* Scroll indicators for mobile dropdowns */
+  .mobile-dropdown-scroll-indicator {
+    position: sticky;
+    height: 4px;
+    background: linear-gradient(to right, transparent, rgba(59, 130, 246, 0.3), transparent);
+    z-index: 10;
+    margin: 0 -0.5rem;
+  }
+
+  .mobile-dropdown-scroll-indicator.top {
+    top: 0;
+    background: linear-gradient(to bottom, rgba(255, 255, 255, 0.9), transparent);
+  }
+
+  .mobile-dropdown-scroll-indicator.bottom {
+    bottom: 0;
+    background: linear-gradient(to top, rgba(255, 255, 255, 0.9), transparent);
+  }
+}
+
+/* iPhone SE and smaller devices (≤ 375px) */
+@media (max-width: 375px) {
+  .mobile-dropdown-menu {
+    max-width: calc(100vw - 1rem) !important;
+    max-height: calc(100vh - 6rem) !important;
+  }
+
+  .mobile-profile-dropdown {
+    width: calc(100vw - 1rem) !important;
+    max-height: calc(100vh - 5rem) !important;
+    top: 3.5rem !important;
+  }
+
+  .mobile-dropdown-content {
+    padding: 0.5rem !important;
+  }
+
+  .mobile-dropdown-item {
+    padding: 0.625rem 0.75rem !important;
+  }
+}
+
+/* Custom scrollbar for mobile dropdowns */
+@media (max-width: 414px) {
+  .mobile-dropdown-menu::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  .mobile-dropdown-menu::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.1);
+    border-radius: 2px;
+  }
+
+  .mobile-dropdown-menu::-webkit-scrollbar-thumb {
+    background: rgba(59, 130, 246, 0.5);
+    border-radius: 2px;
+  }
+
+  .mobile-dropdown-menu::-webkit-scrollbar-thumb:hover {
+    background: rgba(59, 130, 246, 0.7);
+  }
+}
+
+/* Backdrop blur enhancement for mobile dropdowns */
+.mobile-dropdown-backdrop {
+  backdrop-filter: blur(4px) !important;
+  -webkit-backdrop-filter: blur(4px) !important;
+}
+
+/* Animation classes for mobile dropdown entrance */
+.mobile-dropdown-enter {
+  opacity: 0;
+  transform: translateY(-10px) scale(0.95);
+}
+
+.mobile-dropdown-enter-active {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  transition: opacity 200ms ease-out, transform 200ms ease-out;
+}
+
+.mobile-dropdown-exit {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+.mobile-dropdown-exit-active {
+  opacity: 0;
+  transform: translateY(-10px) scale(0.95);
+  transition: opacity 150ms ease-in, transform 150ms ease-in;
+}
+
+/* ===== ADMIN INVITE SCREEN SCROLLING FIXES ===== */
+
+/* Enhanced scrolling for Leadership Management screen */
+.admin-invite-screen {
+  /* Ensure proper flexbox layout */
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.admin-invite-content {
+  /* Flex grow to take remaining space */
+  flex: 1;
+  /* Allow scrolling with proper mobile optimizations */
+  overflow-y: auto;
+  overflow-x: hidden;
+  /* Mobile scroll optimizations */
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  scroll-behavior: smooth;
+  /* Hardware acceleration */
+  -webkit-transform: translate3d(0, 0, 0);
+  transform: translate3d(0, 0, 0);
+  will-change: scroll-position;
+  /* Touch optimization */
+  touch-action: auto;
+}
+
+/* Mobile specific improvements for admin invite screen */
+@media (max-width: 768px) {
+  .admin-invite-content {
+    /* Ensure momentum scrolling on iOS */
+    -webkit-overflow-scrolling: touch;
+    /* Prevent rubber band effect */
+    overscroll-behavior-y: contain;
+    /* Optimize for touch devices */
+    touch-action: pan-y;
+  }
+  
+  /* Enhanced scrollbar for mobile */
+  .admin-invite-content::-webkit-scrollbar {
+    width: 4px;
+  }
+  
+  .admin-invite-content::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.1);
+    border-radius: 2px;
+  }
+  
+  .admin-invite-content::-webkit-scrollbar-thumb {
+    background: rgba(59, 130, 246, 0.5);
+    border-radius: 2px;
+  }
+  
+  .admin-invite-content::-webkit-scrollbar-thumb:hover {
+    background: rgba(59, 130, 246, 0.7);
+  }
+}
+
+/* Ensure invite cards don't cause layout issues */
+.invite-card {
+  /* Prevent shrinking */
+  flex-shrink: 0;
+  /* Ensure proper spacing */
+  margin-bottom: 1rem;
+}
+
+/* Last invite card spacing */
+.invite-card:last-child {
+  margin-bottom: 2rem;
+}

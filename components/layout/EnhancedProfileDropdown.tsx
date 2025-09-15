@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { useAppContext } from '../../contexts/FirebaseAppContext';
 import { authService, FirebaseUser } from '../../services/firebaseService';
 import { TabKeys } from '../../types';
@@ -14,6 +14,14 @@ import {
 } from '../icons';
 import { hasLeaderPrivileges, hasAdminPrivileges } from '../../utils/permissionUtils';
 import AboutModal from '../modals/general/AboutModal';
+import { 
+  getViewportSize, 
+  calculateMobileDropdownPosition,
+  enhanceDropdownScrolling,
+  createScrollIndicators,
+  updateScrollIndicators,
+  debounce
+} from '../../utils/viewportUtils';
 
 interface EnhancedProfileDropdownProps {
   user: FirebaseUser | null;
@@ -29,7 +37,17 @@ const EnhancedProfileDropdown: React.FC<EnhancedProfileDropdownProps> = ({
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isAboutModalOpen, setIsAboutModalOpen] = useState(false);
+  const [dropdownPosition, setDropdownPosition] = useState<{
+    top: number;
+    left: number;
+    maxHeight: number;
+    positioning: 'fixed' | 'absolute';
+  } | null>(null);
+  
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const scrollIndicatorsRef = useRef<{ top: HTMLElement; bottom: HTMLElement } | null>(null);
   const {
     showToast,
   openMemberForm,
@@ -50,6 +68,72 @@ const EnhancedProfileDropdown: React.FC<EnhancedProfileDropdownProps> = ({
   // Use active (non-frozen) members across the app
   const activeMembersCount = useMemo(() => members.filter(m => !m.frozen).length, [members]);
 
+  // Calculate dropdown position based on viewport
+  const calculatePosition = useCallback(() => {
+    if (!triggerRef.current || !isOpen) return;
+
+    const viewport = getViewportSize();
+    // Profile dropdown is larger - estimate height based on content
+    const estimatedHeight = 600; // Approximate height of profile dropdown
+    const estimatedWidth = viewport.isMobile ? 
+      (viewport.isSmallMobile ? window.innerWidth - 16 : window.innerWidth - 32) : 
+      384; // w-96 = 24rem = 384px
+
+    const position = calculateMobileDropdownPosition(
+      triggerRef.current,
+      estimatedWidth,
+      estimatedHeight
+    );
+
+    setDropdownPosition(position);
+  }, [isOpen]);
+
+  // Enhanced scroll handling for mobile
+  const setupMobileScrolling = useCallback(() => {
+    if (!menuRef.current) return () => {};
+
+    const viewport = getViewportSize();
+    if (!viewport.isMobile) return () => {};
+
+    // Add mobile scroll enhancements
+    const cleanup = enhanceDropdownScrolling(menuRef.current);
+
+    // Create scroll indicators
+    const indicators = createScrollIndicators();
+    scrollIndicatorsRef.current = indicators;
+
+    // Add indicators to menu
+    menuRef.current.prepend(indicators.top);
+    menuRef.current.append(indicators.bottom);
+
+    // Setup scroll listener
+    const handleScroll = debounce(() => {
+      if (menuRef.current && scrollIndicatorsRef.current) {
+        updateScrollIndicators(
+          menuRef.current,
+          scrollIndicatorsRef.current.top,
+          scrollIndicatorsRef.current.bottom
+        );
+      }
+    }, 16);
+
+    menuRef.current.addEventListener('scroll', handleScroll);
+
+    // Initial indicator update
+    setTimeout(() => handleScroll(), 100);
+
+    return () => {
+      cleanup();
+      if (menuRef.current) {
+        menuRef.current.removeEventListener('scroll', handleScroll);
+      }
+      if (scrollIndicatorsRef.current) {
+        scrollIndicatorsRef.current.top.remove();
+        scrollIndicatorsRef.current.bottom.remove();
+      }
+    };
+  }, []);
+
   // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -58,9 +142,35 @@ const EnhancedProfileDropdown: React.FC<EnhancedProfileDropdownProps> = ({
       }
     };
 
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      calculatePosition();
+      
+      // Setup mobile scrolling
+      const cleanupScrolling = setupMobileScrolling();
+      
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside);
+        cleanupScrolling();
+      };
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isOpen, calculatePosition, setupMobileScrolling]);
+
+  // Handle window resize
+  useEffect(() => {
+    const handleResize = debounce(() => {
+      if (isOpen) {
+        calculatePosition();
+      }
+    }, 100);
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [isOpen, calculatePosition]);
 
   // Auto-close profile dropdown if navigation drawer opens
   useEffect(() => {
@@ -150,6 +260,7 @@ const EnhancedProfileDropdown: React.FC<EnhancedProfileDropdownProps> = ({
     <div className="relative" ref={dropdownRef}>
       {/* Profile Button */}
       <button
+        ref={triggerRef}
         onClick={() => {
           const next = !isOpen;
           // If we're about to open the profile dropdown, close the navigation drawer
@@ -175,7 +286,23 @@ const EnhancedProfileDropdown: React.FC<EnhancedProfileDropdownProps> = ({
 
       {/* Dropdown Menu */}
       {isOpen && (
-        <div className="absolute right-0 top-full mt-2 w-80 sm:w-96 bg-white rounded-2xl shadow-2xl border border-gray-200 z-50 overflow-hidden">
+        <div 
+          ref={menuRef}
+          className={`bg-white rounded-2xl shadow-2xl border border-gray-200 z-50 overflow-hidden overflow-y-auto ${
+            dropdownPosition?.positioning === 'fixed' 
+              ? 'fixed mobile-profile-dropdown mobile-dropdown-content' 
+              : 'absolute right-0 top-full mt-2 w-80 sm:w-96'
+          }`}
+          style={dropdownPosition ? {
+            position: dropdownPosition.positioning,
+            top: `${dropdownPosition.top}px`,
+            left: `${dropdownPosition.left}px`,
+            maxHeight: `${dropdownPosition.maxHeight}px`,
+            width: getViewportSize().isMobile ? 
+              (getViewportSize().isSmallMobile ? 'calc(100vw - 1rem)' : 'calc(100vw - 2rem)') : 
+              '24rem'
+          } : {}}
+        >
           {/* Profile Header */}
           <div className="p-4 bg-gradient-to-br from-blue-50 to-indigo-50 border-b border-gray-100">
             <div className="flex items-start space-x-3">
@@ -222,7 +349,7 @@ const EnhancedProfileDropdown: React.FC<EnhancedProfileDropdownProps> = ({
                   openMemberForm(undefined);
                   setIsOpen(false);
                 }}
-                className="flex items-center space-x-2 p-3 rounded-lg bg-blue-50 hover:bg-blue-100 transition-colors duration-200 group"
+                className="flex items-center space-x-2 p-3 rounded-lg bg-blue-50 hover:bg-blue-100 transition-colors duration-200 group touch-manipulation mobile-dropdown-item"
               >
                 <PlusIcon className="w-4 h-4 text-blue-600" />
                 <span className="text-sm font-medium text-blue-700">Add Member</span>
@@ -232,7 +359,7 @@ const EnhancedProfileDropdown: React.FC<EnhancedProfileDropdownProps> = ({
                   onOpenBulkMemberModal?.();
                   setIsOpen(false);
                 }}
-                className="flex items-center space-x-2 p-3 rounded-lg bg-green-50 hover:bg-green-100 transition-colors duration-200 group"
+                className="flex items-center space-x-2 p-3 rounded-lg bg-green-50 hover:bg-green-100 transition-colors duration-200 group touch-manipulation mobile-dropdown-item"
               >
                 <ClipboardIcon className="w-4 h-4 text-green-600" />
                 <span className="text-sm font-medium text-green-700">Bulk Add</span>
@@ -243,7 +370,7 @@ const EnhancedProfileDropdown: React.FC<EnhancedProfileDropdownProps> = ({
                   onOpenDataManagement?.();
                   setIsOpen(false);
                 }}
-                className="flex items-center space-x-2 p-3 rounded-lg bg-orange-50 hover:bg-orange-100 transition-colors duration-200 group"
+                className="flex items-center space-x-2 p-3 rounded-lg bg-orange-50 hover:bg-orange-100 transition-colors duration-200 group touch-manipulation mobile-dropdown-item"
               >
                 <CogIcon className="w-4 h-4 text-orange-600" />
                 <span className="text-sm font-medium text-orange-700">Settings</span>
@@ -271,7 +398,7 @@ const EnhancedProfileDropdown: React.FC<EnhancedProfileDropdownProps> = ({
                       try { document.getElementById('constituencies-section')?.scrollIntoView({ behavior: 'smooth' }); } catch {}
                     }, 250);
                   }}
-                  className="mt-2 w-full text-left text-sm px-2 py-2 rounded bg-white hover:bg-indigo-100 text-indigo-800 border border-indigo-100"
+                  className="mt-2 w-full text-left text-sm px-2 py-2 rounded bg-white hover:bg-indigo-100 text-indigo-800 border border-indigo-100 touch-manipulation mobile-dropdown-item"
                 >
                   Manage constituencies in Profile Settings
                 </button>
@@ -282,7 +409,7 @@ const EnhancedProfileDropdown: React.FC<EnhancedProfileDropdownProps> = ({
                 switchTab({ id: TabKeys.PROFILE_SETTINGS, name: 'Profile Settings' });
                 setIsOpen(false);
               }}
-              className="w-full flex items-center space-x-3 px-4 py-3 rounded-lg hover:bg-gray-50 transition-colors duration-200 group"
+              className="w-full flex items-center space-x-3 px-4 py-3 rounded-lg hover:bg-gray-50 transition-colors duration-200 group touch-manipulation mobile-dropdown-item"
             >
               <UserIcon className="w-5 h-5 text-gray-500 group-hover:text-gray-700" />
               <span className="text-sm font-medium text-gray-700 group-hover:text-gray-900">Profile Settings</span>
@@ -293,7 +420,7 @@ const EnhancedProfileDropdown: React.FC<EnhancedProfileDropdownProps> = ({
                 setIsAboutModalOpen(true);
                 setIsOpen(false);
               }}
-              className="w-full flex items-center space-x-3 px-4 py-3 rounded-lg hover:bg-gradient-to-r hover:from-indigo-50 hover:to-blue-50 transition-all duration-200 group"
+              className="w-full flex items-center space-x-3 px-4 py-3 rounded-lg hover:bg-gradient-to-r hover:from-indigo-50 hover:to-blue-50 transition-all duration-200 group touch-manipulation mobile-dropdown-item"
             >
               <InformationCircleIcon className="w-5 h-5 text-indigo-500 group-hover:text-blue-600" />
               <span className="text-sm font-medium text-indigo-600 group-hover:text-blue-700">About</span>
@@ -306,7 +433,7 @@ const EnhancedProfileDropdown: React.FC<EnhancedProfileDropdownProps> = ({
                   switchTab({ id: TabKeys.MY_DELETION_REQUESTS, name: 'My Deletion Requests' });
                   setIsOpen(false);
                 }}
-                className="w-full flex items-center space-x-3 px-4 py-3 rounded-lg hover:bg-orange-50 transition-colors duration-200 group"
+                className="w-full flex items-center space-x-3 px-4 py-3 rounded-lg hover:bg-orange-50 transition-colors duration-200 group touch-manipulation mobile-dropdown-item"
               >
                 <ClipboardIcon className="w-5 h-5 text-orange-500 group-hover:text-orange-700" />
                 <span className="text-sm font-medium text-orange-600 group-hover:text-orange-800">My Deletion Requests</span>
@@ -320,7 +447,7 @@ const EnhancedProfileDropdown: React.FC<EnhancedProfileDropdownProps> = ({
                   switchTab({ id: TabKeys.ADMIN_DELETION_REQUESTS, name: 'Admin Deletion Requests' });
                   setIsOpen(false);
                 }}
-                className="w-full flex items-center space-x-3 px-4 py-3 rounded-lg hover:bg-red-50 transition-colors duration-200 group"
+                className="w-full flex items-center space-x-3 px-4 py-3 rounded-lg hover:bg-red-50 transition-colors duration-200 group touch-manipulation mobile-dropdown-item"
               >
                 <ExclamationTriangleIcon className="w-5 h-5 text-red-500 group-hover:text-red-700" />
                 <span className="text-sm font-medium text-red-600 group-hover:text-red-800">Admin Deletion Requests</span>
@@ -333,7 +460,7 @@ const EnhancedProfileDropdown: React.FC<EnhancedProfileDropdownProps> = ({
                 switchTab({ id: TabKeys.CONTACT, name: 'Contact', data: { initialEmail: user?.email || (typeof window !== 'undefined' ? localStorage.getItem('last_known_email') || undefined : undefined) } });
                 setIsOpen(false);
               }}
-              className="w-full flex items-center space-x-3 px-4 py-3 rounded-lg hover:bg-blue-50 dark:hover:bg-dark-700 transition-colors duration-200 group"
+              className="w-full flex items-center space-x-3 px-4 py-3 rounded-lg hover:bg-blue-50 dark:hover:bg-dark-700 transition-colors duration-200 group touch-manipulation mobile-dropdown-item"
             >
               <InformationCircleIcon className="w-5 h-5 text-blue-500 group-hover:text-blue-700" />
               <div className="text-left">
@@ -350,7 +477,7 @@ const EnhancedProfileDropdown: React.FC<EnhancedProfileDropdownProps> = ({
             <button
               onClick={handleLogout}
               disabled={isLoading}
-              className="w-full flex items-center space-x-3 px-4 py-3 rounded-lg hover:bg-red-50 transition-colors duration-200 group disabled:opacity-50"
+              className="w-full flex items-center space-x-3 px-4 py-3 rounded-lg hover:bg-red-50 transition-colors duration-200 group disabled:opacity-50 touch-manipulation mobile-dropdown-item"
             >
               <ArrowRightOnRectangleIcon className="w-5 h-5 text-red-500 group-hover:text-red-600" />
               <span className="text-sm font-medium text-red-600 group-hover:text-red-700">
@@ -359,6 +486,14 @@ const EnhancedProfileDropdown: React.FC<EnhancedProfileDropdownProps> = ({
             </button>
           </div>
         </div>
+      )}
+
+      {/* Mobile backdrop */}
+      {isOpen && getViewportSize().isMobile && (
+        <div 
+          className="fixed inset-0 bg-black/20 mobile-dropdown-backdrop z-40"
+          onClick={() => setIsOpen(false)}
+        />
       )}
 
       {/* About Modal */}
