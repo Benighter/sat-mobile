@@ -115,7 +115,7 @@ const AdminInviteScreen: React.FC<AdminInviteScreenProps> = ({ isOpen, onClose }
     setSearchedUser(null);
     
     try {
-  const user = await inviteService.searchUserByEmail(searchEmail.trim());
+  const user = await inviteService.searchUserByEmail(searchEmail.trim(), { inviterIsMinistry: !!userProfile?.isMinistryAccount });
       if (user) {
         setSearchedUser(user);
       } else {

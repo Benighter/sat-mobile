@@ -14,50 +14,93 @@ import {
 import { db } from '../firebase.config';
 import { AdminInvite, User } from '../types';
 
+/**
+ * Helper: given multiple user records sharing the same email (normal + ministry accounts)
+ * pick the one matching the inviter's mode preference.
+ */
+export function selectUserByMode<T extends { isMinistryAccount?: boolean }>(
+  candidates: T[],
+  opts: { inviterIsMinistry?: boolean } = {}
+): T | null {
+  if (!candidates.length) return null;
+  const { inviterIsMinistry } = opts;
+  // Deduplicate by object reference/id if duplicates accidentally pushed
+  const unique = [...new Set(candidates)];
+  if (unique.length === 1) return unique[0];
+  // Try direct match on ministry flag
+  const preferred = unique.filter(u => !!u.isMinistryAccount === !!inviterIsMinistry);
+  if (preferred.length === 1) return preferred[0];
+  if (preferred.length > 1) {
+    // Unexpected: multiple with same mode – return first deterministically
+    return preferred[0];
+  }
+  // Fallback: return first normal account if inviter not ministry, else first ministry account
+  if (inviterIsMinistry) {
+    const ministry = unique.filter(u => u.isMinistryAccount === true);
+    if (ministry.length) return ministry[0];
+  } else {
+    const normal = unique.filter(u => u.isMinistryAccount !== true);
+    if (normal.length) return normal[0];
+  }
+  return unique[0];
+}
+
 export const inviteService = {
   // Search directly in Firestore to avoid any Cloud Functions/CORS dependency
-  searchUserByEmail: async (email: string): Promise<User | null> => {
+  searchUserByEmail: async (email: string, opts?: { inviterIsMinistry?: boolean }): Promise<User | null> => {
     try {
       const trimmed = (email || '').trim();
       if (!trimmed) return null;
       const normalized = trimmed.toLowerCase();
+      // Collect all potential matches (cannot use OR queries easily; perform sequential fallbacks)
+      const candidates: any[] = [];
 
-      // Try exact match on email
-      let snap = await getDocs(query(collection(db, 'users'), where('email', '==', trimmed), limit(1)));
+      const pushDocs = (docs: any[]) => {
+        docs.forEach(d => {
+          const data = d.data();
+            // Only admins & active
+            if ((data?.role || '') === 'admin' && data?.isActive !== false) {
+              candidates.push({ docId: d.id, ...(data as any) });
+            }
+        });
+      };
 
-      // Fallback: try lowercased value (supports schemas that store lowercased email)
-      if (snap.empty) {
+      // Exact case email
+      let snap1 = await getDocs(query(collection(db, 'users'), where('email', '==', trimmed)));
+      if (!snap1.empty) pushDocs(snap1.docs);
+      // Lowercased value (some profiles may store lowercase already)
+      if (candidates.length === 0) {
         try {
-          snap = await getDocs(query(collection(db, 'users'), where('email', '==', normalized), limit(1)));
+          const snap2 = await getDocs(query(collection(db, 'users'), where('email', '==', normalized)));
+          if (!snap2.empty) pushDocs(snap2.docs);
+        } catch {}
+      }
+      // emailLower field variant
+      if (candidates.length === 0) {
+        try {
+          const snap3 = await getDocs(query(collection(db, 'users'), where('emailLower', '==', normalized)));
+          if (!snap3.empty) pushDocs(snap3.docs);
         } catch {}
       }
 
-      // Fallback: if schema has emailLower, try that
-      if (snap.empty) {
-        try {
-          snap = await getDocs(query(collection(db, 'users'), where('emailLower', '==', normalized), limit(1)));
-        } catch {}
-      }
+      if (candidates.length === 0) return null;
 
-      if (snap.empty) return null;
-      const docSnap = snap.docs[0];
-      const u: any = docSnap.data() || {};
-
-      // Only allow inviting Admins; treat inactive as not found
-      if ((u.role || '') !== 'admin' || u.isActive === false) return null;
-
+      // If multiple candidates (duplicate email between normal & ministry), select by inviter context
+      const chosen: any = selectUserByMode(candidates, { inviterIsMinistry: opts?.inviterIsMinistry });
+      if (!chosen) return null;
       const result: User = {
-        uid: u.uid || docSnap.id,
-        id: docSnap.id,
-        email: u.email,
-        displayName: u.displayName || [u.firstName, u.lastName].filter(Boolean).join(' ').trim(),
-        firstName: u.firstName || undefined as any,
-        lastName: u.lastName || undefined as any,
-        phoneNumber: u.phoneNumber || undefined as any,
-        profilePicture: u.profilePicture || undefined as any,
-        churchId: u.churchId || '',
-        churchName: u.churchName || undefined as any,
-        role: u.role,
+        uid: chosen.uid || chosen.docId,
+        id: chosen.docId,
+        email: chosen.email,
+        displayName: chosen.displayName || [chosen.firstName, chosen.lastName].filter(Boolean).join(' ').trim(),
+        firstName: chosen.firstName || undefined as any,
+        lastName: chosen.lastName || undefined as any,
+        phoneNumber: chosen.phoneNumber || undefined as any,
+        profilePicture: chosen.profilePicture || undefined as any,
+        churchId: chosen.churchId || '',
+        churchName: chosen.churchName || undefined as any,
+        role: chosen.role,
+        isMinistryAccount: chosen.isMinistryAccount === true
       } as any;
       return result;
     } catch (error: any) {

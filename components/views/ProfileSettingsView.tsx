@@ -1019,7 +1019,7 @@ const ConstituencyManagerScreen: React.FC<ConstituencyManagerScreenProps> = ({
     try {
       setIsInviting(true);
       // Look up the target admin by email
-      const target = await inviteService.searchUserByEmail(email);
+  const target = await inviteService.searchUserByEmail(email, { inviterIsMinistry: !!user?.isMinistryAccount });
       if (!target) {
         showToast('error', 'Admin not found', 'No active user matches that email');
         setIsInviting(false);
