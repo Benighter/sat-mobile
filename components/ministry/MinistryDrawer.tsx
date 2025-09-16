@@ -1,14 +1,14 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAppContext } from '../../contexts/FirebaseAppContext';
 import { TabKeys } from '../../types';
-import { getUpcomingBirthdays } from '../../utils/birthdayUtils';
+
 import {
   XMarkIcon,
   UsersIcon,
   ChartBarIcon,
   CakeIcon,
   CalendarIcon,
-  ChatBubbleLeftRightIcon,
+
 } from '../icons';
 import { PrayerIcon, CheckIcon, PeopleIcon } from '../icons';
 
@@ -25,15 +25,9 @@ const MinistryDrawer: React.FC<MinistryDrawerProps> = ({ isOpen, onClose }) => {
     activeMinistryName,
   } = useAppContext();
 
-  // Get upcoming birthdays count
-  const upcomingBirthdaysCount = useMemo(() => {
-    return getUpcomingBirthdays(members).length;
-  }, [members]);
 
-  // New counts: tongues, baptized, ministries (active members only)
-  const tonguesCount = useMemo(() => members.filter(m => m.speaksInTongues === true && !m.frozen).length, [members]);
-  const baptizedCount = useMemo(() => members.filter(m => m.baptized === true && !m.frozen).length, [members]);
-  const ministriesCount = useMemo(() => members.filter(m => !!m.ministry && m.ministry.trim() !== '' && !m.frozen).length, [members]);
+
+
 
   // Clear any state when drawer closes
   useEffect(() => {
@@ -62,7 +56,7 @@ const MinistryDrawer: React.FC<MinistryDrawerProps> = ({ isOpen, onClose }) => {
           <div className="flex items-center justify-between mb-3 sm:mb-4">
             <h2 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-dark-100 flex items-center min-w-0">
               <ChartBarIcon className="w-5 h-5 sm:w-6 sm:h-6 mr-2 sm:mr-3 text-slate-500 dark:text-slate-400 flex-shrink-0" />
-              <span className="truncate">{activeMinistryName || 'Ministry Navigation'}</span>
+              <span className="whitespace-normal break-words">{activeMinistryName || 'Ministry Navigation'}</span>
             </h2>
             <button
               onClick={onClose}
@@ -81,7 +75,7 @@ const MinistryDrawer: React.FC<MinistryDrawerProps> = ({ isOpen, onClose }) => {
           <div>
             <h3 className="text-xs sm:text-sm font-semibold text-gray-500 dark:text-dark-400 mb-2 sm:mb-3 flex items-center">
               <ChartBarIcon className="w-3 h-3 sm:w-4 sm:h-4 mr-1.5 sm:mr-2 text-slate-500 dark:text-slate-400 flex-shrink-0" />
-              <span className="truncate">Navigation</span>
+              <span className="whitespace-normal break-words">Navigation</span>
             </h3>
             <div className="space-y-1.5 sm:space-y-2">
               {/* Ministry Navigation Items */}
@@ -108,22 +102,16 @@ const MinistryDrawer: React.FC<MinistryDrawerProps> = ({ isOpen, onClose }) => {
                 icon={<CakeIcon className="w-4 h-4" />}
                 label="Birthdays"
                 isActive={currentTab.id === TabKeys.BIRTHDAYS}
-                badge={upcomingBirthdaysCount > 0 ? upcomingBirthdaysCount : undefined}
+
                 onClick={() => {
                   switchTab({ id: TabKeys.BIRTHDAYS, name: 'Birthdays' });
                   onClose();
                 }}
               />
+              <h4 className="text-xs sm:text-sm font-semibold text-gray-500 dark:text-dark-400 mt-4 mb-2 sm:mt-5 sm:mb-3">State of the Flock</h4>
 
-              <NavigationItem
-                icon={<ChatBubbleLeftRightIcon className="w-4 h-4" />}
-                label="Chat"
-                isActive={currentTab.id === TabKeys.CHAT}
-                onClick={() => {
-                  switchTab({ id: TabKeys.CHAT, name: 'Chat' });
-                  onClose();
-                }}
-              />
+
+
 
 
               <NavigationItem
@@ -133,7 +121,7 @@ const MinistryDrawer: React.FC<MinistryDrawerProps> = ({ isOpen, onClose }) => {
                   currentTab.id === TabKeys.ALL_CONGREGATIONS &&
                   (currentTab.data as any)?.speaksInTonguesOnly === true
                 }
-                badge={tonguesCount > 0 ? tonguesCount : undefined}
+
                 onClick={() => {
                   switchTab({ id: TabKeys.ALL_CONGREGATIONS, name: 'Praying in Tongues', data: { speaksInTonguesOnly: true } });
                   onClose();
@@ -147,7 +135,7 @@ const MinistryDrawer: React.FC<MinistryDrawerProps> = ({ isOpen, onClose }) => {
                   currentTab.id === TabKeys.ALL_CONGREGATIONS &&
                   (currentTab.data as any)?.baptizedOnly === true
                 }
-                badge={baptizedCount > 0 ? baptizedCount : undefined}
+
                 onClick={() => {
                   switchTab({ id: TabKeys.ALL_CONGREGATIONS, name: 'Water Baptized', data: { baptizedOnly: true } });
                   onClose();
@@ -158,7 +146,7 @@ const MinistryDrawer: React.FC<MinistryDrawerProps> = ({ isOpen, onClose }) => {
                 icon={<PeopleIcon className="w-4 h-4" />}
                 label="Ministries"
                 isActive={currentTab.id === TabKeys.MINISTRIES}
-                badge={ministriesCount > 0 ? ministriesCount : undefined}
+
                 onClick={() => {
                   switchTab({ id: TabKeys.MINISTRIES, name: 'Ministries' });
                   onClose();
@@ -179,15 +167,14 @@ interface NavigationItemProps {
   label: string;
   isActive: boolean;
   onClick: () => void;
-  badge?: number;
+
 }
 
 const NavigationItem: React.FC<NavigationItemProps> = ({
   icon,
   label,
   isActive,
-  onClick,
-  badge
+  onClick
 }) => {
   // Get accent color based on label with improved contrast
   const getAccentColor = (label: string) => {
@@ -257,11 +244,7 @@ const NavigationItem: React.FC<NavigationItemProps> = ({
         </span>
       </div>
 
-      {badge && (
-        <span className="bg-rose-500 dark:bg-rose-600 text-white text-xs px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full font-bold shadow-sm flex-shrink-0 ml-2">
-          {badge}
-        </span>
-      )}
+
     </button>
   );
 };

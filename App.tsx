@@ -35,7 +35,7 @@ import OfflineIndicator from './components/common/OfflineIndicator';
 import PendingInviteNotification from './components/notifications/PendingInviteNotification';
 import NotificationBadge from './components/notifications/NotificationBadge';
 import DeletionRequestNotificationBadge from './components/notifications/DeletionRequestNotificationBadge';
-import ChatBadge from './components/notifications/ChatBadge';
+
 import { DeleteMemberModal, DeleteBacentaModal, DeleteNewBelieverModal, ClearAllDataModal, ClearSelectedDataModal, CreateDeletionRequestModal, ClearAllNewBelieversModal } from './components/modals/confirmations/ConfirmationModal';
 import WhatsNewModal from './components/modals/general/WhatsNewModal';
 import { useWhatsNew } from './hooks/useWhatsNew';
@@ -602,10 +602,6 @@ const AppContent: React.FC = memo(() => {
               </div>
 
 
-              {/* Chat Unread Badge */}
-              <div className="flex-shrink-0">
-                <ChatBadge />
-              </div>
 
               {/* Enhanced Profile Dropdown */}
               <div className="flex-shrink-0">

@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAppContext } from '../../contexts/FirebaseAppContext';
 import { Bacenta, TabKeys } from '../../types';
-import { getUpcomingBirthdays } from '../../utils/birthdayUtils';
-import { getActiveMemberCount, getActiveMembers } from '../../utils/memberUtils';
+
+import { getActiveMemberCount } from '../../utils/memberUtils';
 import {
   XMarkIcon,
   SearchIcon,
@@ -16,7 +16,7 @@ import {
   BuildingOfficeIcon,
   CalendarIcon,
   InformationCircleIcon,
-  ChatBubbleLeftRightIcon
+
 } from '../icons';
 import { PrayerIcon, CheckIcon, PeopleIcon } from '../icons';
 
@@ -83,23 +83,15 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
     return getActiveMemberCount(members, bacentas, bacentaId);
   };
 
-  // Get upcoming birthdays count
-  const upcomingBirthdaysCount = useMemo(() => {
-    const activeMembers = getActiveMembers(members, bacentas);
-    return getUpcomingBirthdays(activeMembers).length;
-  }, [members, bacentas]);
 
-  // New counts: tongues, baptized, ministries (active members only)
-  const activeMembers = useMemo(() => getActiveMembers(members, bacentas), [members, bacentas]);
-  const tonguesCount = useMemo(() => activeMembers.filter(m => m.speaksInTongues === true).length, [activeMembers]);
-  const baptizedCount = useMemo(() => activeMembers.filter(m => m.baptized === true).length, [activeMembers]);
-  const ministriesCount = useMemo(() => activeMembers.filter(m => !!m.ministry && m.ministry.trim() !== '').length, [activeMembers]);
+
+
 
   // Filter bacentas based on search query
   const filteredBacentas = useMemo(() => {
     // Filter out frozen bacentas by default unless showFrozenBacentas is true
     const visibleBacentas = bacentas.filter(b => showFrozenBacentas ? true : !b.frozen);
-    
+
     if (!searchQuery.trim()) return visibleBacentas;
     return visibleBacentas.filter(bacenta =>
       bacenta.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -216,7 +208,7 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
           <div className="flex items-center justify-between mb-3 sm:mb-4">
             <h2 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-dark-100 flex items-center min-w-0">
               <ChartBarIcon className="w-5 h-5 sm:w-6 sm:h-6 mr-2 sm:mr-3 text-slate-500 dark:text-slate-400 flex-shrink-0" />
-              <span className="truncate">{isMinistryContext ? (activeMinistryName || 'Ministry Navigation') : (userProfile?.churchName || 'Navigation')}</span>
+              <span className="whitespace-normal break-words">{isMinistryContext ? (activeMinistryName || 'Ministry Navigation') : (userProfile?.churchName || 'Navigation')}</span>
             </h2>
             <button
               onClick={onClose}
@@ -249,7 +241,7 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
           <div>
             <h3 className="text-xs sm:text-sm font-semibold text-gray-500 dark:text-dark-400 mb-2 sm:mb-3 flex items-center">
               <ChartBarIcon className="w-3 h-3 sm:w-4 sm:h-4 mr-1.5 sm:mr-2 text-slate-500 dark:text-slate-400 flex-shrink-0" />
-        <span className="truncate">{isMinistryContext ? 'Navigation' : (userProfile?.churchName || 'Navigation')}</span>
+        <span className="whitespace-normal break-words">{isMinistryContext ? 'Navigation' : (userProfile?.churchName || 'Navigation')}</span>
             </h3>
             <div className="space-y-1.5 sm:space-y-2">
               {/* Ministry-aware items */}
@@ -278,12 +270,14 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
                     icon={<CakeIcon className="w-4 h-4" />}
                     label="Birthdays"
                     isActive={currentTab.id === TabKeys.BIRTHDAYS}
-                    badge={upcomingBirthdaysCount > 0 ? upcomingBirthdaysCount : undefined}
+
                     onClick={() => {
                       switchTab({ id: TabKeys.BIRTHDAYS, name: 'Birthdays' });
                       onClose();
                     }}
                   />
+                  <h4 className="text-xs sm:text-sm font-semibold text-gray-500 dark:text-dark-400 mt-4 mb-2 sm:mt-5 sm:mb-3">State of the Flock</h4>
+
                   {/* New in ministry mode: Prays in Tongues */}
                   <NavigationItem
                     icon={<PrayerIcon className="w-4 h-4" />}
@@ -292,7 +286,7 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
                       currentTab.id === TabKeys.ALL_CONGREGATIONS &&
                       (currentTab.data as any)?.speaksInTonguesOnly === true
                     }
-                    badge={tonguesCount > 0 ? tonguesCount : undefined}
+
                     onClick={() => {
                       switchTab({ id: TabKeys.ALL_CONGREGATIONS, name: 'Praying in Tongues', data: { speaksInTonguesOnly: true } });
                       onClose();
@@ -307,7 +301,7 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
                       currentTab.id === TabKeys.ALL_CONGREGATIONS &&
                       (currentTab.data as any)?.baptizedOnly === true
                     }
-                    badge={baptizedCount > 0 ? baptizedCount : undefined}
+
                     onClick={() => {
                       switchTab({ id: TabKeys.ALL_CONGREGATIONS, name: 'Water Baptized', data: { baptizedOnly: true } });
                       onClose();
@@ -360,7 +354,7 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
                     icon={<CakeIcon className="w-4 h-4" />}
                     label="Birthdays"
                     isActive={currentTab.id === TabKeys.BIRTHDAYS}
-                    badge={upcomingBirthdaysCount > 0 ? upcomingBirthdaysCount : undefined}
+
                     onClick={() => {
                       switchTab({ id: TabKeys.BIRTHDAYS, name: 'Birthdays' });
                       onClose();
@@ -368,11 +362,13 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
                   />
 
                   {/* New: Prays in Tongues */}
+                  <h4 className="text-xs sm:text-sm font-semibold text-gray-500 dark:text-dark-400 mt-4 mb-2 sm:mt-5 sm:mb-3">State of the Flock</h4>
+
                   <NavigationItem
                     icon={<PrayerIcon className="w-4 h-4" />}
                     label="Prays in Tongues"
                     isActive={currentTab.id === TabKeys.ALL_CONGREGATIONS && (currentTab.data as any)?.speaksInTonguesOnly === true}
-                    badge={tonguesCount > 0 ? tonguesCount : undefined}
+
                     onClick={() => {
                       switchTab({ id: TabKeys.ALL_CONGREGATIONS, name: 'Praying in Tongues', data: { speaksInTonguesOnly: true } });
                       onClose();
@@ -384,7 +380,7 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
                     icon={<CheckIcon className="w-4 h-4" />}
                     label="Water Baptized"
                     isActive={currentTab.id === TabKeys.ALL_CONGREGATIONS && (currentTab.data as any)?.baptizedOnly === true}
-                    badge={baptizedCount > 0 ? baptizedCount : undefined}
+
                     onClick={() => {
                       switchTab({ id: TabKeys.ALL_CONGREGATIONS, name: 'Water Baptized', data: { baptizedOnly: true } });
                       onClose();
@@ -396,23 +392,14 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
                     icon={<PeopleIcon className="w-4 h-4" />}
                     label="Ministries"
                     isActive={currentTab.id === TabKeys.MINISTRIES}
-                    badge={ministriesCount > 0 ? ministriesCount : undefined}
+
                     onClick={() => {
                       switchTab({ id: TabKeys.MINISTRIES, name: 'Ministries' });
                       onClose();
                     }}
                   />
 
-                  {/* Chat */}
-                  <NavigationItem
-                    icon={<ChatBubbleLeftRightIcon className="w-4 h-4" />}
-                    label="Chat"
-                    isActive={currentTab.id === TabKeys.CHAT}
-                    onClick={() => {
-                      switchTab({ id: TabKeys.CHAT, name: 'Chat' });
-                      onClose();
-                    }}
-                  />
+
 
 
                   {/* Contact */}
@@ -482,7 +469,7 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
                   </div>
                 )}
               </div>
-              
+
               {/* Show Frozen Toggle */}
               <div className="mb-3 flex-shrink-0">
                 <label className="inline-flex items-center space-x-2 px-2 py-1.5 bg-gray-50 dark:bg-dark-700 border border-gray-200 dark:border-dark-600 rounded-md cursor-pointer select-none hover:bg-gray-100 dark:hover:bg-dark-600 transition-colors text-xs">
@@ -752,7 +739,7 @@ const BacentaItem: React.FC<BacentaItemProps> = ({
           <EditIcon className="w-4 h-4 text-slate-500 dark:text-slate-400" />
           <span className="text-sm font-medium text-gray-700 dark:text-dark-200">Edit Bacenta</span>
         </button>
-        
+
         {/* Freeze/Unfreeze Button */}
         {bacenta.frozen ? (
           onUnfreeze && (
@@ -781,7 +768,7 @@ const BacentaItem: React.FC<BacentaItemProps> = ({
             </button>
           )
         )}
-        
+
         <button
           onClick={(e) => {
             e.stopPropagation();
@@ -805,15 +792,14 @@ interface NavigationItemProps {
   label: string;
   isActive: boolean;
   onClick: () => void;
-  badge?: number;
+
 }
 
 const NavigationItem: React.FC<NavigationItemProps> = ({
   icon,
   label,
   isActive,
-  onClick,
-  badge
+  onClick
 }) => {
   // Get accent color based on label with improved contrast
   const getAccentColor = (label: string) => {
@@ -858,21 +844,11 @@ const NavigationItem: React.FC<NavigationItemProps> = ({
           {icon}
         </div>
         <span className={`font-medium text-sm sm:text-base truncate ${isActive ? colors.text : 'text-gray-800 dark:text-dark-100'} transition-colors duration-200`}>
-        {typeof badge === 'number' && badge > 0 && (
-          <span className="ml-2 inline-flex items-center justify-center min-w-[18px] h-[18px] text-[10px] font-bold rounded-full bg-red-500 text-white px-1 shadow ring-1 ring-white">
-            {badge > 99 ? '99+' : badge}
-          </span>
-        )}
-
           {label}
         </span>
       </div>
 
-      {badge && (
-        <span className="bg-rose-500 dark:bg-rose-600 text-white text-xs px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full font-bold shadow-sm flex-shrink-0 ml-2">
-          {badge}
-        </span>
-      )}
+
     </button>
   );
 };
