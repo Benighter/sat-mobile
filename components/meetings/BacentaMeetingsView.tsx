@@ -1,7 +1,8 @@
 import React, { useState, useMemo } from 'react';
+import { useAppContext } from '../../contexts/FirebaseAppContext';
 import { getLatestMeetingDay, formatDateToYYYYMMDD, getWednesdayOfWeek, getMeetingWeekDates } from '../../utils/dateUtils';
 import { CalendarIcon, ChevronLeftIcon, ChevronRightIcon, ClockIcon, BuildingOfficeIcon, CheckCircleIcon, ClipboardIcon } from '../icons';
-import { useAppContext } from '../../contexts/FirebaseAppContext';
+import { getActiveMembersByBacenta, getActiveMemberCount } from '../../utils/memberUtils';
 import BacentaAttendanceForm from './BacentaAttendanceForm';
 
 // Meeting date picker that cycles through Wed -> Thu -> Next Wed -> Next Thu
@@ -159,9 +160,9 @@ const BacentaMeetingsView: React.FC = () => {
   return { held, attendance, offering, firstTimers, converts, cash, online, wednesday, thursday, visitors };
   }, [meetingRecords, currentDate, currentDayName]);
 
-  // Get member count for each bacenta
+  // Get member count for each bacenta (excluding frozen members and frozen bacentas)
   const getMemberCount = (bacentaId: string) => {
-    return members.filter(m => m.bacentaId === bacentaId && !m.frozen).length;
+    return getActiveMemberCount(members, bacentas, bacentaId);
   };
 
   // Check if meeting record exists for bacenta and date
@@ -170,7 +171,88 @@ const BacentaMeetingsView: React.FC = () => {
     return meetingRecords.find(record => record.id === meetingId);
   };
 
-  // Build a cross-Wed/Thu copyable summary
+  // Copy Bacenta Structure (new simple format)
+  const copyBacentaStructure = async () => {
+    try {
+      // Determine the Wednesday/Thursday dates for the week of the currently selected date
+      const weekWed = getWednesdayOfWeek(currentDate);
+      const { wednesday, thursday } = getMeetingWeekDates(weekWed);
+
+      // Helper to find leader for a bacenta
+      const getLeaderName = (bacentaId: string, fallback?: string) => {
+        const bacentaMembers = getActiveMembersByBacenta(members, bacentas, bacentaId);
+        const leader = bacentaMembers.find(m => m.role === 'Bacenta Leader') || bacentaMembers.find(m => m.role === 'Fellowship Leader');
+        if (leader) return `${leader.firstName} ${leader.lastName || ''}`.trim();
+        return fallback || 'Unknown';
+      };
+
+      // Partition bacentas by scheduled day and sort by name for stable output
+      const wedBacentas = bacentas
+        .filter(b => b.meetingDay === 'Wednesday')
+        .sort((a, b) => a.name.localeCompare(b.name));
+      const thuBacentas = bacentas
+        .filter(b => b.meetingDay === 'Thursday')
+        .sort((a, b) => a.name.localeCompare(b.name));
+
+      let lines: string[] = [];
+      const totalPossibleMeetings = wedBacentas.length + thuBacentas.length;
+      
+      // Get constituency name from user profile
+      const constituencyName = userProfile?.churchName || 'Constituency';
+
+      // Header with constituency name
+      lines.push(`${constituencyName}`);
+      lines.push('');
+
+      // Wednesday section
+      lines.push('Wednesday');
+      if (wedBacentas.length === 0) {
+        lines.push('No bacentas scheduled');
+      } else {
+        wedBacentas.forEach((bacenta, index) => {
+          const leaderName = getLeaderName(bacenta.id);
+          const meetingTime = bacenta.meetingTime || '19:00';
+          lines.push(`${index + 1}. ${bacenta.name}, ${meetingTime} - ${leaderName}`);
+        });
+      }
+
+      lines.push('');
+
+      // Thursday section
+      lines.push('Thursday');
+      if (thuBacentas.length === 0) {
+        lines.push('No bacentas scheduled');
+      } else {
+        thuBacentas.forEach((bacenta, index) => {
+          const leaderName = getLeaderName(bacenta.id);
+          const meetingTime = bacenta.meetingTime || '19:00';
+          lines.push(`${index + 1}. ${bacenta.name}, ${meetingTime} - ${leaderName}`);
+        });
+      }
+
+      lines.push('');
+      lines.push(`Grand Total Bacentas: ${totalPossibleMeetings}`);
+
+      const text = lines.join('\n');
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        // Fallback
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+      }
+      showToast('success', 'Copied', 'Bacenta structure copied to clipboard');
+    } catch (err) {
+      console.error('Copy structure failed', err);
+      showToast('error', 'Copy failed', (err as any)?.message || 'Failed to copy structure');
+    }
+  };
+
+  // Build a cross-Wed/Thu copyable summary (original detailed format)
   const copyWeekSummary = async () => {
     try {
       // Determine the Wednesday/Thursday dates for the week of the currently selected date
@@ -179,7 +261,7 @@ const BacentaMeetingsView: React.FC = () => {
 
       // Helper to find leader for a bacenta
       const getLeaderName = (bacentaId: string, fallback?: string) => {
-        const bacentaMembers = members.filter(m => m.bacentaId === bacentaId && !m.frozen);
+        const bacentaMembers = getActiveMembersByBacenta(members, bacentas, bacentaId);
         const leader = bacentaMembers.find(m => m.role === 'Bacenta Leader') || bacentaMembers.find(m => m.role === 'Fellowship Leader');
         if (leader) return `${leader.firstName} ${leader.lastName || ''}`.trim();
         return fallback || 'Unknown';
@@ -197,14 +279,14 @@ const BacentaMeetingsView: React.FC = () => {
       let idx = 1;
       let totalMeetingsRecorded = 0;
       const totalPossibleMeetings = wedBacentas.length + thuBacentas.length;
-  let overallOffering = 0;
-  let overallCash = 0;
-  let overallOnline = 0;
+      let overallOffering = 0;
+      let overallCash = 0;
+      let overallOnline = 0;
       let overallFirstTimers = 0;
       let overallVisitors = 0;
       let overallNewBelievers = 0;
 
-  const WHITE_FLOWER = '💮';
+      const WHITE_FLOWER = '💮';
       const fmt = (ds: string) => new Date(ds + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
       const title = `Bacenta Meetings Summary  •  ${fmt(wednesday)} & ${fmt(thursday)}`;
 
@@ -227,38 +309,38 @@ const BacentaMeetingsView: React.FC = () => {
           return;
         }
         // compute metrics with safe fallbacks
-  const firstTimers = (record.firstTimers ?? record.guests?.length ?? 0) as number;
-  const visitors = Array.isArray((record as any).visitors) ? (record as any).visitors.length : (typeof (record as any).visitorsCount === 'number' ? (record as any).visitorsCount : 0);
-  const attendance = (record.presentMemberIds?.length || 0) + firstTimers + visitors;
-  const cash = (typeof record.cashOffering === 'number' ? record.cashOffering : 0);
-  const online = (typeof record.onlineOffering === 'number' ? record.onlineOffering : 0);
-  const offering = (record.totalOffering ?? (cash + online)) as number;
+        const firstTimers = (record.firstTimers ?? record.guests?.length ?? 0) as number;
+        const visitors = Array.isArray((record as any).visitors) ? (record as any).visitors.length : (typeof (record as any).visitorsCount === 'number' ? (record as any).visitorsCount : 0);
+        const attendance = (record.presentMemberIds?.length || 0) + firstTimers + visitors;
+        const cash = (typeof record.cashOffering === 'number' ? record.cashOffering : 0);
+        const online = (typeof record.onlineOffering === 'number' ? record.onlineOffering : 0);
+        const offering = (record.totalOffering ?? (cash + online)) as number;
         const converts = (record.converts || 0) as number;
 
-  overallOffering += offering;
-  overallCash += cash;
-  overallOnline += online;
-  overallFirstTimers += firstTimers;
-  overallVisitors += visitors;
+        overallOffering += offering;
+        overallCash += cash;
+        overallOnline += online;
+        overallFirstTimers += firstTimers;
+        overallVisitors += visitors;
         overallNewBelievers += converts;
         totalMeetingsRecorded += 1;
 
-  lines.push(`${idx}) ${WHITE_FLOWER} ${leaderName} (${bacenta.name})`);
-  lines.push(`   • Attendance: ${attendance}`);
-  lines.push(`   • Offering: R${offering.toFixed(2)}`);
-  lines.push(`   • First Timers: ${firstTimers}`);
-  lines.push(`   • Visitors: ${visitors}`);
-  lines.push(`   • New Believers: ${converts}`);
-  lines.push('');
+        lines.push(`${idx}) ${WHITE_FLOWER} ${leaderName} (${bacenta.name})`);
+        lines.push(`   • Attendance: ${attendance}`);
+        lines.push(`   • Offering: R${offering.toFixed(2)}`);
+        lines.push(`   • First Timers: ${firstTimers}`);
+        lines.push(`   • Visitors: ${visitors}`);
+        lines.push(`   • New Believers: ${converts}`);
+        lines.push('');
         idx++;
       };
 
-      // Wednesday section
-  // Header
-  lines.push(title);
-  lines.push('');
+      // Header
+      lines.push(title);
+      lines.push('');
 
-  addDaySection('Wednesday');
+      // Wednesday section
+      addDaySection('Wednesday');
       if (wedBacentas.length === 0) {
         lines.push('— No bacentas scheduled');
       } else {
@@ -266,10 +348,10 @@ const BacentaMeetingsView: React.FC = () => {
       }
 
       // Spacer
-  lines.push('');
+      lines.push('');
 
-  // Thursday section
-  addDaySection('Thursday');
+      // Thursday section
+      addDaySection('Thursday');
       if (thuBacentas.length === 0) {
         lines.push('— No bacentas scheduled');
       } else {
@@ -297,14 +379,14 @@ const BacentaMeetingsView: React.FC = () => {
       }
 
       // Totals
-  lines.push(divider('Totals'));
-  lines.push(`Meetings recorded: ${totalMeetingsRecorded}/${totalPossibleMeetings}`);
-  lines.push(`• Online: R${overallOnline.toFixed(2)}`);
-  lines.push(`• Cash: R${overallCash.toFixed(2)}`);
-  lines.push(`• Offering (Overall): R${overallOffering.toFixed(2)}`);
-  lines.push(`• First Timers: ${overallFirstTimers}`);
-  lines.push(`• Visitors: ${overallVisitors}`);
-  lines.push(`• New Believers: ${overallNewBelievers}`);
+      lines.push(divider('Totals'));
+      lines.push(`Meetings recorded: ${totalMeetingsRecorded}/${totalPossibleMeetings}`);
+      lines.push(`• Online: R${overallOnline.toFixed(2)}`);
+      lines.push(`• Cash: R${overallCash.toFixed(2)}`);
+      lines.push(`• Offering (Overall): R${overallOffering.toFixed(2)}`);
+      lines.push(`• First Timers: ${overallFirstTimers}`);
+      lines.push(`• Visitors: ${overallVisitors}`);
+      lines.push(`• New Believers: ${overallNewBelievers}`);
 
       const text = lines.join('\n');
       if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -318,7 +400,7 @@ const BacentaMeetingsView: React.FC = () => {
         document.execCommand('copy');
         document.body.removeChild(textarea);
       }
-      showToast('success', 'Copied', 'Wed & Thu bacenta summary copied to clipboard');
+      showToast('success', 'Copied', 'Detailed meeting summary copied to clipboard');
     } catch (err) {
       console.error('Copy summary failed', err);
       showToast('error', 'Copy failed', (err as any)?.message || 'Failed to copy summary');
@@ -373,16 +455,26 @@ const BacentaMeetingsView: React.FC = () => {
               onNavigate={setCurrentDate}
             />
 
-            {/* Copy Summary Button */}
-            <div className="flex items-center justify-center mt-2">
+            {/* Copy Buttons */}
+            <div className="flex items-center justify-center gap-3 mt-2">
+              <button
+                type="button"
+                onClick={copyBacentaStructure}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-blue-200 bg-white text-blue-700 hover:bg-blue-50 shadow-sm"
+                aria-label="Copy bacenta structure"
+              >
+                <ClipboardIcon className="w-4 h-4" />
+                <span>Copy Structure</span>
+              </button>
+              
               <button
                 type="button"
                 onClick={copyWeekSummary}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-blue-200 bg-white text-blue-700 hover:bg-blue-50 shadow-sm"
-                aria-label="Copy Wed/Thu summary"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-green-200 bg-white text-green-700 hover:bg-green-50 shadow-sm"
+                aria-label="Copy detailed summary"
               >
                 <ClipboardIcon className="w-4 h-4" />
-                <span>Copy Wed & Thu summary</span>
+                <span>Copy Details</span>
               </button>
             </div>
 

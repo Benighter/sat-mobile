@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useAppContext } from '../../contexts/FirebaseAppContext';
 import { Bacenta, TabKeys } from '../../types';
 import { getUpcomingBirthdays } from '../../utils/birthdayUtils';
+import { getActiveMemberCount, getActiveMembers } from '../../utils/memberUtils';
 import {
   XMarkIcon,
   SearchIcon,
@@ -41,6 +42,10 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
   // refreshUserProfile,
     isMinistryContext,
     activeMinistryName,
+    showFrozenBacentas,
+    setShowFrozenBacentas,
+    freezeBacentaHandler,
+    unfreezeBacentaHandler,
   } = useAppContext();
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -73,36 +78,41 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
     }
   }, [currentTab, bacentas]);
 
-  // Get member count for each bacenta (only active members)
+  // Get member count for each bacenta (only active members, excluding frozen bacentas)
   const getMemberCount = (bacentaId: string) => {
-    return members.filter(m => m.bacentaId === bacentaId && !m.frozen).length;
+    return getActiveMemberCount(members, bacentas, bacentaId);
   };
 
   // Get upcoming birthdays count
   const upcomingBirthdaysCount = useMemo(() => {
-    return getUpcomingBirthdays(members).length;
-  }, [members]);
+    const activeMembers = getActiveMembers(members, bacentas);
+    return getUpcomingBirthdays(activeMembers).length;
+  }, [members, bacentas]);
 
   // New counts: tongues, baptized, ministries (active members only)
-  const tonguesCount = useMemo(() => members.filter(m => m.speaksInTongues === true && !m.frozen).length, [members]);
-  const baptizedCount = useMemo(() => members.filter(m => m.baptized === true && !m.frozen).length, [members]);
-  const ministriesCount = useMemo(() => members.filter(m => !!m.ministry && m.ministry.trim() !== '' && !m.frozen).length, [members]);
+  const activeMembers = useMemo(() => getActiveMembers(members, bacentas), [members, bacentas]);
+  const tonguesCount = useMemo(() => activeMembers.filter(m => m.speaksInTongues === true).length, [activeMembers]);
+  const baptizedCount = useMemo(() => activeMembers.filter(m => m.baptized === true).length, [activeMembers]);
+  const ministriesCount = useMemo(() => activeMembers.filter(m => !!m.ministry && m.ministry.trim() !== '').length, [activeMembers]);
 
   // Filter bacentas based on search query
   const filteredBacentas = useMemo(() => {
-    if (!searchQuery.trim()) return bacentas;
-    return bacentas.filter(bacenta =>
+    // Filter out frozen bacentas by default unless showFrozenBacentas is true
+    const visibleBacentas = bacentas.filter(b => showFrozenBacentas ? true : !b.frozen);
+    
+    if (!searchQuery.trim()) return visibleBacentas;
+    return visibleBacentas.filter(bacenta =>
       bacenta.name.toLowerCase().includes(searchQuery.toLowerCase())
     );
-  }, [bacentas, searchQuery]);
+  }, [bacentas, searchQuery, showFrozenBacentas]);
 
-  // Get recent bacentas that still exist
+  // Get recent bacentas that still exist and are not frozen (unless showing frozen)
   const validRecentBacentas = useMemo(() => {
     return recentBacentas
       .map(id => bacentas.find(b => b.id === id))
-      .filter((b): b is Bacenta => b !== undefined)
+      .filter((b): b is Bacenta => b !== undefined && (showFrozenBacentas ? true : !b.frozen))
       .slice(0, 3);
-  }, [recentBacentas, bacentas]);
+  }, [recentBacentas, bacentas, showFrozenBacentas]);
 
   // Close any open context menus when modals open
   useEffect(() => {
@@ -135,6 +145,24 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
       { bacenta, memberCount },
       () => deleteBacentaHandler(bacentaId)
     );
+  };
+
+  const handleFreezeBacenta = async (e: React.MouseEvent, bacentaId: string) => {
+    e.stopPropagation();
+    try {
+      await freezeBacentaHandler(bacentaId);
+    } catch (error) {
+      console.error('Error freezing bacenta:', error);
+    }
+  };
+
+  const handleUnfreezeBacenta = async (e: React.MouseEvent, bacentaId: string) => {
+    e.stopPropagation();
+    try {
+      await unfreezeBacentaHandler(bacentaId);
+    } catch (error) {
+      console.error('Error unfreezing bacenta:', error);
+    }
   };
 
   const handleAddBacenta = () => {
@@ -426,6 +454,8 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
                     onClick={() => handleBacentaClick(bacenta)}
                     onEdit={(e) => handleEditBacenta(e, bacenta)}
                     onDelete={(e) => handleDeleteBacenta(e, bacenta.id)}
+                    onFreeze={(e) => handleFreezeBacenta(e, bacenta.id)}
+                    onUnfreeze={(e) => handleUnfreezeBacenta(e, bacenta.id)}
                   />
                 ))}
               </div>
@@ -451,6 +481,21 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
                     </svg>
                   </div>
                 )}
+              </div>
+              
+              {/* Show Frozen Toggle */}
+              <div className="mb-3 flex-shrink-0">
+                <label className="inline-flex items-center space-x-2 px-2 py-1.5 bg-gray-50 dark:bg-dark-700 border border-gray-200 dark:border-dark-600 rounded-md cursor-pointer select-none hover:bg-gray-100 dark:hover:bg-dark-600 transition-colors text-xs">
+                  <input
+                    type="checkbox"
+                    checked={showFrozenBacentas}
+                    onChange={(e) => setShowFrozenBacentas(e.target.checked)}
+                    className="w-3 h-3 text-blue-600 border-gray-300 rounded focus:ring-blue-500 focus:ring-1"
+                  />
+                  <span className="font-medium text-gray-700 dark:text-dark-200 truncate">
+                    Show frozen ({bacentas.filter(b => b.frozen).length})
+                  </span>
+                </label>
               </div>
 
               {filteredBacentas.length === 0 ? (
@@ -485,6 +530,8 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
                         onClick={() => handleBacentaClick(bacenta)}
                         onEdit={(e) => handleEditBacenta(e, bacenta)}
                         onDelete={(e) => handleDeleteBacenta(e, bacenta.id)}
+                        onFreeze={(e) => handleFreezeBacenta(e, bacenta.id)}
+                        onUnfreeze={(e) => handleUnfreezeBacenta(e, bacenta.id)}
                       />
                     ))}
                   </div>
@@ -514,6 +561,8 @@ interface BacentaItemProps {
   onClick: () => void;
   onEdit: (e: React.MouseEvent) => void;
   onDelete: (e: React.MouseEvent) => void;
+  onFreeze?: (e: React.MouseEvent) => void;
+  onUnfreeze?: (e: React.MouseEvent) => void;
 }
 
 const BacentaItem: React.FC<BacentaItemProps> = ({
@@ -522,7 +571,9 @@ const BacentaItem: React.FC<BacentaItemProps> = ({
   isActive,
   onClick,
   onEdit,
-  onDelete
+  onDelete,
+  onFreeze,
+  onUnfreeze
 }) => {
   const [showContextMenu, setShowContextMenu] = useState(false);
   const [longPressTimer, setLongPressTimer] = useState<NodeJS.Timeout | null>(null);
@@ -643,9 +694,16 @@ const BacentaItem: React.FC<BacentaItemProps> = ({
       >
       <div className="flex items-center justify-between min-w-0">
         <div className="flex-1 min-w-0 pr-2">
-          <h4 className={`font-medium truncate text-sm sm:text-base ${isActive ? 'text-amber-900 dark:text-amber-100' : 'text-gray-800 dark:text-dark-100'} transition-colors duration-200`}>
-            {bacenta.name}
-          </h4>
+          <div className="flex items-center gap-2">
+            <h4 className={`font-medium truncate text-sm sm:text-base ${isActive ? 'text-amber-900 dark:text-amber-100' : 'text-gray-800 dark:text-dark-100'} transition-colors duration-200`}>
+              {bacenta.name}
+            </h4>
+            {bacenta.frozen && (
+              <span className="text-xs px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 border border-blue-200 flex-shrink-0" title="Frozen bacenta">
+                ❄️
+              </span>
+            )}
+          </div>
           <div className={`flex items-center mt-0.5 sm:mt-1 text-xs sm:text-sm ${isActive ? 'text-amber-700 dark:text-amber-200' : 'text-gray-600 dark:text-dark-300'} transition-colors duration-200`}>
             <UsersIcon className="w-3 h-3 mr-1 flex-shrink-0" />
             <span className="truncate">{memberCount} member{memberCount !== 1 ? 's' : ''}</span>
@@ -694,6 +752,36 @@ const BacentaItem: React.FC<BacentaItemProps> = ({
           <EditIcon className="w-4 h-4 text-slate-500 dark:text-slate-400" />
           <span className="text-sm font-medium text-gray-700 dark:text-dark-200">Edit Bacenta</span>
         </button>
+        
+        {/* Freeze/Unfreeze Button */}
+        {bacenta.frozen ? (
+          onUnfreeze && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onUnfreeze(e);
+              }}
+              className="w-full px-4 py-3 text-left hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors duration-200 flex items-center space-x-3"
+            >
+              <span className="w-4 h-4 text-green-500 text-sm">❄️</span>
+              <span className="text-sm font-medium text-green-600 dark:text-green-300">Unfreeze Bacenta</span>
+            </button>
+          )
+        ) : (
+          onFreeze && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onFreeze(e);
+              }}
+              className="w-full px-4 py-3 text-left hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors duration-200 flex items-center space-x-3"
+            >
+              <span className="w-4 h-4 text-blue-500 text-sm">🧊</span>
+              <span className="text-sm font-medium text-blue-600 dark:text-blue-300">Freeze Bacenta</span>
+            </button>
+          )
+        )}
+        
         <button
           onClick={(e) => {
             e.stopPropagation();

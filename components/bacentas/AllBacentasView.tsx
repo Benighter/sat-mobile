@@ -7,7 +7,7 @@ import { SearchIcon, PlusIcon, ChevronRightIcon, PeopleIcon } from '../icons';
 import { TabKeys } from '../../types';
 
 const AllBacentasView: React.FC = () => {
-  const { bacentas, allOutreachMembers, switchTab, addBacentaHandler, showToast } = useAppContext();
+  const { bacentas, allOutreachMembers, switchTab, addBacentaHandler, showToast, showFrozenBacentas, setShowFrozenBacentas } = useAppContext();
   const [query, setQuery] = useState('');
   const [newName, setNewName] = useState('');
 
@@ -42,11 +42,14 @@ const AllBacentasView: React.FC = () => {
   }, [bacentas, allOutreachMembers]);
 
   const filtered = useMemo(() => {
+    // Filter out frozen bacentas by default unless showFrozenBacentas is true
+    const visibleBacentas = bacentas.filter(b => showFrozenBacentas ? true : !b.frozen);
+    
     const list = query.trim()
-      ? bacentas.filter(b => b.name.toLowerCase().includes(query.toLowerCase()))
-      : bacentas;
+      ? visibleBacentas.filter(b => b.name.toLowerCase().includes(query.toLowerCase()))
+      : visibleBacentas;
     return list.sort((a, b) => a.name.localeCompare(b.name));
-  }, [bacentas, query]);
+  }, [bacentas, query, showFrozenBacentas]);
 
   return (
     <div className="space-y-8">
@@ -110,6 +113,21 @@ const AllBacentasView: React.FC = () => {
                   </button>
                 </div>
               </div>
+              
+              {/* Show Frozen Toggle */}
+              <div className="flex justify-center">
+                <label className="inline-flex items-center space-x-2 px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg shadow-sm cursor-pointer select-none hover:bg-gray-100 transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={showFrozenBacentas}
+                    onChange={(e) => setShowFrozenBacentas(e.target.checked)}
+                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
+                  />
+                  <span className="text-sm font-medium text-gray-700">
+                    Show frozen bacentas ({bacentas.filter(b => b.frozen).length})
+                  </span>
+                </label>
+              </div>
             </div>
           </div>
         </div>
@@ -145,9 +163,16 @@ const AllBacentasView: React.FC = () => {
                         </div>
                       </div>
                       
-                      <h3 className="font-bold text-lg text-slate-900 transition-colors duration-200 truncate" title={b.name}>
-                        {b.name}
-                      </h3>
+                      <div className="flex items-center gap-2 mb-2">
+                        <h3 className="font-bold text-lg text-slate-900 transition-colors duration-200 truncate" title={b.name}>
+                          {b.name}
+                        </h3>
+                        {b.frozen && (
+                          <span className="text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-700 border border-blue-200" title="Frozen – excluded from counts">
+                            Frozen
+                          </span>
+                        )}
+                      </div>
                       <div className="h-1 w-12 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full mt-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
                     </div>
                   </div>

@@ -1207,6 +1207,32 @@ export const bacentasFirebaseService = {
     }
   },
 
+  // Freeze bacenta
+  freeze: async (bacentaId: string): Promise<void> => {
+    try {
+      const bacentaRef = doc(db, getChurchCollectionPath('bacentas'), bacentaId);
+      await updateDoc(bacentaRef, {
+        frozen: true,
+        lastUpdated: Timestamp.now()
+      });
+    } catch (error: any) {
+      throw new Error(`Failed to freeze bacenta: ${error.message}`);
+    }
+  },
+
+  // Unfreeze bacenta
+  unfreeze: async (bacentaId: string): Promise<void> => {
+    try {
+      const bacentaRef = doc(db, getChurchCollectionPath('bacentas'), bacentaId);
+      await updateDoc(bacentaRef, {
+        frozen: false,
+        lastUpdated: Timestamp.now()
+      });
+    } catch (error: any) {
+      throw new Error(`Failed to unfreeze bacenta: ${error.message}`);
+    }
+  },
+
   // Listen to bacentas changes
   onSnapshot: (callback: (bacentas: Bacenta[]) => void): Unsubscribe => {
     const bacentasRef = collection(db, getChurchCollectionPath('bacentas'));

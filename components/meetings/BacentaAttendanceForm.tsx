@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef } from 'react';
-import { useAppContext } from '../../contexts/FirebaseAppContext';
+import { getActiveMembersByBacenta } from '../../utils/memberUtils';
 import { formatDisplayDate } from '../../utils/dateUtils';
 import { CameraIcon, CalendarIcon, UserIcon, UsersIcon, TrashIcon, PhotoIcon, PlusIcon, XMarkIcon } from '../icons';
 import Button from '../ui/Button';
@@ -54,7 +54,7 @@ const BacentaAttendanceForm: React.FC<BacentaAttendanceFormProps> = ({
 
   // Get bacenta and leader info
   const bacenta = bacentas.find(b => b.id === bacentaId);
-  const bacentaMembers = members.filter(m => m.bacentaId === bacentaId && !m.frozen);
+  const bacentaMembers = getActiveMembersByBacenta(members, bacentas, bacentaId);
 
   // Enhanced leader detection logic with proper hierarchy
   const bacentaLeader = useMemo(() => {

@@ -116,6 +116,10 @@ interface AppContextType {
   // Context flags
   isMinistryContext: boolean;
   activeMinistryName?: string;
+  
+  // Filtering state
+  showFrozenBacentas: boolean;
+  setShowFrozenBacentas: (show: boolean) => void;
 
   // Data Operations
   fetchInitialData: () => Promise<void>;
@@ -129,6 +133,8 @@ interface AppContextType {
   addBacentaHandler: (bacentaData: Omit<Bacenta, 'id'>) => Promise<string>;
   updateBacentaHandler: (bacentaData: Bacenta) => Promise<void>;
   deleteBacentaHandler: (bacentaId: string) => Promise<void>;
+  freezeBacentaHandler: (bacentaId: string) => Promise<void>;
+  unfreezeBacentaHandler: (bacentaId: string) => Promise<void>;
 
   // New Believer Operations
   addNewBelieverHandler: (newBelieverData: Omit<NewBeliever, 'id' | 'createdDate' | 'lastUpdated'>) => Promise<void>;
@@ -257,6 +263,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [displayedDate, setDisplayedDate] = useState<Date>(new Date());
+  const [showFrozenBacentas, setShowFrozenBacentas] = useState<boolean>(false);
 
   // Modal states
   const [isMemberFormOpen, setIsMemberFormOpen] = useState(false);
@@ -1325,6 +1332,36 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     } catch (error: any) {
       setError(error.message);
       showToast('error', 'Failed to delete bacenta', error.message);
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [showToast]);
+
+  const freezeBacentaHandler = useCallback(async (bacentaId: string) => {
+  if (!ensureCanWrite()) throw new Error('Read-only access');
+    try {
+      setIsLoading(true);
+      await bacentasFirebaseService.freeze(bacentaId);
+      showToast('success', 'Bacenta frozen successfully');
+    } catch (error: any) {
+      setError(error.message);
+      showToast('error', 'Failed to freeze bacenta', error.message);
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [showToast]);
+
+  const unfreezeBacentaHandler = useCallback(async (bacentaId: string) => {
+  if (!ensureCanWrite()) throw new Error('Read-only access');
+    try {
+      setIsLoading(true);
+      await bacentasFirebaseService.unfreeze(bacentaId);
+      showToast('success', 'Bacenta unfrozen successfully');
+    } catch (error: any) {
+      setError(error.message);
+      showToast('error', 'Failed to unfreeze bacenta', error.message);
       throw error;
     } finally {
       setIsLoading(false);
@@ -3750,6 +3787,10 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     needsMigration,
   isMinistryContext,
   activeMinistryName,
+  
+  // Filtering state
+  showFrozenBacentas,
+  setShowFrozenBacentas,
 
     // Data Operations
     fetchInitialData,
@@ -3763,6 +3804,8 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     addBacentaHandler,
     updateBacentaHandler,
     deleteBacentaHandler,
+    freezeBacentaHandler,
+    unfreezeBacentaHandler,
 
     // New Believer Operations
     addNewBelieverHandler,

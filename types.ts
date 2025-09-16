@@ -142,6 +142,8 @@ export interface Bacenta { // Renamed from CongregationGroup
   // Meeting schedule configuration
   meetingDay?: 'Wednesday' | 'Thursday'; // Day of the week for bible study
   meetingTime?: string; // Time in HH:MM format (24-hour)
+  /** If true, this bacenta is temporarily frozen (excluded from counts/visibility along with all its members) */
+  frozen?: boolean;
 }
 
 
