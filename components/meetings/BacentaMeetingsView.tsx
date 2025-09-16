@@ -116,10 +116,10 @@ const BacentaMeetingsView: React.FC = () => {
   // Filter bacentas that have meetings on the current selected day AND have both day and time configured
   const bacentasForCurrentDay = useMemo(() => {
     return bacentas.filter(bacenta =>
-      // Must have both meeting day and time configured
       bacenta.meetingDay &&
       bacenta.meetingTime &&
-      bacenta.meetingDay === currentDayName
+      bacenta.meetingDay === currentDayName &&
+      !bacenta.frozen // Exclude frozen bacentas
     );
   }, [bacentas, currentDayName]);
 
@@ -188,10 +188,10 @@ const BacentaMeetingsView: React.FC = () => {
 
       // Partition bacentas by scheduled day and sort by name for stable output
       const wedBacentas = bacentas
-        .filter(b => b.meetingDay === 'Wednesday')
+        .filter(b => b.meetingDay === 'Wednesday' && !b.frozen)
         .sort((a, b) => a.name.localeCompare(b.name));
       const thuBacentas = bacentas
-        .filter(b => b.meetingDay === 'Thursday')
+        .filter(b => b.meetingDay === 'Thursday' && !b.frozen)
         .sort((a, b) => a.name.localeCompare(b.name));
 
       let lines: string[] = [];
@@ -269,10 +269,10 @@ const BacentaMeetingsView: React.FC = () => {
 
       // Partition bacentas by scheduled day and sort by name for stable output
       const wedBacentas = bacentas
-        .filter(b => b.meetingDay === 'Wednesday')
+        .filter(b => b.meetingDay === 'Wednesday' && !b.frozen)
         .sort((a, b) => a.name.localeCompare(b.name));
       const thuBacentas = bacentas
-        .filter(b => b.meetingDay === 'Thursday')
+        .filter(b => b.meetingDay === 'Thursday' && !b.frozen)
         .sort((a, b) => a.name.localeCompare(b.name));
 
       let lines: string[] = [];

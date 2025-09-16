@@ -5,6 +5,7 @@ import { CameraIcon, CalendarIcon, UserIcon, UsersIcon, TrashIcon, PhotoIcon, Pl
 import Button from '../ui/Button';
 import ImageCropper from '../ui/ImageCropper';
 import ConfirmationModal from '../modals/confirmations/ConfirmationModal';
+import { useAppContext } from '../../contexts/FirebaseAppContext';
 
 interface BacentaAttendanceFormProps {
   bacentaId: string;
