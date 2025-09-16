@@ -131,13 +131,13 @@ const DashboardView: React.FC = memo(() => {
     });
     return filtered.length;
   }, [members, isMinistryContext]);
-  
+
   // Filter out orphaned outreach members whose bacentaId doesn't exist anymore
   const validOutreachMembers = useMemo(() => {
     const validBacentaIds = new Set(bacentas.map(b => b.id));
     return allOutreachMembers.filter(m => validBacentaIds.has(m.bacentaId));
   }, [allOutreachMembers, bacentas]);
-  
+
   const totalOutreachMembers = validOutreachMembers.length;
   const [confirmationTarget, setConfirmationTarget] = useState<number>(0);
   const [isLoadingTarget, setIsLoadingTarget] = useState<boolean>(true);
@@ -632,7 +632,7 @@ const DashboardView: React.FC = memo(() => {
             onClick={() => !rearrangeMode && switchTab({ id: TabKeys.BACENTA_MEETINGS, name: 'Bacenta Meetings' })}
           />
         );
-      
+
   case 'prayerOverall':
         return (
           <StatCard
@@ -656,7 +656,9 @@ const DashboardView: React.FC = memo(() => {
       onDragStart={(e) => onDragStart(e, id)}
       onDragOver={onDragOver}
       onDrop={(e) => onDrop(e, id)}
-      className={rearrangeMode ? 'relative ring-1 ring-dashed ring-slate-300 dark:ring-dark-600 rounded-lg' : undefined}
+      className={rearrangeMode ? 'relative ring-1 ring-dashed ring-slate-300 dark:ring-dark-600 rounded-lg select-none cursor-move' : undefined}
+      style={rearrangeMode ? { userSelect: 'none', WebkitUserSelect: 'none' } : undefined}
+
       aria-grabbed={rearrangeMode ? undefined : false}
     >
       {rearrangeMode && (

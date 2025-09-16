@@ -16,6 +16,7 @@ import {
   BuildingOfficeIcon,
   CalendarIcon,
   InformationCircleIcon,
+  ChevronDownIcon,
 
 } from '../icons';
 import { PrayerIcon, CheckIcon, PeopleIcon } from '../icons';
@@ -47,6 +48,8 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
     freezeBacentaHandler,
     unfreezeBacentaHandler,
   } = useAppContext();
+
+  const [isFlockOpen, setIsFlockOpen] = useState(false);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [recentBacentas, setRecentBacentas] = useState<string[]>([]);
@@ -276,7 +279,14 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
                       onClose();
                     }}
                   />
-                  <h4 className="text-xs sm:text-sm font-semibold text-gray-500 dark:text-dark-400 mt-4 mb-2 sm:mt-5 sm:mb-3">State of the Flock</h4>
+                  <button onClick={() => setIsFlockOpen(v => !v)} className="w-full flex items-center justify-between p-2.5 sm:p-3 rounded-lg bg-gray-50 dark:bg-dark-700 hover:bg-gray-100 dark:hover:bg-dark-600 border border-gray-200 dark:border-dark-600">
+                    <div className="flex items-center space-x-2 sm:space-x-3">
+                      <div className="text-gray-600 dark:text-dark-300"><PeopleIcon className="w-4 h-4" /></div>
+                      <span className="font-semibold text-sm sm:text-base text-gray-800 dark:text-dark-100">State of the Flock</span>
+                    </div>
+                    <ChevronDownIcon className={`w-4 h-4 transform transition-transform ${isFlockOpen ? '' : '-rotate-90'}`} />
+                  </button>
+                  {isFlockOpen && (<>
 
                   {/* New in ministry mode: Prays in Tongues */}
                   <NavigationItem
@@ -308,6 +318,7 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
                     }}
                   />
                   {/* Ministry Sync Test removed */}
+                  </>)}
                 </>
               ) : (
                 <>
@@ -362,7 +373,15 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
                   />
 
                   {/* New: Prays in Tongues */}
-                  <h4 className="text-xs sm:text-sm font-semibold text-gray-500 dark:text-dark-400 mt-4 mb-2 sm:mt-5 sm:mb-3">State of the Flock</h4>
+                  <button onClick={() => setIsFlockOpen(v => !v)} className="w-full flex items-center justify-between p-2.5 sm:p-3 rounded-lg bg-gray-50 dark:bg-dark-700 hover:bg-gray-100 dark:hover:bg-dark-600 border border-gray-200 dark:border-dark-600">
+                    <div className="flex items-center space-x-2 sm:space-x-3">
+                      <div className="text-gray-600 dark:text-dark-300"><PeopleIcon className="w-4 h-4" /></div>
+                      <span className="font-semibold text-sm sm:text-base text-gray-800 dark:text-dark-100">State of the Flock</span>
+                    </div>
+                    <ChevronDownIcon className={`w-4 h-4 transform transition-transform ${isFlockOpen ? '' : '-rotate-90'}`} />
+                  </button>
+
+                  {isFlockOpen && (<>
 
                   <NavigationItem
                     icon={<PrayerIcon className="w-4 h-4" />}
@@ -388,6 +407,7 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
                   />
 
                   {/* New: Ministries */}
+
                   <NavigationItem
                     icon={<PeopleIcon className="w-4 h-4" />}
                     label="Ministries"
@@ -398,6 +418,9 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
                       onClose();
                     }}
                   />
+
+                  </>)}
+
 
 
 
