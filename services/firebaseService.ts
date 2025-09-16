@@ -1215,6 +1215,16 @@ export const bacentasFirebaseService = {
         frozen: true,
         lastUpdated: Timestamp.now()
       });
+
+      // Batch freeze all members in this bacenta
+      const membersRef = collection(db, getChurchCollectionPath('members'));
+      const q = query(membersRef, where('bacentaId', '==', bacentaId));
+      const snapshot = await getDocs(q);
+      const batch = writeBatch(db);
+      snapshot.forEach(docSnap => {
+        batch.update(docSnap.ref, { frozen: true, lastUpdated: Timestamp.now() });
+      });
+      await batch.commit();
     } catch (error: any) {
       throw new Error(`Failed to freeze bacenta: ${error.message}`);
     }
@@ -1228,6 +1238,16 @@ export const bacentasFirebaseService = {
         frozen: false,
         lastUpdated: Timestamp.now()
       });
+
+      // Batch unfreeze all members in this bacenta
+      const membersRef = collection(db, getChurchCollectionPath('members'));
+      const q = query(membersRef, where('bacentaId', '==', bacentaId));
+      const snapshot = await getDocs(q);
+      const batch = writeBatch(db);
+      snapshot.forEach(docSnap => {
+        batch.update(docSnap.ref, { frozen: false, lastUpdated: Timestamp.now() });
+      });
+      await batch.commit();
     } catch (error: any) {
       throw new Error(`Failed to unfreeze bacenta: ${error.message}`);
     }
