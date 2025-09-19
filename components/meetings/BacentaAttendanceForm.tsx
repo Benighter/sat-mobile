@@ -215,61 +215,16 @@ const BacentaAttendanceForm: React.FC<BacentaAttendanceFormProps> = ({
     }
   };
 
-  // Compress a data URL image to a max dimension and quality
-  const compressDataUrl = (dataUrl: string, maxDim = 1600, quality = 0.7): Promise<string> => {
-    return new Promise((resolve) => {
-      try {
-        const img = new Image();
-        img.onload = () => {
-          const origW = img.naturalWidth || img.width;
-          const origH = img.naturalHeight || img.height;
-          let targetW = origW;
-          let targetH = origH;
-          if (Math.max(origW, origH) > maxDim) {
-            if (origW >= origH) {
-              targetW = maxDim;
-              targetH = Math.round((origH / origW) * maxDim);
-            } else {
-              targetH = maxDim;
-              targetW = Math.round((origW / origH) * maxDim);
-            }
-          }
-          const canvas = document.createElement('canvas');
-          canvas.width = Math.max(1, targetW);
-          canvas.height = Math.max(1, targetH);
-          const ctx = canvas.getContext('2d');
-          if (ctx) {
-            ctx.drawImage(img, 0, 0, targetW, targetH);
-          }
-          const out = canvas.toDataURL('image/jpeg', quality);
-          resolve(out);
-        };
-        img.onerror = () => resolve(dataUrl);
-        img.src = dataUrl;
-      } catch {
-        resolve(dataUrl);
-      }
-    });
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isSubmitting) return;
     setIsSubmitting(true);
     try {
-      // For very large images, compress before saving (and upload logic will still store only URL)
-      let processedImage = meetingImageBase64;
-      if (processedImage && typeof processedImage === 'string' && processedImage.startsWith('data:image') && processedImage.length > 900000) {
-        try {
-          processedImage = await compressDataUrl(processedImage, 1600, 0.7);
-        } catch {}
-      }
-
       const meetingRecord = {
         id: `${bacentaId}_${meetingDate}`,
         bacentaId,
         date: meetingDate,
-        meetingImage: processedImage,
+        meetingImage: meetingImageBase64,
         bacentaLeaderName: bacentaLeader ? `${bacentaLeader.firstName} ${bacentaLeader.lastName}` : bacentaLeaderName,
         messagePreached,
         discussionLedBy,
@@ -747,7 +702,7 @@ const BacentaAttendanceForm: React.FC<BacentaAttendanceFormProps> = ({
                 )}
               </div>
             </div>
-
+            
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Message Preached</label>
@@ -764,7 +719,7 @@ const BacentaAttendanceForm: React.FC<BacentaAttendanceFormProps> = ({
                   placeholder="Enter details about the message or sermon..."
                 />
               </div>
-
+              
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Discussion Led By</label>
                 <input
