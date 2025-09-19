@@ -31,8 +31,7 @@ import {
   EmailAuthProvider,
   fetchSignInMethodsForEmail
 } from 'firebase/auth';
-import { db, auth, storage } from '../firebase.config';
-import { ref as storageRef, uploadString, getDownloadURL } from 'firebase/storage';
+import { db, auth } from '../firebase.config';
 import { Member, Bacenta, AttendanceRecord, NewBeliever, SundayConfirmation, Guest, MemberDeletionRequest, DeletionRequestStatus, OutreachBacenta, OutreachMember, PrayerRecord, MeetingRecord, TitheRecord, BussingRecord, TransportRecord, SonOfGod } from '../types';
 // Lightweight inline type to avoid circular heavy imports for new feature (kept local to service)
 export interface HeadCountRecord {
@@ -2590,23 +2589,8 @@ export const meetingRecordsFirebaseService = {
       const meetingsRef = collection(db, getChurchCollectionPath('meetings'));
       const docRef = doc(meetingsRef, record.id);
 
-      // If meetingImage is a base64 data URL, upload it to Firebase Storage and store only the URL
-      const payload: any = { ...record };
-      const img = payload.meetingImage;
-      if (typeof img === 'string' && img.startsWith('data:image')) {
-        const semi = img.indexOf(';');
-        const contentType = semi > 5 ? img.substring(5, semi) : 'image/jpeg';
-        const ext = (contentType.split('/')[1] || 'jpeg').toLowerCase();
-        const churchIdForPath = currentChurchId || 'unknown';
-        const path = `churches/${churchIdForPath}/meetings/${record.id}.${ext}`;
-        const fileRef = storageRef(storage, path);
-        await uploadString(fileRef, img, 'data_url', { contentType });
-        const url = await getDownloadURL(fileRef);
-        payload.meetingImage = url; // Store URL instead of raw base64 to avoid Firestore size limits
-      }
-
       await setDoc(docRef, {
-        ...payload,
+        ...record,
         updatedAt: new Date().toISOString(),
         recordedBy: currentUser?.uid || 'unknown'
       }, { merge: true });

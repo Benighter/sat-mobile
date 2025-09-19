@@ -204,7 +204,7 @@ export interface MeetingRecord {
   id: string; // bacentaId_date (YYYY-MM-DD)
   bacentaId: string;
   date: string; // Meeting date as YYYY-MM-DD
-  meetingImage?: string; // Download URL (or legacy base64 data URL)
+  meetingImage?: string; // Base64 image string
   bacentaLeaderName: string;
   messagePreached: string;
   discussionLedBy: string;
