@@ -327,11 +327,15 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
   const nativeMinistryMembersRef = useRef<Member[]>([]);
 
   // Helper: combine members from default church and native ministry church without duplicates
-  // (IDs are church-scoped, so just concat and stable-sort by lastName)
+  // Combine and de-duplicate by id. Prefer base (default church) over native ministry copy if both exist.
   const composeVisibleMembers = useCallback((base: Member[], native: Member[]): Member[] => {
-    const combined = [...base, ...native];
-    combined.sort((a, b) => (a.lastName || '').localeCompare(b.lastName || ''));
-    return combined;
+    const map = new Map<string, Member>();
+    // seed with native first, then overwrite with base so base wins
+    for (const m of native) { map.set(m.id, m); }
+    for (const m of base) { map.set(m.id, m); }
+    const result = Array.from(map.values());
+    result.sort((a, b) => (a.lastName || '').localeCompare(b.lastName || ''));
+    return result;
   }, []);
 
 
@@ -664,7 +668,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
           // If the signed-in profile has a ministry church, compose base members with native
           // ministry members regardless of the current context flag.
           if (userProfile?.contexts?.ministryChurchId) {
-            baseMembersRef.current = members.filter(m => (m.ministry || '').trim() !== '');
+            baseMembersRef.current = members;
             setMembers(composeVisibleMembers(baseMembersRef.current, nativeMinistryMembersRef.current));
           } else {
             baseMembersRef.current = members;
@@ -987,7 +991,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
               );
               const snap = await getDocs(qNative);
               const native = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) })) as Member[];
-              baseMembersRef.current = membersData.filter(m => (m.ministry || '').trim() !== '');
+              baseMembersRef.current = membersData;
               nativeMinistryMembersRef.current = native;
               setMembers(composeVisibleMembers(baseMembersRef.current, native));
             } else {

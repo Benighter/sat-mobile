@@ -20,9 +20,24 @@ interface DataManagementProps {
 }
 
 const DataManagement: React.FC<DataManagementProps> = ({ isOpen, onClose }) => {
-  const { bacentas, members, attendanceRecords, showConfirmation, showToast, userProfile } = useAppContext();
+  const { bacentas, members, attendanceRecords, showConfirmation, showToast, userProfile, cleanupDuplicateMembers } = useAppContext();
   const [isExcelExportOpen, setIsExcelExportOpen] = useState(false);
   const [isSelectiveDataClearingOpen, setIsSelectiveDataClearingOpen] = useState(false);
+
+  const [isCleaningDuplicates, setIsCleaningDuplicates] = useState(false);
+
+  const handleCleanupDuplicates = async () => {
+    const proceed = window.confirm('This will remove duplicate member records in the current church (keeping the earliest record and cleaning linked confirmations/attendance/prayer). Continue?');
+    if (!proceed) return;
+    try {
+      setIsCleaningDuplicates(true);
+      await cleanupDuplicateMembers();
+    } catch (e: any) {
+      showToast('error', 'Cleanup Failed', e?.message || 'Could not complete duplicate cleanup');
+    } finally {
+      setIsCleaningDuplicates(false);
+    }
+  };
 
   // Check if current user is admin
   const isAdmin = hasAdminPrivileges(userProfile);
@@ -97,6 +112,8 @@ const DataManagement: React.FC<DataManagementProps> = ({ isOpen, onClose }) => {
                     <p className="font-medium text-orange-800">Clear Specific Bacenta Data</p>
                     <p className="text-sm text-orange-700 mb-3">
                       Choose specific bacentas to clear data from. This will delete the selected bacentas,
+
+
                       their members, attendance records, and new believers.
                     </p>
                     <Button
@@ -135,8 +152,39 @@ const DataManagement: React.FC<DataManagementProps> = ({ isOpen, onClose }) => {
                 </div>
               </div>
             </div>
+
+              {/* Clean up duplicate members */}
+              <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 mt-4">
+                <div className="flex items-start space-x-3">
+                  <ExclamationTriangleIcon className="w-5 h-5 text-yellow-600 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="font-medium text-yellow-900">Remove Duplicate Members</p>
+                    <p className="text-sm text-yellow-800 mb-3">
+                      Looks for duplicate active members in this church by name + phone (or name + room as fallback).
+                      Keeps the earliest record, removes later duplicates, and cleans linked confirmations, attendance,
+                      and prayer records. Financial records are preserved.
+                    </p>
+                    <Button
+                      onClick={handleCleanupDuplicates}
+                      variant="secondary"
+                      size="sm"
+                      disabled={isCleaningDuplicates}
+                      className="flex items-center space-x-2 border-yellow-300 text-yellow-800 hover:bg-yellow-100 disabled:opacity-60"
+                      title="Safely remove duplicate members"
+                    >
+                      <ExclamationTriangleIcon className="w-4 h-4" />
+                      <span>{isCleaningDuplicates ? 'Cleaning...' : 'Clean up Duplicate Members'}</span>
+                    </Button>
+                  </div>
+                </div>
+              </div>
+
           </div>
+
+
         )}
+
+
       </div>
 
       {/* Excel Export Modal */}
