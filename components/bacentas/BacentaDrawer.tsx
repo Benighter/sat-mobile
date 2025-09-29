@@ -324,10 +324,10 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
                 <>
                   <NavigationItem
                     icon={<BuildingOfficeIcon className="w-4 h-4" />}
-                    label="All Bacenta Leaders"
+                    label="All Green Bacentas"
                     isActive={currentTab.id === TabKeys.ALL_BACENTAS}
                     onClick={() => {
-                      switchTab({ id: TabKeys.ALL_BACENTAS, name: 'All Bacenta Leaders' });
+                      switchTab({ id: TabKeys.ALL_BACENTAS, name: 'All Green Bacentas' });
                       onClose();
                     }}
                   />
@@ -827,7 +827,7 @@ const NavigationItem: React.FC<NavigationItemProps> = ({
   // Get accent color based on label with improved contrast
   const getAccentColor = (label: string) => {
     switch (label) {
-      case 'All Bacenta Leaders':
+      case 'All Green Bacentas':
         return {
           active: 'bg-blue-100 dark:bg-blue-900/40 border-l-4 border-l-blue-600 dark:border-l-blue-400 shadow-sm',
           icon: 'text-blue-700 dark:text-blue-300',

@@ -36,7 +36,7 @@ interface LinkedBacentaGroup {
 }
 
 interface FellowshipGroup {
-  fellowshipLeader: Member; // role: Fellowship Leader
+  fellowshipLeader: Member; // role: Fellowship Leader (Red Bacenta)
   bacenta: Bacenta | { id: string; name: string };
   members: Member[];
   guests: Guest[];
@@ -45,9 +45,9 @@ interface FellowshipGroup {
 }
 
 interface BacentaLeaderGroup {
-  bacentaLeader: Member; // role: Bacenta Leader
+  bacentaLeader: Member; // role: Bacenta Leader (Green Bacenta)
   bacenta: Bacenta | { id: string; name: string };
-  mainMembers: Member[]; // confirmed members in leader bacenta (excluding fellowship leaders)
+  mainMembers: Member[]; // confirmed members in leader bacenta (excluding Red Bacentas)
   guests: Guest[]; // confirmed guests in leader bacenta
   fellowshipGroups: FellowshipGroup[];
   linkedBacentaGroups: LinkedBacentaGroup[];
@@ -360,10 +360,10 @@ const SundayConfirmationsView: React.FC = () => {
         : { id: 'unassigned', name: 'Unassigned' };
 
       const allInLeaderBacenta = membersByBacenta.get(leader.bacentaId) || [];
-      const mainMembers = allInLeaderBacenta.filter(m => m.role !== 'Fellowship Leader');
+      const mainMembers = allInLeaderBacenta.filter(m => m.role !== 'Fellowship Leader'); // Exclude Red Bacentas - they get their own section
       const mainGuests = guestsByBacenta.get(leader.bacentaId || 'unassigned') || [];
 
-      // Fellowship leaders under this bacenta leader
+      // Red Bacentas (Fellowship leaders) under this Green Bacenta (bacenta leader)
       const fellowshipLeaders = members.filter(m => m.role === 'Fellowship Leader' && m.bacentaLeaderId === leader.id);
       const fellowshipGroups: FellowshipGroup[] = fellowshipLeaders.map(fl => {
         const flBacenta = fl.bacentaId
@@ -372,7 +372,7 @@ const SundayConfirmationsView: React.FC = () => {
         const membersInFellowship = membersByBacenta.get(fl.bacentaId) || [];
         const guestsInFellowship = guestsByBacenta.get(fl.bacentaId || 'unassigned') || [];
 
-        // Linked bacentas for fellowship leader
+        // Linked bacentas for Red Bacenta (fellowship leader)
         const linkedGroups: LinkedBacentaGroup[] = (fl.linkedBacentaIds || [])
           .filter(id => id && id !== fl.bacentaId)
           .map(id => {
@@ -743,12 +743,12 @@ const SundayConfirmationsView: React.FC = () => {
                         </div>
                       ))}
 
-                      {/* Fellowship Leader Groups */}
+                      {/* Red Bacenta Groups */}
                       {group.fellowshipGroups.map(fg => (
                         <div key={fg.fellowshipLeader.id} className="mb-4 last:mb-0">
                           <h4 className="font-medium text-gray-900 flex items-center">
                             <span className="mr-2 text-lg">❤️</span>
-                            Fellowship leader: {fg.fellowshipLeader.firstName} {fg.fellowshipLeader.lastName || ''} ({fg.bacenta.name})
+                            Red Bacenta: {fg.fellowshipLeader.firstName} {fg.fellowshipLeader.lastName || ''} ({fg.bacenta.name})
                           </h4>
                           <ol className="mt-2 space-y-1 list-decimal pl-6">
                             {fg.members.map(m => {
@@ -787,7 +787,7 @@ const SundayConfirmationsView: React.FC = () => {
                               );
                             })}
                           </ol>
-                          {/* Linked bacentas under Fellowship Leader */}
+                          {/* Linked bacentas under Red Bacenta */}
                           {fg.linkedBacentaGroups && fg.linkedBacentaGroups.map(lg => (
                             <div key={lg.bacenta.id} className="mt-3">
                               <h5 className="font-medium text-gray-800 flex items-center">

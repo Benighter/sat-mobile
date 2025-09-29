@@ -27,19 +27,19 @@ interface LinkedBacentaGroup {
 }
 
 interface FellowshipGroup {
-  fellowshipLeader: Member; // role: Fellowship Leader
+  fellowshipLeader: Member; // role: Fellowship Leader (Red Bacenta)
   bacenta: Bacenta | { id: string; name: string };
-  members: Member[]; // includes fellowshipLeader + present members in that fellowship leader's bacenta
-  linkedBacentaGroups: LinkedBacentaGroup[]; // Additional linked bacentas for this fellowship leader
+  members: Member[]; // includes fellowshipLeader + present members in that Red Bacenta's bacenta
+  linkedBacentaGroups: LinkedBacentaGroup[]; // Additional linked bacentas for this Red Bacenta
   total: number; // members length + linked groups member counts
 }
 
 interface BacentaLeaderGroup {
-  bacentaLeader: Member; // role: Bacenta Leader
+  bacentaLeader: Member; // role: Bacenta Leader (Green Bacenta)
   bacenta: Bacenta | { id: string; name: string };
-  mainMembers: Member[]; // Present members in leader's own bacenta (including leader) excluding fellowship leaders
-  fellowshipGroups: FellowshipGroup[]; // Nested fellowship leader groups linked via bacentaLeaderId
-  linkedBacentaGroups: LinkedBacentaGroup[]; // Additional linked bacentas for this bacenta leader
+  mainMembers: Member[]; // Present members in leader's own bacenta (including leader) excluding Red Bacentas
+  fellowshipGroups: FellowshipGroup[]; // Nested Red Bacenta groups linked via bacentaLeaderId
+  linkedBacentaGroups: LinkedBacentaGroup[]; // Additional linked bacentas for this Green Bacenta
   newBelievers: NewBeliever[]; // Present new believers (unassigned or could be associated later)
   total: number; // mainMembers + sum fellowshipGroups totals + linked groups + newBelievers
 }
@@ -126,15 +126,15 @@ const WeeklyAttendanceView: React.FC = () => {
     const groups: BacentaLeaderGroup[] = allBacentaLeaders.map(leader => {
       const leaderBacenta = leader.bacentaId ? bacentaMap.get(leader.bacentaId) || { id: leader.bacentaId, name: 'Unknown Bacenta' } : { id: 'unassigned', name: 'Unassigned' };
       const allInLeaderBacenta = presentByBacenta.get(leader.bacentaId) || [];
-      // Exclude fellowship leaders (they get their own section) from main list
+      // Exclude Red Bacentas (fellowship leaders) - they get their own section - from main list
       const mainMembers = allInLeaderBacenta.filter(m => m.role !== 'Fellowship Leader');
 
-      // Fellowship leaders under this bacenta leader
+      // Red Bacentas (Fellowship leaders) under this Green Bacenta (bacenta leader)
   const fellowshipLeaders = members.filter(m => m.role === 'Fellowship Leader' && m.bacentaLeaderId === leader.id);
       const fellowshipGroups: FellowshipGroup[] = fellowshipLeaders.map(fl => {
         const flBacenta = fl.bacentaId ? bacentaMap.get(fl.bacentaId) || { id: fl.bacentaId, name: 'Unknown Bacenta' } : { id: 'unassigned', name: 'Unassigned' };
-        const membersInFellowship = (presentByBacenta.get(fl.bacentaId) || []); // all present in that bacenta incl fellowship leader (if present)
-        // Linked bacentas for fellowship leader
+        const membersInFellowship = (presentByBacenta.get(fl.bacentaId) || []); // all present in that bacenta incl Red Bacenta (fellowship leader) if present
+        // Linked bacentas for Red Bacenta (fellowship leader)
         const linkedGroups: LinkedBacentaGroup[] = (fl.linkedBacentaIds || [])
           .filter(id => id && id !== fl.bacentaId)
           .map(id => {
@@ -275,7 +275,7 @@ const WeeklyAttendanceView: React.FC = () => {
             });
           });
           group.fellowshipGroups.forEach(fg => {
-            text += `\n❤️ Fellowship leader: ${fg.fellowshipLeader.firstName} ${fg.fellowshipLeader.lastName || ''} (${fg.bacenta.name})\n`;
+            text += `\n❤️ Red Bacenta: ${fg.fellowshipLeader.firstName} ${fg.fellowshipLeader.lastName || ''} (${fg.bacenta.name})\n`;
             fg.members.forEach((m, idx) => {
               text += `${idx + 1}. ${m.firstName} ${m.lastName || ''}\n`;
             });
@@ -605,19 +605,19 @@ const WeeklyAttendanceView: React.FC = () => {
                           </ol>
                         </div>
                       ))}
-                      {/* Fellowship Leader Groups */}
+                      {/* Red Bacenta Groups */}
                       {group.fellowshipGroups.map(fg => (
                         <div key={fg.fellowshipLeader.id} className="mb-4 last:mb-0">
                           <h4 className="font-medium text-gray-900 flex items-center">
                             <span className="mr-2 text-lg">❤️</span>
-                            Fellowship leader: {fg.fellowshipLeader.firstName} {fg.fellowshipLeader.lastName || ''} ({fg.bacenta.name})
+                            Red Bacenta: {fg.fellowshipLeader.firstName} {fg.fellowshipLeader.lastName || ''} ({fg.bacenta.name})
                           </h4>
                           <ol className="mt-2 space-y-1 list-decimal list-inside">
                             {fg.members.map(m => (
                               <li key={m.id} className="text-gray-800">{m.firstName} {m.lastName}</li>
                             ))}
                           </ol>
-                          {/* Linked bacentas under Fellowship Leader */}
+                          {/* Linked bacentas under Red Bacenta */}
                           {fg.linkedBacentaGroups && fg.linkedBacentaGroups.map(lg => (
                             <div key={lg.bacenta.id} className="mt-3">
                               <h5 className="font-medium text-gray-800 flex items-center">

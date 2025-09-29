@@ -178,7 +178,7 @@ const BacentaMeetingsView: React.FC = () => {
       const weekWed = getWednesdayOfWeek(currentDate);
       const { wednesday, thursday } = getMeetingWeekDates(weekWed);
 
-      // Helper to find leader for a bacenta
+      // Helper to find leader for a bacenta (Green Bacenta or Red Bacenta)
       const getLeaderName = (bacentaId: string, fallback?: string) => {
         const bacentaMembers = getActiveMembersByBacenta(members, bacentas, bacentaId);
         const leader = bacentaMembers.find(m => m.role === 'Bacenta Leader') || bacentaMembers.find(m => m.role === 'Fellowship Leader');
@@ -259,7 +259,7 @@ const BacentaMeetingsView: React.FC = () => {
       const weekWed = getWednesdayOfWeek(currentDate);
       const { wednesday, thursday } = getMeetingWeekDates(weekWed);
 
-      // Helper to find leader for a bacenta
+      // Helper to find leader for a bacenta (Green Bacenta or Red Bacenta)
       const getLeaderName = (bacentaId: string, fallback?: string) => {
         const bacentaMembers = getActiveMembersByBacenta(members, bacentas, bacentaId);
         const leader = bacentaMembers.find(m => m.role === 'Bacenta Leader') || bacentaMembers.find(m => m.role === 'Fellowship Leader');

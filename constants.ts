@@ -1,12 +1,26 @@
 
-import { TabOption, TabKeys } from './types';
+import { TabOption, TabKeys, MemberRole } from './types';
 
 // CONGREGATION_GROUPS is removed as Bacentas are now dynamic.
+
+// Role display name mapping - converts database role values to user-facing labels
+export const getRoleDisplayName = (role: MemberRole, plural: boolean = false): string => {
+  switch (role) {
+    case 'Bacenta Leader':
+      return plural ? 'Green Bacentas' : 'Green Bacenta';
+    case 'Fellowship Leader':
+      return plural ? 'Red Bacentas' : 'Red Bacenta';
+    case 'Member':
+      return plural ? 'Members' : 'Member';
+    default:
+      return role;
+  }
+};
 
 export const FIXED_TABS: TabOption[] = [
   { id: TabKeys.DASHBOARD, name: 'Dashboard' },
   { id: TabKeys.ALL_CONGREGATIONS, name: 'All Members' }, // ID remains, name updated
-  { id: TabKeys.ALL_BACENTAS, name: 'All Bacenta Leaders' },
+  { id: TabKeys.ALL_BACENTAS, name: 'All Green Bacentas' },
   { id: TabKeys.ATTENDANCE_ANALYTICS, name: 'Attendance Analytics' },
   { id: TabKeys.WEEKLY_ATTENDANCE, name: 'Weekly Attendance' },
   { id: TabKeys.SUNDAY_HEAD_COUNTS, name: 'Sunday Head counts' },

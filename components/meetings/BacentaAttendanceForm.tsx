@@ -59,7 +59,7 @@ const BacentaAttendanceForm: React.FC<BacentaAttendanceFormProps> = ({
 
   // Enhanced leader detection logic with proper hierarchy
   const bacentaLeader = useMemo(() => {
-    console.log('🔍 Bacenta Leader Detection Debug:', {
+    console.log('🔍 Leader Detection Debug:', {
       bacentaId,
       bacentaName: bacenta?.name,
       totalMembers: members.length,
@@ -72,17 +72,17 @@ const BacentaAttendanceForm: React.FC<BacentaAttendanceFormProps> = ({
       }))
     });
 
-    // First, look for a Bacenta Leader in this specific bacenta
+    // First, look for a Green Bacenta (Bacenta Leader) in this specific bacenta
     const bacentaLeaderRole = bacentaMembers.find(m => m.role === 'Bacenta Leader');
     if (bacentaLeaderRole) {
-      console.log('✅ Found Bacenta Leader:', bacentaLeaderRole);
+      console.log('✅ Found Green Bacenta (Bacenta Leader):', bacentaLeaderRole);
       return bacentaLeaderRole;
     }
 
-    // If no Bacenta Leader, look for Fellowship Leader in this bacenta
+    // If no Green Bacenta, look for Red Bacenta (Fellowship Leader) in this bacenta
     const fellowshipLeaderRole = bacentaMembers.find(m => m.role === 'Fellowship Leader');
     if (fellowshipLeaderRole) {
-      console.log('✅ Found Fellowship Leader:', fellowshipLeaderRole);
+      console.log('✅ Found Red Bacenta (Fellowship Leader):', fellowshipLeaderRole);
       return fellowshipLeaderRole;
     }
 
@@ -673,7 +673,7 @@ const BacentaAttendanceForm: React.FC<BacentaAttendanceFormProps> = ({
         <div className="space-y-2">
                 <label className="flex items-center text-sm font-semibold text-gray-700">
                   <UsersIcon className="w-4 h-4 mr-2 text-purple-500" />
-                  Bacenta Leader
+                  Leader Name
                   {!bacentaLeader && !isViewMode && (
                     <span className="ml-2 px-2 py-1 text-xs bg-blue-100 text-blue-600 rounded-lg font-medium">editable</span>
                   )}
@@ -684,7 +684,7 @@ const BacentaAttendanceForm: React.FC<BacentaAttendanceFormProps> = ({
                     value={bacentaLeader ? `${bacentaLeader.firstName} ${bacentaLeader.lastName}` : bacentaLeaderName}
                     onChange={(e) => setBacentaLeaderName(e.target.value)}
                     readOnly={!!bacentaLeader || isViewMode}
-                    placeholder={bacentaLeader ? '' : 'Enter bacenta leader name'}
+                    placeholder={bacentaLeader ? '' : 'Enter leader name'}
                     className={`w-full px-4 py-3 border-2 rounded-xl font-medium transition-all duration-200 ${
                       bacentaLeader || isViewMode
                         ? 'border-gray-200 bg-gradient-to-r from-gray-50 to-purple-50 text-gray-700'
@@ -732,7 +732,7 @@ const BacentaAttendanceForm: React.FC<BacentaAttendanceFormProps> = ({
                       ? 'bg-gray-50 text-gray-600'
                       : 'focus:outline-none focus:ring-2 focus:ring-blue-500'
                   }`}
-                  placeholder={bacentaLeader ? "Enter name of discussion leader" : "Enter name of discussion leader (defaults to bacenta leader)"}
+                  placeholder={bacentaLeader ? "Enter name of discussion leader" : "Enter name of discussion leader (defaults to leader name)"}
                 />
                 {!bacentaLeader && bacentaLeaderName && !discussionLedBy && (
                   <button
@@ -740,7 +740,7 @@ const BacentaAttendanceForm: React.FC<BacentaAttendanceFormProps> = ({
                     onClick={() => setDiscussionLedBy(bacentaLeaderName)}
                     className="mt-1 text-xs text-blue-600 hover:text-blue-700 underline"
                   >
-                    Use bacenta leader name
+                    Use leader name
                   </button>
                 )}
               </div>

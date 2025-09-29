@@ -29,7 +29,7 @@ const BacentaLeadersView: React.FC = () => {
   
   const [searchTerm, setSearchTerm] = useState('');
 
-  // Filter to show only Bacenta Leaders
+  // Filter to show only Green Bacentas (Bacenta Leaders)
   const bacentaLeaders = useMemo(() => {
     return members
       .filter(member => member.role === 'Bacenta Leader')
@@ -64,7 +64,7 @@ const BacentaLeadersView: React.FC = () => {
   };
 
   const getTotalMembersUnderLeader = (bacentaLeaderId: string) => {
-    // Count fellowship leaders + regular members under this bacenta leader (only active members)
+    // Count Red Bacentas (fellowship leaders) + regular members under this Green Bacenta (bacenta leader) - only active members
     return members.filter(m =>
       !m.frozen && (
         (m.role === 'Fellowship Leader' && m.bacentaLeaderId === bacentaLeaderId) ||
@@ -89,7 +89,7 @@ const BacentaLeadersView: React.FC = () => {
   const baseColumns = [
     {
       key: 'name',
-      header: 'Bacenta Leader',
+      header: 'Green Bacenta',
       width: canEdit ? '25%' : '30%',
       render: (leader: Member) => (
         <div className="flex items-center space-x-3">
@@ -103,7 +103,7 @@ const BacentaLeadersView: React.FC = () => {
             <div className="flex items-center space-x-1">
               <span className="px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium flex items-center">
                 <span className="mr-1">💚</span>
-                Bacenta Leader
+                Green Bacenta
               </span>
             </div>
           </div>
@@ -152,7 +152,7 @@ const BacentaLeadersView: React.FC = () => {
               <UsersIcon className="w-4 h-4 text-purple-500" />
               <span className="font-semibold text-lg">{fellowshipLeaders}</span>
             </div>
-            <div className="text-xs text-gray-500">Fellowship Leaders</div>
+            <div className="text-xs text-gray-500">Red Bacentas</div>
             <div className="text-xs text-gray-600 mt-1">
               {totalMembers} total under leadership
             </div>
@@ -249,7 +249,7 @@ const BacentaLeadersView: React.FC = () => {
           <div>
             <h3 className="text-lg desktop:text-xl desktop-lg:text-2xl font-semibold text-gray-800 flex items-center">
               <UserIcon className="w-5 h-5 desktop:w-6 desktop:h-6 mr-2 text-green-600" />
-              Bacenta Leaders - {currentMonthName}
+              Green Bacentas - {currentMonthName}
             </h3>
             <p className="text-sm text-gray-600 mt-1">
               {canEdit
@@ -271,15 +271,15 @@ const BacentaLeadersView: React.FC = () => {
         </div>
       </div>
 
-      {/* Bacenta Leaders Table */}
+      {/* Green Bacentas Table */}
       <Table
         data={bacentaLeaders}
         columns={columns}
         loading={isLoading}
         emptyMessage={
-          searchTerm 
-            ? "No bacenta leaders match your search" 
-            : "No bacenta leaders assigned yet"
+          searchTerm
+            ? "No green bacentas match your search"
+            : "No green bacentas assigned yet"
         }
         onRowClick={(leader) => canEdit ? openMemberForm(leader) : openHierarchyModal(leader)}
       />
@@ -293,7 +293,7 @@ const BacentaLeadersView: React.FC = () => {
               <div className="text-2xl font-bold text-green-600">{bacentaLeaders.length}</div>
             </div>
             <div className="text-center">
-              <div className="font-semibold text-gray-900">Fellowship Leaders</div>
+              <div className="font-semibold text-gray-900">Red Bacentas</div>
               <div className="text-2xl font-bold text-purple-600">
                 {bacentaLeaders.reduce((sum, leader) => sum + getFellowshipLeadersCount(leader.id), 0)}
               </div>

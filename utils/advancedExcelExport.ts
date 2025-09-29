@@ -608,7 +608,7 @@ const createExecutiveDashboard = async (workbook: ExcelJS.Workbook, data: Advanc
 
   currentRow += 2;
 
-  // All Leaders Table (Bacenta & Fellowship Leaders)
+  // All Leaders Table (Green Bacentas & Red Bacentas)
   const leadersHeaders = ['Name', 'Role', 'Bacenta', 'Phone', 'Attendance Rate', 'Present Count', 'Leadership Info'];
   const leaders = members.filter(m => m.role === 'Bacenta Leader' || m.role === 'Fellowship Leader');
 
@@ -633,15 +633,18 @@ const createExecutiveDashboard = async (workbook: ExcelJS.Workbook, data: Advanc
         (m.role === 'Fellowship Leader' && m.bacentaLeaderId === leader.id) ||
         (m.role === 'Member' && m.bacentaId === leader.bacentaId)
       ).length;
-      leadershipInfo = `${fellowshipLeadersCount} FL, ${totalUnderLeadership} total under leadership`;
+      leadershipInfo = `${fellowshipLeadersCount} Red Bacentas, ${totalUnderLeadership} total under leadership`;
     } else if (leader.role === 'Fellowship Leader') {
       const bacentaLeader = members.find(m => m.id === leader.bacentaLeaderId);
       leadershipInfo = bacentaLeader ? `Reports to ${bacentaLeader.firstName} ${bacentaLeader.lastName}` : 'Unassigned';
     }
 
+    // Display role with new terminology
+    const roleDisplay = leader.role === 'Bacenta Leader' ? 'Green Bacenta' : leader.role === 'Fellowship Leader' ? 'Red Bacenta' : leader.role;
+
     return [
       `${leader.firstName} ${leader.lastName}`,
-      leader.role,
+      roleDisplay,
       bacenta ? bacenta.name : 'Unassigned',
       options.includePersonalInfo ? leader.phoneNumber : 'Hidden',
       `${attendanceRate}%`,

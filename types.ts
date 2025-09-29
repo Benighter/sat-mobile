@@ -33,8 +33,8 @@ export interface Member {
    * structure display. Leader should not be duplicated in those linked bacentas' member lists.
    */
   linkedBacentaIds?: string[]; // Secondary/linked bacentas (leaders only)
-  bacentaLeaderId?: string; // For Fellowship Leaders: ID of the Bacenta Leader they report to
-  role: MemberRole; // Role assignment: Member (default), Fellowship Leader, or Bacenta Leader
+  bacentaLeaderId?: string; // For Red Bacentas (Fellowship Leaders): ID of the Green Bacenta (Bacenta Leader) they report to
+  role: MemberRole; // Role assignment: Member (default), Red Bacenta (Fellowship Leader), or Green Bacenta (Bacenta Leader)
   birthday?: string; // Optional birthday field in YYYY-MM-DD format
   createdDate: string; // ISO string
   lastUpdated: string; // ISO string

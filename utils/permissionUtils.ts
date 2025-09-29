@@ -95,7 +95,7 @@ export const canImportData = (user: User | null): boolean => {
 };
 
 /**
- * Check if a user can assign member roles (Fellowship Leader, Bacenta Leader, etc.)
+ * Check if a user can assign member roles (Red Bacenta, Green Bacenta, etc.)
  * @param user The user object to check
  * @returns boolean indicating if the user can assign member roles
  */
@@ -104,7 +104,7 @@ export const canAssignMemberRoles = (user: User | null): boolean => {
 };
 
 /**
- * Check if a user can manage hierarchy (assign/remove fellowship leaders to/from bacenta leaders)
+ * Check if a user can manage hierarchy (assign/remove Red Bacentas to/from Green Bacentas)
  * @param user The user object to check
  * @returns boolean indicating if the user can manage hierarchy
  */
@@ -113,9 +113,9 @@ export const canManageHierarchy = (user: User | null): boolean => {
 };
 
 /**
- * Check if a user can assign bacenta leaders to bacentas
+ * Check if a user can assign Green Bacentas to bacentas
  * @param user The user object to check
- * @returns boolean indicating if the user can assign bacenta leaders
+ * @returns boolean indicating if the user can assign Green Bacentas
  */
 export const canAssignBacentaLeaders = (user: User | null): boolean => {
   return hasAdminPrivileges(user);
@@ -132,7 +132,7 @@ export const isInvitedAdminLeader = (user: User | null): boolean => {
 };
 
 /**
- * Check if a user can delete members with leader roles (Bacenta Leader, Fellowship Leader)
+ * Check if a user can delete members with leader roles (Green Bacenta, Red Bacenta)
  * Invited admin leaders cannot delete other leaders, only original admins can
  * @param user The user object to check
  * @returns boolean indicating if the user can delete leaders
@@ -159,7 +159,7 @@ export const canDeleteMemberWithRole = (user: User | null, memberRole: string): 
     return hasLeaderPrivileges(user);
   }
 
-  // If the member is a leader (Bacenta Leader or Fellowship Leader),
+  // If the member is a leader (Green Bacenta or Red Bacenta),
   // only original admins can delete them, not invited admin leaders
   if (memberRole === 'Bacenta Leader' || memberRole === 'Fellowship Leader') {
     return canDeleteLeaders(user);

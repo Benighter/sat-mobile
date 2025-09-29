@@ -532,8 +532,8 @@ const MemberFormModal: React.FC<MemberFormModalProps> = ({ isOpen, onClose, memb
                       }
                       const defaultOptions = [
                         { value: 'Member' as MemberRole, label: 'Member' },
-                        { value: 'Fellowship Leader' as MemberRole, label: 'Fellowship Leader' },
-                        { value: 'Bacenta Leader' as MemberRole, label: 'Bacenta Leader' },
+                        { value: 'Fellowship Leader' as MemberRole, label: 'Red Bacenta' },
+                        { value: 'Bacenta Leader' as MemberRole, label: 'Green Bacenta' },
                       ];
                       return defaultOptions.map(opt => (
                         <option key={opt.value} value={opt.value}>{opt.label}</option>

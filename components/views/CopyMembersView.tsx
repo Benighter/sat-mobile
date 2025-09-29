@@ -59,8 +59,8 @@ const CopyMembersView: React.FC = () => {
   const filteredMembers = useMemo(() => {
     const getRolePriority = (role: string | undefined) => {
       switch (role) {
-        case 'Bacenta Leader': return 1;
-        case 'Fellowship Leader': return 2;
+        case 'Bacenta Leader': return 1; // Green Bacenta
+        case 'Fellowship Leader': return 2; // Red Bacenta
         case 'Member': return 3;
         default: return 4;
       }
@@ -157,7 +157,7 @@ const CopyMembersView: React.FC = () => {
         // Header logic
         if (primaryLeader) {
           const heart = primaryLeader.role === 'Bacenta Leader' ? '💚' : '❤️';
-            lines.push(`${heart} ${primaryLeader.role === 'Bacenta Leader' ? 'Bacenta leader:' : 'Fellowship leader:'} ${primaryLeader.firstName} ${primaryLeader.lastName || ''} ${bacentaName}`.trim());
+            lines.push(`${heart} ${primaryLeader.role === 'Bacenta Leader' ? 'Green Bacenta:' : 'Red Bacenta:'} ${primaryLeader.firstName} ${primaryLeader.lastName || ''} ${bacentaName}`.trim());
           countedMemberIds.add(primaryLeader.id);
         } else if (linkedLeader) {
           // Linked bacenta header without repeating leader name

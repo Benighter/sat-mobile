@@ -46,8 +46,8 @@ const MemberListView: React.FC<MemberListViewProps> = ({ bacentaFilter }) => {
     // Define role priority for sorting (lower number = higher priority)
     const getRolePriority = (role: string | undefined) => {
       switch (role) {
-        case 'Bacenta Leader': return 1;
-        case 'Fellowship Leader': return 2;
+        case 'Bacenta Leader': return 1; // Green Bacenta
+        case 'Fellowship Leader': return 2; // Red Bacenta
         case 'Member': return 3;
         default: return 4; // For any undefined roles
       }

@@ -12,7 +12,7 @@ SAT Mobile is a React 19 + Firebase church management system with mobile-first d
 - **Collection Naming**: `members`, `bacentas`, `attendance`, `newBelievers`, `confirmations`, `prayers`, `meetings`
 
 ### Core Data Models
-- **Member**: Church member with `bacentaId` assignment, role (`Member|Fellowship Leader|Bacenta Leader`)
+- **Member**: Church member with `bacentaId` assignment, role (`Member|Red Bacenta (Fellowship Leader)|Green Bacenta (Bacenta Leader)`)
 - **Bacenta**: Small group/congregation with dynamic structure
 - **AttendanceRecord**: Sunday attendance linked to members by date (`YYYY-MM-DD`)
 - **NewBeliever**: Born-again tracking separate from member management

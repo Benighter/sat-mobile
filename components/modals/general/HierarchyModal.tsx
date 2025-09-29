@@ -174,7 +174,7 @@ const HierarchyModal: React.FC<HierarchyModalProps> = ({ isOpen, bacentaLeader, 
                       </div>
                       <div className="flex flex-col sm:flex-row items-end sm:items-center space-y-1 sm:space-y-0 sm:space-x-2 flex-shrink-0">
                         <div className="bg-red-100 text-red-700 px-2 py-1 rounded-md text-xs font-medium">
-                          ❤️ Fellowship Leader
+                          ❤️ Red Bacenta
                         </div>
                         {canManageHierarchyActions && (
                           <Button
@@ -195,16 +195,16 @@ const HierarchyModal: React.FC<HierarchyModalProps> = ({ isOpen, bacentaLeader, 
             )}
           </div>
 
-          {/* Available Fellowship Leaders */}
+          {/* Available Red Bacentas (Fellowship Leaders) */}
           <div>
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3 sm:mb-4">
               <h3 className="text-base sm:text-lg font-semibold text-gray-800 flex items-center px-1">
                 <PlusIcon className="w-4 h-4 sm:w-5 sm:h-5 mr-2 text-blue-600" />
-                Available Fellowship Leaders ({unassignedFellowshipLeaders.length})
+                Available Red Bacentas ({unassignedFellowshipLeaders.length})
               </h3>
               <div className="w-full sm:w-64">
                 <Input
-                  placeholder="Search fellowship leaders..."
+                  placeholder="Search red bacentas..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="border border-gray-300 bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-sm"
@@ -216,7 +216,7 @@ const HierarchyModal: React.FC<HierarchyModalProps> = ({ isOpen, bacentaLeader, 
               <div className="bg-gray-50 border border-gray-200 p-4 sm:p-6 rounded-lg sm:rounded-xl text-center">
                 <UsersIcon className="w-8 h-8 sm:w-12 sm:h-12 text-gray-400 mx-auto mb-2 sm:mb-3" />
                 <p className="text-gray-500 text-sm sm:text-base">
-                  {searchTerm ? 'No fellowship leaders match your search' : 'All fellowship leaders are already assigned'}
+                  {searchTerm ? 'No red bacentas match your search' : 'All red bacentas are already assigned'}
                 </p>
               </div>
             ) : (

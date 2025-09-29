@@ -123,7 +123,7 @@ const BacentaAssignmentModal: React.FC<BacentaAssignmentModalProps> = ({ isOpen,
               <div className="flex items-center space-x-2">
                 <span className={`px-2 py-1 ${leader.role === 'Bacenta Leader' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'} rounded-full text-xs font-medium flex items-center`}>
                   <span className="mr-1">{leader.role === 'Bacenta Leader' ? '💚' : '❤️'}</span>
-                  {leader.role}
+                  {leader.role === 'Bacenta Leader' ? 'Green Bacenta' : 'Red Bacenta'}
                 </span>
               </div>
             </div>

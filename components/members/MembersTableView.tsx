@@ -155,8 +155,8 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
   const speaksInTonguesOnly: boolean = (currentTab?.data as any)?.speaksInTonguesOnly === true;
   const baptizedOnly: boolean = (currentTab?.data as any)?.baptizedOnly === true;
     const getHierarchyRank = (m: Member) => {
-      if ((m.role || 'Member') === 'Bacenta Leader') return 1; // Head
-      if ((m.role || 'Member') === 'Fellowship Leader') return 2; // Leader
+      if ((m.role || 'Member') === 'Bacenta Leader') return 1; // Green Bacenta (Head)
+      if ((m.role || 'Member') === 'Fellowship Leader') return 2; // Red Bacenta (Leader)
       const pos = (m.ministryPosition || '').toLowerCase();
       if ((m.role || 'Member') === 'Member' && pos === 'assistant') return 3; // Assistant
       return 4; // Member (or other positions)
@@ -394,9 +394,9 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
   width: '110px',
       render: (member: Member) => {
         const roleConfig = {
-          'Bacenta Leader': { icon: '💚' },
-          'Fellowship Leader': { icon: '❤️' },
-          'Member': { icon: '👤' }
+          'Bacenta Leader': { icon: '💚', displayName: 'Green Bacenta' },
+          'Fellowship Leader': { icon: '❤️', displayName: 'Red Bacenta' },
+          'Member': { icon: '👤', displayName: 'Member' }
         };
         const roleIcon = roleConfig[member.role || 'Member'].icon;
 
@@ -927,8 +927,8 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
                   </>
                 ) : (
                   <>
-                    <option value="head">�💚 Bacenta Leaders</option>
-                    <option value="leader">❤️ Fellowship Leaders</option>
+                    <option value="head">💚 Green Bacentas</option>
+                    <option value="leader">❤️ Red Bacentas</option>
                     <option value="member">👤 Members</option>
                   </>
                 )}
@@ -1421,7 +1421,7 @@ const MemberActionsDropdown: React.FC<MemberActionsDropdownProps> = ({
                 <div className="flex items-center gap-2">
                   <span className="font-semibold text-sm text-gray-900 truncate">{`${member.firstName} ${member.lastName || ''}`.trim()}</span>
                   <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-700 border border-gray-200">
-                    {(member.role || 'Member') === 'Bacenta Leader' ? '💚 BL' : (member.role || 'Member') === 'Fellowship Leader' ? '❤️ FL' : '👤 M'}
+                    {(member.role || 'Member') === 'Bacenta Leader' ? '💚 GB' : (member.role || 'Member') === 'Fellowship Leader' ? '❤️ RB' : '👤 M'}
                   </span>
                   {member.frozen && (
                     <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-sky-100 text-sky-700 border border-sky-200" title="Frozen – excluded from counts and absentees">Frozen</span>
