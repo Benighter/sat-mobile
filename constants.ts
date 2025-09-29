@@ -42,6 +42,29 @@ export const MINISTRY_OPTIONS: string[] = [
   'Media',
 ];
 
+// Ministry-specific role label generator
+export const getMinistryRoleLabels = (ministryName?: string) => {
+  const name = (ministryName || '').trim();
+  const key = name.toLowerCase();
+  switch (key) {
+    case 'ushers':
+      return { head: 'Ministry Head', leader: 'Ministry Leader', assistant: 'Ministry Assistant', member: 'Ministry Member' };
+    case 'choir':
+      return { head: 'Ministry Head', leader: 'Ministry Leader', assistant: 'Ministry Assistant', member: 'Ministry Member' };
+    case 'youth':
+      return { head: 'Ministry Head', leader: 'Ministry Leader', assistant: 'Ministry Assistant', member: 'Ministry Member' };
+    case 'media':
+      return { head: 'Ministry Head', leader: 'Ministry Leader', assistant: 'Ministry Assistant', member: 'Ministry Member' };
+    case 'dancing stars':
+      return { head: 'Ministry Head', leader: 'Ministry Leader', assistant: 'Ministry Assistant', member: 'Ministry Member' };
+    default: {
+      // Generic labels across all ministries
+      return { head: 'Ministry Head', leader: 'Ministry Leader', assistant: 'Ministry Assistant', member: 'Ministry Member' };
+    }
+  }
+};
+
+
 export const getVariantDisplayNameKey = (): string => {
   // Kept for backward compatibility; returns single unified key
   return `app.displayName.sat`;

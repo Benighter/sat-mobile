@@ -10,6 +10,8 @@ import { memberDeletionRequestService, ministryExclusionsService } from '../../s
 import { UserIcon, TrashIcon, PhoneIcon, CalendarIcon, ChevronLeftIcon, ChevronRightIcon, EllipsisVerticalIcon, CheckIcon, ClockIcon, ClipboardIcon, ArrowRightIcon, CogIcon, SearchIcon, UserPlusIcon, ExclamationTriangleIcon } from '../icons';
 import ConstituencyTransferModal from '../modals/ConstituencyTransferModal';
 // Removed unused UI imports
+import { getMinistryRoleLabels } from '../../constants';
+
 
 interface MembersTableViewProps {
   bacentaFilter?: string | null;
@@ -35,6 +37,7 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
     switchTab,
     currentTab,
     isMinistryContext,
+    activeMinistryName,
     transferMemberToConstituencyHandler,
   titheRecords,
   transportRecords,
@@ -69,7 +72,7 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
 
   const [searchTerm, setSearchTerm] = useState('');
   // Use global displayedDate from context for consistent month across the app
-  const [roleFilter, setRoleFilter] = useState<'all' | 'Bacenta Leader' | 'Fellowship Leader' | 'Member'>('all');
+  const [roleFilter, setRoleFilter] = useState<'all' | 'head' | 'leader' | 'assistant' | 'member'>('all');
   const [showFrozen, setShowFrozen] = useState(false);
   // Tithe-only UI state
   const [showPaidOnly, setShowPaidOnly] = useState(false);
@@ -122,6 +125,7 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
 
   // Get confirmation status for a member on a specific date
   const getConfirmationStatus = (memberId: string, date: string) => {
+
     const record = sundayConfirmations.find(cr => cr.memberId === memberId && cr.date === date);
     return record?.status;
   };
@@ -150,13 +154,12 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
   const ministryOnly: boolean = (currentTab?.data as any)?.ministryOnly === true;
   const speaksInTonguesOnly: boolean = (currentTab?.data as any)?.speaksInTonguesOnly === true;
   const baptizedOnly: boolean = (currentTab?.data as any)?.baptizedOnly === true;
-    const getRolePriority = (role: string | undefined) => {
-      switch (role) {
-        case 'Bacenta Leader': return 1;
-        case 'Fellowship Leader': return 2;
-        case 'Member': return 3;
-        default: return 4;
-      }
+    const getHierarchyRank = (m: Member) => {
+      if ((m.role || 'Member') === 'Bacenta Leader') return 1; // Head
+      if ((m.role || 'Member') === 'Fellowship Leader') return 2; // Leader
+      const pos = (m.ministryPosition || '').toLowerCase();
+      if ((m.role || 'Member') === 'Member' && pos === 'assistant') return 3; // Assistant
+      return 4; // Member (or other positions)
     };
 
   return members
@@ -189,9 +192,13 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
           return false;
         }
 
-        // Filter by role
-        if (roleFilter !== 'all' && (member.role || 'Member') !== roleFilter) {
-          return false;
+        // Filter by hierarchy role (ministry-aware)
+        if (roleFilter !== 'all') {
+          const rank = getHierarchyRank(member);
+          if (roleFilter === 'head' && rank !== 1) return false;
+          if (roleFilter === 'leader' && rank !== 2) return false;
+          if (roleFilter === 'assistant' && rank !== 3) return false;
+          if (roleFilter === 'member' && rank !== 4) return false;
         }
 
         // Filter by search term
@@ -237,9 +244,9 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
           }
         }
 
-        // Default sort by role then name
-        const rolePriorityA = getRolePriority(a.role);
-        const rolePriorityB = getRolePriority(b.role);
+        // Default sort by hierarchy (Head > Leader > Assistant > Member) then name
+        const rolePriorityA = getHierarchyRank(a);
+        const rolePriorityB = getHierarchyRank(b);
         if (rolePriorityA !== rolePriorityB) return rolePriorityA - rolePriorityB;
         return (a.lastName || '').localeCompare(b.lastName || '') || a.firstName.localeCompare(b.firstName);
   });
@@ -252,9 +259,13 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
 
   // Memoized counts for cleaner UI rendering
   const activeCount = useMemo(() => filteredMembers.filter(m => !m.frozen).length, [filteredMembers]);
-  const countBL = useMemo(() => filteredMembers.filter(m => !m.frozen && (m.role || 'Member') === 'Bacenta Leader').length, [filteredMembers]);
-  const countFL = useMemo(() => filteredMembers.filter(m => !m.frozen && (m.role || 'Member') === 'Fellowship Leader').length, [filteredMembers]);
-  const countM = useMemo(() => filteredMembers.filter(m => !m.frozen && (m.role || 'Member') === 'Member').length, [filteredMembers]);
+  const countHead = useMemo(() => filteredMembers.filter(m => !m.frozen && (m.role || 'Member') === 'Bacenta Leader').length, [filteredMembers]);
+  const countLeader = useMemo(() => filteredMembers.filter(m => !m.frozen && (m.role || 'Member') === 'Fellowship Leader').length, [filteredMembers]);
+  const countAssistant = useMemo(() => filteredMembers.filter(m => !m.frozen && (m.role || 'Member') === 'Member' && (m.ministryPosition || '').toLowerCase() === 'assistant').length, [filteredMembers]);
+  const countMember = useMemo(() => filteredMembers.filter(m => !m.frozen && (m.role || 'Member') === 'Member' && (m.ministryPosition || '').toLowerCase() !== 'assistant').length, [filteredMembers]);
+  // Ministry-specific labels for hierarchy
+  const roleLabels = useMemo(() => getMinistryRoleLabels(isMinistryContext ? activeMinistryName : undefined), [isMinistryContext, activeMinistryName]);
+
 
   // Special simple views for Tongues/Baptized navigation
   const speaksInTonguesOnly: boolean = (currentTab?.data as any)?.speaksInTonguesOnly === true;
@@ -351,6 +362,18 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
 
 
   // Define fixed columns (numbering and name)
+  // Compute display label for a member's role, ministry-aware (used for badges)
+  const computeDisplayLabel = (m: Member): string => {
+    if (!isMinistryContext) return m.role || 'Member';
+    const baseRole = (m.role || 'Member');
+    const pos = (m.ministryPosition || '').toLowerCase();
+    if (baseRole === 'Bacenta Leader') return roleLabels.head;
+    if (baseRole === 'Fellowship Leader') return roleLabels.leader;
+    if (baseRole === 'Member' && pos === 'assistant') return roleLabels.assistant;
+    if (baseRole === 'Member') return roleLabels.member;
+    return baseRole;
+  };
+
   const fixedColumns = useMemo(() => [
   {
       key: 'number',
@@ -420,6 +443,12 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
                     {member.frozen && (
                       <span className="ml-1 text-[10px] px-1.5 py-0.5 rounded bg-sky-100 text-sky-700 border border-sky-200" title="Frozen – excluded from counts and absentees">Frozen</span>
                     )}
+                    {isMinistryContext && (
+                      <span className="ml-1 text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-700 border border-gray-200" title={computeDisplayLabel(member)}>
+                        {computeDisplayLabel(member)}
+                      </span>
+                    )}
+
                   </div>
                   {member.ministry && member.ministry.trim() !== '' && (
                     <p className="text-xs text-gray-500 truncate mt-0.5">{member.ministry}</p>
@@ -822,22 +851,27 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
             </div>
           )}
 
-          {/* Role Statistics */}
-          <div className="flex items-center justify-center gap-5 text-sm mb-4">
+          {/* Role Statistics (hierarchy-aware) */}
+          <div className="flex items-center justify-center gap-3 text-sm mb-4">
             <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-green-50 border border-green-200">
               <span className="w-2.5 h-2.5 bg-green-500 rounded-full"></span>
-              <span className="text-green-800 font-semibold">{countBL}</span>
-              <span className="text-green-700 text-xs font-medium">BL</span>
+              <span className="text-green-800 font-semibold">{countHead}</span>
+              <span className="text-green-700 text-xs font-medium" title={roleLabels.head}>Head</span>
             </div>
             <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-50 border border-red-200">
               <span className="w-2.5 h-2.5 bg-red-500 rounded-full"></span>
-              <span className="text-red-800 font-semibold">{countFL}</span>
-              <span className="text-red-700 text-xs font-medium">FL</span>
+              <span className="text-red-800 font-semibold">{countLeader}</span>
+              <span className="text-red-700 text-xs font-medium" title={roleLabels.leader}>Leader</span>
+            </div>
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-50 border border-amber-200">
+              <span className="w-2.5 h-2.5 bg-amber-500 rounded-full"></span>
+              <span className="text-amber-800 font-semibold">{countAssistant}</span>
+              <span className="text-amber-700 text-xs font-medium" title={roleLabels.assistant}>Asst</span>
             </div>
             <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-50 border border-blue-200">
               <span className="w-2.5 h-2.5 bg-blue-500 rounded-full"></span>
-              <span className="text-blue-800 font-semibold">{countM}</span>
-              <span className="text-blue-700 text-xs font-medium">M</span>
+              <span className="text-blue-800 font-semibold">{countMember}</span>
+              <span className="text-blue-700 text-xs font-medium" title={roleLabels.member}>Member</span>
             </div>
           </div>
 
@@ -877,16 +911,27 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
                 />
               </div>
             </div>
-            <div className="w-full sm:w-48">
+            <div className="w-full sm:w-56">
               <select
                 value={roleFilter}
-                onChange={(e) => setRoleFilter(e.target.value as 'all' | 'Bacenta Leader' | 'Fellowship Leader' | 'Member')}
+                onChange={(e) => setRoleFilter(e.target.value as 'all' | 'head' | 'leader' | 'assistant' | 'member')}
                 className="w-full px-3 py-3 sm:py-2 border border-gray-300 dark:border-dark-600 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent transition-colors text-base sm:text-sm bg-white dark:bg-dark-700 text-gray-900 dark:text-dark-100 text-center cursor-pointer"
               >
                 <option value="all">All Roles</option>
-                <option value="Bacenta Leader">💚 Bacenta Leaders</option>
-                <option value="Fellowship Leader">❤️ Fellowship Leaders</option>
-                <option value="Member">👤 Members</option>
+                {isMinistryContext ? (
+                  <>
+                    <option value="head">👑 {roleLabels.head}</option>
+                    <option value="leader">⭐ {roleLabels.leader}</option>
+                    <option value="assistant">�️ {roleLabels.assistant}</option>
+                    <option value="member">👤 {roleLabels.member}</option>
+                  </>
+                ) : (
+                  <>
+                    <option value="head">�💚 Bacenta Leaders</option>
+                    <option value="leader">❤️ Fellowship Leaders</option>
+                    <option value="member">👤 Members</option>
+                  </>
+                )}
               </select>
             </div>
             {/* Show/Hide Frozen Toggle */}
@@ -973,7 +1018,7 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
                     data: {
                       bacentaFilter,
                       searchTerm,
-                      roleFilter,
+                      roleFilter: (roleFilter === 'head' ? 'Bacenta Leader' : roleFilter === 'leader' ? 'Fellowship Leader' : (roleFilter === 'assistant' || roleFilter === 'member') ? 'Member' : 'all'),
                       showFrozen,
                       // pass ministry context if active on this tab
                       ministryOnly: (currentTab?.data as any)?.ministryOnly === true,
@@ -999,7 +1044,7 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
                     data: {
                       bacentaFilter,
                       searchTerm,
-                      roleFilter,
+                      roleFilter: (roleFilter === 'head' ? 'Bacenta Leader' : roleFilter === 'leader' ? 'Fellowship Leader' : (roleFilter === 'assistant' || roleFilter === 'member') ? 'Member' : 'all'),
                       showFrozen,
                       ministryOnly: (currentTab?.data as any)?.ministryOnly === true,
                       ministryName: (currentTab?.data as any)?.ministryName || null

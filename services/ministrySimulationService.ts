@@ -64,6 +64,13 @@ async function syncToMatchingMinistryChurches(
     let synced = 0;
 
     for (const ministryChurchId of ministryChurchIds) {
+      // Respect permanent exclusions: skip if excluded for this source/member
+      const exclusionRef = doc(db, `churches/${ministryChurchId}/ministryExclusions/${sourceChurchId}_${memberId}`);
+      const exclusionDoc = await getDoc(exclusionRef);
+      if (exclusionDoc.exists()) {
+        continue; // do not sync excluded members back into this ministry church
+      }
+
       const targetRef = doc(db, `churches/${ministryChurchId}/members/${memberId}`);
       const payload = {
         ...memberData,
@@ -74,7 +81,7 @@ async function syncToMatchingMinistryChurches(
         },
         syncOrigin: 'default'
       };
-      
+
       batch.set(targetRef, payload, { merge: true });
       batchCount++;
       synced++;
@@ -199,6 +206,14 @@ export const simulateCrossMinistrySync = async (
 
       for (const memberDoc of membersSnapshot.docs) {
         const memberData = memberDoc.data();
+
+        // Respect permanent exclusions for this target ministry church
+        const exclusionRef = doc(db, `churches/${ministryChurchId}/ministryExclusions/${churchDoc.id}_${memberDoc.id}`);
+        const exclusionDoc = await getDoc(exclusionRef);
+        if (exclusionDoc.exists()) {
+          continue;
+        }
+
         const targetRef = doc(db, `churches/${ministryChurchId}/members/${memberDoc.id}`);
         const payload = {
           ...memberData,

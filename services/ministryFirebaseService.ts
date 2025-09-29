@@ -80,38 +80,56 @@ export const ministryMembersService = {
     }
   },
 
-  update: async (memberId: string, updates: Partial<Member>, userProfile: any): Promise<void> => {
+  update: async (memberId: string, updates: Partial<Member>, userProfile: any, contextMember?: Member): Promise<void> => {
     try {
       console.log(`🔄 [Ministry Service] Updating member ${memberId} with bidirectional sync`);
-      
-      // Get current member to check for source church
+
+      // Get current member to check for source church (from ministry church)
       const currentMember = await membersFirebaseService.getById(memberId);
-      const sourceChurchId = (currentMember as any)?.sourceChurchId;
+      const { firebaseUtils } = await import('./firebaseService');
+      const currentChurchId = firebaseUtils.getCurrentChurchId();
+      const inferredSourceChurchId = (contextMember as any)?.sourceChurchId || (currentMember as any)?.sourceChurchId || userProfile?.churchId || currentChurchId;
       const isSyncedOnly = !currentMember; // member not found in ministry church doc set
-  // Determine current church from context (ministry church when in ministry mode)
-  const { firebaseUtils } = await import('./firebaseService');
-  const currentChurchId = firebaseUtils.getCurrentChurchId();
-      
+
+      // Build override payload for ministry context (do NOT mutate source church record)
+      const overridePayload: { frozen?: boolean; role?: Member['role']; ministryPosition?: string } = {};
+      if (updates.frozen !== undefined) overridePayload.frozen = updates.frozen;
+      if (updates.role !== undefined) overridePayload.role = updates.role as Member['role'];
+      if (updates.ministryPosition !== undefined) overridePayload.ministryPosition = updates.ministryPosition as string;
+
       if (isSyncedOnly) {
-        // Apply overrides in ministry church for synced-only member (e.g., frozen flag)
-        const srcId = sourceChurchId || userProfile?.churchId;
-        if (!srcId) throw new Error('Member not found');
-        const overridePayload: { frozen?: boolean } = {};
-        if (updates.frozen !== undefined) overridePayload.frozen = updates.frozen;
+        // Apply overrides in ministry church for synced-only member (e.g., role, ministryPosition, frozen)
+        if (!inferredSourceChurchId) throw new Error('Member not found');
         if (Object.keys(overridePayload).length > 0) {
-          await ministryMemberOverridesService.set(memberId, srcId, overridePayload);
+          await ministryMemberOverridesService.set(memberId, inferredSourceChurchId, overridePayload);
           console.log('✅ [Ministry Service] Applied ministry overrides for synced-only member');
+        }
+        // Also sync allowed non-role fields back to the source church so form edits persist
+        const safeEntries = Object.entries(updates).filter(([k]) => !['role','ministryPosition'].includes(k));
+        if (safeEntries.length > 0 && contextMember) {
+          const safeUpdates = Object.fromEntries(safeEntries) as Partial<Member>;
+          await syncMemberToSourceChurch(contextMember as Member, safeUpdates, userProfile?.uid || '');
+          console.log('✅ [Ministry Service] Synced allowed fields to source church for synced-only member');
         }
       } else {
         // Update in ministry church document
         await membersFirebaseService.update(memberId, updates);
+        // Also write overrides so deduped source record reflects ministry changes in UI
+        if (inferredSourceChurchId && Object.keys(overridePayload).length > 0) {
+          await ministryMemberOverridesService.set(memberId, inferredSourceChurchId, overridePayload);
+        }
       }
-      
-      // Sync to source church if this member came from another church
-  if ((currentMember as any)?.sourceChurchId && (currentMember as any).sourceChurchId !== currentChurchId) {
-        await syncMemberToSourceChurch(currentMember as Member, updates, userProfile?.uid || '');
+
+      // Sync only non-ministry-specific fields back to source church (exclude role/ministryPosition)
+      const shouldSyncToSource = (contextMember as any)?.sourceChurchId && (contextMember as any).sourceChurchId !== currentChurchId;
+      if (shouldSyncToSource) {
+        const safeUpdatesEntries = Object.entries(updates).filter(([k]) => !['role', 'ministryPosition'].includes(k));
+        if (safeUpdatesEntries.length > 0) {
+          const safeUpdates = Object.fromEntries(safeUpdatesEntries) as Partial<Member>;
+          await syncMemberToSourceChurch((contextMember as Member) || (currentMember as Member), safeUpdates, userProfile?.uid || '');
+        }
       }
-      
+
     } catch (error) {
       console.error('Failed to update member with sync:', error);
       throw error;
@@ -121,15 +139,19 @@ export const ministryMembersService = {
   delete: async (memberId: string, userProfile: any): Promise<void> => {
     try {
       console.log(`🔄 [Ministry Service] Deleting member ${memberId} with bidirectional sync`);
-      
-      // Get current member to check for source church
+
+      // Get current member to determine source church and native status
       const currentMember = await membersFirebaseService.getById(memberId);
-      
+      const { firebaseUtils } = await import('./firebaseService');
+      const currentChurchId = firebaseUtils.getCurrentChurchId();
+
       // Delete from ministry church
       await membersFirebaseService.delete(memberId);
-      
-      // Exclude the member from ministry aggregated view if they are synced from another church
-      const sourceChurchId = (currentMember as any)?.sourceChurchId || userProfile?.churchId;
+
+      // Determine source church ID for exclusion key
+      const sourceChurchId = (currentMember as any)?.sourceChurchId || userProfile?.churchId || currentChurchId;
+
+      // Record permanent exclusion to prevent future re-sync into this ministry
       if (sourceChurchId) {
         try {
           await ministryExclusionsService.excludeMember(memberId, sourceChurchId);
@@ -137,12 +159,35 @@ export const ministryMembersService = {
         } catch (ex) {
           console.warn('⚠️ [Ministry Service] Failed to record exclusion for deleted member:', ex);
         }
+
+        // Clear any ministry overrides for this member/source
+        try {
+          await ministryMemberOverridesService.clear(memberId, sourceChurchId);
+          console.log(`🧹 [Ministry Service] Cleared ministry overrides for ${memberId} (sourceChurchId=${sourceChurchId})`);
+        } catch (ovEx) {
+          console.warn('⚠️ [Ministry Service] Failed to clear overrides for deleted member:', ovEx);
+        }
+      }
+
+      // Clean up ministry-specific records (attendance, confirmations) only in the ministry church
+      try {
+        // Attendance
+        const attendSnap = await getDocs(query(collection(db, `churches/${currentChurchId}/attendance`), where('memberId', '==', memberId)));
+        for (const d of attendSnap.docs) {
+          try { await (await import('firebase/firestore')).deleteDoc(doc(db, `churches/${currentChurchId}/attendance/${d.id}`)); } catch {}
+        }
+        // Sunday Confirmations
+        const confSnap = await getDocs(query(collection(db, `churches/${currentChurchId}/sundayConfirmations`), where('memberId', '==', memberId)));
+        for (const d of confSnap.docs) {
+          try { await (await import('firebase/firestore')).deleteDoc(doc(db, `churches/${currentChurchId}/sundayConfirmations/${d.id}`)); } catch {}
+        }
+      } catch (cleanupErr) {
+        console.warn('⚠️ [Ministry Service] Failed to clean up ministry-specific records for deleted member:', cleanupErr);
       }
 
       // Note: We don't delete from source church to preserve data integrity
-      // The member will just no longer appear in ministry mode
       console.log('Member deleted from ministry church only (preserved in source church)');
-      
+
     } catch (error) {
       console.error('Failed to delete member with sync:', error);
       throw error;

@@ -1,6 +1,6 @@
 /**
  * Bidirectional Sync Service
- * 
+ *
  * Handles synchronization between ministry mode and normal mode:
  * - Ministry mode reads: Aggregate data from multiple churches (already implemented)
  * - Ministry mode writes: Sync changes back to source churches (this service)
@@ -29,7 +29,7 @@ export interface SyncMetadata {
 // Fields that are allowed to be synced back to normal mode
 const ALLOWED_SYNC_FIELDS = [
   'firstName',
-  'lastName', 
+  'lastName',
   'phoneNumber',
   'buildingAddress',
   'roomNumber',
@@ -38,6 +38,26 @@ const ALLOWED_SYNC_FIELDS = [
   'birthday',
   'bornAgainStatus'
 ];
+
+
+/**
+ * Check whether a member is permanently excluded from a specific ministry church
+ * by inspecting the ministryExclusions collection scoped to that church.
+ */
+export const isMemberExcludedInMinistry = async (
+  memberId: string,
+  sourceChurchId: string,
+  ministryChurchId: string
+): Promise<boolean> => {
+  try {
+    const exclusionDocRef = doc(db, `churches/${ministryChurchId}/ministryExclusions/${sourceChurchId}_${memberId}`);
+    const exclusionSnap = await getDoc(exclusionDocRef);
+    return exclusionSnap.exists();
+  } catch (e) {
+    console.warn('[Bidirectional Sync] Failed to check exclusion status', { memberId, sourceChurchId, ministryChurchId }, e);
+    return false;
+  }
+};
 
 /**
  * Sync member updates from ministry mode back to the source church
@@ -234,7 +254,7 @@ export const determineSourceChurchForNewRecord = async (
   try {
     // Use the user's default church as the source for new records
     const defaultChurchId = userProfile?.contexts?.defaultChurchId || userProfile?.churchId;
-    
+
     if (defaultChurchId) {
       console.log(`📍 [Bidirectional Sync] Using default church ${defaultChurchId} as source for new ${ministryName} record`);
       return defaultChurchId;

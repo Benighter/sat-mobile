@@ -10,7 +10,7 @@ import ImageUpload from '../../ui/ImageUpload';
 // Removed unused formatDateToYYYYMMDD import
 import { canAssignMemberRoles } from '../../../utils/permissionUtils';
 import { User, Phone, Home, Users, Shield } from 'lucide-react';
-import { MINISTRY_OPTIONS } from '../../../constants';
+import { MINISTRY_OPTIONS, getMinistryRoleLabels } from '../../../constants';
 
 interface MemberFormModalProps {
   isOpen: boolean;
@@ -43,7 +43,7 @@ const MemberFormModal: React.FC<MemberFormModalProps> = ({ isOpen, onClose, memb
     linkedBacentaIds: [],
     role: 'Member' as MemberRole, // Default role is Member
     birthday: '', // Optional birthday field
-    ministry: isMinistryContext ? (activeMinistryName || '') : '',
+    ministry: isMinistryContext ? ((activeMinistryName || '').trim()) : '',
     isNativeMinistryMember: isMinistryContext, // Mark as native if added in ministry mode
     ministryPosition: ''
   };
@@ -78,16 +78,14 @@ const MemberFormModal: React.FC<MemberFormModalProps> = ({ isOpen, onClose, memb
         ...initialFormData,
         bacentaId: defaultBacentaId,
         linkedBacentaIds: [],
-  ministry: isMinistryContext ? (activeMinistryName || '') : '',
+        ministry: isMinistryContext ? ((activeMinistryName || '').trim()) : '',
       });
     }
     setErrors({});
   }, [isOpen, member, bacentas, currentBacentaId, isMinistryContext, activeMinistryName]);
 
   // Dancing Stars role label mapping (UI-only). Underlying values remain MemberRole.
-  const ministryKey = useMemo(() => (activeMinistryName || '').trim().toLowerCase(), [activeMinistryName]);
-  const isDancingStars = useMemo(() => isMinistryContext && ministryKey === 'dancing stars', [isMinistryContext, ministryKey]);
-  const isUshers = useMemo(() => isMinistryContext && ministryKey === 'ushers', [isMinistryContext, ministryKey]);
+  const isUshers = useMemo(() => isMinistryContext && ((activeMinistryName || '').trim().toLowerCase() === 'ushers'), [isMinistryContext, activeMinistryName]);
 
   // Set of bacenta IDs that already have a primary leader (a leader whose main bacentaId matches)
   const primaryLedBacentaIds = useMemo(() => {
@@ -136,8 +134,8 @@ const MemberFormModal: React.FC<MemberFormModalProps> = ({ isOpen, onClose, memb
         const { checked } = e.target as HTMLInputElement;
         setFormData(prev => ({ ...prev, [name]: checked }));
     } else {
-        if (name === 'role' && isUshers) {
-          // Value is encoded as "<Role>|<Position>"
+        if (name === 'role' && isMinistryContext) {
+          // Value is encoded as "<Role>|<Position>" in ministry mode to capture hierarchy level
           const [baseRole, position] = (value || '').split('|');
           return setFormData(prev => ({ ...prev, role: (baseRole as MemberRole) || 'Member', ministryPosition: position || '' }));
         }
@@ -443,7 +441,7 @@ const MemberFormModal: React.FC<MemberFormModalProps> = ({ isOpen, onClose, memb
               )}
 
               {/* Linked Bacentas Selector (leaders only) */}
-              {(formData.role === 'Bacenta Leader' || formData.role === 'Fellowship Leader') && (
+              {!isMinistryContext && (formData.role === 'Bacenta Leader' || formData.role === 'Fellowship Leader') && (
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <label className="block text-sm font-medium text-gray-700">Linked Bacentas (Optional)</label>
@@ -496,21 +494,22 @@ const MemberFormModal: React.FC<MemberFormModalProps> = ({ isOpen, onClose, memb
                 <div className="space-y-2">
                   <label className="block text-sm font-medium text-gray-700">
                     <Shield className="w-4 h-4 inline mr-1" />
-                    Role
+                    {isMinistryContext ? 'Ministry Role' : 'Role'}
                   </label>
                   <select
                     name="role"
-                    value={isUshers ? `${formData.role}|${formData.ministryPosition || (formData.role === 'Bacenta Leader' ? 'Ministry Head' : formData.role === 'Fellowship Leader' ? 'Ministry Leader' : 'Assistant')}` : formData.role}
+                    value={isMinistryContext ? `${formData.role}|${formData.ministryPosition || (formData.role === 'Bacenta Leader' ? 'Head' : formData.role === 'Fellowship Leader' ? 'Leader' : (formData.ministryPosition || 'Member'))}` : formData.role}
                     onChange={handleChange}
                     className={`w-full px-4 py-3 border ${errors.role ? 'border-red-500' : 'border-gray-300'} rounded-lg shadow-sm focus:outline-none focus:ring-2 ${errors.role ? 'focus:ring-red-500' : 'focus:ring-blue-500'} focus:border-transparent transition-colors h-12`}
                   >
                     {(() => {
                       if (isUshers) {
                         // Ushers exclusive roles mapping
+                        const ushersLabels = getMinistryRoleLabels('Ushers');
                         const ushersOptions = [
-                          { value: 'Bacenta Leader|Ministry Head', label: 'Ministry Head' },
-                          { value: 'Fellowship Leader|Ministry Leader', label: 'Ministry Leader' },
-                          { value: 'Member|Assistant', label: 'Assistant' },
+                          { value: 'Bacenta Leader|Head', label: ushersLabels.head },
+                          { value: 'Fellowship Leader|Leader', label: ushersLabels.leader },
+                          { value: 'Member|Assistant', label: ushersLabels.assistant },
                           { value: 'Member|Usher at the door', label: 'Usher at the door' },
                           { value: 'Member|Altar Call Usher', label: 'Altar Call Usher' },
                           { value: 'Member|Sunday Management', label: 'Sunday Management' },
@@ -519,13 +518,15 @@ const MemberFormModal: React.FC<MemberFormModalProps> = ({ isOpen, onClose, memb
                           <option key={`${opt.value}-${opt.label}`} value={opt.value}>{opt.label}</option>
                         ));
                       }
-                      if (isDancingStars) {
-                        const dsOptions = [
-                          { value: 'Bacenta Leader' as MemberRole, label: 'Ministry head' },
-                          { value: 'Fellowship Leader' as MemberRole, label: 'Ministry leader' },
-                          { value: 'Member' as MemberRole, label: 'Assistances' },
+                      if (isMinistryContext) {
+                        const labels = getMinistryRoleLabels(activeMinistryName);
+                        const ministryOptions = [
+                          { value: 'Bacenta Leader|Head', label: labels.head },
+                          { value: 'Fellowship Leader|Leader', label: labels.leader },
+                          { value: 'Member|Assistant', label: labels.assistant },
+                          { value: 'Member|Member', label: labels.member },
                         ];
-                        return dsOptions.map(opt => (
+                        return ministryOptions.map(opt => (
                           <option key={`${opt.value}-${opt.label}`} value={opt.value}>{opt.label}</option>
                         ));
                       }

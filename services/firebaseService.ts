@@ -776,13 +776,13 @@ export const ministryExclusionsService = {
   }
 };
 
-// Ministry Member Overrides Service: store per-member overrides (e.g., frozen) for ministry UI
+// Ministry Member Overrides Service: store per-member overrides (e.g., frozen, role, ministryPosition) for ministry UI
 export const ministryMemberOverridesService = {
   // Set or update overrides
   set: async (
     memberId: string,
     sourceChurchId: string,
-    overrides: { frozen?: boolean }
+    overrides: { frozen?: boolean; role?: Member['role']; ministryPosition?: string }
   ): Promise<void> => {
     try {
       const ref = collection(db, getChurchCollectionPath('ministryMemberOverrides'));
@@ -816,7 +816,7 @@ export const ministryMemberOverridesService = {
   },
 
   // Get all overrides
-  getAll: async (): Promise<Array<{ id: string; memberId: string; sourceChurchId: string; frozen?: boolean }>> => {
+  getAll: async (): Promise<Array<{ id: string; memberId: string; sourceChurchId: string; frozen?: boolean; role?: Member['role']; ministryPosition?: string }>> => {
     try {
       const ref = collection(db, getChurchCollectionPath('ministryMemberOverrides'));
       const snap = await getDocs(ref);
@@ -828,7 +828,7 @@ export const ministryMemberOverridesService = {
 
   // Listen to overrides
   onSnapshot: (
-    callback: (items: Array<{ id: string; memberId: string; sourceChurchId: string; frozen?: boolean }>) => void,
+    callback: (items: Array<{ id: string; memberId: string; sourceChurchId: string; frozen?: boolean; role?: Member['role']; ministryPosition?: string }>) => void,
     churchIdOverride?: string
   ): Unsubscribe => {
     const ref = collection(db, getChurchCollectionPathScoped('ministryMemberOverrides', churchIdOverride));

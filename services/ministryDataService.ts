@@ -443,7 +443,7 @@ export const setupMinistryDataListeners = (
     sourceChurches: []
   };
   let excludedKeys = new Set<string>(); // key: `${sourceChurchId}_${memberId}`
-  let overridesMap = new Map<string, { frozen?: boolean }>(); // key: `${sourceChurchId}_${memberId}`
+  let overridesMap = new Map<string, { frozen?: boolean; role?: Member['role']; ministryPosition?: string }>(); // key: `${sourceChurchId}_${memberId}`
 
   const updateAggregatedData = () => {
   // Always dedupe before emitting to the app state
@@ -467,7 +467,7 @@ export const setupMinistryDataListeners = (
       unsubscribers.push(unsubExclusions);
 
   const unsubOverrides = ministryMemberOverridesService.onSnapshot((items) => {
-        overridesMap = new Map(items.map(i => [`${i.sourceChurchId}_${i.memberId}`, { frozen: i.frozen }]));
+        overridesMap = new Map(items.map(i => [`${i.sourceChurchId}_${i.memberId}`, { frozen: i.frozen, role: (i as any).role, ministryPosition: (i as any).ministryPosition }]));
         // Apply overrides to current members
         currentData.members = currentData.members.map(m => {
           const key = `${(m as any).sourceChurchId || currentChurchId}_${m.id}`;

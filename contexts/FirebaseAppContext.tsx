@@ -116,7 +116,7 @@ interface AppContextType {
   // Context flags
   isMinistryContext: boolean;
   activeMinistryName?: string;
-  
+
   // Filtering state
   showFrozenBacentas: boolean;
   setShowFrozenBacentas: (show: boolean) => void;
@@ -320,6 +320,9 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
 
   // Optimistic update tracking to prevent listener conflicts
   const optimisticUpdatesRef = useRef<Set<string>>(new Set());
+  // Optimistic removal of members in ministry mode to avoid brief reappearance
+  const optimisticDeletedMemberIdsRef = useRef<Set<string>>(new Set());
+
   const optimisticTimeoutsRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
   // Keep separate references for base (default church) members and native ministry members
   // so we can compose the visible list in normal mode for ministry accounts
@@ -623,7 +626,10 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
             sourceChurches: data.sourceChurches.length
           });
 
-          setMembers(data.members);
+          const filteredMembers = isMinistryContext
+            ? data.members.filter(m => !optimisticDeletedMemberIdsRef.current.has(m.id))
+            : data.members;
+          setMembers(filteredMembers);
           setBacentas(data.bacentas);
 
           // Smart merge for attendance records to preserve optimistic updates
@@ -1084,21 +1090,47 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     if (!ensureCanWrite()) throw new Error('Read-only access');
     try {
       setIsLoading(true);
-      // In ministry context, auto-tag to selected ministry and allow no bacenta
-  const payload: Omit<Member, 'id' | 'createdDate' | 'lastUpdated'> = isMinistryContext
+
+      // If adding in ministry mode, ensure a specific ministry is selected and normalize the value
+      const trimmedMinistry = (activeMinistryName || '').trim();
+      if (isMinistryContext && !trimmedMinistry) {
+        const err = new Error('Select a ministry before adding members in ministry mode');
+        showToast('error', 'No ministry selected', 'Please choose a ministry first.');
+        throw err;
+      }
+
+      // Prepare payload: in ministry mode, auto-tag ministry and allow empty bacenta
+      const payload: Omit<Member, 'id' | 'createdDate' | 'lastUpdated'> = isMinistryContext
         ? {
             ...memberData,
-            ministry: memberData.ministry || activeMinistryName || memberData.ministry,
+            ministry: trimmedMinistry, // enforce exact ministry tag
             bacentaId: memberData.bacentaId || ''
           }
         : memberData;
-      // Use ministry service for bidirectional sync in ministry mode
+
+      // Ensure writes occur in the ministry church when in ministry mode
+      const originalCtx = firebaseUtils.getCurrentChurchId();
+      const ministryChurchId = userProfile?.contexts?.ministryChurchId || null;
+      let switchedForWrite = false;
+      if (isMinistryContext && ministryChurchId && originalCtx !== ministryChurchId) {
+        try {
+          firebaseUtils.setChurchContext(ministryChurchId);
+          switchedForWrite = true;
+        } catch {}
+      }
+
+      // Perform write
       const newMemberId = isMinistryContext
         ? await ministryMembersService.add(payload, userProfile)
         : await memberOperationsWithNotifications.add(payload);
 
+      // Restore original context if we temporarily switched
+      if (switchedForWrite) {
+        try { firebaseUtils.setChurchContext(originalCtx); } catch {}
+      }
+
       showToast('success', isMinistryContext
-        ? 'Member added successfully (synced to source church)'
+        ? 'Member added successfully (ministry)'
         : 'Member added successfully');
       return newMemberId;
     } catch (error: any) {
@@ -1108,7 +1140,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     } finally {
       setIsLoading(false);
     }
-  }, [showToast, isMinistryContext, activeMinistryName]);
+  }, [showToast, isMinistryContext, activeMinistryName, userProfile]);
 
   const addMultipleMembersHandler = useCallback(async (membersData: Omit<Member, 'id' | 'createdDate' | 'lastUpdated'>[]) => {
     if (!ensureCanWrite()) throw new Error('Read-only access');
@@ -1213,11 +1245,18 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
           }
         });
 
-        await ministryMembersService.update(memberData.id, updates, userProfile);
+        await ministryMembersService.update(memberData.id, updates, userProfile, original as Member);
         showToast('success', 'Member updated successfully (synced to source church)');
+        // Optimistic UI update so changes show immediately in ministry mode
+        setMembers(prev => prev.map(m => {
+          if (m.id !== memberData.id) return m;
+          return { ...m, ...(updates as Partial<Member>) } as Member;
+        }));
       } else {
         await memberOperationsWithNotifications.update(memberData.id, memberData, original || undefined);
         showToast('success', 'Member updated successfully');
+        // Optimistic UI update in normal mode
+        setMembers(prev => prev.map(m => m.id === memberData.id ? ({ ...m, ...memberData } as Member) : m));
       }
     } catch (error: any) {
       setError(error.message);
@@ -1262,6 +1301,9 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
 
       if (isMinistryContext) {
         await ministryMembersService.delete(memberId, userProfile);
+        // Optimistically remove from UI and prevent reappearance until exclusions listener catches up
+        optimisticDeletedMemberIdsRef.current.add(memberId);
+        setMembers(prev => prev.filter(m => m.id !== memberId));
         showToast('success', 'Member removed from ministry (preserved in source church)');
       } else {
         await memberOperationsWithNotifications.delete(memberId, memberName);
@@ -1285,7 +1327,6 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
         console.warn('⚠️ Failed to clear outreach conversion links after member deletion:', syncError);
       }
 
-      showToast('success', 'Member deleted successfully');
     } catch (error: any) {
       setError(error.message);
       showToast('error', 'Failed to delete member', error.message);
@@ -3791,7 +3832,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     needsMigration,
   isMinistryContext,
   activeMinistryName,
-  
+
   // Filtering state
   showFrozenBacentas,
   setShowFrozenBacentas,
