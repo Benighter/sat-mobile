@@ -20,6 +20,17 @@ const PrayerView: React.FC = () => {
   // const allowEditPreviousSundays = userProfile?.preferences?.allowEditPreviousSundays ?? false;
   const isAdmin = hasAdminPrivileges(userProfile);
 
+  // Delayed sorting state to prevent immediate reordering when toggling prayer status
+  const [sortingEnabled, setSortingEnabled] = useState<boolean>(true);
+  const [sortDelayTimer, setSortDelayTimer] = useState<NodeJS.Timeout | null>(null);
+
+  // Auto-mark missed state
+  const [autoMarkTimer, setAutoMarkTimer] = useState<NodeJS.Timeout | null>(null);
+  const [lastAutoMarkDate, setLastAutoMarkDate] = useState<string | null>(() => {
+    // Load from localStorage to persist across page refreshes
+    return localStorage.getItem('prayerAutoMarkLastDate');
+  });
+
   const weekDates = useMemo(() => getTuesdayToSundayRange(anchorDate), [anchorDate]);
 
   // Selected day for copy/bulk actions (defaults to the latest day in the current range up to today)
@@ -39,6 +50,42 @@ const PrayerView: React.FC = () => {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [weekDates.join(',')]);
+
+  // Cleanup timers on unmount
+  useEffect(() => {
+    return () => {
+      if (sortDelayTimer) {
+        clearTimeout(sortDelayTimer);
+      }
+      if (autoMarkTimer) {
+        clearTimeout(autoMarkTimer);
+      }
+    };
+  }, [sortDelayTimer, autoMarkTimer]);
+
+  // Re-enable sorting when navigating to a different week
+  useEffect(() => {
+    setSortingEnabled(true);
+    if (sortDelayTimer) {
+      clearTimeout(sortDelayTimer);
+      setSortDelayTimer(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [anchorDate]);
+
+  // Listen for storage changes to sync auto-mark state across tabs
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'prayerAutoMarkLastDate' && e.newValue) {
+        setLastAutoMarkDate(e.newValue);
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+    };
+  }, []);
 
   // Map of memberId_date -> status for quick lookups
   const recordsByKey = useMemo(() => {
@@ -81,6 +128,21 @@ const PrayerView: React.FC = () => {
     return map;
   }, [members, weekDates, recordsByKey]);
 
+  // Compute lifetime/overall prayer totals for each member (all historical "Prayed" statuses)
+  const memberLifetimePrayerTotals = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const m of members) {
+      let count = 0;
+      for (const record of prayerRecords) {
+        if (record.memberId === m.id && record.status === 'Prayed') {
+          count++;
+        }
+      }
+      map.set(m.id, count);
+    }
+    return map;
+  }, [members, prayerRecords]);
+
   const weekday = (d: string) => {
     const dt = new Date(d + 'T00:00:00');
     return dt.toLocaleDateString(undefined, { weekday: 'long' });
@@ -99,36 +161,117 @@ const PrayerView: React.FC = () => {
   };
 
   // Filtered and sorted members
-  const filteredMembers = useMemo<Member[]>(() => {
+  const filteredAndSortedMembers = useMemo<Member[]>(() => {
     const searchLower = searchTerm.trim().toLowerCase();
-    return members
-      .filter(m => {
-  // Hide frozen members by default
-  if (m.frozen) return false;
-  // Bacenta filter
-  if (bacentaFilter && m.bacentaId !== bacentaFilter) return false;
-  // Role filter
-  if (roleFilter !== 'all' && (m.role || 'Member') !== roleFilter) return false;
-        // Search filter (name, phone, address)
-        if (searchLower) {
-          return (
-            m.firstName.toLowerCase().includes(searchLower) ||
-            (m.lastName || '').toLowerCase().includes(searchLower) ||
-            (m.phoneNumber || '').includes(searchTerm) ||
-            (m.buildingAddress || '').toLowerCase().includes(searchLower)
-          );
+    const filtered = members.filter(m => {
+      // Hide frozen members by default
+      if (m.frozen) return false;
+      // Bacenta filter
+      if (bacentaFilter && m.bacentaId !== bacentaFilter) return false;
+      // Role filter
+      if (roleFilter !== 'all' && (m.role || 'Member') !== roleFilter) return false;
+      // Search filter (name, phone, address)
+      if (searchLower) {
+        return (
+          m.firstName.toLowerCase().includes(searchLower) ||
+          (m.lastName || '').toLowerCase().includes(searchLower) ||
+          (m.phoneNumber || '').includes(searchTerm) ||
+          (m.buildingAddress || '').toLowerCase().includes(searchLower)
+        );
+      }
+      return true;
+    });
+
+    // Only apply sorting if sorting is enabled
+    if (!sortingEnabled) {
+      return filtered;
+    }
+
+    return filtered.sort((a, b) => {
+        // Calculate current week prayer totals for each member (count of 'Prayed' statuses in current week)
+        const getPrayerTotal = (memberId: string): number => {
+          let count = 0;
+          for (const date of weekDates) {
+            const status = recordsByKey.get(`${memberId}_${date}`);
+            if (status === 'Prayed') count++;
+          }
+          return count;
+        };
+
+        const weekTotalA = getPrayerTotal(a.id);
+        const weekTotalB = getPrayerTotal(b.id);
+
+        // Check if member has at least one prayer session in current week (is "ticked")
+        const isTickedA = weekTotalA > 0;
+        const isTickedB = weekTotalB > 0;
+
+        // Get lifetime prayer totals for predictive sorting
+        const lifetimeTotalA = memberLifetimePrayerTotals.get(a.id) || 0;
+        const lifetimeTotalB = memberLifetimePrayerTotals.get(b.id) || 0;
+
+        // Primary sort: Ticked members first (those who have prayed in current week)
+        if (isTickedA && !isTickedB) return -1;
+        if (!isTickedA && isTickedB) return 1;
+
+        // Secondary sort: Within ticked group, sort by current week prayer total descending
+        if (isTickedA && isTickedB) {
+          if (weekTotalA !== weekTotalB) return weekTotalB - weekTotalA;
         }
-        return true;
-      })
-      .sort((a, b) => {
+
+        // Tertiary sort: Within unticked group (or when week totals are equal),
+        // use predictive sorting based on lifetime prayer totals (descending)
+        // This helps prioritize members most likely to pray based on historical patterns
+        if (lifetimeTotalA !== lifetimeTotalB) return lifetimeTotalB - lifetimeTotalA;
+
+        // Quaternary sort: If lifetime totals are equal, sort by role priority
         const pa = getRolePriority(a.role);
         const pb = getRolePriority(b.role);
         if (pa !== pb) return pa - pb;
+
+        // Quinary sort: If roles are equal, sort by name
         const last = (a.lastName || '').localeCompare(b.lastName || '');
         if (last !== 0) return last;
         return a.firstName.localeCompare(b.firstName);
       });
-  }, [members, bacentaFilter, roleFilter, searchTerm]);
+  }, [members, bacentaFilter, roleFilter, searchTerm, weekDates, recordsByKey, memberLifetimePrayerTotals, sortingEnabled]);
+
+  // Create a stable snapshot of member order when sorting is disabled
+  // This prevents the list from reordering while the user is actively marking attendance
+  const [memberOrderSnapshot, setMemberOrderSnapshot] = useState<string[]>([]);
+
+  // Update snapshot when sorting is re-enabled or filters change
+  useEffect(() => {
+    if (sortingEnabled) {
+      setMemberOrderSnapshot(filteredAndSortedMembers.map(m => m.id));
+    }
+  }, [sortingEnabled, filteredAndSortedMembers]);
+
+  // Apply the snapshot order when sorting is disabled
+  const filteredMembers = useMemo<Member[]>(() => {
+    if (sortingEnabled || memberOrderSnapshot.length === 0) {
+      return filteredAndSortedMembers;
+    }
+
+    // Preserve the snapshot order
+    const memberMap = new Map(filteredAndSortedMembers.map(m => [m.id, m]));
+    const ordered: Member[] = [];
+
+    // First, add members in the snapshot order
+    for (const id of memberOrderSnapshot) {
+      const member = memberMap.get(id);
+      if (member) {
+        ordered.push(member);
+        memberMap.delete(id);
+      }
+    }
+
+    // Then add any new members that weren't in the snapshot (e.g., from filter changes)
+    for (const member of memberMap.values()) {
+      ordered.push(member);
+    }
+
+    return ordered;
+  }, [sortingEnabled, filteredAndSortedMembers, memberOrderSnapshot]);
 
   const combinedWeeklyHours = useMemo(() => {
     return (filteredMembers || []).reduce((acc, m) => acc + (memberWeeklyHours.get(m.id) || 0), 0);
@@ -137,6 +280,24 @@ const PrayerView: React.FC = () => {
   const onToggle = async (memberId: string, date: string) => {
     const key = `${memberId}_${date}`;
     const current = recordsByKey.get(key);
+
+    // Disable sorting to prevent immediate reordering
+    setSortingEnabled(false);
+
+    // Clear any existing timer
+    if (sortDelayTimer) {
+      clearTimeout(sortDelayTimer);
+    }
+
+    // Set a new timer to re-enable sorting after 3 seconds of inactivity
+    const newTimer = setTimeout(() => {
+      setSortingEnabled(true);
+      setSortDelayTimer(null);
+    }, 3000);
+
+    setSortDelayTimer(newTimer);
+
+    // Perform the toggle action
     if (!current) {
       await markPrayerHandler(memberId, date, 'Prayed');
     } else if (current === 'Prayed') {
@@ -158,6 +319,132 @@ const PrayerView: React.FC = () => {
     if (isAdmin) return true; // admin can edit past and today
     return target.getTime() === startOfToday.getTime(); // leaders: only today
   };
+
+  // Auto-mark members as "Missed" after prayer session ends
+  const autoMarkMissedForDate = async (date: string) => {
+    // Check if we've already auto-marked for this date
+    if (lastAutoMarkDate === date) {
+      return; // Already auto-marked for this date
+    }
+
+    // Only auto-mark if the date is editable
+    if (!isPrayerDateEditable(date)) {
+      return;
+    }
+
+    // Get all members who need to be marked as missed
+    const toMark: { id: string; name: string }[] = [];
+    for (const m of members) {
+      // Skip frozen members
+      if (m.frozen) continue;
+
+      const key = `${m.id}_${date}`;
+      const status = recordsByKey.get(key);
+
+      // Only mark if no status exists yet (not Prayed or Missed)
+      if (!status) {
+        toMark.push({ id: m.id, name: m.firstName });
+      }
+    }
+
+    if (toMark.length === 0) {
+      return; // Nothing to mark
+    }
+
+    try {
+      // Mark all unmarked members as Missed
+      const promises = toMark.map(m => markPrayerHandler(m.id, date, 'Missed'));
+      await Promise.all(promises);
+
+      // Update last auto-mark date
+      setLastAutoMarkDate(date);
+      localStorage.setItem('prayerAutoMarkLastDate', date);
+
+      // Show success notification
+      const weekdayLabel = new Date(date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'long' });
+      showToast(
+        'success',
+        'Auto-marked Missed',
+        `Automatically marked ${toMark.length} member${toMark.length !== 1 ? 's' : ''} as Missed for ${weekdayLabel}'s prayer session`
+      );
+    } catch (error: any) {
+      console.error('Auto-mark missed failed:', error);
+      showToast('error', 'Auto-mark Failed', error?.message || 'Failed to auto-mark members as missed');
+    }
+  };
+
+  // Schedule auto-mark for today's prayer session
+  useEffect(() => {
+    // Clear any existing timer
+    if (autoMarkTimer) {
+      clearTimeout(autoMarkTimer);
+      setAutoMarkTimer(null);
+    }
+
+    const scheduleAutoMark = () => {
+      const now = new Date();
+      const todayStr = now.toISOString().slice(0, 10);
+
+      // Check if today is a prayer day (Tuesday-Sunday)
+      const dayOfWeek = now.getDay(); // 0=Sun, 1=Mon, 2=Tue...6=Sat
+      if (dayOfWeek === 1) {
+        // Monday is not a prayer day
+        return;
+      }
+
+      // Get session info for today
+      const sessionInfo = getSessionInfoForDate(todayStr);
+      if (!sessionInfo.end || sessionInfo.end === '00:00') {
+        return; // No valid session
+      }
+
+      // Parse session end time (format: "HH:MM")
+      const [endHour, endMinute] = sessionInfo.end.split(':').map(Number);
+
+      // Calculate auto-mark time (1 minute after session ends)
+      const autoMarkTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), endHour, endMinute + 1, 0, 0);
+
+      // Calculate milliseconds until auto-mark time
+      const msUntilAutoMark = autoMarkTime.getTime() - now.getTime();
+
+      if (msUntilAutoMark > 0) {
+        // Schedule auto-mark for the future
+        const timer = setTimeout(() => {
+          autoMarkMissedForDate(todayStr);
+        }, msUntilAutoMark);
+        setAutoMarkTimer(timer);
+      } else {
+        // Auto-mark time has already passed today
+        // Check if we should run it now (user came online late)
+        const timeSinceAutoMark = now.getTime() - autoMarkTime.getTime();
+        const oneHour = 60 * 60 * 1000;
+
+        // Only auto-mark if less than 1 hour has passed since the scheduled time
+        // This prevents auto-marking if the user opens the app much later in the day
+        if (timeSinceAutoMark < oneHour && lastAutoMarkDate !== todayStr) {
+          autoMarkMissedForDate(todayStr);
+        }
+      }
+    };
+
+    // Initial schedule
+    scheduleAutoMark();
+
+    // Set up periodic check every 5 minutes to handle edge cases
+    // (e.g., user keeps app open across the auto-mark time)
+    const periodicCheckInterval = setInterval(() => {
+      scheduleAutoMark();
+    }, 5 * 60 * 1000); // Check every 5 minutes
+
+    // Cleanup on unmount or when dependencies change
+    return () => {
+      if (autoMarkTimer) {
+        clearTimeout(autoMarkTimer);
+      }
+      clearInterval(periodicCheckInterval);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [members, recordsByKey, lastAutoMarkDate]);
 
   // Helper to get bacenta name (no longer used in copy formatting)
 
