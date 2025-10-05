@@ -32,7 +32,7 @@ import {
   fetchSignInMethodsForEmail
 } from 'firebase/auth';
 import { db, auth } from '../firebase.config';
-import { Member, Bacenta, AttendanceRecord, NewBeliever, SundayConfirmation, Guest, MemberDeletionRequest, DeletionRequestStatus, OutreachBacenta, OutreachMember, PrayerRecord, MeetingRecord, TitheRecord, BussingRecord, TransportRecord, SonOfGod } from '../types';
+import { Member, Bacenta, AttendanceRecord, NewBeliever, SundayConfirmation, Guest, MemberDeletionRequest, DeletionRequestStatus, OutreachBacenta, OutreachMember, PrayerRecord, PrayerSchedule, MeetingRecord, TitheRecord, BussingRecord, TransportRecord, SonOfGod, CustomPrayer, CustomPrayerRecord } from '../types';
 // Lightweight inline type to avoid circular heavy imports for new feature (kept local to service)
 export interface HeadCountRecord {
   id: string; // `${date}_${section}`
@@ -1844,6 +1844,99 @@ export const prayerFirebaseService = {
   }
 };
 
+// Prayer Schedule Service
+export const prayerScheduleFirebaseService = {
+  // Get all prayer schedules (default + week-specific)
+  getAll: async (): Promise<PrayerSchedule[]> => {
+    try {
+      const schedulesRef = collection(db, getChurchCollectionPath('prayerSchedules'));
+      const querySnapshot = await getDocs(schedulesRef);
+
+      return querySnapshot.docs.map(doc => ({
+        ...doc.data(),
+        id: doc.id
+      })) as PrayerSchedule[];
+    } catch (error: any) {
+      throw new Error(`Failed to fetch prayer schedules: ${error.message}`);
+    }
+  },
+
+  // Get default (permanent) schedule
+  getDefault: async (): Promise<PrayerSchedule | null> => {
+    try {
+      const scheduleRef = doc(db, getChurchCollectionPath('prayerSchedules'), 'default');
+      const docSnap = await getDoc(scheduleRef);
+
+      if (docSnap.exists()) {
+        return { ...docSnap.data(), id: docSnap.id } as PrayerSchedule;
+      }
+      return null;
+    } catch (error: any) {
+      throw new Error(`Failed to fetch default prayer schedule: ${error.message}`);
+    }
+  },
+
+  // Get schedule for a specific week (by Tuesday date)
+  getByWeek: async (weekStart: string): Promise<PrayerSchedule | null> => {
+    try {
+      const scheduleRef = doc(db, getChurchCollectionPath('prayerSchedules'), weekStart);
+      const docSnap = await getDoc(scheduleRef);
+
+      if (docSnap.exists()) {
+        return { ...docSnap.data(), id: docSnap.id } as PrayerSchedule;
+      }
+      return null;
+    } catch (error: any) {
+      throw new Error(`Failed to fetch prayer schedule for week ${weekStart}: ${error.message}`);
+    }
+  },
+
+  // Save or update a prayer schedule
+  addOrUpdate: async (schedule: Omit<PrayerSchedule, 'createdAt' | 'createdBy' | 'updatedAt' | 'updatedBy'>): Promise<void> => {
+    try {
+      const schedulesRef = collection(db, getChurchCollectionPath('prayerSchedules'));
+      const docRef = doc(schedulesRef, schedule.id);
+
+      const existingDoc = await getDoc(docRef);
+      const isNew = !existingDoc.exists();
+
+      await setDoc(docRef, {
+        ...schedule,
+        ...(isNew ? { createdAt: new Date().toISOString(), createdBy: currentUser?.uid || 'unknown' } : {}),
+        updatedAt: new Date().toISOString(),
+        updatedBy: currentUser?.uid || 'unknown'
+      }, { merge: true });
+    } catch (error: any) {
+      throw new Error(`Failed to save prayer schedule: ${error.message}`);
+    }
+  },
+
+  // Delete a week-specific schedule
+  delete: async (scheduleId: string): Promise<void> => {
+    try {
+      if (scheduleId === 'default') {
+        throw new Error('Cannot delete the default schedule');
+      }
+      const scheduleRef = doc(db, getChurchCollectionPath('prayerSchedules'), scheduleId);
+      await deleteDoc(scheduleRef);
+    } catch (error: any) {
+      throw new Error(`Failed to delete prayer schedule: ${error.message}`);
+    }
+  },
+
+  // Listen to schedule changes
+  onSnapshot: (callback: (schedules: PrayerSchedule[]) => void): Unsubscribe => {
+    const schedulesRef = collection(db, getChurchCollectionPath('prayerSchedules'));
+    return onSnapshot(schedulesRef, (querySnapshot) => {
+      const schedules = querySnapshot.docs.map(doc => ({
+        ...doc.data(),
+        id: doc.id
+      })) as PrayerSchedule[];
+      callback(schedules);
+    });
+  }
+};
+
 // Sunday Confirmation Service
 export const confirmationFirebaseService = {
   // Get all confirmations
@@ -2748,5 +2841,228 @@ export const initializeFirebaseServices = async (): Promise<void> => {
     console.log('Firebase services initialized');
   } catch (error: any) {
     console.error('Failed to initialize Firebase services:', error.message);
+  }
+};
+
+// Custom Prayer Service
+export const customPrayerFirebaseService = {
+  // Get all custom prayers for a member
+  getByMember: async (memberId: string): Promise<CustomPrayer[]> => {
+    try {
+      const customPrayersRef = collection(db, getChurchCollectionPath('customPrayers'));
+      const q = query(customPrayersRef, where('memberId', '==', memberId), orderBy('createdAt', 'desc'));
+      const querySnapshot = await getDocs(q);
+      return querySnapshot.docs.map(doc => ({
+        ...doc.data(),
+        id: doc.id
+      })) as CustomPrayer[];
+    } catch (error: any) {
+      throw new Error(`Failed to fetch custom prayers: ${error.message}`);
+    }
+  },
+
+  // Get all custom prayers (admin only)
+  getAll: async (): Promise<CustomPrayer[]> => {
+    try {
+      const customPrayersRef = collection(db, getChurchCollectionPath('customPrayers'));
+      const q = query(customPrayersRef, orderBy('createdAt', 'desc'));
+      const querySnapshot = await getDocs(q);
+      return querySnapshot.docs.map(doc => ({
+        ...doc.data(),
+        id: doc.id
+      })) as CustomPrayer[];
+    } catch (error: any) {
+      throw new Error(`Failed to fetch all custom prayers: ${error.message}`);
+    }
+  },
+
+  // Get custom prayer by ID
+  getById: async (prayerId: string): Promise<CustomPrayer | null> => {
+    try {
+      const ref = doc(db, getChurchCollectionPath('customPrayers'), prayerId);
+      const snap = await getDoc(ref);
+      if (!snap.exists()) return null;
+      return { ...snap.data(), id: snap.id } as CustomPrayer;
+    } catch (error: any) {
+      throw new Error(`Failed to fetch custom prayer: ${error.message}`);
+    }
+  },
+
+  // Add or update custom prayer
+  addOrUpdate: async (prayer: Omit<CustomPrayer, 'createdAt' | 'createdBy' | 'updatedAt' | 'updatedBy'>): Promise<void> => {
+    try {
+      console.log('🔍 [CustomPrayer] addOrUpdate called with prayer:', prayer);
+
+      const customPrayersRef = collection(db, getChurchCollectionPath('customPrayers'));
+      const user = authService.getCurrentUser();
+      console.log('🔍 [CustomPrayer] currentUser from authService:', user);
+
+      const userId = user?.uid || 'unknown';
+      console.log('🔍 [CustomPrayer] userId:', userId);
+
+      if (prayer.id) {
+        // Update existing
+        console.log('🔍 [CustomPrayer] Updating existing prayer:', prayer.id);
+        const ref = doc(db, getChurchCollectionPath('customPrayers'), prayer.id);
+        await updateDoc(ref, {
+          ...prayer,
+          updatedAt: new Date().toISOString(),
+          updatedBy: userId
+        });
+        console.log('✅ [CustomPrayer] Prayer updated successfully');
+      } else {
+        // Create new
+        console.log('🔍 [CustomPrayer] Creating new prayer');
+        const newRef = doc(customPrayersRef);
+        await setDoc(newRef, {
+          ...prayer,
+          id: newRef.id,
+          createdAt: new Date().toISOString(),
+          createdBy: userId,
+          updatedAt: new Date().toISOString(),
+          updatedBy: userId
+        });
+        console.log('✅ [CustomPrayer] Prayer created successfully with ID:', newRef.id);
+      }
+    } catch (error: any) {
+      console.error('❌ [CustomPrayer] Error in addOrUpdate:', error);
+      console.error('❌ [CustomPrayer] Error stack:', error.stack);
+      throw new Error(`Failed to save custom prayer: ${error.message}`);
+    }
+  },
+
+  // Delete custom prayer
+  delete: async (prayerId: string): Promise<void> => {
+    try {
+      const ref = doc(db, getChurchCollectionPath('customPrayers'), prayerId);
+      await deleteDoc(ref);
+    } catch (error: any) {
+      throw new Error(`Failed to delete custom prayer: ${error.message}`);
+    }
+  },
+
+  // Real-time listener for member's custom prayers
+  onSnapshotByMember: (memberId: string, callback: (prayers: CustomPrayer[]) => void): (() => void) => {
+    const customPrayersRef = collection(db, getChurchCollectionPath('customPrayers'));
+    const q = query(customPrayersRef, where('memberId', '==', memberId), orderBy('createdAt', 'desc'));
+
+    return onSnapshot(q, (snapshot) => {
+      const prayers = snapshot.docs.map(doc => ({
+        ...doc.data(),
+        id: doc.id
+      })) as CustomPrayer[];
+      callback(prayers);
+    });
+  },
+
+  // Real-time listener for all custom prayers (admin)
+  onSnapshot: (callback: (prayers: CustomPrayer[]) => void): (() => void) => {
+    const customPrayersRef = collection(db, getChurchCollectionPath('customPrayers'));
+    const q = query(customPrayersRef, orderBy('createdAt', 'desc'));
+
+    return onSnapshot(q, (snapshot) => {
+      const prayers = snapshot.docs.map(doc => ({
+        ...doc.data(),
+        id: doc.id
+      })) as CustomPrayer[];
+      callback(prayers);
+    });
+  }
+};
+
+// Custom Prayer Record Service
+export const customPrayerRecordFirebaseService = {
+  // Get all records for a member
+  getByMember: async (memberId: string): Promise<CustomPrayerRecord[]> => {
+    try {
+      const recordsRef = collection(db, getChurchCollectionPath('customPrayerRecords'));
+      const q = query(recordsRef, where('memberId', '==', memberId));
+      const querySnapshot = await getDocs(q);
+      return querySnapshot.docs.map(doc => ({
+        ...doc.data(),
+        id: doc.id
+      })) as CustomPrayerRecord[];
+    } catch (error: any) {
+      throw new Error(`Failed to fetch custom prayer records: ${error.message}`);
+    }
+  },
+
+  // Get records for a date range
+  getByDateRange: async (memberId: string, startDate: string, endDate: string): Promise<CustomPrayerRecord[]> => {
+    try {
+      const recordsRef = collection(db, getChurchCollectionPath('customPrayerRecords'));
+      const q = query(
+        recordsRef,
+        where('memberId', '==', memberId),
+        where('date', '>=', startDate),
+        where('date', '<=', endDate)
+      );
+      const querySnapshot = await getDocs(q);
+      return querySnapshot.docs.map(doc => ({
+        ...doc.data(),
+        id: doc.id
+      })) as CustomPrayerRecord[];
+    } catch (error: any) {
+      throw new Error(`Failed to fetch custom prayer records: ${error.message}`);
+    }
+  },
+
+  // Mark attendance (Prayed or Missed)
+  markAttendance: async (customPrayerId: string, memberId: string, date: string, status: 'Prayed' | 'Missed'): Promise<void> => {
+    try {
+      const recordId = `${customPrayerId}_${memberId}_${date}`;
+      const ref = doc(db, getChurchCollectionPath('customPrayerRecords'), recordId);
+      const user = authService.getCurrentUser();
+      const userId = user?.uid || 'unknown';
+
+      await setDoc(ref, {
+        id: recordId,
+        customPrayerId,
+        memberId,
+        date,
+        status,
+        recordedAt: new Date().toISOString(),
+        recordedBy: userId
+      });
+    } catch (error: any) {
+      throw new Error(`Failed to mark attendance: ${error.message}`);
+    }
+  },
+
+  // Delete record
+  deleteRecord: async (recordId: string): Promise<void> => {
+    try {
+      const ref = doc(db, getChurchCollectionPath('customPrayerRecords'), recordId);
+      await deleteDoc(ref);
+    } catch (error: any) {
+      throw new Error(`Failed to delete record: ${error.message}`);
+    }
+  },
+
+  // Real-time listener for member's records
+  onSnapshotByMember: (memberId: string, callback: (records: CustomPrayerRecord[]) => void): (() => void) => {
+    const recordsRef = collection(db, getChurchCollectionPath('customPrayerRecords'));
+    const q = query(recordsRef, where('memberId', '==', memberId));
+
+    return onSnapshot(q, (snapshot) => {
+      const records = snapshot.docs.map(doc => ({
+        ...doc.data(),
+        id: doc.id
+      })) as CustomPrayerRecord[];
+      callback(records);
+    });
+  },
+
+  // Real-time listener for all records
+  onSnapshot: (callback: (records: CustomPrayerRecord[]) => void): (() => void) => {
+    const recordsRef = collection(db, getChurchCollectionPath('customPrayerRecords'));
+
+    return onSnapshot(recordsRef, (snapshot) => {
+      const records = snapshot.docs.map(doc => ({
+        ...doc.data(),
+        id: doc.id
+      })) as CustomPrayerRecord[];
+      callback(records);
+    });
   }
 };

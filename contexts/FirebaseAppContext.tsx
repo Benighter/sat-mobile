@@ -2,7 +2,7 @@
 import React, { createContext, useState, useEffect, useCallback, ReactNode, useMemo, useRef } from 'react';
 import { collection, doc, getDocs, onSnapshot, query as fsQuery, where as fsWhere, setDoc } from 'firebase/firestore';
 import { db } from '../firebase.config';
-import { Member, AttendanceRecord, Bacenta, TabOption, AttendanceStatus, NewBeliever, SundayConfirmation, ConfirmationStatus, Guest, MemberDeletionRequest, OutreachBacenta, OutreachMember, PrayerRecord, PrayerStatus, MeetingRecord, TitheRecord, TransportRecord, CrossTenantAccessLink, CrossTenantPermission, SonOfGod } from '../types';
+import { Member, AttendanceRecord, Bacenta, TabOption, AttendanceStatus, NewBeliever, SundayConfirmation, ConfirmationStatus, Guest, MemberDeletionRequest, OutreachBacenta, OutreachMember, PrayerRecord, PrayerSchedule, PrayerStatus, MeetingRecord, TitheRecord, TransportRecord, CrossTenantAccessLink, CrossTenantPermission, SonOfGod, CustomPrayer, CustomPrayerRecord } from '../types';
 import { FIXED_TABS, DEFAULT_TAB_ID } from '../constants';
 import { sessionStateStorage } from '../utils/localStorage';
 import { getSundaysOfMonth } from '../utils/dateUtils';
@@ -19,6 +19,9 @@ import {
   outreachBacentasFirebaseService,
   outreachMembersFirebaseService,
   prayerFirebaseService,
+  prayerScheduleFirebaseService,
+  customPrayerFirebaseService,
+  customPrayerRecordFirebaseService,
   meetingRecordsFirebaseService,
   titheFirebaseService,
   transportFirebaseService,
@@ -49,6 +52,7 @@ interface AppContextType {
   members: Member[];
   attendanceRecords: AttendanceRecord[];
   prayerRecords: PrayerRecord[];
+  prayerSchedules: PrayerSchedule[];
   bacentas: Bacenta[];
   newBelievers: NewBeliever[];
   sundayConfirmations: SundayConfirmation[];
@@ -151,6 +155,17 @@ interface AppContextType {
   markPrayerHandler: (memberId: string, date: string, status: PrayerStatus) => Promise<void>;
   clearPrayerHandler: (memberId: string, date: string) => Promise<void>;
 
+  // Prayer Schedule Operations
+  savePrayerScheduleHandler: (schedule: Omit<PrayerSchedule, 'createdAt' | 'createdBy' | 'updatedAt' | 'updatedBy'>) => Promise<void>;
+  deletePrayerScheduleHandler: (scheduleId: string) => Promise<void>;
+
+  // Custom Prayer Operations
+  customPrayers: CustomPrayer[];
+  customPrayerRecords: CustomPrayerRecord[];
+  saveCustomPrayerHandler: (prayer: Omit<CustomPrayer, 'createdAt' | 'createdBy' | 'updatedAt' | 'updatedBy'>) => Promise<void>;
+  deleteCustomPrayerHandler: (prayerId: string) => Promise<void>;
+  markCustomPrayerAttendanceHandler: (customPrayerId: string, memberId: string, date: string, status: 'Prayed' | 'Missed') => Promise<void>;
+
   // Meeting Record Operations
   saveMeetingRecordHandler: (record: MeetingRecord) => Promise<void>;
   updateMeetingRecordHandler: (record: MeetingRecord) => Promise<void>;
@@ -250,6 +265,9 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
   const [members, setMembers] = useState<Member[]>([]);
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
   const [prayerRecords, setPrayerRecords] = useState<PrayerRecord[]>([]);
+  const [prayerSchedules, setPrayerSchedules] = useState<PrayerSchedule[]>([]);
+  const [customPrayers, setCustomPrayers] = useState<CustomPrayer[]>([]);
+  const [customPrayerRecords, setCustomPrayerRecords] = useState<CustomPrayerRecord[]>([]);
   const [bacentas, setBacentas] = useState<Bacenta[]>([]);
   const [newBelievers, setNewBelievers] = useState<NewBeliever[]>([]);
   const [sundayConfirmations, setSundayConfirmations] = useState<SundayConfirmation[]>([]);
@@ -752,6 +770,24 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
         });
         unsubscribers.push(unsubscribePrayer);
 
+        // Listen to prayer schedules
+        const unsubscribePrayerSchedules = prayerScheduleFirebaseService.onSnapshot((schedules) => {
+          setPrayerSchedules(schedules);
+        });
+        unsubscribers.push(unsubscribePrayerSchedules);
+
+        // Listen to custom prayers
+        const unsubscribeCustomPrayers = customPrayerFirebaseService.onSnapshot((prayers) => {
+          setCustomPrayers(prayers);
+        });
+        unsubscribers.push(unsubscribeCustomPrayers);
+
+        // Listen to custom prayer records
+        const unsubscribeCustomPrayerRecords = customPrayerRecordFirebaseService.onSnapshot((records) => {
+          setCustomPrayerRecords(records);
+        });
+        unsubscribers.push(unsubscribeCustomPrayerRecords);
+
         // Client-side auto-miss fallback: attempt once per day per church after listeners attach
         try {
           const churchId = firebaseUtils.getCurrentChurchId();
@@ -932,9 +968,13 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
           setSundayConfirmations(ministryData.sundayConfirmations);
           setGuests(ministryData.guests);
 
-          // Still fetch prayer data from current church
-          const prayerData = await prayerFirebaseService.getAll();
+          // Still fetch prayer data and schedules from current church
+          const [prayerData, prayerSchedulesData] = await Promise.all([
+            prayerFirebaseService.getAll(),
+            prayerScheduleFirebaseService.getAll()
+          ]);
           setPrayerRecords(prayerData);
+          setPrayerSchedules(prayerSchedulesData);
 
           console.log('✅ [Ministry Mode] Cross-church data loaded (SuperAdmin style):', {
             members: ministryData.members.length,
@@ -956,13 +996,14 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
         } catch (error) {
           console.error('❌ [Ministry Mode] Failed to fetch cross-church data:', error);
           // Fallback to normal data fetching
-          const [membersData, bacentasData, attendanceData, newBelieversData, confirmationsData, prayerData] = await Promise.all([
+          const [membersData, bacentasData, attendanceData, newBelieversData, confirmationsData, prayerData, prayerSchedulesData] = await Promise.all([
             membersFirebaseService.getAll(),
             bacentasFirebaseService.getAll(),
             attendanceFirebaseService.getAll(),
             newBelieversFirebaseService.getAll(),
             confirmationFirebaseService.getAll(),
-            prayerFirebaseService.getAll()
+            prayerFirebaseService.getAll(),
+            prayerScheduleFirebaseService.getAll()
           ]);
 
           setMembers(membersData);
@@ -971,16 +1012,18 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
           setNewBelievers(newBelieversData);
           setSundayConfirmations(confirmationsData);
           setPrayerRecords(prayerData);
+          setPrayerSchedules(prayerSchedulesData);
         }
       } else {
         // Normal mode - fetch from current church only
-        const [membersData, bacentasData, attendanceData, newBelieversData, confirmationsData, prayerData, meetingData] = await Promise.all([
+        const [membersData, bacentasData, attendanceData, newBelieversData, confirmationsData, prayerData, prayerSchedulesData, meetingData] = await Promise.all([
           membersFirebaseService.getAll(),
           bacentasFirebaseService.getAll(),
           attendanceFirebaseService.getAll(),
           newBelieversFirebaseService.getAll(),
           confirmationFirebaseService.getAll(),
           prayerFirebaseService.getAll(),
+          prayerScheduleFirebaseService.getAll(),
           meetingRecordsFirebaseService.getAll()
         ]);
 
@@ -1022,6 +1065,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
         setNewBelievers(newBelieversData);
         setSundayConfirmations(confirmationsData);
         setPrayerRecords(prayerData);
+        setPrayerSchedules(prayerSchedulesData);
         setMeetingRecords(meetingData);
       }
 
@@ -2606,6 +2650,72 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     }
   }, [showToast]);
 
+  // Prayer Schedule handlers
+  const savePrayerScheduleHandler = useCallback(async (schedule: Omit<PrayerSchedule, 'createdAt' | 'createdBy' | 'updatedAt' | 'updatedBy'>) => {
+    if (!ensureCanWrite()) throw new Error('Read-only access');
+    try {
+      await prayerScheduleFirebaseService.addOrUpdate(schedule);
+      showToast('success', 'Prayer schedule saved successfully',
+        schedule.isPermanent ? 'This schedule will apply to all future weeks' : 'This schedule will apply to this week only');
+    } catch (error: any) {
+      setError(error.message);
+      showToast('error', 'Failed to save prayer schedule', error.message);
+      throw error;
+    }
+  }, [showToast]);
+
+  const deletePrayerScheduleHandler = useCallback(async (scheduleId: string) => {
+    if (!ensureCanWrite()) throw new Error('Read-only access');
+    try {
+      await prayerScheduleFirebaseService.delete(scheduleId);
+      showToast('success', 'Prayer schedule deleted successfully');
+    } catch (error: any) {
+      setError(error.message);
+      showToast('error', 'Failed to delete prayer schedule', error.message);
+      throw error;
+    }
+  }, [showToast]);
+
+  // Custom Prayer handlers
+  const saveCustomPrayerHandler = useCallback(async (prayer: Omit<CustomPrayer, 'createdAt' | 'createdBy' | 'updatedAt' | 'updatedBy'>) => {
+    console.log('🔍 [Context] saveCustomPrayerHandler called with:', prayer);
+    if (!ensureCanWrite()) throw new Error('Read-only access');
+    try {
+      console.log('🔍 [Context] Calling customPrayerFirebaseService.addOrUpdate');
+      await customPrayerFirebaseService.addOrUpdate(prayer);
+      console.log('✅ [Context] Custom prayer saved successfully');
+      showToast('success', 'Custom prayer saved successfully');
+    } catch (error: any) {
+      console.error('❌ [Context] Error saving custom prayer:', error);
+      setError(error.message);
+      showToast('error', 'Failed to save custom prayer', error.message);
+      throw error;
+    }
+  }, [showToast]);
+
+  const deleteCustomPrayerHandler = useCallback(async (prayerId: string) => {
+    if (!ensureCanWrite()) throw new Error('Read-only access');
+    try {
+      await customPrayerFirebaseService.delete(prayerId);
+      showToast('success', 'Custom prayer deleted successfully');
+    } catch (error: any) {
+      setError(error.message);
+      showToast('error', 'Failed to delete custom prayer', error.message);
+      throw error;
+    }
+  }, [showToast]);
+
+  const markCustomPrayerAttendanceHandler = useCallback(async (customPrayerId: string, memberId: string, date: string, status: 'Prayed' | 'Missed') => {
+    if (!ensureCanWrite()) throw new Error('Read-only access');
+    try {
+      await customPrayerRecordFirebaseService.markAttendance(customPrayerId, memberId, date, status);
+    } catch (error: any) {
+      setError(error.message);
+      showToast('error', 'Failed to mark attendance', error.message);
+      throw error;
+    }
+  }, [showToast]);
+
   // Confirmation handlers
   const markConfirmationHandler = useCallback(async (memberId: string, date: string, status: ConfirmationStatus) => {
   if (!ensureCanWrite()) throw new Error('Read-only access');
@@ -3789,6 +3899,9 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     members,
     attendanceRecords,
   prayerRecords,
+  prayerSchedules,
+    customPrayers,
+    customPrayerRecords,
     bacentas,
     newBelievers,
     sundayConfirmations,
@@ -3866,6 +3979,15 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
   // Prayer Operations
   markPrayerHandler,
   clearPrayerHandler,
+
+  // Prayer Schedule Operations
+  savePrayerScheduleHandler,
+  deletePrayerScheduleHandler,
+
+    // Custom Prayer Operations
+    saveCustomPrayerHandler,
+    deleteCustomPrayerHandler,
+    markCustomPrayerAttendanceHandler,
 
     // Meeting Record Operations
     saveMeetingRecordHandler,

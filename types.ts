@@ -109,6 +109,68 @@ export interface PrayerRecord {
   status: PrayerStatus;
 }
 
+// Custom prayer schedule types
+export interface PrayerSchedule {
+  id: string; // 'default' for permanent schedule, or weekStart date (YYYY-MM-DD) for week-specific
+  weekStart?: string; // Tuesday date (YYYY-MM-DD) for week-specific schedules, undefined for default
+  isPermanent: boolean; // true if this is the default schedule for all future weeks
+  times: {
+    tuesday: { start: string; end: string }; // HH:MM format
+    wednesday: { start: string; end: string };
+    thursday: { start: string; end: string };
+    friday: { start: string; end: string };
+    saturday: { start: string; end: string };
+    sunday: { start: string; end: string };
+  };
+  createdAt?: string; // ISO timestamp
+  createdBy?: string; // User ID
+  updatedAt?: string; // ISO timestamp
+  updatedBy?: string; // User ID
+}
+
+// Custom Prayer Types
+export type CustomPrayerCategory = 'Personal' | 'All-night Vigil' | 'Quiet Time' | 'Other';
+
+export interface CustomPrayer {
+  id: string;
+  memberId: string;
+  name: string; // e.g., "Personal Prayer", "All-night Vigil"
+  category: CustomPrayerCategory;
+  customCategory?: string; // For 'Other' category
+
+  // Days of week (true = active on that day)
+  days: {
+    monday: boolean;
+    tuesday: boolean;
+    wednesday: boolean;
+    thursday: boolean;
+    friday: boolean;
+    saturday: boolean;
+    sunday: boolean;
+  };
+
+  // Time configuration
+  startTime: string; // HH:MM format (24-hour)
+  endTime: string; // HH:MM format (24-hour)
+
+  // Metadata
+  isActive: boolean;
+  createdAt: string; // ISO timestamp
+  createdBy: string; // User ID
+  updatedAt?: string; // ISO timestamp
+  updatedBy?: string; // User ID
+}
+
+export interface CustomPrayerRecord {
+  id: string; // customPrayerId_memberId_date
+  customPrayerId: string;
+  memberId: string;
+  date: string; // YYYY-MM-DD
+  status: 'Prayed' | 'Missed';
+  recordedAt?: string; // ISO timestamp
+  recordedBy?: string; // User ID
+}
+
 export type ConfirmationStatus = 'Confirmed' | 'Not Confirmed';
 
 export interface SundayConfirmation {

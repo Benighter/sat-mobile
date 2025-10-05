@@ -1,12 +1,14 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useAppContext } from '../../contexts/FirebaseAppContext';
-import { getTuesdayToSundayRange, getPreviousPrayerWeekAnchor, getNextPrayerWeekAnchor, formatFullDate } from '../../utils/dateUtils';
+import { getTuesdayToSundayRange, getPreviousPrayerWeekAnchor, getNextPrayerWeekAnchor, formatFullDate, getTuesdayOfWeek } from '../../utils/dateUtils';
 import { hasAdminPrivileges } from '../../utils/permissionUtils';
 import { CheckIcon, XMarkIcon, ChevronLeftIcon, ChevronRightIcon, CalendarIcon, ClipboardIcon, SearchIcon } from '../icons';
-import { Member, PrayerStatus, TabKeys } from '../../types';
+import { Member, PrayerStatus, PrayerSchedule, TabKeys } from '../../types';
+import { getPrayerSessionInfo } from '../../utils/prayerUtils';
+import EditPrayerTimesModal from './EditPrayerTimesModal';
 
 const PrayerView: React.FC = () => {
-  const { members, bacentas, prayerRecords, markPrayerHandler, clearPrayerHandler, userProfile, switchTab, showToast } = useAppContext();
+  const { members, bacentas, prayerRecords, prayerSchedules, markPrayerHandler, clearPrayerHandler, savePrayerScheduleHandler, userProfile, switchTab, showToast } = useAppContext();
   const [anchorDate, setAnchorDate] = useState<string>(getTuesdayToSundayRange()[0]);
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [bacentaFilter, setBacentaFilter] = useState<string>(''); // empty => all
@@ -16,6 +18,10 @@ const PrayerView: React.FC = () => {
     if (v === 'Bacenta Leader' || v === 'Fellowship Leader' || v === 'Member' || v === 'all') return v;
     return 'all';
   };
+
+  // Prayer times modal state
+  const [isEditTimesModalOpen, setIsEditTimesModalOpen] = useState(false);
+  const [editingDate, setEditingDate] = useState<string | null>(null);
 
   // const allowEditPreviousSundays = userProfile?.preferences?.allowEditPreviousSundays ?? false;
   const isAdmin = hasAdminPrivileges(userProfile);
@@ -96,22 +102,9 @@ const PrayerView: React.FC = () => {
     return map;
   }, [prayerRecords]);
 
-  // Session info per day: start, end, hours
+  // Session info per day: start, end, hours (uses custom schedules if available)
   const getSessionInfoForDate = (date: string) => {
-    const dt = new Date(date + 'T00:00:00');
-    const day = dt.getDay(); // 0=Sun,1=Mon,2=Tue...6=Sat
-    // Tue(2), Fri(5): 04:30-06:30; Wed(3), Thu(4): 04:00-06:00; Sat(6), Sun(0): 05:00-07:00
-    if (day === 2 || day === 5) {
-      return { start: '04:30', end: '06:30', hours: 2 };
-    }
-    if (day === 3 || day === 4) {
-      return { start: '04:00', end: '06:00', hours: 2 };
-    }
-    if (day === 6 || day === 0) {
-      return { start: '05:00', end: '07:00', hours: 2 };
-    }
-    // Default fallback
-    return { start: '00:00', end: '00:00', hours: 0 };
+    return getPrayerSessionInfo(date, prayerSchedules);
   };
 
   // Compute per-member weekly hours and combined total hours for filtered set
@@ -584,7 +577,7 @@ const PrayerView: React.FC = () => {
           </div>
 
           {/* Summary */}
-          <div className="text-sm text-gray-600 mb-4 flex items-center justify-center gap-2">
+          <div className="text-sm text-gray-600 mb-2 flex items-center justify-center gap-2">
             <span>
               {filteredMembers.length} member{filteredMembers.length !== 1 ? 's' : ''}
             </span>
@@ -593,6 +586,16 @@ const PrayerView: React.FC = () => {
               {combinedWeeklyHours} h this week
             </span>
           </div>
+
+          {/* Admin hint */}
+          {isAdmin && (
+            <div className="text-xs text-gray-500 mb-4 flex items-center justify-center gap-1">
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span>Click on any day to edit prayer times</span>
+            </div>
+          )}
 
           {/* Quick analytics strip */}
           {filteredMembers.length > 0 && (
@@ -720,12 +723,27 @@ const PrayerView: React.FC = () => {
               </th>
               {weekDates.map(d => {
                 const info = getSessionInfoForDate(d);
+
                 return (
-                  <th key={d} className="px-3 py-2 text-center whitespace-nowrap sticky top-0 z-10 bg-white dark:bg-dark-700" title={`${formatFullDate(d)} • ${info.start}–${info.end}`}>
-                    <div className="flex flex-col items-center leading-tight">
-                      <span className="font-medium">{weekday(d)}</span>
-                      <span className="text-xs text-gray-500">{info.start}–{info.end}</span>
-                    </div>
+                  <th key={d} className="px-3 py-2 text-center whitespace-nowrap sticky top-0 z-10 bg-white dark:bg-dark-700">
+                    {isAdmin ? (
+                      <button
+                        onClick={() => {
+                          setEditingDate(d);
+                          setIsEditTimesModalOpen(true);
+                        }}
+                        className="flex flex-col items-center leading-tight hover:bg-blue-50 rounded px-2 py-1 transition-colors cursor-pointer"
+                        title={`${formatFullDate(d)} • ${info.start}–${info.end}\nClick to edit prayer times`}
+                      >
+                        <span className="font-medium">{weekday(d)}</span>
+                        <span className="text-xs text-gray-500">{info.start}–{info.end}</span>
+                      </button>
+                    ) : (
+                      <div className="flex flex-col items-center leading-tight px-2 py-1" title={`${formatFullDate(d)} • ${info.start}–${info.end}`}>
+                        <span className="font-medium">{weekday(d)}</span>
+                        <span className="text-xs text-gray-500">{info.start}–{info.end}</span>
+                      </div>
+                    )}
                   </th>
                 );
               })}
@@ -835,6 +853,23 @@ const PrayerView: React.FC = () => {
           </tbody>
         </table>
       </div>
+
+      {/* Edit Prayer Times Modal */}
+      {isEditTimesModalOpen && editingDate && (
+        <EditPrayerTimesModal
+          isOpen={isEditTimesModalOpen}
+          onClose={() => {
+            setIsEditTimesModalOpen(false);
+            setEditingDate(null);
+          }}
+          onSave={async (schedule, isPermanent) => {
+            await savePrayerScheduleHandler(schedule);
+          }}
+          weekStart={getTuesdayOfWeek(editingDate)}
+          currentSchedule={prayerSchedules.find(s => !s.isPermanent && s.weekStart === getTuesdayOfWeek(editingDate))}
+          defaultSchedule={prayerSchedules.find(s => s.isPermanent && s.id === 'default')}
+        />
+      )}
 
   {/* Bulk mark modal removed */}
     </div>

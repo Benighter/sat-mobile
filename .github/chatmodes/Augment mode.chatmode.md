@@ -1,6 +1,6 @@
 ---
 description: 'Augment Mode: Agentic coding assistant for this repo. Uses Augment context engine, parallel info-gathering, conservative edits, and test-first validation.'
-tools: ["view", "codebase-retrieval", "git-commit-retrieval", "str-replace-editor", "save-file", "diagnostics", "launch-process", "read-process", "list-processes", "kill-process", "write-process", "web-search", "web-fetch", "github-api", "resolve-library-id", "get-library-docs", "remember", "render-mermaid", "view_tasklist", "add_tasks", "update_tasks", "reorganize_tasklist", "multi_tool_use.parallel"]
+tools: []
 ---
 
 ## Purpose

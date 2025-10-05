@@ -4,13 +4,27 @@ import { Member, PrayerRecord } from '../../types';
 import { getTuesdayToSundayRange, getPreviousPrayerWeekAnchor, getNextPrayerWeekAnchor, formatFullDate } from '../../utils/dateUtils';
 import { getPrayerSessionInfo } from '../../utils/prayerUtils';
 import { CalendarIcon, ChevronLeftIcon, ChevronRightIcon, CheckIcon, XMarkIcon } from '../icons';
+import CustomPrayersView from './CustomPrayersView';
+import { calculateTotalCustomHours } from '../../utils/customPrayerUtils';
 
 const PrayerMemberDetailsView: React.FC = () => {
-  const { currentTab, members, prayerRecords } = useAppContext();
+  const {
+    currentTab,
+    members,
+    prayerRecords,
+    prayerSchedules,
+    customPrayers,
+    customPrayerRecords,
+    saveCustomPrayerHandler,
+    deleteCustomPrayerHandler,
+    markCustomPrayerAttendanceHandler,
+    userProfile
+  } = useAppContext();
   const memberId: string = currentTab?.data?.memberId;
   const member: Member | undefined = members.find(m => m.id === memberId);
 
   const [anchorDate, setAnchorDate] = useState<string>(getTuesdayToSundayRange()[0]);
+  const [activeTab, setActiveTab] = useState<'church' | 'custom'>('church');
   const weekDates = useMemo(() => getTuesdayToSundayRange(anchorDate), [anchorDate]);
 
   const memberRecords = useMemo(() => prayerRecords.filter(r => r.memberId === memberId), [prayerRecords, memberId]);
@@ -20,9 +34,42 @@ const PrayerMemberDetailsView: React.FC = () => {
     return map;
   }, [memberRecords]);
 
+  // Custom prayers for this member
+  const memberCustomPrayers = useMemo(
+    () => customPrayers.filter(p => p.memberId === memberId),
+    [customPrayers, memberId]
+  );
+
+  const memberCustomRecords = useMemo(
+    () => customPrayerRecords.filter(r => r.memberId === memberId),
+    [customPrayerRecords, memberId]
+  );
+
+  // Check if current user can edit
+  // For now, allow editing if user is admin or if viewing their own profile
+  // Since we don't have a direct link between userProfile.uid and Member.id,
+  // we'll be permissive and allow members to edit (they can only see their own prayers anyway)
+  const canEdit = useMemo(() => {
+    if (!userProfile) return false;
+    // Admins can always edit
+    if (userProfile.role === 'Admin' || userProfile.role === 'admin') return true;
+    // For members/leaders, allow editing (they're viewing their own profile)
+    return true;
+  }, [userProfile]);
+
   const lifetimeHours = useMemo(() => {
-    return memberRecords.reduce((acc, r) => acc + (r.status === 'Prayed' ? getPrayerSessionInfo(r.date).hours : 0), 0);
-  }, [memberRecords]);
+    return memberRecords.reduce((acc, r) => acc + (r.status === 'Prayed' ? getPrayerSessionInfo(r.date, prayerSchedules).hours : 0), 0);
+  }, [memberRecords, prayerSchedules]);
+
+  const lifetimeCustomHours = useMemo(() => {
+    return calculateTotalCustomHours(
+      memberCustomPrayers,
+      memberCustomRecords,
+      memberId,
+      '2000-01-01',
+      '2099-12-31'
+    );
+  }, [memberCustomPrayers, memberCustomRecords, memberId]);
 
   // View-only: No toggling or editing here
 
@@ -43,8 +90,13 @@ const PrayerMemberDetailsView: React.FC = () => {
             <CalendarIcon className="w-5 h-5 text-blue-600" />
             <h2 className="text-xl font-semibold text-gray-900">{member.firstName} {member.lastName || ''}</h2>
           </div>
-          <div className="text-sm text-gray-600 mb-3">
-            Lifetime Prayer Hours: <span className="font-semibold text-gray-800">{lifetimeHours}</span>
+          <div className="grid grid-cols-2 gap-4 mb-3">
+            <div className="text-sm text-gray-600">
+              Church Prayer Hours: <span className="font-semibold text-blue-700">{lifetimeHours}</span>
+            </div>
+            <div className="text-sm text-gray-600">
+              Custom Prayer Hours: <span className="font-semibold text-purple-700">{lifetimeCustomHours.toFixed(1)}</span>
+            </div>
           </div>
 
           {/* Week navigation */}
@@ -72,13 +124,49 @@ const PrayerMemberDetailsView: React.FC = () => {
         </div>
       </div>
 
-      {/* Weekly grid */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-auto">
+      {/* Tab Navigation */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+        <div className="border-b border-gray-200">
+          <nav className="flex space-x-4 px-6" aria-label="Tabs">
+            <button
+              onClick={() => setActiveTab('church')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                activeTab === 'church'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              Church Prayers
+            </button>
+            <button
+              onClick={() => setActiveTab('custom')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                activeTab === 'custom'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              Custom Prayers
+              {memberCustomPrayers.length > 0 && (
+                <span className="ml-2 bg-blue-100 text-blue-600 py-0.5 px-2 rounded-full text-xs">
+                  {memberCustomPrayers.length}
+                </span>
+              )}
+            </button>
+          </nav>
+        </div>
+
+        {/* Tab Content */}
+        <div className="p-6">
+          {activeTab === 'church' ? (
+            <div className="space-y-4">
+              {/* Weekly grid */}
+              <div className="bg-white rounded-lg border border-gray-200 overflow-auto">
         <table className="min-w-full text-sm">
           <thead>
             <tr className="bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200">
               {weekDates.map(d => {
-                const info = getPrayerSessionInfo(d);
+                const info = getPrayerSessionInfo(d, prayerSchedules);
                 const dt = new Date(d + 'T00:00:00');
                 const wd = dt.toLocaleDateString(undefined, { weekday: 'long' });
                 return (
@@ -127,30 +215,48 @@ const PrayerMemberDetailsView: React.FC = () => {
             </div>
           );
         })()}
-      </div>
+              </div>
 
-      {/* Lifetime summary */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-        <div className="text-sm text-gray-700">
-          <div className="font-medium mb-2">Summary</div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm">
-            <div className="p-3 rounded-lg bg-gray-50 border border-gray-200">
-              <div className="text-gray-500">Total Days Marked</div>
-              <div className="text-gray-900 font-semibold">{memberRecords.length}</div>
+              {/* Lifetime summary */}
+              <div className="bg-white rounded-lg border border-gray-200 p-4">
+                <div className="text-sm text-gray-700">
+                  <div className="font-medium mb-2">Summary</div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm">
+                    <div className="p-3 rounded-lg bg-gray-50 border border-gray-200">
+                      <div className="text-gray-500">Total Days Marked</div>
+                      <div className="text-gray-900 font-semibold">{memberRecords.length}</div>
+                    </div>
+                    <div className="p-3 rounded-lg bg-gray-50 border border-gray-200">
+                      <div className="text-gray-500">Prayed Days</div>
+                      <div className="text-gray-900 font-semibold">{memberRecords.filter(r => r.status === 'Prayed').length}</div>
+                    </div>
+                    <div className="p-3 rounded-lg bg-gray-50 border border-gray-200">
+                      <div className="text-gray-500">Missed Days</div>
+                      <div className="text-gray-900 font-semibold">{memberRecords.filter(r => r.status === 'Missed').length}</div>
+                    </div>
+                    <div className="p-3 rounded-lg bg-gray-50 border border-gray-200">
+                      <div className="text-gray-500">Total Hours</div>
+                      <div className="text-gray-900 font-semibold">{lifetimeHours}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
-            <div className="p-3 rounded-lg bg-gray-50 border border-gray-200">
-              <div className="text-gray-500">Prayed Days</div>
-              <div className="text-gray-900 font-semibold">{memberRecords.filter(r => r.status === 'Prayed').length}</div>
+          ) : (
+            <div className="space-y-6">
+              {/* Custom Prayers Management */}
+              <CustomPrayersView
+                prayers={memberCustomPrayers}
+                records={memberCustomRecords}
+                memberId={memberId}
+                memberName={`${member.firstName} ${member.lastName || ''}`}
+                onSave={saveCustomPrayerHandler}
+                onDelete={deleteCustomPrayerHandler}
+                onMarkAttendance={markCustomPrayerAttendanceHandler}
+                canEdit={canEdit}
+              />
             </div>
-            <div className="p-3 rounded-lg bg-gray-50 border border-gray-200">
-              <div className="text-gray-500">Missed Days</div>
-              <div className="text-gray-900 font-semibold">{memberRecords.filter(r => r.status === 'Missed').length}</div>
-            </div>
-            <div className="p-3 rounded-lg bg-gray-50 border border-gray-200">
-              <div className="text-gray-500">Total Hours</div>
-              <div className="text-gray-900 font-semibold">{lifetimeHours}</div>
-            </div>
-          </div>
+          )}
         </div>
       </div>
     </div>
