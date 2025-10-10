@@ -39,7 +39,8 @@ import {
 } from '../services/notificationIntegration';
 import { setEnhancedNotificationContext } from '../services/enhancedNotificationIntegration';
 import { getMinistryAggregatedData, setupMinistryDataListeners } from '../services/ministryDataService';
-import { ministryAccessService } from '../services/ministryAccessService';
+// REMOVED: Ministry access service - ministry app now operates independently
+// import { ministryAccessService } from '../services/ministryAccessService';
 import {
   ministryMembersService,
   ministryAttendanceService,
@@ -467,12 +468,12 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
             try {
               const profile = await userService.getUserProfile(user.uid);
               setUserProfile(profile);
-              // Auto-create ministry access request if applicable
-              try {
-                if (profile?.isMinistryAccount) {
-                  await ministryAccessService.ensureRequestForUser(profile);
-                }
-              } catch (e) { console.warn('[MinistryAccess] ensureRequestForUser failed', e); }
+              // REMOVED: Ministry access request - ministry app now operates independently
+              // try {
+              //   if (profile?.isMinistryAccount) {
+              //     await ministryAccessService.ensureRequestForUser(profile);
+              //   }
+              // } catch (e) { console.warn('[MinistryAccess] ensureRequestForUser failed', e); }
               // Load cross-tenant accessible links for this admin
               try {
                 const links = await crossTenantService.getAccessibleChurchLinks(user.uid);
@@ -603,14 +604,14 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     const unsubscribers: (() => void)[] = [];
 
   try {
-      // Ministry access gate: if in ministry context and not approved, do not attach listeners
-  if (!isImpersonating && isMinistryContext && userProfile && !ministryAccessService.isAccessApproved(userProfile)) {
-        console.log('⛔ [Ministry Access] Listeners blocked: access pending/denied for', userProfile?.uid);
-        try { void ministryAccessService.ensureRequestForUser(userProfile); } catch {}
-        showToast('info', 'Ministry access pending', 'Your ministry account is awaiting approval. You will see data once approved.');
-        listenersCleanupRef.current = () => {};
-        return;
-      }
+      // REMOVED: Ministry access gate - ministry app now operates independently
+      // if (!isImpersonating && isMinistryContext && userProfile && !ministryAccessService.isAccessApproved(userProfile)) {
+      //   console.log('⛔ [Ministry Access] Listeners blocked: access pending/denied for', userProfile?.uid);
+      //   try { void ministryAccessService.ensureRequestForUser(userProfile); } catch {}
+      //   showToast('info', 'Ministry access pending', 'Your ministry account is awaiting approval. You will see data once approved.');
+      //   listenersCleanupRef.current = () => {};
+      //   return;
+      // }
       // If we are in ministry context WITHOUT a selected ministry, temporarily target the default church for simple listeners
       // When a ministry is selected (e.g., Ushers), we must keep the ministry church context so native members appear.
       const originalChurchId = firebaseUtils.getCurrentChurchId();
@@ -917,20 +918,20 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
       setIsLoading(true);
       setError(null);
 
-      // Ministry access gate for initial fetch
-      if (isMinistryContext && userProfile && !ministryAccessService.isAccessApproved(userProfile)) {
-        console.log('⛔ [Ministry Access] Initial fetch blocked: access pending/denied for', userProfile?.uid);
-        try { await ministryAccessService.ensureRequestForUser(userProfile); } catch {}
-        setMembers([]);
-        setBacentas([]);
-        setAttendanceRecords([]);
-        setNewBelievers([]);
-        setSundayConfirmations([]);
-        setGuests([]);
-        showToast('info', 'Ministry access pending', 'Your ministry account is awaiting approval. You will see data once approved.');
-        setIsLoading(false);
-        return;
-      }
+      // REMOVED: Ministry access gate - ministry app now operates independently
+      // if (isMinistryContext && userProfile && !ministryAccessService.isAccessApproved(userProfile)) {
+      //   console.log('⛔ [Ministry Access] Initial fetch blocked: access pending/denied for', userProfile?.uid);
+      //   try { await ministryAccessService.ensureRequestForUser(userProfile); } catch {}
+      //   setMembers([]);
+      //   setBacentas([]);
+      //   setAttendanceRecords([]);
+      //   setNewBelievers([]);
+      //   setSundayConfirmations([]);
+      //   setGuests([]);
+      //   showToast('info', 'Ministry access pending', 'Your ministry account is awaiting approval. You will see data once approved.');
+      //   setIsLoading(false);
+      //   return;
+      // }
 
   // If in ministry context WITHOUT a selected ministry, temporarily read from default church for initial fetch
       const originalChurchId = firebaseUtils.getCurrentChurchId();

@@ -6,7 +6,8 @@ import { db, auth } from '../../firebase.config';
 import { useAppContext } from '../../contexts/FirebaseAppContext';
 import AdminChurchPreview from './AdminChurchPreview';
 import ConfirmationModal from '../modals/confirmations/ConfirmationModal';
-import { ministryAccessService } from '../../services/ministryAccessService';
+// REMOVED: Ministry access service - ministry app now operates independently
+// import { ministryAccessService } from '../../services/ministryAccessService';
 import { notificationService, setNotificationContext } from '../../services/notificationService';
 import { userService } from '../../services/userService';
 import NotificationBadge from '../notifications/NotificationBadge';
@@ -26,6 +27,11 @@ interface AdminUserRecord {
   lastLoginAt?: any;
   isActive?: boolean;
   memberCount?: number; // computed client-side
+  isMinistryAccount?: boolean;
+  isDeleted?: boolean;
+  preferences?: {
+    ministryName?: string;
+  };
 }
 
 interface SuperAdminDashboardProps {
@@ -45,10 +51,14 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
   const [admins, setAdmins] = useState<AdminUserRecord[]>([]);
   // Leaders state and view toggle
   const [leaders, setLeaders] = useState<AdminUserRecord[]>([]);
-  const [viewMode, setViewMode] = useState<'dashboard' | 'admins' | 'leaders' | 'newly_registered' | 'all_members'>('dashboard');
+  const [viewMode, setViewMode] = useState<'dashboard' | 'admins' | 'leaders' | 'newly_registered' | 'all_members' | 'ministries'>('dashboard');
   const [leadersLoading, setLeadersLoading] = useState(false);
   const [newlyRegistered, setNewlyRegistered] = useState<AdminUserRecord[]>([]);
   const [newlyRegisteredLoading, setNewlyRegisteredLoading] = useState(false);
+
+  // Ministry accounts state
+  const [ministryAccounts, setMinistryAccounts] = useState<AdminUserRecord[]>([]);
+  const [unassignedMinistries, setUnassignedMinistries] = useState<AdminUserRecord[]>([]);
 
   // All Members state
   const [allMembers, setAllMembers] = useState<(Member & { constituencyName: string })[]>([]);
@@ -78,15 +88,15 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
   const [confirmDeleteCampus, setConfirmDeleteCampus] = useState(false);
   // Promotion flow
   const [pendingPromotion, setPendingPromotion] = useState<AdminUserRecord | null>(null);
-  // Ministry access requests
-  const [accessRequests, setAccessRequests] = useState<any[]>([]);
-  const [accessLoading, setAccessLoading] = useState(false);
-  const [accessError, setAccessError] = useState<string | null>(null);
+  // REMOVED: Ministry access requests - ministry app now operates independently
+  // const [accessRequests, setAccessRequests] = useState<any[]>([]);
+  // const [accessLoading, setAccessLoading] = useState(false);
+  // const [accessError, setAccessError] = useState<string | null>(null);
   const [superAdminNotifications, setSuperAdminNotifications] = useState<any[]>([]);
-  // Ministry accounts needing (re)approval fix
-  const [ministryAccountsNeedingApproval, setMinistryAccountsNeedingApproval] = useState<any[]>([]);
-  const [reapproveWorkingUid, setReapproveWorkingUid] = useState<string | null>(null);
-  const [reapproveAllLoading, setReapproveAllLoading] = useState(false);
+  // REMOVED: Ministry accounts needing (re)approval fix - no longer needed
+  // const [ministryAccountsNeedingApproval, setMinistryAccountsNeedingApproval] = useState<any[]>([]);
+  // const [reapproveWorkingUid, setReapproveWorkingUid] = useState<string | null>(null);
+  // const [reapproveAllLoading, setReapproveAllLoading] = useState(false);
 
 
   const campusAggregates = useMemo(() => {
@@ -111,47 +121,47 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
     }));
   }, [campuses, admins]);
 
-  // Function to manually reload access requests
-  const loadAccessRequests = useCallback(async () => {
-    try {
-      setAccessLoading(true);
-      setAccessError(null);
-      const qReq = query(
-        collection(db, 'ministryAccessRequests'),
-        where('status', '==', 'pending'),
-        limit(200)
-      );
-      const snapshot = await getDocs(qReq);
-      const items = snapshot.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
-      items.sort((a,b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
-      setAccessRequests(items);
-    } catch (e: any) {
-      console.error('Failed to load access requests', e);
-      setAccessError(e.message || 'Failed to load access requests');
-    } finally {
-      setAccessLoading(false);
-    }
-  }, []);
-  // Load ministry accounts that have a ministry selected but are not approved
-  const loadMinistryAccountsNeedingApproval = useCallback(async () => {
-    try {
-      const q = query(
-        collection(db, 'users'),
-        where('isMinistryAccount', '==', true),
-        limit(500)
-      );
-      const snap = await getDocs(q);
-      const users = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
-      const needing = users.filter(u => {
-        const status = u?.ministryAccess?.status || 'none';
-        const ministryName = (u?.preferences?.ministryName || '').trim();
-        return !!ministryName && status !== 'approved';
-      });
-      setMinistryAccountsNeedingApproval(needing);
-    } catch (e) {
-      console.error('Failed to load ministry accounts needing approval', e);
-    }
-  }, []);
+  // REMOVED: Ministry access requests - ministry app now operates independently
+  // const loadAccessRequests = useCallback(async () => {
+  //   try {
+  //     setAccessLoading(true);
+  //     setAccessError(null);
+  //     const qReq = query(
+  //       collection(db, 'ministryAccessRequests'),
+  //       where('status', '==', 'pending'),
+  //       limit(200)
+  //     );
+  //     const snapshot = await getDocs(qReq);
+  //     const items = snapshot.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
+  //     items.sort((a,b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+  //     setAccessRequests(items);
+  //   } catch (e: any) {
+  //     console.error('Failed to load access requests', e);
+  //     setAccessError(e.message || 'Failed to load access requests');
+  //   } finally {
+  //     setAccessLoading(false);
+  //   }
+  // }, []);
+  // REMOVED: Ministry accounts needing approval - no longer needed
+  // const loadMinistryAccountsNeedingApproval = useCallback(async () => {
+  //   try {
+  //     const q = query(
+  //       collection(db, 'users'),
+  //       where('isMinistryAccount', '==', true),
+  //       limit(500)
+  //     );
+  //     const snap = await getDocs(q);
+  //     const users = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
+  //     const needing = users.filter(u => {
+  //       const status = u?.ministryAccess?.status || 'none';
+  //       const ministryName = (u?.preferences?.ministryName || '').trim();
+  //       return !!ministryName && status !== 'approved';
+  //     });
+  //     setMinistryAccountsNeedingApproval(needing);
+  //   } catch (e) {
+  //     console.error('Failed to load ministry accounts needing approval', e);
+  //   }
+  // }, []);
 
 
   // Comprehensive refresh function that forces loading of all data
@@ -185,17 +195,26 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
       const filtered = data.filter(a => !(a as any).isDeleted);
       filtered.sort((a, b) => getTime(b.createdAt) - getTime(a.createdAt));
       setAdmins(filtered);
+
+      // Separate ministry accounts (active and unassigned)
+      const allMinistryAccounts = data.filter(a => a.isMinistryAccount === true);
+      const activeMinistries = allMinistryAccounts.filter(a => !(a as any).isDeleted);
+      const deletedMinistries = allMinistryAccounts.filter(a => (a as any).isDeleted === true);
+
+      activeMinistries.sort((a, b) => getTime(b.createdAt) - getTime(a.createdAt));
+      deletedMinistries.sort((a, b) => getTime(b.createdAt) - getTime(a.createdAt));
+
+      setMinistryAccounts(activeMinistries);
+      setUnassignedMinistries(deletedMinistries);
+
       setStats({
         total: filtered.length,
         active: filtered.filter(a => a.isActive !== false).length,
         inactive: filtered.filter(a => a.isActive === false).length
       });
 
-      // Force reload member counts and access requests in parallel
-      await Promise.all([
-        computeMemberCounts(filtered, true), // Force full recount
-        loadAccessRequests() // Reload access requests
-      ]);
+      // Force reload member counts
+      await computeMemberCounts(filtered, true); // Force full recount
 
     } catch (e: any) {
       console.error('Failed to refresh data', e);
@@ -203,7 +222,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
     } finally {
       setLoading(false);
     }
-  }, [loadAccessRequests]);
+  }, []);
 
   // Function to load all members across all constituencies
   const loadAllMembers = useCallback(async () => {
@@ -371,31 +390,31 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
     fetchAdmins();
   }, [fetchAdmins]);
 
-  // Load ministry access requests (realtime)
-  useEffect(() => {
-    try {
-      setAccessLoading(true);
-      const qReq = query(
-        collection(db, 'ministryAccessRequests'),
-        where('status', '==', 'pending'),
-        limit(200)
-      );
-      const unsub = onSnapshot(qReq, snap => {
-        const items = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
-        items.sort((a,b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
-        setAccessRequests(items);
-        setAccessLoading(false);
-      }, err => { setAccessError(err?.message || 'Failed to load access requests'); setAccessLoading(false); });
-      return () => { try { unsub(); } catch {} };
-    } catch (e:any) {
-      setAccessError(e.message || 'Failed to load access requests');
-      setAccessLoading(false);
-    }
-  }, []);
-  // Load list of ministry accounts needing (re)approval on mount
-  useEffect(() => {
-    loadMinistryAccountsNeedingApproval();
-  }, [loadMinistryAccountsNeedingApproval]);
+  // REMOVED: Ministry access requests listener - ministry app now operates independently
+  // useEffect(() => {
+  //   try {
+  //     setAccessLoading(true);
+  //     const qReq = query(
+  //       collection(db, 'ministryAccessRequests'),
+  //       where('status', '==', 'pending'),
+  //       limit(200)
+  //     );
+  //     const unsub = onSnapshot(qReq, snap => {
+  //       const items = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
+  //       items.sort((a,b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+  //       setAccessRequests(items);
+  //       setAccessLoading(false);
+  //     }, err => { setAccessError(err?.message || 'Failed to load access requests'); setAccessLoading(false); });
+  //     return () => { try { unsub(); } catch {} };
+  //   } catch (e:any) {
+  //     setAccessError(e.message || 'Failed to load access requests');
+  //     setAccessLoading(false);
+  //   }
+  // }, []);
+  // REMOVED: Ministry accounts needing approval - no longer needed
+  // useEffect(() => {
+  //   loadMinistryAccountsNeedingApproval();
+  // }, [loadMinistryAccountsNeedingApproval]);
 
 
   // Load SuperAdmin notifications (realtime)
@@ -435,86 +454,84 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
       console.error('Failed to mark notification as read:', e);
     }
   }, []);
-  // Reapprove a single ministry account (force set status=approved)
-  const reapproveMinistryUser = useCallback(async (u: any) => {
-    try {
-      setReapproveWorkingUid(u.id);
-      const userRef = doc(db, 'users', u.id);
-      await updateDoc(userRef, {
-        'ministryAccess.status': 'approved',
-        'ministryAccess.approvedAt': new Date().toISOString(),
-        'ministryAccess.updatedAt': new Date().toISOString(),
-        'ministryAccess.approvedBy': userProfile?.uid || 'superadmin',
-        'ministryAccess.approvedByName': userProfile?.displayName || 'SuperAdmin'
-      } as any);
-      setMinistryAccountsNeedingApproval(prev => prev.filter(x => x.id !== u.id));
-    } catch (e) {
-      console.error('Failed to reapprove ministry user', e);
-    } finally {
-      setReapproveWorkingUid(null);
-    }
-  }, [userProfile?.uid, userProfile?.displayName]);
+  // REMOVED: Ministry approval functions - ministry app now operates independently
+  // const reapproveMinistryUser = useCallback(async (u: any) => {
+  //   try {
+  //     setReapproveWorkingUid(u.id);
+  //     const userRef = doc(db, 'users', u.id);
+  //     await updateDoc(userRef, {
+  //       'ministryAccess.status': 'approved',
+  //       'ministryAccess.approvedAt': new Date().toISOString(),
+  //       'ministryAccess.updatedAt': new Date().toISOString(),
+  //       'ministryAccess.approvedBy': userProfile?.uid || 'superadmin',
+  //       'ministryAccess.approvedByName': userProfile?.displayName || 'SuperAdmin'
+  //     } as any);
+  //     setMinistryAccountsNeedingApproval(prev => prev.filter(x => x.id !== u.id));
+  //   } catch (e) {
+  //     console.error('Failed to reapprove ministry user', e);
+  //   } finally {
+  //     setReapproveWorkingUid(null);
+  //   }
+  // }, [userProfile?.uid, userProfile?.displayName]);
 
-  // Reapprove all listed ministry accounts
-  const reapproveAllMinistryUsers = useCallback(async () => {
-    if (!ministryAccountsNeedingApproval.length) return;
-    setReapproveAllLoading(true);
-    try {
-      for (const u of ministryAccountsNeedingApproval) {
-        // eslint-disable-next-line no-await-in-loop
-        await reapproveMinistryUser(u);
-      }
-    } catch (e) {
-      console.error('Failed to reapprove all ministry users', e);
-    } finally {
-      setReapproveAllLoading(false);
-    }
-  }, [ministryAccountsNeedingApproval, reapproveMinistryUser]);
+  // const reapproveAllMinistryUsers = useCallback(async () => {
+  //   if (!ministryAccountsNeedingApproval.length) return;
+  //   setReapproveAllLoading(true);
+  //   try {
+  //     for (const u of ministryAccountsNeedingApproval) {
+  //       // eslint-disable-next-line no-await-in-loop
+  //       await reapproveMinistryUser(u);
+  //     }
+  //   } catch (e) {
+  //     console.error('Failed to reapprove all ministry users', e);
+  //   } finally {
+  //     setReapproveAllLoading(false);
+  //   }
+  // }, [ministryAccountsNeedingApproval, reapproveMinistryUser]);
 
+  // const approveAccess = useCallback(async (req: any) => {
+  //   try {
+  //     await ministryAccessService.approveRequest(req.id, { uid: 'superadmin', name: 'SuperAdmin' });
+  //     // Notify requester in their ministry church context if available, else admin's church
+  //     const churchId = req.ministryChurchId || req.requesterChurchId || (admins.find(a => a.uid === req.requesterUid)?.churchId) || null;
+  //     if (churchId) {
+  //       // Scope notifications to that church for delivery
+  //       setNotificationContext({} as any, churchId);
+  //       await notificationService.createForRecipients([
+  //         req.requesterUid
+  //       ], 'system_message' as any, 'Ministry access approved', { description: 'Your ministry account has been approved. You can now view cross-church ministry data.' }, undefined, { id: 'superadmin', name: 'SuperAdmin' });
+  //     }
+  //
+  //     // Mark related notification as read
+  //     const relatedNotification = superAdminNotifications.find(n => n.requestId === req.id);
+  //     if (relatedNotification) {
+  //       await markNotificationAsRead(relatedNotification.id);
+  //     }
+  //   } catch (e:any) {
+  //     setAccessError(e.message || 'Failed to approve request');
+  //   }
+  // }, [admins, superAdminNotifications, markNotificationAsRead]);
 
-  const approveAccess = useCallback(async (req: any) => {
-    try {
-      await ministryAccessService.approveRequest(req.id, { uid: 'superadmin', name: 'SuperAdmin' });
-      // Notify requester in their ministry church context if available, else admin's church
-      const churchId = req.ministryChurchId || req.requesterChurchId || (admins.find(a => a.uid === req.requesterUid)?.churchId) || null;
-      if (churchId) {
-        // Scope notifications to that church for delivery
-        setNotificationContext({} as any, churchId);
-        await notificationService.createForRecipients([
-          req.requesterUid
-        ], 'system_message' as any, 'Ministry access approved', { description: 'Your ministry account has been approved. You can now view cross-church ministry data.' }, undefined, { id: 'superadmin', name: 'SuperAdmin' });
-      }
-
-      // Mark related notification as read
-      const relatedNotification = superAdminNotifications.find(n => n.requestId === req.id);
-      if (relatedNotification) {
-        await markNotificationAsRead(relatedNotification.id);
-      }
-    } catch (e:any) {
-      setAccessError(e.message || 'Failed to approve request');
-    }
-  }, [admins, superAdminNotifications, markNotificationAsRead]);
-
-  const rejectAccess = useCallback(async (req: any) => {
-    try {
-      await ministryAccessService.rejectRequest(req.id, { uid: 'superadmin', name: 'SuperAdmin' });
-      const churchId = req.ministryChurchId || req.requesterChurchId || (admins.find(a => a.uid === req.requesterUid)?.churchId) || null;
-      if (churchId) {
-        setNotificationContext({} as any, churchId);
-        await notificationService.createForRecipients([
-          req.requesterUid
-        ], 'system_message' as any, 'Ministry access rejected', { description: 'Your ministry access request was rejected. Contact SuperAdmin for details.' }, undefined, { id: 'superadmin', name: 'SuperAdmin' });
-      }
-
-      // Mark related notification as read
-      const relatedNotification = superAdminNotifications.find(n => n.requestId === req.id);
-      if (relatedNotification) {
-        await markNotificationAsRead(relatedNotification.id);
-      }
-    } catch (e:any) {
-      setAccessError(e.message || 'Failed to reject request');
-    }
-  }, [admins, superAdminNotifications, markNotificationAsRead]);
+  // const rejectAccess = useCallback(async (req: any) => {
+  //   try {
+  //     await ministryAccessService.rejectRequest(req.id, { uid: 'superadmin', name: 'SuperAdmin' });
+  //     const churchId = req.ministryChurchId || req.requesterChurchId || (admins.find(a => a.uid === req.requesterUid)?.churchId) || null;
+  //     if (churchId) {
+  //       setNotificationContext({} as any, churchId);
+  //       await notificationService.createForRecipients([
+  //         req.requesterUid
+  //       ], 'system_message' as any, 'Ministry access rejected', { description: 'Your ministry access request was rejected. Contact SuperAdmin for details.' }, undefined, { id: 'superadmin', name: 'SuperAdmin' });
+  //     }
+  //
+  //     // Mark related notification as read
+  //     const relatedNotification = superAdminNotifications.find(n => n.requestId === req.id);
+  //     if (relatedNotification) {
+  //       await markNotificationAsRead(relatedNotification.id);
+  //     }
+  //   } catch (e:any) {
+  //     setAccessError(e.message || 'Failed to reject request');
+  //   }
+  // }, [admins, superAdminNotifications, markNotificationAsRead]);
 
   // Leaders realtime listener (enabled when viewing leaders)
   useEffect(() => {
@@ -992,6 +1009,29 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
     return admins.filter(a => (a as any).campusId === selectedCampus.id);
   }, [admins, selectedCampus]);
 
+  // Restore unassigned ministry
+  const restoreMinistry = async (ministry: AdminUserRecord) => {
+    try {
+      setUpdating(ministry.id, true);
+      await updateDoc(doc(db, 'users', ministry.id), {
+        isDeleted: false,
+        isActive: true,
+        lastUpdated: Timestamp.now()
+      });
+
+      // Move from unassigned to active
+      setUnassignedMinistries(prev => prev.filter(m => m.id !== ministry.id));
+      setMinistryAccounts(prev => [...prev, { ...ministry, isDeleted: false, isActive: true }]);
+
+      // Also update admins list
+      setAdmins(prev => [...prev, { ...ministry, isDeleted: false, isActive: true }]);
+    } catch (e: any) {
+      setError(e.message || 'Failed to restore ministry');
+    } finally {
+      setUpdating(ministry.id, false);
+    }
+  };
+
   // (Removed legacy read-only constituency detail; full impersonation implemented instead)
 
   return (
@@ -1026,14 +1066,14 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
 
               <button
                 onClick={refreshAllData}
-                disabled={loading || memberCountsLoading || accessLoading}
+                disabled={loading || memberCountsLoading}
                 className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold bg-gradient-to-r from-indigo-500 to-blue-600 text-white shadow-lg hover:shadow-xl hover:from-indigo-600 hover:to-blue-700 focus:outline-none focus:ring-2 focus:ring-indigo-400 disabled:opacity-50 transition-all duration-200"
-                title="Refresh all data including stats, member counts, and access requests"
+                title="Refresh all data including stats and member counts"
               >
-                {(loading || memberCountsLoading || accessLoading) && (
+                {(loading || memberCountsLoading) && (
                   <span className="w-4 h-4 border-2 border-white/60 border-t-transparent rounded-full animate-spin"/>
                 )}
-                <span>{(loading || memberCountsLoading || accessLoading) ? 'Refreshing…' : 'Refresh'}</span>
+                <span>{(loading || memberCountsLoading) ? 'Refreshing…' : 'Refresh'}</span>
               </button>
 
               {!selectedCampus && (
@@ -1107,6 +1147,21 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
                   </svg>
                   Admins ({admins.length})
+                </span>
+              </button>
+              <button
+                onClick={() => setViewMode('ministries')}
+                className={`px-6 py-3 rounded-xl text-sm font-semibold transition-all duration-300 ${
+                  viewMode === 'ministries'
+                    ? 'bg-gradient-to-r from-purple-500 to-indigo-600 text-white shadow-lg transform scale-105'
+                    : 'text-gray-600 dark:text-dark-300 hover:text-gray-900 dark:hover:text-white hover:bg-white/50 dark:hover:bg-dark-500/50'
+                }`}
+              >
+                <span className="flex items-center gap-2">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                  </svg>
+                  Ministries ({ministryAccounts.length})
                 </span>
               </button>
               <button
@@ -1259,91 +1314,8 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
           </div>
         )}
 
-        {/* Ministry Accounts Not Fetching (Reapprove) - Dashboard */}
-        {!selectedCampus && viewMode === 'dashboard' && (
-          <div className="lg:col-span-3 mb-8">
-            <div className="bg-white dark:bg-dark-800 rounded-xl shadow-sm border border-gray-200/70 dark:border-dark-700 overflow-hidden">
-              <div className="px-4 sm:px-6 py-4 border-b border-gray-200/60 dark:border-dark-700 flex items-center justify-between">
-                <div>
-                  <h2 className="text-base sm:text-lg font-semibold">Fix Ministry Accounts Not Fetching</h2>
-                  <p className="text-xs text-gray-500">Reapprove ministry accounts that have a ministry selected but are not approved</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-gray-500">{ministryAccountsNeedingApproval.length} to fix</span>
-                  <button
-                    onClick={reapproveAllMinistryUsers}
-                    disabled={!ministryAccountsNeedingApproval.length || reapproveAllLoading}
-                    className={`px-3 py-1.5 text-xs rounded-md ${(!ministryAccountsNeedingApproval.length || reapproveAllLoading) ? 'bg-gray-300 text-gray-600' : 'bg-blue-600 text-white'}`}
-                  >
-                    {reapproveAllLoading ? 'Reapproving…' : 'Reapprove All'}
-                  </button>
-                </div>
-              </div>
-              {ministryAccountsNeedingApproval.length === 0 ? (
-                <div className="px-4 sm:px-6 py-6 text-sm text-gray-500">All ministry accounts look good.</div>
-              ) : (
-                <div className="divide-y divide-gray-100 dark:divide-dark-700">
-                  {ministryAccountsNeedingApproval.slice(0, 10).map(u => (
-                    <div key={u.id} className="px-4 sm:px-6 py-4 flex items-center justify-between gap-4">
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium truncate">{u.displayName || u.email || u.id}</span>
-                          <span className="text-[10px] px-2 py-0.5 rounded-full border bg-red-50 text-red-700 border-red-200">NOT APPROVED</span>
-                        </div>
-                        <div className="text-xs text-gray-500 truncate">Ministry: {u?.preferences?.ministryName || '—'}</div>
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <button
-                          onClick={() => reapproveMinistryUser(u)}
-                          disabled={reapproveWorkingUid === u.id}
-                          className={`px-3 py-1.5 text-xs rounded-md ${reapproveWorkingUid === u.id ? 'bg-gray-300 text-gray-600' : 'bg-green-600 text-white'}`}
-                        >
-                          {reapproveWorkingUid === u.id ? 'Working…' : 'Reapprove'}
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                  {ministryAccountsNeedingApproval.length > 10 && (
-                    <div className="px-4 sm:px-6 py-3 text-xs text-gray-500">Showing first 10 of {ministryAccountsNeedingApproval.length}. Use Reapprove All to fix the rest.</div>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Ministry Access Requests - Only show on Dashboard tab */}
-        {!selectedCampus && viewMode === 'dashboard' && accessRequests.length > 0 && (
-          <div className="lg:col-span-3 mb-8">
-            <div className="bg-white dark:bg-dark-800 rounded-xl shadow-sm border border-gray-200/70 dark:border-dark-700 overflow-hidden">
-              <div className="px-4 sm:px-6 py-4 border-b border-gray-200/60 dark:border-dark-700 flex items-center justify-between">
-                <div>
-                  <h2 className="text-base sm:text-lg font-semibold">Ministry Access Requests</h2>
-                  <p className="text-xs text-gray-500">Approve or reject access to cross-church ministry data</p>
-                </div>
-                {accessLoading && <span className="text-xs text-gray-500">Loading…</span>}
-              </div>
-              {accessError && <div className="px-4 sm:px-6 py-2 text-sm text-red-600">{accessError}</div>}
-              <div className="divide-y divide-gray-100 dark:divide-dark-700">
-                {accessRequests.map(req => (
-                  <div key={req.id} className="px-4 sm:px-6 py-4 flex items-center justify-between gap-4">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium truncate">{req.requesterName || req.requesterEmail || req.requesterUid}</span>
-                        <span className={`text-[10px] px-2 py-0.5 rounded-full border bg-amber-50 text-amber-700 border-amber-200`}>PENDING</span>
-                      </div>
-                      <div className="text-xs text-gray-500 truncate">Ministry: {req.ministryName || '—'}</div>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <button onClick={() => approveAccess(req)} className="px-3 py-1.5 text-xs rounded-md bg-green-600 text-white">Approve</button>
-                      <button onClick={() => rejectAccess(req)} className="px-3 py-1.5 text-xs rounded-md bg-red-600 text-white">Reject</button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
+        {/* REMOVED: Ministry Accounts Reapproval - ministry app now operates independently */}
+        {/* REMOVED: Ministry Access Requests - ministry app now operates independently */}
 
 
 
@@ -1801,6 +1773,163 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
               {leadersLoading && (
                 <div className="p-4 text-center text-xs text-gray-500 dark:text-dark-300">Loading leaders...</div>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* Ministries View */}
+        {viewMode === 'ministries' && (
+          <div className="space-y-6">
+            {/* Active Ministries */}
+            <div className="glass rounded-2xl shadow-xl overflow-hidden border border-gray-200/40 dark:border-dark-600/40">
+              <div className="px-5 py-4 border-b border-gray-200/40 dark:border-dark-600/40 bg-white/60 dark:bg-dark-800/60 backdrop-blur-sm">
+                <div className="flex items-center justify-between">
+                  <h2 className="font-semibold text-gray-800 dark:text-white text-lg flex items-center gap-2">
+                    <span className="text-purple-500">▣</span> Active Ministries
+                  </h2>
+                  <span className="px-2 py-0.5 rounded-lg bg-gray-100 dark:bg-dark-700 text-gray-700 dark:text-dark-200 text-xs font-medium">{ministryAccounts.length}</span>
+                </div>
+              </div>
+              <div className="overflow-x-auto custom-scrollbar max-h-[50vh]">
+                <table className="min-w-full text-[13px]">
+                  <thead>
+                    <tr className="text-left text-[11px] uppercase tracking-wider text-gray-500 dark:text-dark-300 bg-gray-50/70 dark:bg-dark-700/70">
+                      <th className="px-4 py-3 font-semibold w-10">#</th>
+                      <th className="px-5 py-3 font-semibold">Admin</th>
+                      <th className="px-5 py-3 font-semibold">Ministry</th>
+                      <th className="px-5 py-3 font-semibold">Members</th>
+                      <th className="px-5 py-3 font-semibold">Status</th>
+                      <th className="px-5 py-3 font-semibold">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100/60 dark:divide-dark-600/40">
+                    {ministryAccounts.map((m, idx) => (
+                      <tr
+                        key={m.id}
+                        className="group hover:bg-purple-50/60 dark:hover:bg-purple-900/20 cursor-pointer"
+                        onClick={(e) => { if ((e.target as HTMLElement).closest('button')) return; if (m.churchId) startImpersonation((m as any).uid || m.id, m.churchId!); }}
+                        title={m.churchId ? 'Enter app (impersonate)' : ''}
+                      >
+                        <td className="px-4 py-3 text-right text-gray-500 dark:text-dark-300">{idx + 1}</td>
+                        <td className="px-5 py-3 whitespace-nowrap">
+                          <div className="flex flex-col leading-tight">
+                            <span className="font-medium text-gray-800 dark:text-dark-100">{m.displayName || m.email || '—'}</span>
+                            <span className="text-[11px] text-gray-500 dark:text-dark-300">{m.email || '—'}</span>
+                          </div>
+                        </td>
+                        <td className="px-5 py-3 text-gray-700 dark:text-dark-300">
+                          <span className="font-medium">{m.preferences?.ministryName || m.churchName || '—'}</span>
+                        </td>
+                        <td className="px-5 py-3 whitespace-nowrap text-gray-700 dark:text-dark-300">
+                          {m.churchId ? (
+                            m.memberCount != null ? (
+                              m.memberCount >= 0 ? (
+                                <span className="font-semibold">{m.memberCount}</span>
+                              ) : (
+                                <span className="text-[11px] text-orange-500">!</span>
+                              )
+                            ) : (
+                              <span className="text-[11px] text-gray-400">…</span>
+                            )
+                          ) : <span className="text-[11px] text-gray-400">—</span>}
+                        </td>
+                        <td className="px-5 py-3"><StatusBadge active={m.isActive !== false} /></td>
+                        <td className="px-5 py-3 whitespace-nowrap">
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => toggleActiveStatus(m)}
+                              disabled={updatingIds[m.id]}
+                              className={`px-2.5 py-1 rounded-md text-[11px] font-semibold shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed
+                                ${m.isActive !== false
+                                  ? 'bg-yellow-500 hover:bg-yellow-600 text-white'
+                                  : 'bg-green-600 hover:bg-green-700 text-white'}`}
+                            >
+                              {updatingIds[m.id] ? '...' : (m.isActive !== false ? 'Deactivate' : 'Activate')}
+                            </button>
+                            <button
+                              onClick={() => softDeleteAdmin(m)}
+                              disabled={updatingIds[m.id]}
+                              className="px-2.5 py-1 rounded-md text-[11px] font-semibold bg-red-600 hover:bg-red-700 text-white shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              {updatingIds[m.id] ? '...' : 'Delete'}
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                    {ministryAccounts.length === 0 && (
+                      <tr>
+                        <td className="px-5 py-10 text-center text-gray-500 dark:text-dark-300" colSpan={6}>No active ministry accounts found</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Unassigned Ministries */}
+            <div className="glass rounded-2xl shadow-xl overflow-hidden border border-orange-200/40 dark:border-orange-600/40">
+              <div className="px-5 py-4 border-b border-orange-200/40 dark:border-orange-600/40 bg-orange-50/60 dark:bg-orange-900/20 backdrop-blur-sm">
+                <div className="flex items-center justify-between">
+                  <h2 className="font-semibold text-gray-800 dark:text-white text-lg flex items-center gap-2">
+                    <span className="text-orange-500">⚠</span> Unassigned Ministries
+                  </h2>
+                  <span className="px-2 py-0.5 rounded-lg bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300 text-xs font-medium">{unassignedMinistries.length}</span>
+                </div>
+                <p className="text-xs text-gray-600 dark:text-dark-300 mt-2">These ministry accounts have been deleted. You can restore them to make them active again.</p>
+              </div>
+              <div className="overflow-x-auto custom-scrollbar max-h-[40vh]">
+                <table className="min-w-full text-[13px]">
+                  <thead>
+                    <tr className="text-left text-[11px] uppercase tracking-wider text-gray-500 dark:text-dark-300 bg-gray-50/70 dark:bg-dark-700/70">
+                      <th className="px-4 py-3 font-semibold w-10">#</th>
+                      <th className="px-5 py-3 font-semibold">Admin</th>
+                      <th className="px-5 py-3 font-semibold">Ministry</th>
+                      <th className="px-5 py-3 font-semibold">Deleted At</th>
+                      <th className="px-5 py-3 font-semibold">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100/60 dark:divide-dark-600/40">
+                    {unassignedMinistries.map((m, idx) => {
+                      const created = m.createdAt?.toDate ? m.createdAt.toDate() : (m.createdAt ? new Date(m.createdAt) : null);
+                      return (
+                        <tr key={m.id} className="group hover:bg-orange-50/60 dark:hover:bg-orange-900/20">
+                          <td className="px-4 py-3 text-right text-gray-500 dark:text-dark-300">{idx + 1}</td>
+                          <td className="px-5 py-3 whitespace-nowrap">
+                            <div className="flex flex-col leading-tight">
+                              <span className="font-medium text-gray-800 dark:text-dark-100">{m.displayName || m.email || '—'}</span>
+                              <span className="text-[11px] text-gray-500 dark:text-dark-300">{m.email || '—'}</span>
+                            </div>
+                          </td>
+                          <td className="px-5 py-3 text-gray-700 dark:text-dark-300">
+                            <span className="font-medium">{m.preferences?.ministryName || m.churchName || '—'}</span>
+                          </td>
+                          <td className="px-5 py-3 text-gray-500 dark:text-dark-400 whitespace-nowrap">{created ? created.toLocaleDateString() : '—'}</td>
+                          <td className="px-5 py-3 whitespace-nowrap">
+                            <button
+                              onClick={() => restoreMinistry(m)}
+                              disabled={updatingIds[m.id]}
+                              className="px-3 py-1.5 rounded-md text-[11px] font-semibold bg-green-600 hover:bg-green-700 text-white shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              {updatingIds[m.id] ? 'Restoring...' : 'Restore'}
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {unassignedMinistries.length === 0 && (
+                      <tr>
+                        <td className="px-5 py-10 text-center text-gray-500 dark:text-dark-300" colSpan={5}>
+                          <div className="flex flex-col items-center gap-2">
+                            <span className="text-2xl">✅</span>
+                            <span>No unassigned ministries</span>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         )}

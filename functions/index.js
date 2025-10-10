@@ -493,538 +493,558 @@ async function cleanupInvalidTokens(failedTokens, churchId) {
   }
 }
 
+// DISABLED: Helper functions for ministry sync removed for ministry independence
+//
 // Helper: resolve owner mapping and ministry church for a given church
-async function getOwnerChurchMapping(churchId) {
-  const db = admin.firestore();
-  try {
-    const churchRef = db.doc(`churches/${churchId}`);
-    const churchSnap = await churchRef.get();
-    if (!churchSnap.exists) return null;
-    const church = churchSnap.data() || {};
-    const ownerId = church.ownerId;
-    if (!ownerId) return null;
-    const userSnap = await db.doc(`users/${ownerId}`).get();
-    if (!userSnap.exists) return null;
-    const user = userSnap.data() || {};
-    const ctx = (user && user.contexts) || {};
-    const defaultChurchId = ctx.defaultChurchId || user.churchId;
-    const ministryChurchId = ctx.ministryChurchId;
-    if (!defaultChurchId || !ministryChurchId) return null;
-    return { ownerId, defaultChurchId, ministryChurchId };
-  } catch (e) {
-    console.error('getOwnerChurchMapping failed for', churchId, e);
-    return null;
-  }
-}
+// async function getOwnerChurchMapping(churchId) {
+//   const db = admin.firestore();
+//   try {
+//     const churchRef = db.doc(`churches/${churchId}`);
+//     const churchSnap = await churchRef.get();
+//     if (!churchSnap.exists) return null;
+//     const church = churchSnap.data() || {};
+//     const ownerId = church.ownerId;
+//     if (!ownerId) return null;
+//     const userSnap = await db.doc(`users/${ownerId}`).get();
+//     if (!userSnap.exists) return null;
+//     const user = userSnap.data() || {};
+//     const ctx = (user && user.contexts) || {};
+//     const defaultChurchId = ctx.defaultChurchId || user.churchId;
+//     const ministryChurchId = ctx.ministryChurchId;
+//     if (!defaultChurchId || !ministryChurchId) return null;
+//     return { ownerId, defaultChurchId, ministryChurchId };
+//   } catch (e) {
+//     console.error('getOwnerChurchMapping failed for', churchId, e);
+//     return null;
+//   }
+// }
+//
+// // Helper function to find all ministry churches with a specific ministry
+// async function findMinistryChurchesWithMinistry(db, ministryName) {
+//   try {
+//     const usersSnapshot = await db.collection('users')
+//       .where('isMinistryAccount', '==', true)
+//       .where('preferences.ministryName', '==', ministryName)
+//       .get();
+//
+//     const ministryChurchIds = [];
+//     usersSnapshot.docs.forEach(doc => {
+//       const userData = doc.data();
+//       const ministryChurchId = userData.contexts?.ministryChurchId || userData.churchId;
+//       if (ministryChurchId && !ministryChurchIds.includes(ministryChurchId)) {
+//         ministryChurchIds.push(ministryChurchId);
+//       }
+//     });
+//
+//     return ministryChurchIds;
+//   } catch (e) {
+//     console.error('findMinistryChurchesWithMinistry failed', e);
+//     return [];
+//   }
+// }
+//
+// // Helper function to sync member to all matching ministry churches
+// async function syncToMatchingMinistryChurches(db, memberId, memberData, sourceChurchId) {
+//   try {
+//     const ministryName = memberData.ministry;
+//     if (!ministryName) return;
+//
+//     const ministryChurchIds = await findMinistryChurchesWithMinistry(db, ministryName);
+//
+//     const batch = db.batch();
+//     let batchCount = 0;
+//
+//     for (const ministryChurchId of ministryChurchIds) {
+//       const targetRef = db.doc(`churches/${ministryChurchId}/members/${memberId}`);
+//       const payload = {
+//         ...memberData,
+//         bacentaId: '', // Detach from bacenta structure in ministry context
+//         syncedFrom: {
+//           churchId: sourceChurchId,
+//           at: new Date().toISOString()
+//         },
+//         syncOrigin: 'default'
+//       };
+//
+//       batch.set(targetRef, payload, { merge: true });
+//       batchCount++;
+//
+//       // Commit in chunks to respect Firestore limits
+//       if (batchCount >= 450) {
+//         await batch.commit();
+//         batchCount = 0;
+//       }
+//     }
+//
+//     if (batchCount > 0) {
+//       await batch.commit();
+//     }
+//   } catch (e) {
+//     console.error('syncToMatchingMinistryChurches failed', e);
+//   }
+// }
+//
+// // Helper function to remove member from all ministry churches
+// async function removeFromAllMinistryChurches(db, memberId, ministryName) {
+//   try {
+//     if (!ministryName) return;
+//
+//     const ministryChurchIds = await findMinistryChurchesWithMinistry(db, ministryName);
+//
+//     const batch = db.batch();
+//     let batchCount = 0;
+//
+//     for (const ministryChurchId of ministryChurchIds) {
+//       const targetRef = db.doc(`churches/${ministryChurchId}/members/${memberId}`);
+//       batch.delete(targetRef);
+//       batchCount++;
+//
+//       // Commit in chunks to respect Firestore limits
+//       if (batchCount >= 450) {
+//         await batch.commit();
+//         batchCount = 0;
+//       }
+//     }
+//
+//     if (batchCount > 0) {
+//       await batch.commit();
+//     }
+//   } catch (e) {
+//     console.error('removeFromAllMinistryChurches failed', e);
+//   }
+// }
 
-// Helper function to find all ministry churches with a specific ministry
-async function findMinistryChurchesWithMinistry(db, ministryName) {
-  try {
-    const usersSnapshot = await db.collection('users')
-      .where('isMinistryAccount', '==', true)
-      .where('preferences.ministryName', '==', ministryName)
-      .get();
-
-    const ministryChurchIds = [];
-    usersSnapshot.docs.forEach(doc => {
-      const userData = doc.data();
-      const ministryChurchId = userData.contexts?.ministryChurchId || userData.churchId;
-      if (ministryChurchId && !ministryChurchIds.includes(ministryChurchId)) {
-        ministryChurchIds.push(ministryChurchId);
-      }
-    });
-
-    return ministryChurchIds;
-  } catch (e) {
-    console.error('findMinistryChurchesWithMinistry failed', e);
-    return [];
-  }
-}
-
-// Helper function to sync member to all matching ministry churches
-async function syncToMatchingMinistryChurches(db, memberId, memberData, sourceChurchId) {
-  try {
-    const ministryName = memberData.ministry;
-    if (!ministryName) return;
-
-    const ministryChurchIds = await findMinistryChurchesWithMinistry(db, ministryName);
-
-    const batch = db.batch();
-    let batchCount = 0;
-
-    for (const ministryChurchId of ministryChurchIds) {
-      const targetRef = db.doc(`churches/${ministryChurchId}/members/${memberId}`);
-      const payload = {
-        ...memberData,
-        bacentaId: '', // Detach from bacenta structure in ministry context
-        syncedFrom: {
-          churchId: sourceChurchId,
-          at: new Date().toISOString()
-        },
-        syncOrigin: 'default'
-      };
-
-      batch.set(targetRef, payload, { merge: true });
-      batchCount++;
-
-      // Commit in chunks to respect Firestore limits
-      if (batchCount >= 450) {
-        await batch.commit();
-        batchCount = 0;
-      }
-    }
-
-    if (batchCount > 0) {
-      await batch.commit();
-    }
-  } catch (e) {
-    console.error('syncToMatchingMinistryChurches failed', e);
-  }
-}
-
-// Helper function to remove member from all ministry churches
-async function removeFromAllMinistryChurches(db, memberId, ministryName) {
-  try {
-    if (!ministryName) return;
-
-    const ministryChurchIds = await findMinistryChurchesWithMinistry(db, ministryName);
-
-    const batch = db.batch();
-    let batchCount = 0;
-
-    for (const ministryChurchId of ministryChurchIds) {
-      const targetRef = db.doc(`churches/${ministryChurchId}/members/${memberId}`);
-      batch.delete(targetRef);
-      batchCount++;
-
-      // Commit in chunks to respect Firestore limits
-      if (batchCount >= 450) {
-        await batch.commit();
-        batchCount = 0;
-      }
-    }
-
-    if (batchCount > 0) {
-      await batch.commit();
-    }
-  } catch (e) {
-    console.error('removeFromAllMinistryChurches failed', e);
-  }
-}
-
+// DISABLED: Automatic sync removed for ministry independence
+// Ministry app now operates as a completely standalone system
+// Members must be manually added to ministry churches by ministry leaders
+//
 // Enhanced sync: members from DEFAULT church to ALL MINISTRY churches with matching ministry
-exports.syncMemberToMinistry = functions.firestore
-  .document('churches/{churchId}/members/{memberId}')
-  .onWrite(async (change, context) => {
-    const { churchId, memberId } = context.params;
-    const db = admin.firestore();
-    try {
-      const mapping = await getOwnerChurchMapping(churchId);
-      if (!mapping) return;
-      const { defaultChurchId, ministryChurchId } = mapping;
-      // Only act for writes against the DEFAULT church; avoid loops on ministry side
-      if (churchId !== defaultChurchId) return;
-
-      const before = change.before.exists ? change.before.data() : null;
-      const after = change.after.exists ? change.after.data() : null;
-
-      // If deleted in default, remove from all ministry churches
-      if (!after) {
-        await removeFromAllMinistryChurches(db, memberId, before?.ministry);
-        return;
-      }
-
-      const hasMinistry = typeof after.ministry === 'string' && after.ministry.trim() !== '';
-      const isActive = after.isActive !== false; // default true
-
-      // If no ministry or inactive, remove from all ministry churches
-      if (!hasMinistry || !isActive) {
-        await removeFromAllMinistryChurches(db, memberId, before?.ministry || after.ministry);
-        return;
-      }
-
-      // Sync to all ministry churches with matching ministry
-      await syncToMatchingMinistryChurches(db, memberId, after, defaultChurchId);
-
-      // Also handle ministry change - remove from old ministry churches if ministry changed
-      if (before && before.ministry && before.ministry !== after.ministry) {
-        await removeFromAllMinistryChurches(db, memberId, before.ministry);
-      }
-    } catch (e) {
-      console.error('syncMemberToMinistry failed', churchId, memberId, e);
-    }
-  });
-
-      // Callable to backfill existing members from default -> ministry for the calling admin
-      exports.backfillMinistrySync = functions.https.onCall(async (data, context) => {
-        if (!context.auth) {
-          throw new functions.https.HttpsError('unauthenticated', 'Authentication required');
-        }
-        const uid = context.auth.uid;
-        const db = admin.firestore();
-        try {
-          const userSnap = await db.doc(`users/${uid}`).get();
-          if (!userSnap.exists) {
-            throw new functions.https.HttpsError('failed-precondition', 'User profile not found');
-          }
-          const user = userSnap.data() || {};
-          const ctx = (user && user.contexts) || {};
-          const defaultChurchId = ctx.defaultChurchId || user.churchId;
-          const ministryChurchId = ctx.ministryChurchId;
-          if (!defaultChurchId || !ministryChurchId) {
-            throw new functions.https.HttpsError('failed-precondition', 'User does not have both default and ministry churches');
-          }
-
-          // Enhanced backfill: sync members to ALL ministry churches with matching ministry
-          const membersSnap = await db.collection('churches').doc(defaultChurchId).collection('members').get();
-          let synced = 0;
-
-          for (const docSnap of membersSnap.docs) {
-            const m = docSnap.data() || {};
-            const hasMinistry = typeof m.ministry === 'string' && m.ministry.trim() !== '';
-            const isActive = m.isActive !== false;
-            if (!hasMinistry || !isActive) continue;
-
-            // Sync to all matching ministry churches
-            await syncToMatchingMinistryChurches(db, docSnap.id, m, defaultChurchId);
-            synced++;
-          }
-          return { success: true, synced };
-        } catch (e) {
-          console.error('backfillMinistrySync failed', e);
-          throw new functions.https.HttpsError('internal', e?.message || 'Backfill failed');
-        }
-      });
-
-      // Bidirectional sync: changes in ministry mode sync back to default church
-      exports.syncMinistryToDefault = functions.firestore
-        .document('churches/{churchId}/members/{memberId}')
-        .onWrite(async (change, context) => {
-          const { churchId, memberId } = context.params;
-          const db = admin.firestore();
-          try {
-            // Only act on ministry churches (those with ministry accounts)
-            const churchDoc = await db.doc(`churches/${churchId}`).get();
-            if (!churchDoc.exists) return;
-
-            const churchData = churchDoc.data() || {};
-            const ownerId = churchData.ownerId;
-            if (!ownerId) return;
-
-            const userDoc = await db.doc(`users/${ownerId}`).get();
-            if (!userDoc.exists) return;
-
-            const userData = userDoc.data() || {};
-            if (!userData.isMinistryAccount) return; // Only act on ministry churches
-
-            const after = change.after.exists ? change.after.data() : null;
-            const before = change.before.exists ? change.before.data() : null;
-
-            // Skip if this is a sync from default (avoid loops)
-            if (after && after.syncOrigin === 'default') return;
-
-            // Find the original default church for this member
-            const syncedFrom = after?.syncedFrom || before?.syncedFrom;
-            if (!syncedFrom || !syncedFrom.churchId) return;
-
-            const defaultChurchId = syncedFrom.churchId;
-            const defaultMemberRef = db.doc(`churches/${defaultChurchId}/members/${memberId}`);
-
-            // If deleted in ministry, don't delete in default (ministry is just a view)
-            if (!after) return;
-
-            // Sync back specific fields that can be updated in ministry mode
-            const allowedFields = ['ministry', 'firstName', 'lastName', 'phoneNumber', 'profilePicture'];
-            const updatePayload = {};
-            let hasUpdates = false;
-
-            for (const field of allowedFields) {
-              if (after[field] !== undefined) {
-                updatePayload[field] = after[field];
-                hasUpdates = true;
-              }
-            }
-
-            if (hasUpdates) {
-              updatePayload.lastUpdated = new Date().toISOString();
-              updatePayload.syncedFromMinistry = {
-                churchId: churchId,
-                at: new Date().toISOString()
-              };
-
-              await defaultMemberRef.set(updatePayload, { merge: true });
-            }
-          } catch (e) {
-            console.error('syncMinistryToDefault failed', churchId, memberId, e);
-          }
-        });
-
-      // Cross-ministry aggregation: when a new ministry account is created, sync all relevant members
-      exports.onMinistryAccountCreated = functions.firestore
-        .document('users/{userId}')
-        .onWrite(async (change, context) => {
-          const { userId } = context.params;
-          const db = admin.firestore();
-          try {
-            const after = change.after.exists ? change.after.data() : null;
-            const before = change.before.exists ? change.before.data() : null;
-
-            // Check if this is a new ministry account or ministry was just added
-            const isNewMinistryAccount = after && after.isMinistryAccount &&
-              (!before || !before.isMinistryAccount);
-            const ministryChanged = after && before &&
-              after.preferences?.ministryName !== before.preferences?.ministryName;
-
-            if (!isNewMinistryAccount && !ministryChanged) return;
-
-            const ministryName = after.preferences?.ministryName;
-            if (!ministryName) return;
-
-            const ministryChurchId = after.contexts?.ministryChurchId || after.churchId;
-            if (!ministryChurchId) return;
-
-            // Find all members across all default churches with this ministry
-            const allChurches = await db.collection('churches').get();
-            let synced = 0;
-
-            for (const churchDoc of allChurches.docs) {
-              const churchData = churchDoc.data() || {};
-              const ownerId = churchData.ownerId;
-              if (!ownerId) continue;
-
-              // Check if this is a default church (not ministry)
-              const ownerDoc = await db.doc(`users/${ownerId}`).get();
-              if (!ownerDoc.exists) continue;
-
-              const ownerData = ownerDoc.data() || {};
-              if (ownerData.isMinistryAccount) continue; // Skip ministry churches
-
-              // Get members with matching ministry from this church
-              const membersQuery = db.collection(`churches/${churchDoc.id}/members`)
-                .where('ministry', '==', ministryName)
-                .where('isActive', '!=', false);
-
-              const membersSnap = await membersQuery.get();
-
-              for (const memberDoc of membersSnap.docs) {
-                const memberData = memberDoc.data();
-                const targetRef = db.doc(`churches/${ministryChurchId}/members/${memberDoc.id}`);
-                const payload = {
-                  ...memberData,
-                  bacentaId: '', // Detach from bacenta structure in ministry context
-                  syncedFrom: {
-                    churchId: churchDoc.id,
-                    at: new Date().toISOString()
-                  },
-                  syncOrigin: 'default'
-                };
-
-                await targetRef.set(payload, { merge: true });
-                synced++;
-              }
-            }
-
-            console.log(`Synced ${synced} members to new ministry account for ${ministryName}`);
-          } catch (e) {
-            console.error('onMinistryAccountCreated failed', userId, e);
-          }
-        });
-
-      // Cross-ministry sync callable function
-      exports.crossMinistrySync = functions.https.onCall(async (data, context) => {
-        if (!context.auth) {
-          throw new functions.https.HttpsError('unauthenticated', 'Authentication required');
-        }
-        const uid = context.auth.uid;
-        const { ministryName } = data || {};
-        const db = admin.firestore();
-
-        try {
-          const userSnap = await db.doc(`users/${uid}`).get();
-          if (!userSnap.exists) {
-            throw new functions.https.HttpsError('failed-precondition', 'User profile not found');
-          }
-          const user = userSnap.data() || {};
-          if (!user.isMinistryAccount) {
-            throw new functions.https.HttpsError('failed-precondition', 'User is not a ministry account');
-          }
-
-          const targetMinistry = ministryName || user.preferences?.ministryName;
-          if (!targetMinistry) {
-            throw new functions.https.HttpsError('failed-precondition', 'No ministry specified');
-          }
-
-          const ministryChurchId = user.contexts?.ministryChurchId || user.churchId;
-          if (!ministryChurchId) {
-            throw new functions.https.HttpsError('failed-precondition', 'No ministry church found');
-          }
-
-          // Find all churches and sync members with matching ministry
-          const allChurches = await db.collection('churches').get();
-          let synced = 0;
-
-          for (const churchDoc of allChurches.docs) {
-            const churchData = churchDoc.data() || {};
-            const ownerId = churchData.ownerId;
-            if (!ownerId) continue;
-
-            // Check if this is a default church (not ministry)
-            const ownerDoc = await db.doc(`users/${ownerId}`).get();
-            if (!ownerDoc.exists) continue;
-
-            const ownerData = ownerDoc.data() || {};
-            if (ownerData.isMinistryAccount) continue; // Skip ministry churches
-
-            // Get members with matching ministry from this church
-            const membersQuery = db.collection(`churches/${churchDoc.id}/members`)
-              .where('ministry', '==', targetMinistry)
-              .where('isActive', '!=', false);
-
-            const membersSnap = await membersQuery.get();
-
-            const batch = db.batch();
-            let batchCount = 0;
-
-            for (const memberDoc of membersSnap.docs) {
-              const memberData = memberDoc.data();
-              const targetRef = db.doc(`churches/${ministryChurchId}/members/${memberDoc.id}`);
-              const payload = {
-                ...memberData,
-                bacentaId: '', // Detach from bacenta structure in ministry context
-                syncedFrom: {
-                  churchId: churchDoc.id,
-                  at: new Date().toISOString()
-                },
-                syncOrigin: 'default'
-              };
-
-              batch.set(targetRef, payload, { merge: true });
-              batchCount++;
-              synced++;
-
-              // Commit in chunks to respect Firestore limits
-              if (batchCount >= 450) {
-                await batch.commit();
-                batchCount = 0;
-              }
-            }
-
-            if (batchCount > 0) {
-              await batch.commit();
-            }
-          }
-
-          return { success: true, synced };
-        } catch (e) {
-          console.error('crossMinistrySync failed', e);
-          throw new functions.https.HttpsError('internal', e?.message || 'Cross-ministry sync failed');
-        }
-      });
-
-      // HTTP version of crossMinistrySync for CORS support
-      exports.crossMinistrySyncHttp = functions.https.onRequest(async (req, res) => {
-        setCors(req, res);
-        if (req.method === 'OPTIONS') {
-          return res.status(204).send('');
-        }
-        if (req.method !== 'POST') {
-          return res.status(405).json({ success: false, error: 'Method not allowed' });
-        }
-
-        try {
-          // Extract auth token
-          const authHeader = req.headers.authorization;
-          if (!authHeader || !authHeader.startsWith('Bearer ')) {
-            return res.status(401).json({ success: false, error: 'Unauthorized' });
-          }
-
-          const token = authHeader.split('Bearer ')[1];
-          const decodedToken = await admin.auth().verifyIdToken(token);
-          const uid = decodedToken.uid;
-
-          const { ministryName } = req.body || {};
-          const db = admin.firestore();
-
-          const userSnap = await db.doc(`users/${uid}`).get();
-          if (!userSnap.exists) {
-            return res.status(400).json({ success: false, error: 'User profile not found' });
-          }
-          const user = userSnap.data() || {};
-          if (!user.isMinistryAccount) {
-            return res.status(400).json({ success: false, error: 'User is not a ministry account' });
-          }
-
-          const targetMinistry = ministryName || user.preferences?.ministryName;
-          if (!targetMinistry) {
-            return res.status(400).json({ success: false, error: 'No ministry specified' });
-          }
-
-          const ministryChurchId = user.contexts?.ministryChurchId || user.churchId;
-          if (!ministryChurchId) {
-            return res.status(400).json({ success: false, error: 'No ministry church found' });
-          }
-
-          // Find all churches and sync members with matching ministry
-          const allChurches = await db.collection('churches').get();
-          let synced = 0;
-
-          for (const churchDoc of allChurches.docs) {
-            const churchData = churchDoc.data() || {};
-            const ownerId = churchData.ownerId;
-            if (!ownerId) continue;
-
-            // Check if this is a default church (not ministry)
-            const ownerDoc = await db.doc(`users/${ownerId}`).get();
-            if (!ownerDoc.exists) continue;
-
-            const ownerData = ownerDoc.data() || {};
-            if (ownerData.isMinistryAccount) continue; // Skip ministry churches
-
-            // Get members with matching ministry from this church
-            const membersQuery = db.collection(`churches/${churchDoc.id}/members`)
-              .where('ministry', '==', targetMinistry)
-              .where('isActive', '!=', false);
-
-            const membersSnap = await membersQuery.get();
-
-            const batch = db.batch();
-            let batchCount = 0;
-
-            for (const memberDoc of membersSnap.docs) {
-              const memberData = memberDoc.data();
-              const targetRef = db.doc(`churches/${ministryChurchId}/members/${memberDoc.id}`);
-              const payload = {
-                ...memberData,
-                bacentaId: '', // Detach from bacenta structure in ministry context
-                syncedFrom: {
-                  churchId: churchDoc.id,
-                  at: new Date().toISOString()
-                },
-                syncOrigin: 'default'
-              };
-
-              batch.set(targetRef, payload, { merge: true });
-              batchCount++;
-              synced++;
-
-              // Commit in chunks to respect Firestore limits
-              if (batchCount >= 450) {
-                await batch.commit();
-                batchCount = 0;
-              }
-            }
-
-            if (batchCount > 0) {
-              await batch.commit();
-            }
-          }
-
-          return res.status(200).json({ success: true, synced });
-        } catch (e) {
-          console.error('crossMinistrySyncHttp failed', e);
-          return res.status(500).json({ success: false, error: e?.message || 'Cross-ministry sync failed' });
-        }
-      });
+// exports.syncMemberToMinistry = functions.firestore
+//   .document('churches/{churchId}/members/{memberId}')
+//   .onWrite(async (change, context) => {
+//     const { churchId, memberId } = context.params;
+//     const db = admin.firestore();
+//     try {
+//       const mapping = await getOwnerChurchMapping(churchId);
+//       if (!mapping) return;
+//       const { defaultChurchId, ministryChurchId } = mapping;
+//       // Only act for writes against the DEFAULT church; avoid loops on ministry side
+//       if (churchId !== defaultChurchId) return;
+//
+//       const before = change.before.exists ? change.before.data() : null;
+//       const after = change.after.exists ? change.after.data() : null;
+//
+//       // If deleted in default, remove from all ministry churches
+//       if (!after) {
+//         await removeFromAllMinistryChurches(db, memberId, before?.ministry);
+//         return;
+//       }
+//
+//       const hasMinistry = typeof after.ministry === 'string' && after.ministry.trim() !== '';
+//       const isActive = after.isActive !== false; // default true
+//
+//       // If no ministry or inactive, remove from all ministry churches
+//       if (!hasMinistry || !isActive) {
+//         await removeFromAllMinistryChurches(db, memberId, before?.ministry || after.ministry);
+//         return;
+//       }
+//
+//       // Sync to all ministry churches with matching ministry
+//       await syncToMatchingMinistryChurches(db, memberId, after, defaultChurchId);
+//
+//       // Also handle ministry change - remove from old ministry churches if ministry changed
+//       if (before && before.ministry && before.ministry !== after.ministry) {
+//         await removeFromAllMinistryChurches(db, memberId, before.ministry);
+//       }
+//     } catch (e) {
+//       console.error('syncMemberToMinistry failed', churchId, memberId, e);
+//     }
+//   });
+
+// DISABLED: Manual backfill removed for ministry independence
+// Ministry leaders must manually add members to their ministry churches
+//
+// Callable to backfill existing members from default -> ministry for the calling admin
+// exports.backfillMinistrySync = functions.https.onCall(async (data, context) => {
+//   if (!context.auth) {
+//     throw new functions.https.HttpsError('unauthenticated', 'Authentication required');
+//   }
+//   const uid = context.auth.uid;
+//   const db = admin.firestore();
+//   try {
+//     const userSnap = await db.doc(`users/${uid}`).get();
+//     if (!userSnap.exists) {
+//       throw new functions.https.HttpsError('failed-precondition', 'User profile not found');
+//     }
+//     const user = userSnap.data() || {};
+//     const ctx = (user && user.contexts) || {};
+//     const defaultChurchId = ctx.defaultChurchId || user.churchId;
+//     const ministryChurchId = ctx.ministryChurchId;
+//     if (!defaultChurchId || !ministryChurchId) {
+//       throw new functions.https.HttpsError('failed-precondition', 'User does not have both default and ministry churches');
+//     }
+//
+//     // Enhanced backfill: sync members to ALL ministry churches with matching ministry
+//     const membersSnap = await db.collection('churches').doc(defaultChurchId).collection('members').get();
+//     let synced = 0;
+//
+//     for (const docSnap of membersSnap.docs) {
+//       const m = docSnap.data() || {};
+//       const hasMinistry = typeof m.ministry === 'string' && m.ministry.trim() !== '';
+//       const isActive = m.isActive !== false;
+//       if (!hasMinistry || !isActive) continue;
+//
+//       // Sync to all matching ministry churches
+//       await syncToMatchingMinistryChurches(db, docSnap.id, m, defaultChurchId);
+//       synced++;
+//     }
+//     return { success: true, synced };
+//   } catch (e) {
+//     console.error('backfillMinistrySync failed', e);
+//     throw new functions.https.HttpsError('internal', e?.message || 'Backfill failed');
+//   }
+// });
+
+// DISABLED: Bidirectional sync removed for ministry independence
+// Ministry app data does not sync back to main church system
+//
+// Bidirectional sync: changes in ministry mode sync back to default church
+// exports.syncMinistryToDefault = functions.firestore
+//   .document('churches/{churchId}/members/{memberId}')
+//   .onWrite(async (change, context) => {
+//     const { churchId, memberId } = context.params;
+//     const db = admin.firestore();
+//     try {
+//       // Only act on ministry churches (those with ministry accounts)
+//       const churchDoc = await db.doc(`churches/${churchId}`).get();
+//       if (!churchDoc.exists) return;
+//
+//       const churchData = churchDoc.data() || {};
+//       const ownerId = churchData.ownerId;
+//       if (!ownerId) return;
+//
+//       const userDoc = await db.doc(`users/${ownerId}`).get();
+//       if (!userDoc.exists) return;
+//
+//       const userData = userDoc.data() || {};
+//       if (!userData.isMinistryAccount) return; // Only act on ministry churches
+//
+//       const after = change.after.exists ? change.after.data() : null;
+//       const before = change.before.exists ? change.before.data() : null;
+//
+//       // Skip if this is a sync from default (avoid loops)
+//       if (after && after.syncOrigin === 'default') return;
+//
+//       // Find the original default church for this member
+//       const syncedFrom = after?.syncedFrom || before?.syncedFrom;
+//       if (!syncedFrom || !syncedFrom.churchId) return;
+//
+//       const defaultChurchId = syncedFrom.churchId;
+//       const defaultMemberRef = db.doc(`churches/${defaultChurchId}/members/${memberId}`);
+//
+//       // If deleted in ministry, don't delete in default (ministry is just a view)
+//       if (!after) return;
+//
+//       // Sync back specific fields that can be updated in ministry mode
+//       const allowedFields = ['ministry', 'firstName', 'lastName', 'phoneNumber', 'profilePicture'];
+//       const updatePayload = {};
+//       let hasUpdates = false;
+//
+//       for (const field of allowedFields) {
+//         if (after[field] !== undefined) {
+//           updatePayload[field] = after[field];
+//           hasUpdates = true;
+//         }
+//       }
+//
+//       if (hasUpdates) {
+//         updatePayload.lastUpdated = new Date().toISOString();
+//         updatePayload.syncedFromMinistry = {
+//           churchId: churchId,
+//           at: new Date().toISOString()
+//         };
+//
+//         await defaultMemberRef.set(updatePayload, { merge: true });
+//       }
+//     } catch (e) {
+//       console.error('syncMinistryToDefault failed', churchId, memberId, e);
+//     }
+//   });
+
+// DISABLED: Cross-ministry aggregation removed for ministry independence
+// Ministry accounts no longer automatically sync members from default churches
+//
+// Cross-ministry aggregation: when a new ministry account is created, sync all relevant members
+// exports.onMinistryAccountCreated = functions.firestore
+//   .document('users/{userId}')
+//   .onWrite(async (change, context) => {
+//     const { userId } = context.params;
+//     const db = admin.firestore();
+//     try {
+//       const after = change.after.exists ? change.after.data() : null;
+//       const before = change.before.exists ? change.before.data() : null;
+//
+//       // Check if this is a new ministry account or ministry was just added
+//       const isNewMinistryAccount = after && after.isMinistryAccount &&
+//         (!before || !before.isMinistryAccount);
+//       const ministryChanged = after && before &&
+//         after.preferences?.ministryName !== before.preferences?.ministryName;
+//
+//       if (!isNewMinistryAccount && !ministryChanged) return;
+//
+//       const ministryName = after.preferences?.ministryName;
+//       if (!ministryName) return;
+//
+//       const ministryChurchId = after.contexts?.ministryChurchId || after.churchId;
+//       if (!ministryChurchId) return;
+//
+//       // Find all members across all default churches with this ministry
+//       const allChurches = await db.collection('churches').get();
+//       let synced = 0;
+//
+//       for (const churchDoc of allChurches.docs) {
+//         const churchData = churchDoc.data() || {};
+//         const ownerId = churchData.ownerId;
+//         if (!ownerId) continue;
+//
+//         // Check if this is a default church (not ministry)
+//         const ownerDoc = await db.doc(`users/${ownerId}`).get();
+//         if (!ownerDoc.exists) continue;
+//
+//         const ownerData = ownerDoc.data() || {};
+//         if (ownerData.isMinistryAccount) continue; // Skip ministry churches
+//
+//         // Get members with matching ministry from this church
+//         const membersQuery = db.collection(`churches/${churchDoc.id}/members`)
+//           .where('ministry', '==', ministryName)
+//           .where('isActive', '!=', false);
+//
+//         const membersSnap = await membersQuery.get();
+//
+//         for (const memberDoc of membersSnap.docs) {
+//           const memberData = memberDoc.data();
+//           const targetRef = db.doc(`churches/${ministryChurchId}/members/${memberDoc.id}`);
+//           const payload = {
+//             ...memberData,
+//             bacentaId: '', // Detach from bacenta structure in ministry context
+//             syncedFrom: {
+//               churchId: churchDoc.id,
+//               at: new Date().toISOString()
+//             },
+//             syncOrigin: 'default'
+//           };
+//
+//           await targetRef.set(payload, { merge: true });
+//           synced++;
+//         }
+//       }
+//
+//       console.log(`Synced ${synced} members to new ministry account for ${ministryName}`);
+//     } catch (e) {
+//       console.error('onMinistryAccountCreated failed', userId, e);
+//     }
+//   });
+
+// DISABLED: Cross-ministry sync removed for ministry independence
+// Ministry churches no longer sync members from default churches
+//
+// Cross-ministry sync callable function
+// exports.crossMinistrySync = functions.https.onCall(async (data, context) => {
+//   if (!context.auth) {
+//     throw new functions.https.HttpsError('unauthenticated', 'Authentication required');
+//   }
+//   const uid = context.auth.uid;
+//   const { ministryName } = data || {};
+//   const db = admin.firestore();
+//
+//   try {
+//     const userSnap = await db.doc(`users/${uid}`).get();
+//     if (!userSnap.exists) {
+//       throw new functions.https.HttpsError('failed-precondition', 'User profile not found');
+//     }
+//     const user = userSnap.data() || {};
+//     if (!user.isMinistryAccount) {
+//       throw new functions.https.HttpsError('failed-precondition', 'User is not a ministry account');
+//     }
+//
+//     const targetMinistry = ministryName || user.preferences?.ministryName;
+//     if (!targetMinistry) {
+//       throw new functions.https.HttpsError('failed-precondition', 'No ministry specified');
+//     }
+//
+//     const ministryChurchId = user.contexts?.ministryChurchId || user.churchId;
+//     if (!ministryChurchId) {
+//       throw new functions.https.HttpsError('failed-precondition', 'No ministry church found');
+//     }
+//
+//     // Find all churches and sync members with matching ministry
+//     const allChurches = await db.collection('churches').get();
+//     let synced = 0;
+//
+//     for (const churchDoc of allChurches.docs) {
+//       const churchData = churchDoc.data() || {};
+//       const ownerId = churchData.ownerId;
+//       if (!ownerId) continue;
+//
+//       // Check if this is a default church (not ministry)
+//       const ownerDoc = await db.doc(`users/${ownerId}`).get();
+//       if (!ownerDoc.exists) continue;
+//
+//       const ownerData = ownerDoc.data() || {};
+//       if (ownerData.isMinistryAccount) continue; // Skip ministry churches
+//
+//       // Get members with matching ministry from this church
+//       const membersQuery = db.collection(`churches/${churchDoc.id}/members`)
+//         .where('ministry', '==', targetMinistry)
+//         .where('isActive', '!=', false);
+//
+//       const membersSnap = await membersQuery.get();
+//
+//       const batch = db.batch();
+//       let batchCount = 0;
+//
+//       for (const memberDoc of membersSnap.docs) {
+//         const memberData = memberDoc.data();
+//         const targetRef = db.doc(`churches/${ministryChurchId}/members/${memberDoc.id}`);
+//         const payload = {
+//           ...memberData,
+//           bacentaId: '', // Detach from bacenta structure in ministry context
+//           syncedFrom: {
+//             churchId: churchDoc.id,
+//             at: new Date().toISOString()
+//           },
+//           syncOrigin: 'default'
+//         };
+//
+//         batch.set(targetRef, payload, { merge: true });
+//         batchCount++;
+//         synced++;
+//
+//         // Commit in chunks to respect Firestore limits
+//         if (batchCount >= 450) {
+//           await batch.commit();
+//           batchCount = 0;
+//         }
+//       }
+//
+//       if (batchCount > 0) {
+//         await batch.commit();
+//       }
+//     }
+//
+//     return { success: true, synced };
+//   } catch (e) {
+//     console.error('crossMinistrySync failed', e);
+//     throw new functions.https.HttpsError('internal', e?.message || 'Cross-ministry sync failed');
+//   }
+// });
+
+// DISABLED: HTTP version of cross-ministry sync removed for ministry independence
+//
+// HTTP version of crossMinistrySync for CORS support
+// exports.crossMinistrySyncHttp = functions.https.onRequest(async (req, res) => {
+//   setCors(req, res);
+//   if (req.method === 'OPTIONS') {
+//     return res.status(204).send('');
+//   }
+//   if (req.method !== 'POST') {
+//     return res.status(405).json({ success: false, error: 'Method not allowed' });
+//   }
+//
+//   try {
+//     // Extract auth token
+//     const authHeader = req.headers.authorization;
+//     if (!authHeader || !authHeader.startsWith('Bearer ')) {
+//       return res.status(401).json({ success: false, error: 'Unauthorized' });
+//     }
+//
+//     const token = authHeader.split('Bearer ')[1];
+//     const decodedToken = await admin.auth().verifyIdToken(token);
+//     const uid = decodedToken.uid;
+//
+//     const { ministryName } = req.body || {};
+//     const db = admin.firestore();
+//
+//     const userSnap = await db.doc(`users/${uid}`).get();
+//     if (!userSnap.exists) {
+//       return res.status(400).json({ success: false, error: 'User profile not found' });
+//     }
+//     const user = userSnap.data() || {};
+//     if (!user.isMinistryAccount) {
+//       return res.status(400).json({ success: false, error: 'User is not a ministry account' });
+//     }
+//
+//     const targetMinistry = ministryName || user.preferences?.ministryName;
+//     if (!targetMinistry) {
+//       return res.status(400).json({ success: false, error: 'No ministry specified' });
+//     }
+//
+//     const ministryChurchId = user.contexts?.ministryChurchId || user.churchId;
+//     if (!ministryChurchId) {
+//       return res.status(400).json({ success: false, error: 'No ministry church found' });
+//     }
+//
+//     // Find all churches and sync members with matching ministry
+//     const allChurches = await db.collection('churches').get();
+//     let synced = 0;
+//
+//     for (const churchDoc of allChurches.docs) {
+//       const churchData = churchDoc.data() || {};
+//       const ownerId = churchData.ownerId;
+//       if (!ownerId) continue;
+//
+//       // Check if this is a default church (not ministry)
+//       const ownerDoc = await db.doc(`users/${ownerId}`).get();
+//       if (!ownerDoc.exists) continue;
+//
+//       const ownerData = ownerDoc.data() || {};
+//       if (ownerData.isMinistryAccount) continue; // Skip ministry churches
+//
+//       // Get members with matching ministry from this church
+//       const membersQuery = db.collection(`churches/${churchDoc.id}/members`)
+//         .where('ministry', '==', targetMinistry)
+//         .where('isActive', '!=', false);
+//
+//       const membersSnap = await membersQuery.get();
+//
+//       const batch = db.batch();
+//       let batchCount = 0;
+//
+//       for (const memberDoc of membersSnap.docs) {
+//         const memberData = memberDoc.data();
+//         const targetRef = db.doc(`churches/${ministryChurchId}/members/${memberDoc.id}`);
+//         const payload = {
+//           ...memberData,
+//           bacentaId: '', // Detach from bacenta structure in ministry context
+//           syncedFrom: {
+//             churchId: churchDoc.id,
+//             at: new Date().toISOString()
+//           },
+//           syncOrigin: 'default'
+//         };
+//
+//         batch.set(targetRef, payload, { merge: true });
+//         batchCount++;
+//         synced++;
+//
+//         // Commit in chunks to respect Firestore limits
+//         if (batchCount >= 450) {
+//           await batch.commit();
+//           batchCount = 0;
+//         }
+//       }
+//
+//       if (batchCount > 0) {
+//         await batch.commit();
+//       }
+//     }
+//
+//     return res.status(200).json({ success: true, synced });
+//   } catch (e) {
+//     console.error('crossMinistrySyncHttp failed', e);
+//     return res.status(500).json({ success: false, error: e?.message || 'Cross-ministry sync failed' });
+//   }
+// });
 
 // Scheduled function to clean up old device tokens (runs daily)
 exports.cleanupOldTokens = functions.pubsub.schedule('0 2 * * *')

@@ -856,124 +856,133 @@ export const setActiveContext = async (mode: 'default' | 'ministry'): Promise<vo
   }
 };
 
+// DISABLED: Ministry sync removed for ministry independence
+// Ministry app now operates as a completely standalone system
 // One-off backfill to sync default members-with-ministry into ministry church
 export const runBackfillMinistrySync = async (): Promise<{ success: boolean; synced?: number }> => {
-  try {
-  const { getFunctions, httpsCallable } = await import('firebase/functions');
-  // Use explicit region to avoid CORS/404 preflight issues in dev
-  const appFunctions = getFunctions(undefined as any, 'us-central1');
-    const fn = httpsCallable(appFunctions, 'backfillMinistrySync');
-    const res: any = await fn({});
-    return (res && res.data) ? res.data : { success: true };
-  } catch (e: any) {
-    console.warn('[runBackfillMinistrySync] callable failed, attempting HTTP fallback', e?.message || String(e));
-    try {
-      const user = auth.currentUser;
-      if (!user) return { success: false };
-      const idToken = await user.getIdToken();
-      const endpoint = 'https://us-central1-sat-mobile-de6f1.cloudfunctions.net/backfillMinistrySyncHttp';
-      const resp = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${idToken}`
-        },
-        body: JSON.stringify({})
-      });
-      if (!resp.ok) {
-        const text = await resp.text();
-        console.warn('[runBackfillMinistrySync] http failed', resp.status, text);
-        return { success: false };
-      }
-      const data = await resp.json();
-      return data && typeof data === 'object' ? data : { success: true };
-    } catch (httpErr: any) {
-      console.warn('[runBackfillMinistrySync] http fallback failed, attempting simulation', httpErr?.message || String(httpErr));
-      // Fallback to client-side simulation
-      try {
-        const { simulateBackfillMinistrySync } = await import('./ministrySimulationService');
-        const user = auth.currentUser;
-        if (!user) return { success: false };
+  console.log('⚠️ [runBackfillMinistrySync] DISABLED - Ministry sync has been removed for ministry independence');
+  return { success: false, synced: 0 };
 
-        // Get user profile to find church contexts
-        const userDoc = await getDoc(doc(db, 'users', user.uid));
-        if (!userDoc.exists()) return { success: false };
-
-        const userData = userDoc.data();
-        const contexts = userData.contexts || {};
-        const defaultChurchId = contexts.defaultChurchId || userData.churchId;
-        const ministryChurchId = contexts.ministryChurchId;
-
-        if (!defaultChurchId || !ministryChurchId) {
-          return { success: false };
-        }
-
-        return await simulateBackfillMinistrySync(defaultChurchId, ministryChurchId);
-      } catch (simErr: any) {
-        console.error('[runBackfillMinistrySync] simulation failed', simErr?.message || String(simErr));
-        return { success: false };
-      }
-    }
-  }
+  // try {
+  // const { getFunctions, httpsCallable } = await import('firebase/functions');
+  // // Use explicit region to avoid CORS/404 preflight issues in dev
+  // const appFunctions = getFunctions(undefined as any, 'us-central1');
+  //   const fn = httpsCallable(appFunctions, 'backfillMinistrySync');
+  //   const res: any = await fn({});
+  //   return (res && res.data) ? res.data : { success: true };
+  // } catch (e: any) {
+  //   console.warn('[runBackfillMinistrySync] callable failed, attempting HTTP fallback', e?.message || String(e));
+  //   try {
+  //     const user = auth.currentUser;
+  //     if (!user) return { success: false };
+  //     const idToken = await user.getIdToken();
+  //     const endpoint = 'https://us-central1-sat-mobile-de6f1.cloudfunctions.net/backfillMinistrySyncHttp';
+  //     const resp = await fetch(endpoint, {
+  //       method: 'POST',
+  //       headers: {
+  //         'Content-Type': 'application/json',
+  //         'Authorization': `Bearer ${idToken}`
+  //       },
+  //       body: JSON.stringify({})
+  //     });
+  //     if (!resp.ok) {
+  //       const text = await resp.text();
+  //       console.warn('[runBackfillMinistrySync] http failed', resp.status, text);
+  //       return { success: false };
+  //     }
+  //     const data = await resp.json();
+  //     return data && typeof data === 'object' ? data : { success: true };
+  //   } catch (httpErr: any) {
+  //     console.warn('[runBackfillMinistrySync] http fallback failed, attempting simulation', httpErr?.message || String(httpErr));
+  //     // Fallback to client-side simulation
+  //     try {
+  //       const { simulateBackfillMinistrySync } = await import('./ministrySimulationService');
+  //       const user = auth.currentUser;
+  //       if (!user) return { success: false };
+  //
+  //       // Get user profile to find church contexts
+  //       const userDoc = await getDoc(doc(db, 'users', user.uid));
+  //       if (!userDoc.exists()) return { success: false };
+  //
+  //       const userData = userDoc.data();
+  //       const contexts = userData.contexts || {};
+  //       const defaultChurchId = contexts.defaultChurchId || userData.churchId;
+  //       const ministryChurchId = contexts.ministryChurchId;
+  //
+  //       if (!defaultChurchId || !ministryChurchId) {
+  //         return { success: false };
+  //       }
+  //
+  //       return await simulateBackfillMinistrySync(defaultChurchId, ministryChurchId);
+  //     } catch (simErr: any) {
+  //       console.error('[runBackfillMinistrySync] simulation failed', simErr?.message || String(simErr));
+  //       return { success: false };
+  //     }
+  //   }
+  // }
 };
 
+// DISABLED: Cross-ministry sync removed for ministry independence
 // Force sync all members with ministry assignments across all churches
 export const runCrossMinistrySync = async (ministryName?: string): Promise<{ success: boolean; synced?: number }> => {
-  try {
-    const { getFunctions, httpsCallable } = await import('firebase/functions');
-    const appFunctions = getFunctions(undefined as any, 'us-central1');
-    const fn = httpsCallable(appFunctions, 'crossMinistrySync');
-    const res: any = await fn({ ministryName });
-    return (res && res.data) ? res.data : { success: true };
-  } catch (e: any) {
-    console.warn('[runCrossMinistrySync] callable failed, attempting HTTP fallback', e?.message || String(e));
-    try {
-      const user = auth.currentUser;
-      if (!user) return { success: false };
-      const idToken = await user.getIdToken();
-      const endpoint = 'https://us-central1-sat-mobile-de6f1.cloudfunctions.net/crossMinistrySyncHttp';
-      const resp = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${idToken}`
-        },
-        body: JSON.stringify({ ministryName })
-      });
-      if (!resp.ok) {
-        const text = await resp.text();
-        console.warn('[runCrossMinistrySync] http failed', resp.status, text);
-        return { success: false };
-      }
-      const data = await resp.json();
-      return data && typeof data === 'object' ? data : { success: true };
-    } catch (httpErr: any) {
-      console.warn('[runCrossMinistrySync] http fallback failed, attempting simulation', httpErr?.message || String(httpErr));
-      // Fallback to client-side simulation
-      try {
-        const { simulateCrossMinistrySync } = await import('./ministrySimulationService');
-        const user = auth.currentUser;
-        if (!user) return { success: false };
+  console.log('⚠️ [runCrossMinistrySync] DISABLED - Ministry sync has been removed for ministry independence');
+  return { success: false, synced: 0 };
 
-        // Get user profile to find ministry church
-        const userDoc = await getDoc(doc(db, 'users', user.uid));
-        if (!userDoc.exists()) return { success: false };
-
-        const userData = userDoc.data();
-        const targetMinistry = ministryName || userData.preferences?.ministryName;
-        const ministryChurchId = userData.contexts?.ministryChurchId || userData.churchId;
-
-        if (!targetMinistry || !ministryChurchId) {
-          return { success: false };
-        }
-
-        return await simulateCrossMinistrySync(targetMinistry, ministryChurchId);
-      } catch (simErr: any) {
-        console.error('[runCrossMinistrySync] simulation failed', simErr?.message || String(simErr));
-        return { success: false };
-      }
-    }
-  }
+  // try {
+  //   const { getFunctions, httpsCallable } = await import('firebase/functions');
+  //   const appFunctions = getFunctions(undefined as any, 'us-central1');
+  //   const fn = httpsCallable(appFunctions, 'crossMinistrySync');
+  //   const res: any = await fn({ ministryName });
+  //   return (res && res.data) ? res.data : { success: true };
+  // } catch (e: any) {
+  //   console.warn('[runCrossMinistrySync] callable failed, attempting HTTP fallback', e?.message || String(e));
+  //   try {
+  //     const user = auth.currentUser;
+  //     if (!user) return { success: false };
+  //     const idToken = await user.getIdToken();
+  //     const endpoint = 'https://us-central1-sat-mobile-de6f1.cloudfunctions.net/crossMinistrySyncHttp';
+  //     const resp = await fetch(endpoint, {
+  //       method: 'POST',
+  //       headers: {
+  //         'Content-Type': 'application/json',
+  //         'Authorization': `Bearer ${idToken}`
+  //       },
+  //       body: JSON.stringify({ ministryName })
+  //     });
+  //     if (!resp.ok) {
+  //       const text = await resp.text();
+  //       console.warn('[runCrossMinistrySync] http failed', resp.status, text);
+  //       return { success: false };
+  //     }
+  //     const data = await resp.json();
+  //     return data && typeof data === 'object' ? data : { success: true };
+  //   } catch (httpErr: any) {
+  //     console.warn('[runCrossMinistrySync] http fallback failed, attempting simulation', httpErr?.message || String(httpErr));
+  //     // Fallback to client-side simulation
+  //     try {
+  //       const { simulateCrossMinistrySync } = await import('./ministrySimulationService');
+  //       const user = auth.currentUser;
+  //       if (!user) return { success: false };
+  //
+  //       // Get user profile to find ministry church
+  //       const userDoc = await getDoc(doc(db, 'users', user.uid));
+  //       if (!userDoc.exists()) return { success: false };
+  //
+  //       const userData = userDoc.data();
+  //       const targetMinistry = ministryName || userData.preferences?.ministryName;
+  //       const ministryChurchId = userData.contexts?.ministryChurchId || userData.churchId;
+  //
+  //       if (!targetMinistry || !ministryChurchId) {
+  //         return { success: false };
+  //       }
+  //
+  //       return await simulateCrossMinistrySync(targetMinistry, ministryChurchId);
+  //     } catch (simErr: any) {
+  //       console.error('[runCrossMinistrySync] simulation failed', simErr?.message || String(simErr));
+  //       return { success: false };
+  //     }
+  //   }
+  // }
 };
 
 // Members Service
@@ -1042,14 +1051,14 @@ export const membersFirebaseService = {
       } as any;
       const docRef = await addDoc(membersRef, payload);
 
-      // Best-effort local simulation of Cloud Function sync (admin → ministry)
-      try {
-        const { simulateMemberSyncTrigger } = await import('./ministrySimulationService');
-        const currentChurchId = firebaseUtils.getCurrentChurchId();
-        await simulateMemberSyncTrigger(docRef.id, { id: docRef.id, ...(payload as any) } as Member, null, currentChurchId || '');
-      } catch (e) {
-        // non-fatal
-      }
+      // REMOVED: Sync simulation disabled for ministry independence
+      // try {
+      //   const { simulateMemberSyncTrigger } = await import('./ministrySimulationService');
+      //   const currentChurchId = firebaseUtils.getCurrentChurchId();
+      //   await simulateMemberSyncTrigger(docRef.id, { id: docRef.id, ...(payload as any) } as Member, null, currentChurchId || '');
+      // } catch (e) {
+      //   // non-fatal
+      // }
 
       return docRef.id;
     } catch (error: any) {
@@ -1079,16 +1088,16 @@ export const membersFirebaseService = {
         if (snapAfter.exists()) afterDoc = { id: snapAfter.id, ...(snapAfter.data() as any) } as Member;
       } catch {}
 
-      // Best-effort local simulation of Cloud Function sync (admin → ministry)
-      try {
-        const { firebaseUtils } = await import('./firebaseService');
-        const { simulateMemberSyncTrigger } = await import('./ministrySimulationService');
-        const currentChurchId = firebaseUtils.getCurrentChurchId();
-        const before = null; // we already applied the update; treat as write with afterDoc
-        await simulateMemberSyncTrigger(memberId, (afterDoc || (payload as any)) as any, before as any, currentChurchId || '');
-      } catch (e) {
-        // non-fatal
-      }
+      // REMOVED: Sync simulation disabled for ministry independence
+      // try {
+      //   const { firebaseUtils } = await import('./firebaseService');
+      //   const { simulateMemberSyncTrigger } = await import('./ministrySimulationService');
+      //   const currentChurchId = firebaseUtils.getCurrentChurchId();
+      //   const before = null; // we already applied the update; treat as write with afterDoc
+      //   await simulateMemberSyncTrigger(memberId, (afterDoc || (payload as any)) as any, before as any, currentChurchId || '');
+      // } catch (e) {
+      //   // non-fatal
+      // }
     } catch (error: any) {
       throw new Error(`Failed to update member: ${error.message}`);
     }
@@ -1107,13 +1116,13 @@ export const membersFirebaseService = {
 
       await deleteDoc(memberRef);
 
-      // Best-effort local simulation of Cloud Function sync (admin → ministry) for delete
-      try {
-        const { firebaseUtils } = await import('./firebaseService');
-        const { simulateMemberSyncTrigger } = await import('./ministrySimulationService');
-        const currentChurchId = firebaseUtils.getCurrentChurchId();
-        await simulateMemberSyncTrigger(memberId, null, beforeDoc, currentChurchId || '');
-      } catch {}
+      // REMOVED: Sync simulation disabled for ministry independence
+      // try {
+      //   const { firebaseUtils } = await import('./firebaseService');
+      //   const { simulateMemberSyncTrigger } = await import('./ministrySimulationService');
+      //   const currentChurchId = firebaseUtils.getCurrentChurchId();
+      //   await simulateMemberSyncTrigger(memberId, null, beforeDoc, currentChurchId || '');
+      // } catch {}
     } catch (error: any) {
       // Surface the error to caller instead of soft-deleting
       throw new Error(`Failed to delete member: ${error.message || String(error)}`);

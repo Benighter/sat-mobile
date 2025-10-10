@@ -254,15 +254,16 @@ const fetchMinistryMembersFromChurch = async (churchId: string, ministryName: st
       } catch { return false; }
     };
 
-    if (currentChurchId && !(await ministryHasMembers()) && defaultChurchId) {
-      console.log('🧪 [Ministry Aggregation] Ministry church appears empty; attempting local backfill...');
-      try {
-        const { simulateBackfillMinistrySync } = await import('./ministrySimulationService');
-        await simulateBackfillMinistrySync(defaultChurchId, currentChurchId);
-      } catch (e) {
-        console.warn('Backfill simulation failed (non-fatal):', e);
-      }
-    }
+    // REMOVED: Backfill sync disabled for ministry independence
+    // if (currentChurchId && !(await ministryHasMembers()) && defaultChurchId) {
+    //   console.log('🧪 [Ministry Aggregation] Ministry church appears empty; attempting local backfill...');
+    //   try {
+    //     const { simulateBackfillMinistrySync } = await import('./ministrySimulationService');
+    //     await simulateBackfillMinistrySync(defaultChurchId, currentChurchId);
+    //   } catch (e) {
+    //     console.warn('Backfill simulation failed (non-fatal):', e);
+    //   }
+    // }
   } catch {}
 
 };

@@ -22,10 +22,15 @@ export interface Member {
   frozen?: boolean;
   /** If true, this member originated from an Outreach flow (born again from outreach) */
   outreachOrigin?: boolean;
-  /** If true, this member is native to the ministry (not synced from any constituency) */
+  /**
+   * If true, this member is native to the ministry church (not synced from any constituency).
+   * In the new independent ministry app architecture, ALL members created in ministry mode
+   * should have this set to TRUE.
+   */
   isNativeMinistryMember?: boolean;
-  /** Target constituency for transfer (when transferring native members to constituencies) */
-  targetConstituencyId?: string;
+  // REMOVED: targetConstituencyId - transfer functionality removed with ministry independence
+  // /** Target constituency for transfer (when transferring native members to constituencies) */
+  // targetConstituencyId?: string;
   bacentaId: string; // Renamed from congregationGroup, stores Bacenta.id, empty if unassigned
   /**
    * Additional bacentas this leader is linked to. The member officially belongs
@@ -588,20 +593,21 @@ export interface AdminNotification {
   };
 }
 
-// Ministry Access Approval Flow
-export interface MinistryAccessRequest {
-  id: string; // Auto ID
-  requesterUid: string;
-  requesterName?: string;
-  requesterEmail?: string;
-  ministryName: string;
-  ministryChurchId?: string; // if known
-  status: 'pending' | 'approved' | 'rejected' | 'cancelled';
-  createdAt: string; // ISO
-  updatedAt?: string; // ISO
-  approvedBy?: string;
-  approvedByName?: string;
-  approvedAt?: string; // ISO
-  rejectionReason?: string;
-  approvalSource?: 'superadmin' | 'ministry_admin_invite';
-}
+// REMOVED: Ministry Access Approval Flow - Ministry app now operates independently
+// Ministry leaders get immediate access without approval workflow
+// export interface MinistryAccessRequest {
+//   id: string; // Auto ID
+//   requesterUid: string;
+//   requesterName?: string;
+//   requesterEmail?: string;
+//   ministryName: string;
+//   ministryChurchId?: string; // if known
+//   status: 'pending' | 'approved' | 'rejected' | 'cancelled';
+//   createdAt: string; // ISO
+//   updatedAt?: string; // ISO
+//   approvedBy?: string;
+//   approvedByName?: string;
+//   approvedAt?: string; // ISO
+//   rejectionReason?: string;
+//   approvalSource?: 'superadmin' | 'ministry_admin_invite';
+// }
