@@ -271,25 +271,14 @@ const fetchMinistryMembersFromChurch = async (churchId: string, ministryName: st
 // Get aggregated data for a specific ministry across the user’s accessible scope (no superadmin discovery)
 export const getMinistryAggregatedData = async (
   ministryName: string,
-  currentChurchId?: string,
-  defaultChurchId?: string
+  currentChurchId?: string
 ): Promise<MinistryAggregatedData> => {
   try {
-    console.log(`🔍 [Ministry Aggregation] Fetching data for ministry: ${ministryName}`);
+    console.log(`🔍 [Ministry Independent Mode] Fetching data for ministry: ${ministryName} from ministry church only`);
 
-    // Discover churches that currently have members in this ministry using a collection-group query
-    const cgMembers = await fetchMinistryMembersViaCollectionGroup(ministryName);
-    const discoveredChurchIds = Array.from(new Set((cgMembers || []).map(m => (m as any).sourceChurchId).filter(Boolean)));
-
-    // Aggregate from discovered churches plus the user's current and default churches (for native/sync coverage)
-    const allChurchIds = Array.from(new Set([
-      ...discoveredChurchIds,
-      ...(currentChurchId ? [currentChurchId] : []),
-      ...(defaultChurchId ? [defaultChurchId] : [])
-    ]));
-
-    if (allChurchIds.length === 0) {
-      console.log(`⚠️ No accessible churches resolved for ${ministryName}`);
+    // MINISTRY INDEPENDENCE: Only fetch from the ministry church, NOT from default church
+    if (!currentChurchId) {
+      console.log(`⚠️ No ministry church ID provided for ${ministryName}`);
       return {
         members: [],
         bacentas: [],
@@ -301,113 +290,45 @@ export const getMinistryAggregatedData = async (
       };
     }
 
-    // Fetch data from the resolved churches (avoid global discovery that violates rules)
-    console.log(`🔄 [Ministry Aggregation] Fetching data from:`, allChurchIds);
-    const allPromises = allChurchIds.map(async (churchId) => {
-      console.log(`📥 Fetching data from church: ${churchId}`);
-      const [members, bacentas, attendance, newBelievers, confirmations, guests] = await Promise.all([
-        fetchMinistryMembersFromChurch(churchId, ministryName),
-        fetchChurchCollection(churchId, 'bacentas'),
-        fetchChurchCollection(churchId, 'attendance'),
-        fetchChurchCollection(churchId, 'newBelievers'),
-        fetchChurchCollection(churchId, 'sundayConfirmations'),
-        fetchChurchCollection(churchId, 'guests')
-      ]);
+    // Fetch data ONLY from the ministry church (no cross-church aggregation)
+    console.log(`🔄 [Ministry Independent Mode] Fetching data from ministry church only: ${currentChurchId}`);
+    const [members, bacentas, attendance, newBelievers, confirmations, guests] = await Promise.all([
+      fetchMinistryMembersFromChurch(currentChurchId, ministryName),
+      fetchChurchCollection(currentChurchId, 'bacentas'),
+      fetchChurchCollection(currentChurchId, 'attendance'),
+      fetchChurchCollection(currentChurchId, 'newBelievers'),
+      fetchChurchCollection(currentChurchId, 'sundayConfirmations'),
+      fetchChurchCollection(currentChurchId, 'guests')
+    ]);
 
-      console.log(`✅ Church ${churchId} data:`, {
-        members: members.length,
-        bacentas: bacentas.length,
-        attendance: attendance.length,
-        newBelievers: newBelievers.length,
-        confirmations: confirmations.length,
-        guests: guests.length
-      });
-
-      return {
-        churchId,
-        members,
-        bacentas,
-        attendance,
-        newBelievers,
-        confirmations,
-        guests
-      };
+    console.log(`✅ Ministry church ${currentChurchId} data:`, {
+      members: members.length,
+      bacentas: bacentas.length,
+      attendance: attendance.length,
+      newBelievers: newBelievers.length,
+      confirmations: confirmations.length,
+      guests: guests.length
     });
 
-    const churchDataArray = await Promise.all(allPromises);
-
-    // Step 3: Aggregate all data (no superadmin-level global scan)
+    // Return data from ministry church only
     const aggregatedData: MinistryAggregatedData = {
-      members: [],
-      bacentas: [],
-      attendanceRecords: [],
-      newBelievers: [],
-      sundayConfirmations: [],
-      guests: [],
-      sourceChurches: allChurchIds
+      members: members,
+      bacentas: bacentas,
+      attendanceRecords: attendance,
+      newBelievers: newBelievers,
+      sundayConfirmations: confirmations,
+      guests: guests,
+      sourceChurches: [currentChurchId]
     };
 
-    // Seed with collection-group members first (covers cross-constituency scope by ministry)
-    if (cgMembers.length) {
-      aggregatedData.members.push(...cgMembers);
-      aggregatedData.members = dedupeMembers(aggregatedData.members, currentChurchId);
-    }
-
-    churchDataArray.forEach(churchData => {
-      aggregatedData.members.push(...churchData.members);
-      aggregatedData.bacentas.push(...churchData.bacentas);
-      aggregatedData.attendanceRecords.push(...churchData.attendance);
-      aggregatedData.newBelievers.push(...churchData.newBelievers);
-      aggregatedData.sundayConfirmations.push(...churchData.confirmations);
-      aggregatedData.guests.push(...churchData.guests);
-    });
-
-  // Step 4: Add ministry-church members from the current ministry church as well (both native and just-added)
-  if (currentChurchId) {
-      console.log('📥 Fetching native ministry members from current ministry church...');
-      try {
-        // Check church doc first; if not readable, skip silently to avoid errors
-        const churchSnap = await getDoc(doc(db, `churches/${currentChurchId}`));
-        if (churchSnap.exists()) {
-          // Fetch ALL ministry members in the ministry church (include native + those pending/after sync)
-          const nativeMembersQuery = query(
-            collection(db, `churches/${currentChurchId}/members`),
-            where('ministry', '==', ministryName)
-          );
-          const nativeSnapshot = await getDocs(nativeMembersQuery);
-          const nativeMembers = nativeSnapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data(),
-            sourceChurchId: currentChurchId // Mark as coming from ministry church
-          } as any as Member)).filter(m => m.isActive !== false);
-
-          console.log(`✅ Found ${nativeMembers.length} ministry-church members (native + synced)`);
-          aggregatedData.members.push(...nativeMembers);
-        } else {
-          console.warn('Skip native members — ministry church doc not readable');
-        }
-      } catch (e) {
-        console.warn('Failed to fetch native ministry members:', e);
-      }
-    } else {
-      console.log('📥 No current church ID provided - skipping native members fetch');
-    }
-
-  // Dedupe members before returning (avoid duplicates once sync completes)
-  aggregatedData.members = dedupeMembers(aggregatedData.members, currentChurchId);
-
-  console.log(`🎉 [SuperAdmin Style] Successfully aggregated data for ${ministryName}:`, {
+  console.log(`🎉 [Ministry Independent Mode] Successfully fetched data for ${ministryName}:`, {
       members: aggregatedData.members.length,
-      nativeMembers: aggregatedData.members.filter(m => m.isNativeMinistryMember).length,
-      syncedMembers: aggregatedData.members.filter(m => !m.isNativeMinistryMember).length,
       bacentas: aggregatedData.bacentas.length,
       attendance: aggregatedData.attendanceRecords.length,
       newBelievers: aggregatedData.newBelievers.length,
       confirmations: aggregatedData.sundayConfirmations.length,
       guests: aggregatedData.guests.length,
-      churches: allChurchIds.length,
-      sourceChurches: aggregatedData.sourceChurches,
-      currentChurchId: currentChurchId || 'not provided'
+      sourceChurch: currentChurchId
     });
 
     return aggregatedData;
@@ -425,13 +346,12 @@ export const getMinistryAggregatedData = async (
   }
 };
 
-// Set up real-time listeners for ministry data across multiple churches
+// Set up real-time listeners for ministry data - INDEPENDENT MODE (only ministry church)
 export const setupMinistryDataListeners = (
   ministryName: string,
   onDataUpdate: (data: MinistryAggregatedData) => void,
   optimisticUpdatesRef?: React.MutableRefObject<Set<string>>,
-  currentChurchId?: string,
-  defaultChurchId?: string
+  currentChurchId?: string
 ): (() => void) => {
   const unsubscribers: Unsubscribe[] = [];
   let currentData: MinistryAggregatedData = {
@@ -447,13 +367,12 @@ export const setupMinistryDataListeners = (
   let overridesMap = new Map<string, { frozen?: boolean; role?: Member['role']; ministryPosition?: string }>(); // key: `${sourceChurchId}_${memberId}`
 
   const updateAggregatedData = () => {
-  // Always dedupe before emitting to the app state
-  currentData.members = dedupeMembers(currentData.members, currentChurchId);
+  // No deduplication needed since we're only listening to one church
   onDataUpdate({ ...currentData });
   };
 
-  // Initialize with current data
-  getMinistryAggregatedData(ministryName, currentChurchId, defaultChurchId).then(data => {
+  // Initialize with current data (ministry church only)
+  getMinistryAggregatedData(ministryName, currentChurchId).then(data => {
     currentData = data;
     updateAggregatedData();
 
@@ -480,50 +399,44 @@ export const setupMinistryDataListeners = (
       unsubscribers.push(unsubOverrides);
     }
 
-  // Set up listeners for each church
-  data.sourceChurches.forEach(churchId => {
+  // MINISTRY INDEPENDENCE: Set up listener ONLY for the ministry church
+  if (currentChurchId) {
       try {
-        // Listen to members with this ministry (same pattern as onSnapshotByMinistry)
+        console.log(`🔄 [Ministry Independent Mode] Setting up listener for ministry church: ${currentChurchId}`);
+
+        // Listen to members with this ministry in the ministry church only
         const membersQuery = query(
-          collection(db, `churches/${churchId}/members`),
+          collection(db, `churches/${currentChurchId}/members`),
           where('ministry', '==', ministryName)
         );
 
         const unsubMembers = onSnapshot(membersQuery, (snapshot) => {
-          // Apply isActive filter client-side (same as existing service)
+          // Apply isActive filter client-side
           const items = snapshot.docs.map(doc => ({
             id: doc.id,
             ...doc.data(),
-            sourceChurchId: churchId
+            sourceChurchId: currentChurchId
           } as any as Member));
 
           const filtered = items.filter(m => m.isActive !== false);
-          // Sort same as existing service
           filtered.sort((a, b) => (a.lastName || '').localeCompare(b.lastName || ''));
 
-          // Update members for this church, but preserve native ministry members
-          currentData.members = currentData.members.filter(m => {
-            const isFromThisChurch = (m as any).sourceChurchId === churchId;
-            const isNative = m.isNativeMinistryMember;
-            // Keep members that are NOT from this church OR are native ministry members
-            return !isFromThisChurch || isNative;
-          });
-          // Filter by exclusions (if any) then add
-          const allowed = filtered.filter(m => !excludedKeys.has(`${churchId}_${m.id}`));
+          // Replace all members with the fresh snapshot from ministry church
+          const allowed = filtered.filter(m => !excludedKeys.has(`${currentChurchId}_${m.id}`));
           const withOverrides = allowed.map(m => {
-            const ov = overridesMap.get(`${churchId}_${m.id}`);
+            const ov = overridesMap.get(`${currentChurchId}_${m.id}`);
             return ov ? { ...m, ...ov } : m;
           });
-          currentData.members.push(...withOverrides);
+          currentData.members = withOverrides;
           updateAggregatedData();
         }, (err) => {
-          console.warn(`[Ministry Data] Members listener error for ${churchId} — skipping`, err?.message || err);
+          console.warn(`[Ministry Data] Members listener error for ${currentChurchId} — skipping`, err?.message || err);
         });
 
         unsubscribers.push(unsubMembers);
 
-        // Listen to attendance records from this church with debouncing to reduce conflicts
-        const attendanceQuery = query(collection(db, `churches/${churchId}/attendance`));
+        // Listen to attendance records from ministry church with debouncing to reduce conflicts
+        const attendanceQuery = query(collection(db, `churches/${currentChurchId}/attendance`));
         let attendanceUpdateTimeout: NodeJS.Timeout;
 
         const unsubAttendance = onSnapshot(attendanceQuery, (snapshot) => {
@@ -537,7 +450,7 @@ export const setupMinistryDataListeners = (
             const items = snapshot.docs.map(doc => ({
               id: doc.id,
               ...doc.data(),
-              sourceChurchId: churchId
+              sourceChurchId: currentChurchId
             } as any as AttendanceRecord));
 
             // Filter out items that are currently being optimistically updated
@@ -545,71 +458,32 @@ export const setupMinistryDataListeners = (
               ? items.filter(item => !optimisticUpdatesRef.current.has(item.id))
               : items;
 
-            console.log(`📊 [Ministry Data] Attendance update for church ${churchId}:`, {
+            console.log(`📊 [Ministry Independent Mode] Attendance update:`, {
               totalItems: items.length,
               filteredItems: filteredItems.length,
-              optimisticUpdates: Array.from(optimisticUpdatesRef?.current || []),
-              beforeUpdate: currentData.attendanceRecords.length,
-              beforeFromThisChurch: currentData.attendanceRecords.filter(a => (a as any).sourceChurchId === churchId).length
+              optimisticUpdates: Array.from(optimisticUpdatesRef?.current || [])
             });
 
-            // Update attendance for this church, preserving optimistic updates
-            const beforeFilter = currentData.attendanceRecords.length;
-            const removedRecords: AttendanceRecord[] = [];
-
-            currentData.attendanceRecords = currentData.attendanceRecords.filter(a => {
-              const isFromThisChurch = (a as any).sourceChurchId === churchId;
-              const isOptimistic = optimisticUpdatesRef?.current.has(a.id);
-              const shouldKeep = !isFromThisChurch || isOptimistic;
-
-              if (!shouldKeep) {
-                removedRecords.push(a);
-              }
-
-              // Keep records that are NOT from this church OR are optimistically updated
-              return shouldKeep;
-            });
-            const afterFilter = currentData.attendanceRecords.length;
-
-            console.log(`📊 [Ministry Data] Filtering details:`, {
-              removedRecords: removedRecords.map(r => ({
-                id: r.id,
-                memberId: r.memberId,
-                date: r.date,
-                status: r.status,
-                sourceChurchId: (r as any).sourceChurchId
-              }))
-            });
-
-            // Add new records that aren't optimistically updated
-            currentData.attendanceRecords.push(...filteredItems);
-
-            console.log(`📊 [Ministry Data] After attendance update:`, {
-              beforeFilter,
-              afterFilter,
-              addedItems: filteredItems.length,
-              finalTotal: currentData.attendanceRecords.length,
-              attendanceByChurch: currentData.attendanceRecords.reduce((acc, a) => {
-                const church = (a as any).sourceChurchId || 'unknown';
-                acc[church] = (acc[church] || 0) + 1;
-                return acc;
-              }, {} as Record<string, number>)
-            });
+            // Replace all attendance records with fresh snapshot (preserving optimistic updates)
+            const optimisticRecords = currentData.attendanceRecords.filter(a =>
+              optimisticUpdatesRef?.current.has(a.id)
+            );
+            currentData.attendanceRecords = [...optimisticRecords, ...filteredItems];
 
             updateAggregatedData();
           }, 100); // 100ms debounce to allow optimistic updates to settle
         }, (err) => {
-          console.warn(`[Ministry Data] Attendance listener error for ${churchId} — skipping`, err?.message || err);
+          console.warn(`[Ministry Data] Attendance listener error for ${currentChurchId} — skipping`, err?.message || err);
         });
 
         unsubscribers.push(unsubAttendance);
       } catch (e) {
-        console.warn(`Failed to set up listeners for church ${churchId}:`, e);
+        console.warn(`Failed to set up listeners for ministry church ${currentChurchId}:`, e);
       }
-    });
+    }
 
-    // Safety net: ensure we also listen to the leader's default church even if it wasn't discovered initially
-    if (defaultChurchId && !data.sourceChurches.includes(defaultChurchId)) {
+    // MINISTRY INDEPENDENCE: No default church listener - ministry mode is completely independent
+    if (false) {
       try {
         console.log(`🔒 Ensuring default church listener is attached: ${defaultChurchId}`);
         const membersQuery = query(
@@ -649,8 +523,8 @@ export const setupMinistryDataListeners = (
       }
     }
 
-    // Set up listener for ministry-church members in the current ministry church (include native + synced)
-    if (currentChurchId && !data.sourceChurches.includes(currentChurchId)) {
+    // MINISTRY INDEPENDENCE: Listener already set up above - no need for duplicate
+    if (false) {
       try {
         console.log(`🔄 Setting up native members listener for ministry church: ${currentChurchId}`);
 
