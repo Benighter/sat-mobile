@@ -10,6 +10,10 @@ export const getRoleDisplayName = (role: MemberRole, plural: boolean = false): s
       return plural ? 'Green Bacentas' : 'Green Bacenta';
     case 'Fellowship Leader':
       return plural ? 'Red Bacentas' : 'Red Bacenta';
+    case 'Assistant':
+      return plural ? 'Assistants' : 'Assistant';
+    case 'Admin':
+      return plural ? 'Admins' : 'Admin';
     case 'Member':
       return plural ? 'Members' : 'Member';
     default:
@@ -36,6 +40,8 @@ export const FIXED_TABS: TabOption[] = [
   { id: TabKeys.MINISTRIES, name: 'Ministries' },
   { id: TabKeys.BIDIRECTIONAL_SYNC_TEST, name: 'Bidirectional Sync Test' },
   { id: TabKeys.CONTACT, name: 'Contact' },
+  { id: TabKeys.ASSIGNMENT_MANAGEMENT, name: 'Assignment Management' },
+  { id: TabKeys.LEADER_HIERARCHY, name: 'Leader Hierarchy' },
 ];
 
 export const DEFAULT_TAB_ID = TabKeys.DASHBOARD;

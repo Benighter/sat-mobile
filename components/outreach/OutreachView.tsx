@@ -17,9 +17,8 @@ import AddOutreachMemberModal from './AddOutreachMemberModal';
 const BacentaDetail: React.FC<{
   bacenta: OutreachBacenta;
   members: OutreachMember[];
-  weekStart: string;
   onBack: () => void;
-}> = ({ bacenta, members, weekStart, onBack }) => {
+}> = ({ bacenta, members, onBack }) => {
   const { deleteOutreachMemberHandler, convertOutreachMemberToPermanentHandler } = useAppContext();
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
@@ -65,12 +64,7 @@ const BacentaDetail: React.FC<{
                 </span>
               </h1>
               <p className="text-gray-600 dark:text-dark-300 mt-1">
-                Showing outreach for the week starting {new Date(weekStart).toLocaleDateString(undefined, {
-                  weekday: 'long',
-                  year: 'numeric',
-                  month: 'long',
-                  day: 'numeric'
-                })}
+                All outreach contacts for this building
               </p>
             </div>
           </div>
@@ -153,14 +147,12 @@ const BacentaDetail: React.FC<{
             onClose={() => setShowAddModal(false)}
             bacentaId={bacenta.id}
             bacentaName={bacenta.name}
-            weekStart={weekStart}
           />
           <BulkOutreachAddModal
             isOpen={showBulk}
             onClose={() => setShowBulk(false)}
             bacentaId={bacenta.id}
             bacentaName={bacenta.name}
-            weekStart={weekStart}
           />
 
           {/* Members List - Enhanced */}
@@ -168,7 +160,7 @@ const BacentaDetail: React.FC<{
             <div className="text-center">
               <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Outreach Members</h2>
               <p className="text-gray-600 dark:text-dark-300 mt-1">
-                {members.length > 0 ? `${members.length} member${members.length === 1 ? '' : 's'} contacted this week` : 'No members contacted yet'}
+                {members.length > 0 ? `${members.length} member${members.length === 1 ? '' : 's'} contacted` : 'No members contacted yet'}
               </p>
             </div>
 
@@ -316,17 +308,6 @@ const OutreachView: React.FC = () => {
   // const [newBacentaName, setNewBacentaName] = useState('');
   const [selectedBacentaId, setSelectedBacentaId] = useState<string>('');
 
-  // Monday-based week state (YYYY-MM-DD for Monday) - fixed to current week
-  const weekStart = useMemo(() => {
-    const now = new Date();
-    const day = now.getDay();
-    const diff = (day === 0 ? -6 : 1 - day);
-    const monday = new Date(now);
-    monday.setDate(now.getDate() + diff);
-    monday.setHours(0,0,0,0);
-    return monday.toISOString().slice(0,10);
-  }, []);
-
   // Preselect bacenta when arriving from All Bacentas
   useEffect(() => {
     const id = (currentTab as any)?.data?.bacentaId as string | undefined;
@@ -387,33 +368,6 @@ const OutreachView: React.FC = () => {
     return { perBacenta, overall, overallComing, overallConverted, overallComingRate, overallConversionRate };
   }, [outreachBacentas, allMembersByBacenta, effectiveAllMembers]);
 
-  // Weekly members map for stats/cards (Mon..Sun) - use effective data source
-  const weeklyMembersByBacenta = useMemo(() => {
-    const monday = new Date(weekStart);
-    const sunday = new Date(monday); sunday.setDate(monday.getDate()+6);
-    const inWeek = (d?: string) => d ? (new Date(d) >= monday && new Date(d) <= sunday) : false;
-    const map: Record<string, OutreachMember[]> = {};
-    
-    // Use effective data source - prefer allOutreachMembers if available, fallback to current monthly data
-    const dataSource = effectiveAllMembers.length > 0 ? effectiveAllMembers : outreachMembers;
-    
-    for (const m of dataSource) {
-      if (inWeek(m.outreachDate)) {
-        (map[m.bacentaId] ||= []).push(m);
-      }
-    }
-    return map;
-  }, [effectiveAllMembers, outreachMembers, weekStart]);
-
-  // Calculate weekly totals
-  const weeklyTotals = useMemo(() => {
-    const weeklyMembers = Object.values(weeklyMembersByBacenta).flat();
-    const weeklyTotal = weeklyMembers.length;
-    const weeklyComing = weeklyMembers.filter(m => m.comingStatus).length;
-    const weeklyConverted = weeklyMembers.filter(m => !!m.convertedMemberId).length;
-    return { weeklyTotal, weeklyComing, weeklyConverted };
-  }, [weeklyMembersByBacenta]);
-
   // Note: adding outreach bacenta is handled elsewhere; this view only displays
 
 
@@ -425,8 +379,7 @@ const OutreachView: React.FC = () => {
         {selectedBacentaId && outreachBacentas.find(b => b.id === selectedBacentaId) ? (
           <BacentaDetail
             bacenta={outreachBacentas.find(b => b.id === selectedBacentaId)!}
-            members={(weeklyMembersByBacenta[selectedBacentaId] || [])}
-            weekStart={weekStart}
+            members={(allMembersByBacenta[selectedBacentaId] || [])}
             onBack={() => setSelectedBacentaId('')}
           />
         ) : (
@@ -491,29 +444,6 @@ const OutreachView: React.FC = () => {
                             {outreachBacentas.length}
                           </span>
                         </div>
-                        
-                        {/* Current week stats */}
-                        {weeklyTotals.weeklyTotal > 0 && (
-                          <>
-                            <div className="pt-3 mt-3 border-t border-gray-100">
-                              <div className="text-xs text-gray-500 mb-2 font-medium uppercase tracking-wider">
-                                This Week
-                              </div>
-                              <div className="flex justify-between items-center text-sm">
-                                <span className="text-gray-600">People contacted:</span>
-                                <span className="font-semibold text-rose-600">
-                                  {weeklyTotals.weeklyTotal}
-                                </span>
-                              </div>
-                              <div className="flex justify-between items-center text-sm">
-                                <span className="text-gray-600">Coming this week:</span>
-                                <span className="font-semibold text-green-600">
-                                  {weeklyTotals.weeklyComing}
-                                </span>
-                              </div>
-                            </div>
-                          </>
-                        )}
                       </div>
                     </div>
                   </div>

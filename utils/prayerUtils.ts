@@ -45,10 +45,11 @@ function getDayName(date: string): 'tuesday' | 'wednesday' | 'thursday' | 'frida
 
 // Returns session info for a given date string (YYYY-MM-DD)
 // Checks for custom schedules (week-specific or default) before falling back to hardcoded defaults
+// Also checks if the day is disabled for the given date
 export function getPrayerSessionInfo(
   date: string,
   schedules?: PrayerSchedule[]
-): { start: string; end: string; hours: number } {
+): { start: string; end: string; hours: number; disabled?: boolean } {
   // If no schedules provided, use default hardcoded times
   if (!schedules || schedules.length === 0) {
     return getDefaultSessionInfo(date);
@@ -64,6 +65,32 @@ export function getPrayerSessionInfo(
 
   // First, check for a week-specific schedule
   const weekSchedule = schedules.find(s => !s.isPermanent && s.weekStart === weekStart);
+
+  // Check if this day is disabled for this date
+  let isDisabled = false;
+  if (weekSchedule?.disabledDays?.[dayName]) {
+    const disabledFromDate = weekSchedule.disabledDays[dayName];
+    if (disabledFromDate && date >= disabledFromDate) {
+      isDisabled = true;
+    }
+  }
+
+  // If not disabled by week-specific schedule, check default schedule
+  if (!isDisabled) {
+    const defaultSchedule = schedules.find(s => s.isPermanent && s.id === 'default');
+    if (defaultSchedule?.disabledDays?.[dayName]) {
+      const disabledFromDate = defaultSchedule.disabledDays[dayName];
+      if (disabledFromDate && date >= disabledFromDate) {
+        isDisabled = true;
+      }
+    }
+  }
+
+  // If day is disabled, return 0 hours
+  if (isDisabled) {
+    return { start: '00:00', end: '00:00', hours: 0, disabled: true };
+  }
+
   if (weekSchedule && weekSchedule.times[dayName]) {
     const { start, end } = weekSchedule.times[dayName];
     return { start, end, hours: calculateHours(start, end) };

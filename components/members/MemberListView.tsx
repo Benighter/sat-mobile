@@ -24,7 +24,7 @@ const MemberListView: React.FC<MemberListViewProps> = ({ bacentaFilter }) => {
   const ministryOnly: boolean = (currentTab?.data as any)?.ministryOnly === true;
   const ministryName: string | undefined = (currentTab?.data as any)?.ministryName;
 
-  const [roleFilter] = useState<'all' | 'Bacenta Leader' | 'Fellowship Leader' | 'Member'>('all');
+  const [roleFilter] = useState<'all' | 'Bacenta Leader' | 'Fellowship Leader' | 'Assistant' | 'Admin' | 'Member'>('all');
   
   // Welcome UI state - moved before any conditional returns
   const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
@@ -48,8 +48,10 @@ const MemberListView: React.FC<MemberListViewProps> = ({ bacentaFilter }) => {
       switch (role) {
         case 'Bacenta Leader': return 1; // Green Bacenta
         case 'Fellowship Leader': return 2; // Red Bacenta
-        case 'Member': return 3;
-        default: return 4; // For any undefined roles
+        case 'Assistant': return 3;
+        case 'Admin': return 4;
+        case 'Member': return 5;
+        default: return 6; // For any undefined roles
       }
     };
 

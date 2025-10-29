@@ -1,52 +1,15 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useAppContext } from '../../contexts/FirebaseAppContext';
 import { OutreachMember } from '../../types';
-import { formatDateToYYYYMMDD } from '../../utils/dateUtils';
 import Button from '../ui/Button';
 import ConfirmationModal from '../modals/confirmations/ConfirmationModal';
 // removed inline form components after switching to modal
 import Badge from '../ui/Badge';
-import { CalendarIcon, PlusIcon, CheckIcon, ExclamationTriangleIcon, ChevronLeftIcon, ChevronRightIcon, TrashIcon, UserIcon, PhoneIcon, XMarkIcon, FilterIcon } from '../icons';
+import { PlusIcon, CheckIcon, ExclamationTriangleIcon, TrashIcon, UserIcon, PhoneIcon, XMarkIcon, FilterIcon } from '../icons';
 import Input from '../ui/Input';
 import BulkOutreachAddModal from './BulkOutreachAddModal';
 import AddOutreachMemberModal from './AddOutreachMemberModal';
 import EditOutreachMemberModal from './EditOutreachMemberModal';
-
-// Week picker (Monday-based)
-const WeekPicker: React.FC<{ value: string; onChange: (v: string) => void }> = ({ value, onChange }) => {
-  const parse = (s: string) => new Date(s + 'T00:00:00');
-  const addDays = (d: Date, days: number) => {
-    const nd = new Date(d);
-    nd.setDate(nd.getDate() + days);
-    nd.setHours(0,0,0,0);
-    return nd;
-  };
-  const format = (d: Date) => formatDateToYYYYMMDD(d);
-
-  // value is already a Monday (YYYY-MM-DD)
-  const monday = parse(value);
-  const sunday = addDays(monday, 6);
-  const label = `${monday.toLocaleDateString(undefined,{ month:'short', day:'numeric' })} - ${sunday.toLocaleDateString(undefined,{ month:'short', day:'numeric' })}`;
-
-  return (
-    <div className="inline-flex items-center gap-2 bg-white/70 dark:bg-dark-700/60 rounded-full px-2 py-1.5 border border-gray-200 dark:border-dark-600 shadow-sm relative z-20 pointer-events-auto">
-      <button type="button" className="p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-dark-600 text-gray-600 pointer-events-auto relative z-30" onClick={() => {
-        onChange(format(addDays(monday, -7)));
-      }} aria-label="Previous week">
-        <ChevronLeftIcon className="w-4 h-4" />
-      </button>
-      <div className="flex items-center gap-2 px-2">
-        <CalendarIcon className="w-4 h-4 text-gray-600" />
-        <span className="font-semibold tracking-wide">Week of {monday.toLocaleDateString(undefined,{ weekday:'long' })} · {label}</span>
-      </div>
-      <button type="button" className="p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-dark-600 text-gray-600 pointer-events-auto relative z-30" onClick={() => {
-        onChange(format(addDays(monday, 7)));
-      }} aria-label="Next week">
-        <ChevronRightIcon className="w-4 h-4" />
-      </button>
-    </div>
-  );
-};
 
 interface BacentaOutreachViewProps {
   bacentaId: string;
@@ -55,32 +18,12 @@ interface BacentaOutreachViewProps {
 const BacentaOutreachView: React.FC<BacentaOutreachViewProps> = ({ bacentaId }) => {
   const {
     bacentas,
-    outreachMembers,
-    outreachMonth,
-    setOutreachMonth,
+    allOutreachMembers,
     updateOutreachMemberHandler,
     deleteOutreachMemberHandler,
     convertOutreachMemberToPermanentHandler,
     showToast
   } = useAppContext();
-
-  // Monday-based week state (YYYY-MM-DD for Monday)
-  const [weekStart, setWeekStart] = useState<string>(() => {
-    const now = new Date();
-    const day = now.getDay();
-    const diff = (day === 0 ? -6 : 1 - day);
-    const monday = new Date(now);
-    monday.setDate(now.getDate() + diff);
-    monday.setHours(0,0,0,0);
-    return formatDateToYYYYMMDD(monday);
-  });
-
-  // old inline form state removed in favor of modal
-  // Keep monthly subscription in sync when week changes
-  useEffect(() => {
-    const ym = weekStart.slice(0,7);
-    if (ym !== outreachMonth) setOutreachMonth(ym);
-  }, [weekStart, outreachMonth, setOutreachMonth]);
 
   // replaced inline form with modal
   const [showAddModal, setShowAddModal] = useState(false);
@@ -89,22 +32,10 @@ const BacentaOutreachView: React.FC<BacentaOutreachViewProps> = ({ bacentaId }) 
 
   const bacenta = bacentas.find(b => b.id === bacentaId);
 
-  // Filter outreach members for this bacenta and week
-  const weeklyMembers = useMemo(() => {
-    const monday = new Date(weekStart);
-    const sunday = new Date(monday);
-    sunday.setDate(monday.getDate() + 6);
-
-    const inWeek = (d?: string) => {
-      if (!d) return false;
-      const date = new Date(d);
-      return date >= monday && date <= sunday;
-    };
-
-    return outreachMembers.filter(m =>
-      m.bacentaId === bacentaId && inWeek(m.outreachDate)
-    );
-  }, [outreachMembers, bacentaId, weekStart]);
+  // Get all outreach members for this bacenta (no week filtering)
+  const allMembers = useMemo(() => {
+    return allOutreachMembers.filter(m => m.bacentaId === bacentaId);
+  }, [allOutreachMembers, bacentaId]);
 
   // removed old handleAdd - handled in modal
 
@@ -154,7 +85,7 @@ const BacentaOutreachView: React.FC<BacentaOutreachViewProps> = ({ bacentaId }) 
 
   const filteredMembers = useMemo(() => {
     const term = search.trim().toLowerCase();
-    return weeklyMembers.filter(m => {
+    return allMembers.filter(m => {
       if (showSonsOfGod && !m.sonOfGodId) return false;
       if (showComingOnly && !m.comingStatus) return false;
       if (!term) return true;
@@ -166,7 +97,7 @@ const BacentaOutreachView: React.FC<BacentaOutreachViewProps> = ({ bacentaId }) 
       ].join(' ').toLowerCase();
       return haystack.includes(term);
     });
-  }, [weeklyMembers, search, showSonsOfGod, showComingOnly]);
+  }, [allMembers, search, showSonsOfGod, showComingOnly]);
 
   if (!bacenta) {
     return <div className="p-8 text-center text-gray-500">Bacenta not found</div>;
@@ -180,9 +111,8 @@ const BacentaOutreachView: React.FC<BacentaOutreachViewProps> = ({ bacentaId }) 
           <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight bg-gradient-to-r from-rose-500 to-amber-500 bg-clip-text text-transparent">
             {bacenta.name} Outreach
           </h2>
-          <p className="text-sm text-gray-500 dark:text-dark-300 mt-1">Manage weekly outreach for this building</p>
+          <p className="text-sm text-gray-500 dark:text-dark-300 mt-1">All outreach members for this building</p>
         </div>
-        <WeekPicker value={weekStart} onChange={setWeekStart} />
       </div>
 
       {/* Add member button/form */}
@@ -208,9 +138,9 @@ const BacentaOutreachView: React.FC<BacentaOutreachViewProps> = ({ bacentaId }) 
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
             <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
               <span>Outreach Members</span>
-              <span className="text-sm font-normal text-gray-500">{filteredMembers.length} / {weeklyMembers.length}</span>
+              <span className="text-sm font-normal text-gray-500">{filteredMembers.length} / {allMembers.length}</span>
             </h3>
-            <div className="text-xs text-gray-500">Week starting {new Date(weekStart).toLocaleDateString()}</div>
+            <div className="text-xs text-gray-500">All time outreach contacts</div>
           </div>
           {/* Filter Bar */}
           <div className="flex flex-col lg:flex-row gap-3 items-stretch lg:items-center">
@@ -261,7 +191,7 @@ const BacentaOutreachView: React.FC<BacentaOutreachViewProps> = ({ bacentaId }) 
           </div>
         </div>
 
-        {weeklyMembers.length === 0 ? (
+        {allMembers.length === 0 ? (
           <div className="text-center py-12 text-gray-500">
             <UserIcon className="w-12 h-12 mx-auto mb-4 text-gray-300" />
             <p className="text-lg font-medium mb-2">No outreach members yet</p>
@@ -391,14 +321,12 @@ const BacentaOutreachView: React.FC<BacentaOutreachViewProps> = ({ bacentaId }) 
         onClose={() => setShowBulkModal(false)}
         bacentaId={bacentaId}
         bacentaName={bacenta?.name}
-        weekStart={weekStart}
       />
       <AddOutreachMemberModal
         isOpen={showAddModal}
         onClose={() => setShowAddModal(false)}
         bacentaId={bacentaId}
         bacentaName={bacenta?.name}
-        weekStart={weekStart}
       />
       <EditOutreachMemberModal
         isOpen={!!editingMember}

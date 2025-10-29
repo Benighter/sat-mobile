@@ -10,7 +10,7 @@ interface Props {
   isOpen: boolean;
   onClose: () => void;
   bacentaId: string; // outreach bacenta id
-  weekStart: string; // YYYY-MM-DD Monday
+  weekStart?: string; // YYYY-MM-DD (optional, defaults to today)
   bacentaName?: string;
 }
 
@@ -73,6 +73,9 @@ const BulkOutreachAddModal: React.FC<Props> = ({ isOpen, onClose, bacentaId, bac
     if (!parseResult) return;
     setStep('processing');
     try {
+      // Use provided weekStart or default to today's date
+      const outreachDate = weekStart || new Date().toISOString().slice(0, 10);
+
       const hasBornAgain = editableContacts.some(ec => ec.current.bornAgain);
       if (hasBornAgain) {
         let success = 0; const errs: string[] = [];
@@ -86,7 +89,7 @@ const BulkOutreachAddModal: React.FC<Props> = ({ isOpen, onClose, bacentaId, bac
                   name: c.name || '',
                   phoneNumber: c.phoneNumber || undefined,
                   roomNumber: c.roomNumber || undefined,
-                  outreachDate: weekStart,
+                  outreachDate: outreachDate,
                   bacentaId,
                   notes: '',
                   integrated: false
@@ -95,7 +98,7 @@ const BulkOutreachAddModal: React.FC<Props> = ({ isOpen, onClose, bacentaId, bac
                 console.warn('SonOfGod creation failed', e);
               }
             }
-            const outreachPayload = OutreachTextParser.convertToOutreachMember(c, bacentaId, weekStart) as any;
+            const outreachPayload = OutreachTextParser.convertToOutreachMember(c, bacentaId, outreachDate) as any;
             if (sonOfGodId) outreachPayload.sonOfGodId = sonOfGodId;
             await outreachMembersFirebaseService.add(outreachPayload);
             success++;
@@ -106,7 +109,7 @@ const BulkOutreachAddModal: React.FC<Props> = ({ isOpen, onClose, bacentaId, bac
         setAddedCount(success);
         setErrors(errs);
       } else {
-        const payload = parseResult.contacts.map(c => OutreachTextParser.convertToOutreachMember(c, bacentaId, weekStart));
+        const payload = parseResult.contacts.map(c => OutreachTextParser.convertToOutreachMember(c, bacentaId, outreachDate));
         const result = await addMultipleOutreachMembersHandler(payload);
         setAddedCount(result.successful.length);
         setErrors(result.failed.map(f => `Failed to add ${f.data.name}: ${f.error}`));

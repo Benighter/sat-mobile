@@ -27,7 +27,7 @@ const NewBelieversTableView: React.FC = () => {
   } = useAppContext();
 
   const [searchTerm, setSearchTerm] = useState('');
-  const [roleFilter, setRoleFilter] = useState<'all' | 'Bacenta Leader' | 'Fellowship Leader' | 'Member'>('all');
+  const [roleFilter, setRoleFilter] = useState<'all' | 'Bacenta Leader' | 'Fellowship Leader' | 'Assistant' | 'Admin' | 'Member'>('all');
   const [bacentaFilter, setBacentaFilter] = useState('');
   const [originFilter, setOriginFilter] = useState<'all' | 'outreach'>('all');
 
@@ -233,12 +233,14 @@ const NewBelieversTableView: React.FC = () => {
             <div className="w-full sm:w-48">
               <select
                 value={roleFilter}
-                onChange={(e) => setRoleFilter(e.target.value as 'all' | 'Bacenta Leader' | 'Fellowship Leader' | 'Member')}
+                onChange={(e) => setRoleFilter(e.target.value as 'all' | 'Bacenta Leader' | 'Fellowship Leader' | 'Assistant' | 'Admin' | 'Member')}
                 className="w-full px-3 py-3 sm:py-2 border border-gray-300 dark:border-dark-600 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent transition-colors text-base sm:text-sm bg-white dark:bg-dark-700 text-gray-900 dark:text-dark-100 text-center cursor-pointer"
               >
                 <option value="all">All Roles</option>
                 <option value="Bacenta Leader">💚 Green Bacentas</option>
                 <option value="Fellowship Leader">❤️ Red Bacentas</option>
+                <option value="Assistant">🤝 Assistants</option>
+                <option value="Admin">⚙️ Admins</option>
                 <option value="Member">👤 Members</option>
               </select>
             </div>

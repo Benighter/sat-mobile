@@ -72,7 +72,7 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
 
   const [searchTerm, setSearchTerm] = useState('');
   // Use global displayedDate from context for consistent month across the app
-  const [roleFilter, setRoleFilter] = useState<'all' | 'head' | 'leader' | 'assistant' | 'member'>('all');
+  const [roleFilter, setRoleFilter] = useState<'all' | 'head' | 'leader' | 'assistant' | 'admin' | 'member'>('all');
   const [showFrozen, setShowFrozen] = useState(false);
   // Tithe-only UI state
   const [showPaidOnly, setShowPaidOnly] = useState(false);
@@ -157,9 +157,11 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
     const getHierarchyRank = (m: Member) => {
       if ((m.role || 'Member') === 'Bacenta Leader') return 1; // Green Bacenta (Head)
       if ((m.role || 'Member') === 'Fellowship Leader') return 2; // Red Bacenta (Leader)
+      if ((m.role || 'Member') === 'Assistant') return 3; // Assistant
+      if ((m.role || 'Member') === 'Admin') return 4; // Admin
       const pos = (m.ministryPosition || '').toLowerCase();
-      if ((m.role || 'Member') === 'Member' && pos === 'assistant') return 3; // Assistant
-      return 4; // Member (or other positions)
+      if ((m.role || 'Member') === 'Member' && pos === 'assistant') return 3; // Ministry Assistant (legacy)
+      return 5; // Member (or other positions)
     };
 
   return members
@@ -198,7 +200,8 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
           if (roleFilter === 'head' && rank !== 1) return false;
           if (roleFilter === 'leader' && rank !== 2) return false;
           if (roleFilter === 'assistant' && rank !== 3) return false;
-          if (roleFilter === 'member' && rank !== 4) return false;
+          if (roleFilter === 'admin' && rank !== 4) return false;
+          if (roleFilter === 'member' && rank !== 5) return false;
         }
 
         // Filter by search term
@@ -396,6 +399,8 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
         const roleConfig = {
           'Bacenta Leader': { icon: '💚', displayName: 'Green Bacenta' },
           'Fellowship Leader': { icon: '❤️', displayName: 'Red Bacenta' },
+          'Assistant': { icon: '🤝', displayName: 'Assistant' },
+          'Admin': { icon: '⚙️', displayName: 'Admin' },
           'Member': { icon: '👤', displayName: 'Member' }
         };
         const roleIcon = roleConfig[member.role || 'Member'].icon;
@@ -914,7 +919,7 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
             <div className="w-full sm:w-56">
               <select
                 value={roleFilter}
-                onChange={(e) => setRoleFilter(e.target.value as 'all' | 'head' | 'leader' | 'assistant' | 'member')}
+                onChange={(e) => setRoleFilter(e.target.value as 'all' | 'head' | 'leader' | 'assistant' | 'admin' | 'member')}
                 className="w-full px-3 py-3 sm:py-2 border border-gray-300 dark:border-dark-600 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent transition-colors text-base sm:text-sm bg-white dark:bg-dark-700 text-gray-900 dark:text-dark-100 text-center cursor-pointer"
               >
                 <option value="all">All Roles</option>
@@ -929,6 +934,8 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
                   <>
                     <option value="head">💚 Green Bacentas</option>
                     <option value="leader">❤️ Red Bacentas</option>
+                    <option value="assistant">🤝 Assistants</option>
+                    <option value="admin">⚙️ Admins</option>
                     <option value="member">👤 Members</option>
                   </>
                 )}

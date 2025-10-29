@@ -125,6 +125,18 @@ const MemberCard: React.FC<MemberCardProps> = ({ member }) => {
                   <span>Fellowship Leader</span>
                 </div>
               )}
+              {member.role === 'Assistant' && (
+                <div className="flex items-center space-x-1 bg-gradient-to-r from-blue-100 to-blue-200 dark:from-blue-900/30 dark:to-blue-800/30 text-blue-700 dark:text-blue-200 px-3 py-1 rounded-full text-sm font-semibold shadow-sm">
+                  <span>🤝</span>
+                  <span>Assistant</span>
+                </div>
+              )}
+              {member.role === 'Admin' && (
+                <div className="flex items-center space-x-1 bg-gradient-to-r from-purple-100 to-purple-200 dark:from-purple-900/30 dark:to-purple-800/30 text-purple-700 dark:text-purple-200 px-3 py-1 rounded-full text-sm font-semibold shadow-sm">
+                  <span>⚙️</span>
+                  <span>Admin</span>
+                </div>
+              )}
               {member.role === 'Member' && (
                 <div className="flex items-center space-x-1 bg-gradient-to-r from-gray-100 to-gray-200 dark:from-gray-700/30 dark:to-gray-600/30 text-gray-700 dark:text-gray-200 px-3 py-1 rounded-full text-sm font-semibold shadow-sm">
                   <span>👤</span>

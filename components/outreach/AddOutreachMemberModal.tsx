@@ -11,7 +11,7 @@ interface Props {
   isOpen: boolean;
   onClose: () => void;
   bacentaId: string; // regular bacenta id used for both outreach record and member
-  weekStart: string; // YYYY-MM-DD (Monday)
+  weekStart?: string; // YYYY-MM-DD (optional, defaults to today)
   bacentaName?: string;
 }
 
@@ -46,6 +46,9 @@ const AddOutreachMemberModal: React.FC<Props> = ({ isOpen, onClose, bacentaId, w
     }
   setSubmitting(true);
     try {
+      // Use provided weekStart or default to today's date
+      const outreachDate = weekStart || new Date().toISOString().slice(0, 10);
+
       // If marked born again, create a SonOfGod record instead of immediate Member creation
       let sonOfGodId: string | undefined;
       if (bornAgain) {
@@ -54,7 +57,7 @@ const AddOutreachMemberModal: React.FC<Props> = ({ isOpen, onClose, bacentaId, w
             name: trimmed,
             phoneNumber: normalizedPhone || undefined,
             roomNumber: room || undefined,
-            outreachDate: weekStart,
+            outreachDate: outreachDate,
             bacentaId,
             notes: '',
             integrated: false
@@ -72,7 +75,7 @@ const AddOutreachMemberModal: React.FC<Props> = ({ isOpen, onClose, bacentaId, w
         bacentaId,
         comingStatus: coming === 'yes',
         notComingReason: coming === 'no' && reason ? reason : undefined,
-        outreachDate: weekStart,
+        outreachDate: outreachDate,
   ...(bornAgain && sonOfGodId ? { sonOfGodId } : {}),
       } as any);
 

@@ -95,10 +95,12 @@ const CopyAbsenteesView: React.FC = () => {
   const filteredMembers = useMemo(() => {
     const getRolePriority = (role: string | undefined) => {
       switch (role) {
-        case 'Bacenta Leader': return 1;
-        case 'Fellowship Leader': return 2;
-        case 'Member': return 3;
-        default: return 4;
+        case 'Bacenta Leader': return 1; // Green Bacenta
+        case 'Fellowship Leader': return 2; // Red Bacenta
+        case 'Assistant': return 3;
+        case 'Admin': return 4;
+        case 'Member': return 5;
+        default: return 6;
       }
     };
 

@@ -114,7 +114,8 @@ export const inviteService = {
     adminName: string,
     churchId: string,
     targetUser: User,
-    expirationHours: number = 168 // Default 7 days
+    expirationHours: number = 168, // Default 7 days
+    isMinistryInvite?: boolean // True if this is a ministry mode invitation
   ): Promise<AdminInvite> => {
     try {
       // Check if there's already a pending invite for this user
@@ -147,7 +148,8 @@ export const inviteService = {
         status: 'pending' as const,
         createdAt: now.toISOString(),
         expiresAt: expiresAt.toISOString(),
-        accessChurchId: churchId // The church the leader will have access to
+        accessChurchId: churchId, // The church the leader will have access to
+        ...(isMinistryInvite !== undefined ? { isMinistryInvite } : {}) // Include ministry flag if provided
       };
 
       const docRef = await addDoc(collection(db, 'adminInvites'), inviteData);
@@ -186,6 +188,8 @@ export const inviteService = {
   },
 
   // Accept an admin invite (changes user role to leader)
+  // Works for both normal mode and ministry mode invitations
+  // For ministry invites, userUid should be the ministry account's UID
   acceptAdminInvite: async (
     inviteId: string,
     userUid: string
@@ -213,13 +217,20 @@ export const inviteService = {
       }
 
       // Resolve the invited user's current church and data ownership
+      // Note: For ministry invites, this operates on the ministry account
       const userDocRef = doc(db, 'users', userUid);
       const userSnap = await getDoc(userDocRef);
       if (!userSnap.exists()) {
         return { success: false, message: 'User profile not found' };
       }
       const userData = userSnap.data() as User;
-      const userChurchId = userData.churchId;
+
+      // MINISTRY MODE FIX: For ministry invites, use the ministry church ID from contexts
+      // For normal invites, use the regular churchId
+      const isMinistryInvite = invite.isMinistryInvite === true;
+      const userChurchId = isMinistryInvite && userData.contexts?.ministryChurchId
+        ? userData.contexts.ministryChurchId
+        : userData.churchId;
 
       // Check if invited user already has members (or bacentas) under their church
       let hasOwnData = false;
@@ -276,6 +287,9 @@ export const inviteService = {
       }
 
       // Fallback: user has no data yet — proceed with the original leader invite flow
+      // This works for both normal and ministry mode:
+      // - Normal mode: Changes the user's normal account from admin → leader
+      // - Ministry mode: Changes the user's ministry account from admin → leader
       let resolvedChurchName: string | undefined;
       try {
         const churchSnap = await getDoc(doc(db, 'churches', invite.churchId));
@@ -287,6 +301,7 @@ export const inviteService = {
   const previousChurchId = userChurchId || userUid;
   const previousChurchName = (userData as any)?.churchName || undefined;
   const previousRole = (userData as any)?.role || 'admin';
+      // Update the user document (normal or ministry account depending on invite context)
       await updateDoc(userDocRef, {
         role: 'leader',
         churchId: invite.churchId,

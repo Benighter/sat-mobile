@@ -13,6 +13,7 @@ import Badge from '../ui/Badge';
 import ImageUpload from '../ui/ImageUpload';
 import ChangePasswordModal from '../auth/ChangePasswordModal';
 import AdminInviteManager from '../admin/AdminInviteManager';
+import InviteMigrationPanel from '../admin/InviteMigrationPanel';
 // import PushNotificationSettings from '../notifications/PushNotificationSettings';
 import { hasAdminPrivileges, hasLeaderPrivileges } from '../../utils/permissionUtils';
 import {
@@ -100,6 +101,7 @@ const ProfileSettingsView: React.FC = () => {
   const [imagePreview, setImagePreview] = useState<string>(userProfile?.profilePicture || '');
   const [isChangePasswordModalOpen, setIsChangePasswordModalOpen] = useState(false);
   const [isAdminInviteModalOpen, setIsAdminInviteModalOpen] = useState(false);
+  const [isMigrationPanelOpen, setIsMigrationPanelOpen] = useState(false);
   const [isFixingAccess, setIsFixingAccess] = useState(false);
   const [isConstituencyManagerOpen, setIsConstituencyManagerOpen] = useState(false);
   // const [isSendingTestEmail, setIsSendingTestEmail] = useState(false); // Email feature on hold
@@ -511,21 +513,43 @@ const ProfileSettingsView: React.FC = () => {
               <h2 className="text-2xl font-bold text-gray-900">Admin Features</h2>
             </div>
 
-            <div className="bg-gradient-to-r from-green-50 to-teal-50 rounded-2xl p-6 border border-green-100">
-              <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
-                <div className="flex-1">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Admin Invite Management</h3>
-                  <p className="text-gray-600">Generate invites to promote other admins to leaders under your authority</p>
+            <div className="space-y-4">
+              {/* Admin Invite Management */}
+              <div className="bg-gradient-to-r from-green-50 to-teal-50 rounded-2xl p-6 border border-green-100">
+                <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+                  <div className="flex-1">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">Admin Invite Management</h3>
+                    <p className="text-gray-600">Generate invites to promote other admins to leaders under your authority</p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="primary"
+                    onClick={() => setIsAdminInviteModalOpen(true)}
+                    className="h-12 px-6 bg-gradient-to-r from-green-600 to-teal-600 hover:from-green-700 hover:to-teal-700 rounded-2xl font-medium transition-all duration-200 flex items-center justify-center space-x-2 min-w-[160px]"
+                  >
+                    <UserGroupIcon className="w-5 h-5" />
+                    <span>Manage Invites</span>
+                  </Button>
                 </div>
-                <Button
-                  type="button"
-                  variant="primary"
-                  onClick={() => setIsAdminInviteModalOpen(true)}
-                  className="h-12 px-6 bg-gradient-to-r from-green-600 to-teal-600 hover:from-green-700 hover:to-teal-700 rounded-2xl font-medium transition-all duration-200 flex items-center justify-center space-x-2 min-w-[160px]"
-                >
-                  <UserGroupIcon className="w-5 h-5" />
-                  <span>Manage Invites</span>
-                </Button>
+              </div>
+
+              {/* Data Migration Tool */}
+              <div className="bg-gradient-to-r from-orange-50 to-amber-50 rounded-2xl p-6 border border-orange-100">
+                <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+                  <div className="flex-1">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">Ministry Invitation Data Fix</h3>
+                    <p className="text-gray-600">Fix data inconsistencies from ministry invitations accepted before the recent bug fix</p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => setIsMigrationPanelOpen(true)}
+                    className="h-12 px-6 bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 text-white rounded-2xl font-medium transition-all duration-200 flex items-center justify-center space-x-2 min-w-[160px]"
+                  >
+                    <RefreshIcon className="w-5 h-5" />
+                    <span>Run Migration</span>
+                  </Button>
+                </div>
               </div>
             </div>
           </div>
@@ -781,6 +805,15 @@ const ProfileSettingsView: React.FC = () => {
         isOpen={isAdminInviteModalOpen}
         onClose={() => setIsAdminInviteModalOpen(false)}
       />
+
+      {/* Migration Panel Modal */}
+      {isMigrationPanelOpen && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <InviteMigrationPanel onClose={() => setIsMigrationPanelOpen(false)} />
+          </div>
+        </div>
+      )}
 
       {/* Constituency Manager Overlay */}
       <ConstituencyManagerScreen

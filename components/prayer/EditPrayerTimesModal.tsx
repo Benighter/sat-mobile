@@ -28,6 +28,14 @@ const EditPrayerTimesModal: React.FC<EditPrayerTimesModalProps> = ({
     saturday: { start: '05:00', end: '07:00' },
     sunday: { start: '05:00', end: '07:00' }
   });
+  const [disabledDays, setDisabledDays] = useState<{
+    tuesday?: string;
+    wednesday?: string;
+    thursday?: string;
+    friday?: string;
+    saturday?: string;
+    sunday?: string;
+  }>({});
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
@@ -39,6 +47,7 @@ const EditPrayerTimesModal: React.FC<EditPrayerTimesModalProps> = ({
       if (scheduleToUse) {
         setTimes(scheduleToUse.times);
         setIsPermanent(scheduleToUse.isPermanent || false);
+        setDisabledDays(scheduleToUse.disabledDays || {});
       } else {
         // Reset to hardcoded defaults
         setTimes({
@@ -50,6 +59,7 @@ const EditPrayerTimesModal: React.FC<EditPrayerTimesModalProps> = ({
           sunday: { start: '05:00', end: '07:00' }
         });
         setIsPermanent(false);
+        setDisabledDays({});
       }
       setSaveSuccess(false);
     }
@@ -65,6 +75,21 @@ const EditPrayerTimesModal: React.FC<EditPrayerTimesModalProps> = ({
     }));
   };
 
+  const handleToggleDay = (day: keyof typeof times) => {
+    const today = new Date().toISOString().slice(0, 10);
+    setDisabledDays(prev => {
+      const newDisabledDays = { ...prev };
+      if (newDisabledDays[day]) {
+        // Re-enable the day (remove the disabled date)
+        delete newDisabledDays[day];
+      } else {
+        // Disable the day from today forward
+        newDisabledDays[day] = today;
+      }
+      return newDisabledDays;
+    });
+  };
+
   const handleSave = async () => {
     setIsSaving(true);
     setSaveSuccess(false);
@@ -73,7 +98,8 @@ const EditPrayerTimesModal: React.FC<EditPrayerTimesModalProps> = ({
         id: isPermanent ? 'default' : weekStart,
         weekStart: isPermanent ? undefined : weekStart,
         isPermanent,
-        times
+        times,
+        disabledDays
       };
       await onSave(schedule, isPermanent);
       setSaveSuccess(true);
@@ -144,35 +170,70 @@ const EditPrayerTimesModal: React.FC<EditPrayerTimesModalProps> = ({
           {/* Time inputs for each day */}
           <div className="space-y-4">
             <h3 className="font-semibold text-gray-900 text-lg">Prayer Session Times</h3>
-            {days.map(({ key, label }) => (
-              <div key={key} className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-center p-4 bg-gray-50 rounded-lg">
-                <div className="font-medium text-gray-700">{label}</div>
-                <div className="space-y-1">
-                  <label className="text-xs text-gray-600 block">Start Time</label>
-                  <input
-                    type="time"
-                    value={times[key].start}
-                    onChange={(e) => handleTimeChange(key, 'start', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
+            {days.map(({ key, label }) => {
+              const isDayDisabled = !!disabledDays[key];
+              return (
+                <div key={key} className={`p-4 rounded-lg border-2 transition-all ${isDayDisabled ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-200'}`}>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="font-medium text-gray-700">{label}</div>
+                    <label className="flex items-center space-x-2 cursor-pointer">
+                      <span className={`text-sm font-medium ${isDayDisabled ? 'text-red-600' : 'text-green-600'}`}>
+                        {isDayDisabled ? 'Disabled' : 'Enabled'}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleToggleDay(key)}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                          isDayDisabled ? 'bg-red-500' : 'bg-green-500'
+                        }`}
+                      >
+                        <span
+                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                            isDayDisabled ? 'translate-x-1' : 'translate-x-6'
+                          }`}
+                        />
+                      </button>
+                    </label>
+                  </div>
+                  {isDayDisabled && (
+                    <div className="mb-3 p-2 bg-red-100 border border-red-300 rounded text-xs text-red-800">
+                      <strong>Note:</strong> This day is disabled from {disabledDays[key]} onwards. Past dates are not affected.
+                    </div>
+                  )}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <label className="text-xs text-gray-600 block">Start Time</label>
+                      <input
+                        type="time"
+                        value={times[key].start}
+                        onChange={(e) => handleTimeChange(key, 'start', e.target.value)}
+                        disabled={isDayDisabled}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-200 disabled:cursor-not-allowed"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs text-gray-600 block">End Time</label>
+                      <input
+                        type="time"
+                        value={times[key].end}
+                        onChange={(e) => handleTimeChange(key, 'end', e.target.value)}
+                        disabled={isDayDisabled}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-200 disabled:cursor-not-allowed"
+                      />
+                    </div>
+                  </div>
                 </div>
-                <div className="space-y-1">
-                  <label className="text-xs text-gray-600 block">End Time</label>
-                  <input
-                    type="time"
-                    value={times[key].end}
-                    onChange={(e) => handleTimeChange(key, 'end', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           {/* Info message */}
           <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
             <p className="text-sm text-amber-800">
               <strong>Note:</strong> Times are in 24-hour format. The duration will be automatically calculated based on start and end times.
+            </p>
+            <p className="text-sm text-amber-800 mt-2">
+              <strong>Disabling Days:</strong> When you disable a day, it will not count towards prayer attendance from today onwards. Past prayer records remain unaffected. Re-enabling a day will only affect current and future dates.
             </p>
           </div>
         </div>

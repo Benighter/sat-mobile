@@ -12,10 +12,10 @@ const PrayerView: React.FC = () => {
   const [anchorDate, setAnchorDate] = useState<string>(getTuesdayToSundayRange()[0]);
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [bacentaFilter, setBacentaFilter] = useState<string>(''); // empty => all
-  type RoleFilter = 'all' | 'Bacenta Leader' | 'Fellowship Leader' | 'Member';
+  type RoleFilter = 'all' | 'Bacenta Leader' | 'Fellowship Leader' | 'Assistant' | 'Admin' | 'Member';
   const [roleFilter, setRoleFilter] = useState<RoleFilter>('all');
   const coerceRoleFilter = (v: string): RoleFilter => {
-    if (v === 'Bacenta Leader' || v === 'Fellowship Leader' || v === 'Member' || v === 'all') return v;
+    if (v === 'Bacenta Leader' || v === 'Fellowship Leader' || v === 'Assistant' || v === 'Admin' || v === 'Member' || v === 'all') return v;
     return 'all';
   };
 
@@ -146,10 +146,12 @@ const PrayerView: React.FC = () => {
   // Helpers matching Members table behavior
   const getRolePriority = (role?: string) => {
     switch (role) {
-      case 'Bacenta Leader': return 1;
-      case 'Fellowship Leader': return 2;
-      case 'Member': return 3;
-      default: return 4;
+      case 'Bacenta Leader': return 1; // Green Bacenta
+      case 'Fellowship Leader': return 2; // Red Bacenta
+      case 'Assistant': return 3;
+      case 'Admin': return 4;
+      case 'Member': return 5;
+      default: return 6;
     }
   };
 
@@ -655,6 +657,8 @@ const PrayerView: React.FC = () => {
                 <option value="all">All Roles</option>
                 <option value="Bacenta Leader">💚 Green Bacentas</option>
                 <option value="Fellowship Leader">❤️ Red Bacentas</option>
+                <option value="Assistant">🤝 Assistants</option>
+                <option value="Admin">⚙️ Admins</option>
                 <option value="Member">👤 Members</option>
               </select>
             </div>
@@ -723,25 +727,30 @@ const PrayerView: React.FC = () => {
               </th>
               {weekDates.map(d => {
                 const info = getSessionInfoForDate(d);
+                const isDayDisabled = info.disabled || false;
 
                 return (
-                  <th key={d} className="px-3 py-2 text-center whitespace-nowrap sticky top-0 z-10 bg-white dark:bg-dark-700">
+                  <th key={d} className={`px-3 py-2 text-center whitespace-nowrap sticky top-0 z-10 ${isDayDisabled ? 'bg-red-50' : 'bg-white dark:bg-dark-700'}`}>
                     {isAdmin ? (
                       <button
                         onClick={() => {
                           setEditingDate(d);
                           setIsEditTimesModalOpen(true);
                         }}
-                        className="flex flex-col items-center leading-tight hover:bg-blue-50 rounded px-2 py-1 transition-colors cursor-pointer"
-                        title={`${formatFullDate(d)} • ${info.start}–${info.end}\nClick to edit prayer times`}
+                        className={`flex flex-col items-center leading-tight rounded px-2 py-1 transition-colors cursor-pointer ${isDayDisabled ? 'hover:bg-red-100' : 'hover:bg-blue-50'}`}
+                        title={isDayDisabled ? `${formatFullDate(d)} • DISABLED\nClick to edit prayer times` : `${formatFullDate(d)} • ${info.start}–${info.end}\nClick to edit prayer times`}
                       >
-                        <span className="font-medium">{weekday(d)}</span>
-                        <span className="text-xs text-gray-500">{info.start}–{info.end}</span>
+                        <span className={`font-medium ${isDayDisabled ? 'text-red-600' : ''}`}>{weekday(d)}</span>
+                        <span className={`text-xs ${isDayDisabled ? 'text-red-500 font-semibold' : 'text-gray-500'}`}>
+                          {isDayDisabled ? 'DISABLED' : `${info.start}–${info.end}`}
+                        </span>
                       </button>
                     ) : (
-                      <div className="flex flex-col items-center leading-tight px-2 py-1" title={`${formatFullDate(d)} • ${info.start}–${info.end}`}>
-                        <span className="font-medium">{weekday(d)}</span>
-                        <span className="text-xs text-gray-500">{info.start}–{info.end}</span>
+                      <div className="flex flex-col items-center leading-tight px-2 py-1" title={isDayDisabled ? `${formatFullDate(d)} • DISABLED` : `${formatFullDate(d)} • ${info.start}–${info.end}`}>
+                        <span className={`font-medium ${isDayDisabled ? 'text-red-600' : ''}`}>{weekday(d)}</span>
+                        <span className={`text-xs ${isDayDisabled ? 'text-red-500 font-semibold' : 'text-gray-500'}`}>
+                          {isDayDisabled ? 'DISABLED' : `${info.start}–${info.end}`}
+                        </span>
                       </div>
                     )}
                   </th>
@@ -797,7 +806,9 @@ const PrayerView: React.FC = () => {
                   const key = `${m.id}_${date}`;
                   const status = recordsByKey.get(key);
                   const dateEditable = isPrayerDateEditable(date);
-                  const editable = dateEditable && !m.frozen; // disable edits for frozen members
+                  const sessionInfo = getSessionInfoForDate(date);
+                  const isDayDisabled = sessionInfo.disabled || false;
+                  const editable = dateEditable && !m.frozen && !isDayDisabled; // disable edits for frozen members and disabled days
 
                   // Compute disabled styling and reason
                   const now = new Date();
@@ -807,9 +818,11 @@ const PrayerView: React.FC = () => {
 
                   const baseClasses = 'w-6 h-6 md:w-7 md:h-7 rounded border-2 flex items-center justify-center transition-all duration-200';
                   const classes = !editable
-                    ? (m.frozen
-                        ? 'bg-gray-200 border-gray-300 cursor-not-allowed opacity-60'
-                        : (isFuture ? 'bg-blue-50 border-blue-200 cursor-not-allowed opacity-60' : 'bg-gray-200 border-gray-300 cursor-not-allowed opacity-60'))
+                    ? (isDayDisabled
+                        ? 'bg-red-100 border-red-300 cursor-not-allowed opacity-60'
+                        : (m.frozen
+                            ? 'bg-gray-200 border-gray-300 cursor-not-allowed opacity-60'
+                            : (isFuture ? 'bg-blue-50 border-blue-200 cursor-not-allowed opacity-60' : 'bg-gray-200 border-gray-300 cursor-not-allowed opacity-60')))
                     : status === 'Prayed'
                       ? 'bg-green-500 border-green-500 text-white hover:bg-green-600 cursor-pointer'
                       : status === 'Missed'
@@ -817,15 +830,17 @@ const PrayerView: React.FC = () => {
                         : 'bg-gray-100 border-gray-300 text-gray-400 hover:bg-gray-200 cursor-pointer';
 
                   const title = !editable
-                    ? (m.frozen
-                        ? 'Frozen member – prayer marking disabled'
-                        : (isFuture
-                            ? `Future date - cannot edit ${formatFullDate(date)}`
-                            : `Past date - only admins can edit ${formatFullDate(date)}`))
+                    ? (isDayDisabled
+                        ? `Day disabled - prayer attendance not counted for ${formatFullDate(date)}`
+                        : (m.frozen
+                            ? 'Frozen member – prayer marking disabled'
+                            : (isFuture
+                                ? `Future date - cannot edit ${formatFullDate(date)}`
+                                : `Past date - only admins can edit ${formatFullDate(date)}`)))
                     : `Click to ${!status ? 'mark prayed' : status === 'Prayed' ? 'mark missed' : 'clear'} for ${formatFullDate(date)}`;
 
                   return (
-                      <td key={date} className="px-3 py-2 text-center">
+                      <td key={date} className={`px-3 py-2 text-center ${isDayDisabled ? 'bg-red-50' : ''}`}>
                         <div className="flex justify-center">
                           <div
                             className={`${baseClasses} ${classes}`}

@@ -1,5 +1,5 @@
 
-export type MemberRole = 'Member' | 'Fellowship Leader' | 'Bacenta Leader';
+export type MemberRole = 'Member' | 'Admin' | 'Assistant' | 'Fellowship Leader' | 'Bacenta Leader';
 
 export interface Member {
   id: string;
@@ -39,6 +39,7 @@ export interface Member {
    */
   linkedBacentaIds?: string[]; // Secondary/linked bacentas (leaders only)
   bacentaLeaderId?: string; // For Red Bacentas (Fellowship Leaders): ID of the Green Bacenta (Bacenta Leader) they report to
+  assignedLeaderId?: string; // For Assistants and Admins: ID of the leader (Green or Red Bacenta) they are assigned to
   role: MemberRole; // Role assignment: Member (default), Red Bacenta (Fellowship Leader), or Green Bacenta (Bacenta Leader)
   birthday?: string; // Optional birthday field in YYYY-MM-DD format
   createdDate: string; // ISO string
@@ -126,6 +127,17 @@ export interface PrayerSchedule {
     friday: { start: string; end: string };
     saturday: { start: string; end: string };
     sunday: { start: string; end: string };
+  };
+  // Disabled days tracking - maps day name to the date from which it was disabled (YYYY-MM-DD)
+  // When a day is disabled, it affects current and future dates only
+  // When re-enabled, it only affects current and future dates (past disabled days remain unaffected)
+  disabledDays?: {
+    tuesday?: string; // Date from which Tuesday is disabled (undefined = enabled)
+    wednesday?: string;
+    thursday?: string;
+    friday?: string;
+    saturday?: string;
+    sunday?: string;
   };
   createdAt?: string; // ISO timestamp
   createdBy?: string; // User ID
@@ -321,6 +333,8 @@ export enum TabKeys {
   BIDIRECTIONAL_SYNC_TEST = 'bidirectional_sync_test',
   CONTACT = 'contact',
   CHAT = 'chat',
+  ASSIGNMENT_MANAGEMENT = 'assignment_management',
+  LEADER_HIERARCHY = 'leader_hierarchy',
 }
 
 export interface NavigationHistoryItem {
@@ -490,6 +504,7 @@ export interface AdminInvite {
   revokedAt?: string; // When leader access was revoked
   accessChurchId?: string; // Church ID that the leader should have access to
   handledAs?: 'cross-tenant-link'; // When accepted without role change, provide cross-tenant access instead
+  isMinistryInvite?: boolean; // True if this is a ministry mode invitation
 }
 
 // Cross-tenant (admin-to-admin) access sharing

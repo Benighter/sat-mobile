@@ -8,6 +8,8 @@ import DashboardView from './components/views/DashboardView';
 import LazyWrapper, { LazyMemberListView, LazyAttendanceAnalyticsView, LazyWeeklyAttendanceView, LazySundayConfirmationsView, LazyNewBelieversView, LazySonsOfGodView, LazyOutreachView, LazyBacentaOutreachView, LazyPrayerView, LazyPrayerMemberDetailsView, LazyMinistriesView, LazyBacentaLeadersView, LazyMyDeletionRequestsView, LazyMemberDeletionRequestsView, LazyBacentaMeetingsView, LazySundayHeadCountsView, LazySundayHeadCountSectionView, LazyContactView, LazyChatView } from './components/common/LazyWrapper';
 import ProfileSettingsView from './components/views/ProfileSettingsView';
 import CopyMembersView from './components/views/CopyMembersView';
+import AssignmentManagementView from './components/assignments/AssignmentManagementView';
+import LeaderHierarchyView from './components/assignments/LeaderHierarchyView';
 import CopyAbsenteesView from './components/views/CopyAbsenteesView';
 import BirthdaysView from './components/views/BirthdaysView';
 import BidirectionalSyncTest from './components/debug/BidirectionalSyncTest';
@@ -453,6 +455,10 @@ const AppContent: React.FC = memo(() => {
             <LazyChatView />
           </LazyWrapper>
         );
+      case TabKeys.ASSIGNMENT_MANAGEMENT:
+        return <AssignmentManagementView />;
+      case TabKeys.LEADER_HIERARCHY:
+        return <LeaderHierarchyView />;
 
       default:
         return (

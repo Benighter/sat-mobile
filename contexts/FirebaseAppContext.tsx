@@ -133,6 +133,8 @@ interface AppContextType {
   updateMemberHandler: (memberData: Member) => Promise<void>;
   deleteMemberHandler: (memberId: string) => Promise<void>;
   transferMemberToConstituencyHandler: (memberId: string, targetConstituencyId: string) => Promise<void>;
+  assignAssistantOrAdminToLeaderHandler: (assistantOrAdminId: string, leaderId: string) => Promise<void>;
+  unassignAssistantOrAdminHandler: (assistantOrAdminId: string) => Promise<void>;
 
   // Bacenta Operations
   addBacentaHandler: (bacentaData: Omit<Bacenta, 'id'>) => Promise<string>;
@@ -1249,6 +1251,95 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
       setIsLoading(false);
     }
   }, [showToast, members]);
+
+  const assignAssistantOrAdminToLeaderHandler = useCallback(async (assistantOrAdminId: string, leaderId: string) => {
+    if (!ensureCanWrite()) throw new Error('Read-only access');
+    try {
+      setIsLoading(true);
+
+      // Validate that the member being assigned is an Assistant or Admin
+      const member = members.find(m => m.id === assistantOrAdminId);
+      if (!member) {
+        throw new Error('Member not found');
+      }
+      if (member.role !== 'Assistant' && member.role !== 'Admin') {
+        throw new Error('Only Assistants and Admins can be assigned to leaders');
+      }
+
+      // Validate that the leader is a Green or Red Bacenta
+      const leader = members.find(m => m.id === leaderId);
+      if (!leader) {
+        throw new Error('Leader not found');
+      }
+      if (leader.role !== 'Bacenta Leader' && leader.role !== 'Fellowship Leader') {
+        throw new Error('Can only assign to Green Bacenta or Red Bacenta leaders');
+      }
+
+      // Update the member with the assigned leader
+      const updates: Partial<Member> = {
+        assignedLeaderId: leaderId
+      };
+
+      if (isMinistryContext) {
+        await ministryMembersService.update(assistantOrAdminId, updates, userProfile, member);
+      } else {
+        await membersFirebaseService.update(assistantOrAdminId, updates);
+      }
+
+      // Optimistic UI update
+      setMembers(prev => prev.map(m =>
+        m.id === assistantOrAdminId ? { ...m, assignedLeaderId: leaderId } : m
+      ));
+
+      showToast('success', `${member.role} assigned to ${leader.firstName} ${leader.lastName || ''}`);
+    } catch (error: any) {
+      setError(error.message);
+      showToast('error', 'Failed to assign', error.message);
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [members, showToast, isMinistryContext, userProfile]);
+
+  const unassignAssistantOrAdminHandler = useCallback(async (assistantOrAdminId: string) => {
+    if (!ensureCanWrite()) throw new Error('Read-only access');
+    try {
+      setIsLoading(true);
+
+      // Validate that the member exists
+      const member = members.find(m => m.id === assistantOrAdminId);
+      if (!member) {
+        throw new Error('Member not found');
+      }
+      if (member.role !== 'Assistant' && member.role !== 'Admin') {
+        throw new Error('Only Assistants and Admins can be unassigned');
+      }
+
+      // Update the member to remove the assigned leader
+      const updates: Partial<Member> = {
+        assignedLeaderId: undefined
+      };
+
+      if (isMinistryContext) {
+        await ministryMembersService.update(assistantOrAdminId, updates, userProfile, member);
+      } else {
+        await membersFirebaseService.update(assistantOrAdminId, updates);
+      }
+
+      // Optimistic UI update
+      setMembers(prev => prev.map(m =>
+        m.id === assistantOrAdminId ? { ...m, assignedLeaderId: undefined } : m
+      ));
+
+      showToast('success', `${member.role} unassigned`);
+    } catch (error: any) {
+      setError(error.message);
+      showToast('error', 'Failed to unassign', error.message);
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [members, showToast, isMinistryContext, userProfile]);
 
   const deleteMemberHandler = useCallback(async (memberId: string) => {
   if (!ensureCanWrite()) throw new Error('Read-only access');
@@ -3873,6 +3964,8 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     updateMemberHandler,
     deleteMemberHandler,
     transferMemberToConstituencyHandler,
+    assignAssistantOrAdminToLeaderHandler,
+    unassignAssistantOrAdminHandler,
 
     // Bacenta Operations
     addBacentaHandler,

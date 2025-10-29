@@ -159,6 +159,11 @@ export const canDeleteMemberWithRole = (user: User | null, memberRole: string): 
     return hasLeaderPrivileges(user);
   }
 
+  // If the member is an Assistant or Admin role, any leader or admin can delete them
+  if (memberRole === 'Assistant' || memberRole === 'Admin') {
+    return hasLeaderPrivileges(user);
+  }
+
   // If the member is a leader (Green Bacenta or Red Bacenta),
   // only original admins can delete them, not invited admin leaders
   if (memberRole === 'Bacenta Leader' || memberRole === 'Fellowship Leader') {

@@ -138,9 +138,11 @@ const AdminInviteScreen: React.FC<AdminInviteScreenProps> = ({ isOpen, onClose }
         userProfile.uid,
         userProfile.displayName,
         userProfile.churchId,
-        searchedUser
+        searchedUser,
+        168, // Default 7 days expiration
+        !!userProfile.isMinistryAccount // Pass ministry context
       );
-      
+
       showToast('success', `Invite sent to ${searchedUser.displayName}`);
       setSearchedUser(null);
       setSearchEmail('');

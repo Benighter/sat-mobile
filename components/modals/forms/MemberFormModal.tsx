@@ -45,7 +45,8 @@ const MemberFormModal: React.FC<MemberFormModalProps> = ({ isOpen, onClose, memb
     birthday: '', // Optional birthday field
     ministry: isMinistryContext ? ((activeMinistryName || '').trim()) : '',
     isNativeMinistryMember: isMinistryContext, // Mark as native if added in ministry mode
-    ministryPosition: ''
+    ministryPosition: '',
+    assignedLeaderId: undefined
   };
   const [formData, setFormData] = useState(initialFormData);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -70,6 +71,7 @@ const MemberFormModal: React.FC<MemberFormModalProps> = ({ isOpen, onClose, memb
   ministry: member.ministry || '',
   ministryPosition: member.ministryPosition || '',
         isNativeMinistryMember: member.isNativeMinistryMember || false,
+        assignedLeaderId: member.assignedLeaderId || undefined,
       });
     } else {
       // For new members, default to current bacenta if we're in one
@@ -79,6 +81,7 @@ const MemberFormModal: React.FC<MemberFormModalProps> = ({ isOpen, onClose, memb
         bacentaId: defaultBacentaId,
         linkedBacentaIds: [],
         ministry: isMinistryContext ? ((activeMinistryName || '').trim()) : '',
+        assignedLeaderId: undefined,
       });
     }
     setErrors({});
@@ -531,9 +534,11 @@ const MemberFormModal: React.FC<MemberFormModalProps> = ({ isOpen, onClose, memb
                         ));
                       }
                       const defaultOptions = [
-                        { value: 'Member' as MemberRole, label: 'Member' },
-                        { value: 'Fellowship Leader' as MemberRole, label: 'Red Bacenta' },
                         { value: 'Bacenta Leader' as MemberRole, label: 'Green Bacenta' },
+                        { value: 'Fellowship Leader' as MemberRole, label: 'Red Bacenta' },
+                        { value: 'Assistant' as MemberRole, label: 'Assistant' },
+                        { value: 'Admin' as MemberRole, label: 'Admin' },
+                        { value: 'Member' as MemberRole, label: 'Member' },
                       ];
                       return defaultOptions.map(opt => (
                         <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -541,6 +546,42 @@ const MemberFormModal: React.FC<MemberFormModalProps> = ({ isOpen, onClose, memb
                     })()}
                   </select>
                   {errors.role && <p className="mt-1 text-xs text-red-600">{errors.role}</p>}
+                </div>
+              )}
+
+              {/* Leader Assignment for Assistants and Admins */}
+              {!isMinistryContext && (formData.role === 'Assistant' || formData.role === 'Admin') && (
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-gray-700">
+                    <Users className="w-4 h-4 inline mr-1" />
+                    Assigned Leader (Optional)
+                  </label>
+                  <select
+                    name="assignedLeaderId"
+                    value={formData.assignedLeaderId || ''}
+                    onChange={handleChange}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors h-12"
+                  >
+                    <option value="">No Leader Assigned</option>
+                    {members
+                      .filter(m => m.role === 'Bacenta Leader' || m.role === 'Fellowship Leader')
+                      .sort((a, b) => {
+                        // Sort by role first (Bacenta Leader before Fellowship Leader)
+                        if (a.role !== b.role) {
+                          return a.role === 'Bacenta Leader' ? -1 : 1;
+                        }
+                        // Then by name
+                        return `${a.firstName} ${a.lastName || ''}`.localeCompare(`${b.firstName} ${b.lastName || ''}`);
+                      })
+                      .map(leader => (
+                        <option key={leader.id} value={leader.id}>
+                          {leader.firstName} {leader.lastName || ''} ({leader.role === 'Bacenta Leader' ? '💚 Green Bacenta' : '❤️ Red Bacenta'})
+                        </option>
+                      ))}
+                  </select>
+                  <p className="text-xs text-gray-500">
+                    Assign this {formData.role} to a Green Bacenta or Red Bacenta leader
+                  </p>
                 </div>
               )}
 

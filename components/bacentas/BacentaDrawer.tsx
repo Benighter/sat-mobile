@@ -419,6 +419,26 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
                     }}
                   />
 
+                  <NavigationItem
+                    icon={<UsersIcon className="w-4 h-4" />}
+                    label="Assignment Management"
+                    isActive={currentTab.id === TabKeys.ASSIGNMENT_MANAGEMENT}
+                    onClick={() => {
+                      switchTab({ id: TabKeys.ASSIGNMENT_MANAGEMENT, name: 'Assignment Management' });
+                      onClose();
+                    }}
+                  />
+
+                  <NavigationItem
+                    icon={<ChartBarIcon className="w-4 h-4" />}
+                    label="Leader Hierarchy"
+                    isActive={currentTab.id === TabKeys.LEADER_HIERARCHY}
+                    onClick={() => {
+                      switchTab({ id: TabKeys.LEADER_HIERARCHY, name: 'Leader Hierarchy' });
+                      onClose();
+                    }}
+                  />
+
                   </>)}
 
 
@@ -840,6 +860,20 @@ const NavigationItem: React.FC<NavigationItemProps> = ({
           icon: 'text-emerald-700 dark:text-emerald-300',
           text: 'text-emerald-900 dark:text-emerald-100',
           hover: 'hover:bg-emerald-50 dark:hover:bg-emerald-900/20 hover:border-l-emerald-500 dark:hover:border-l-emerald-500'
+        };
+      case 'Assignment Management':
+        return {
+          active: 'bg-indigo-100 dark:bg-indigo-900/40 border-l-4 border-l-indigo-600 dark:border-l-indigo-400 shadow-sm',
+          icon: 'text-indigo-700 dark:text-indigo-300',
+          text: 'text-indigo-900 dark:text-indigo-100',
+          hover: 'hover:bg-indigo-50 dark:hover:bg-indigo-900/20 hover:border-l-indigo-500 dark:hover:border-l-indigo-500'
+        };
+      case 'Leader Hierarchy':
+        return {
+          active: 'bg-teal-100 dark:bg-teal-900/40 border-l-4 border-l-teal-600 dark:border-l-teal-400 shadow-sm',
+          icon: 'text-teal-700 dark:text-teal-300',
+          text: 'text-teal-900 dark:text-teal-100',
+          hover: 'hover:bg-teal-50 dark:hover:bg-teal-900/20 hover:border-l-teal-500 dark:hover:border-l-teal-500'
         };
       default:
         return {

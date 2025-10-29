@@ -61,8 +61,10 @@ const CopyMembersView: React.FC = () => {
       switch (role) {
         case 'Bacenta Leader': return 1; // Green Bacenta
         case 'Fellowship Leader': return 2; // Red Bacenta
-        case 'Member': return 3;
-        default: return 4;
+        case 'Assistant': return 3;
+        case 'Admin': return 4;
+        case 'Member': return 5;
+        default: return 6;
       }
     };
 
@@ -120,6 +122,7 @@ const CopyMembersView: React.FC = () => {
       case 'leadersOnly':
         return filteredMembers.filter(m => m.role === 'Bacenta Leader' || m.role === 'Fellowship Leader');
       case 'excludeLeaders':
+        // Exclude all leadership roles (Green Bacenta, Red Bacenta, Assistant, Admin) - only include Members
         return filteredMembers.filter(m => m.role === 'Member' || !m.role);
       case 'all':
       default:

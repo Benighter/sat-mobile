@@ -49,8 +49,11 @@ const PendingInviteNotification: React.FC = () => {
 
     setProcessingInviteId(invite.id);
     try {
-      const result = await inviteService.acceptAdminInvite(invite.id, user.uid);
-      
+      // CRITICAL FIX: Use invite.invitedUserId instead of user.uid
+      // This ensures we update the correct account (normal vs ministry)
+      // The invite was sent to a specific account (invitedUserId), so we must update that account
+      const result = await inviteService.acceptAdminInvite(invite.id, invite.invitedUserId);
+
       if (result.success) {
         showToast('success', 'Invite Accepted!', result.message);
         setPendingInvites(prev => prev.filter(i => i.id !== invite.id));
