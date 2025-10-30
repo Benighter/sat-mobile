@@ -405,6 +405,9 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
         };
         const roleIcon = roleConfig[member.role || 'Member'].icon;
 
+        // Check if member is confirmed for upcoming Sunday
+        const isConfirmedForSunday = getConfirmationStatus(member.id, upcomingSunday) === 'Confirmed';
+
         return (
           <div
             className="flex items-center space-x-2 cursor-pointer hover:bg-blue-50 rounded-lg p-1 -m-1 transition-colors duration-200"
@@ -445,6 +448,14 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
                         ⭐
                       </span>
                     )}
+                    {isConfirmedForSunday && (
+                      <span
+                        className="text-xs flex-shrink-0 animate-pulse"
+                        title={`Confirmed for Sunday ${formatDisplayDate(upcomingSunday)}`}
+                      >
+                        ✅
+                      </span>
+                    )}
                     {member.frozen && (
                       <span className="ml-1 text-[10px] px-1.5 py-0.5 rounded bg-sky-100 text-sky-700 border border-sky-200" title="Frozen – excluded from counts and absentees">Frozen</span>
                     )}
@@ -465,7 +476,7 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
         );
       },
     }
-  ], [openMemberForm, isTithe]);
+  ], [openMemberForm, isTithe, upcomingSunday, getConfirmationStatus]);
 
   // Define scrollable columns (phone, role, born again, attendance dates, remove)
   const scrollableColumns = useMemo(() => {
