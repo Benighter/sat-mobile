@@ -5,7 +5,7 @@ import Button from '../ui/Button';
 import Input from '../ui/Input';
 import Select from '../ui/Select';
 import Badge from '../ui/Badge';
-import { UsersIcon, PlusIcon, CheckIcon, ExclamationTriangleIcon, ChevronLeftIcon, PeopleIcon, TrashIcon, XMarkIcon, FilterIcon } from '../icons';
+import { UsersIcon, PlusIcon, CheckIcon, ExclamationTriangleIcon, ChevronLeftIcon, PeopleIcon, TrashIcon, XMarkIcon, FilterIcon, ClipboardIcon } from '../icons';
 import AllBacentasView from '../bacentas/AllBacentasView';
 import BulkOutreachAddModal from './BulkOutreachAddModal';
 import AddOutreachMemberModal from './AddOutreachMemberModal';
@@ -19,7 +19,7 @@ const BacentaDetail: React.FC<{
   members: OutreachMember[];
   onBack: () => void;
 }> = ({ bacenta, members, onBack }) => {
-  const { deleteOutreachMemberHandler, convertOutreachMemberToPermanentHandler } = useAppContext();
+  const { deleteOutreachMemberHandler, convertOutreachMemberToPermanentHandler, showToast } = useAppContext();
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [room, setRoom] = useState('');
@@ -27,6 +27,7 @@ const BacentaDetail: React.FC<{
   const [reason, setReason] = useState('');
   const [showBulk, setShowBulk] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [isCopying, setIsCopying] = useState(false);
 
   // Filters
   const [search, setSearch] = useState('');
@@ -42,6 +43,103 @@ const BacentaDetail: React.FC<{
       return haystack.includes(term);
     });
   }, [members, search, showSonsOfGod, showComingOnly]);
+
+  // Copy phone number to clipboard
+  const handleCopyPhone = async (phoneNumber: string) => {
+    try {
+      // Try modern clipboard API first, fallback to legacy method
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(phoneNumber);
+      } else {
+        // Fallback for environments where clipboard API is not available
+        const textarea = document.createElement('textarea');
+        textarea.value = phoneNumber;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+      }
+
+      showToast('success', 'Copied!', `${phoneNumber} copied to clipboard.`);
+    } catch (error) {
+      console.error('Failed to copy phone number:', error);
+      showToast('error', 'Copy Failed', 'Failed to copy phone number to clipboard.');
+    }
+  };
+
+  // Copy functionality
+  const handleCopyOutreachMembers = async () => {
+    setIsCopying(true);
+
+    try {
+      if (filteredMembers.length === 0) {
+        showToast('warning', 'No Data', 'No outreach members to copy with current filters.');
+        setIsCopying(false);
+        return;
+      }
+
+      const lines: string[] = [];
+
+      filteredMembers.forEach((member, index) => {
+        const parts: string[] = [];
+
+        // Add number
+        parts.push(`${index + 1}.`);
+
+        // Add name
+        if (member.name) {
+          parts.push(member.name.trim());
+        }
+
+        // Add room number
+        if (member.roomNumber && member.roomNumber.trim()) {
+          parts.push(`Room ${member.roomNumber.trim()}`);
+        }
+
+        // Add phone number
+        if (member.phoneNumbers && member.phoneNumbers.length > 0 && member.phoneNumbers[0].trim()) {
+          parts.push(member.phoneNumbers[0].trim());
+        }
+
+        const line = parts.join(' ');
+        if (line.trim()) {
+          lines.push(line);
+        }
+      });
+
+      const textToCopy = lines.join('\n');
+
+      if (!textToCopy.trim()) {
+        showToast('warning', 'No Data', 'No outreach member data to copy.');
+        setIsCopying(false);
+        return;
+      }
+
+      // Try modern clipboard API first, fallback to legacy method
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(textToCopy);
+      } else {
+        // Fallback for environments where clipboard API is not available
+        const textarea = document.createElement('textarea');
+        textarea.value = textToCopy;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+      }
+
+      showToast('success', 'Copied!', `${filteredMembers.length} outreach member${filteredMembers.length !== 1 ? 's' : ''} copied to clipboard.`);
+    } catch (error) {
+      console.error('Failed to copy to clipboard:', error);
+      showToast('error', 'Copy Failed', 'Failed to copy to clipboard. Please try again.');
+    } finally {
+      setIsCopying(false);
+    }
+  };
 
   // inline add handler replaced by modal
 
@@ -124,7 +222,7 @@ const BacentaDetail: React.FC<{
                   </div>
                 )}
 
-                <div className="flex justify-end gap-4 pt-4 border-t border-gray-200 dark:border-dark-600">
+                <div className="flex justify-end gap-4 pt-4 border-t border-gray-200 dark:border-dark-600 flex-wrap">
                   <Button
                     onClick={() => setShowAddModal(true)}
                     leftIcon={<PlusIcon className="w-5 h-5" />}
@@ -137,6 +235,14 @@ const BacentaDetail: React.FC<{
                     onClick={() => setShowBulk(true)}
                   >
                     Bulk Add
+                  </Button>
+                  <Button
+                    onClick={handleCopyOutreachMembers}
+                    leftIcon={<ClipboardIcon className="w-5 h-5" />}
+                    variant="secondary"
+                    disabled={isCopying || filteredMembers.length === 0}
+                  >
+                    {isCopying ? 'Copying...' : 'Copy List'}
                   </Button>
                 </div>
               </div>
@@ -237,7 +343,17 @@ const BacentaDetail: React.FC<{
                             </div>
                             <div className="flex items-center gap-1">
                               <span className="font-medium">Phone:</span>
-                              <span>{m.phoneNumbers?.[0] || 'Not provided'}</span>
+                              {m.phoneNumbers?.[0] ? (
+                                <span
+                                  className="cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition-colors underline decoration-dotted"
+                                  onClick={() => handleCopyPhone(m.phoneNumbers![0])}
+                                  title="Click to copy phone number"
+                                >
+                                  {m.phoneNumbers[0]}
+                                </span>
+                              ) : (
+                                <span>Not provided</span>
+                              )}
                             </div>
                           </div>
 
