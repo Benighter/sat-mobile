@@ -7,6 +7,7 @@ import Button from '../ui/Button';
 import { OutreachMember } from '../../types';
 import { useAppContext } from '../../contexts/FirebaseAppContext';
 import { membersFirebaseService } from '../../services/firebaseService';
+import { getUpcomingSunday } from '../../utils/dateUtils';
 
 interface Props {
   isOpen: boolean;
@@ -32,12 +33,13 @@ const EditOutreachMemberModal: React.FC<Props> = ({ isOpen, onClose, member, bac
   // Hydrate fields whenever the targeted member changes or modal opens
   useEffect(() => {
     if (!member || !isOpen) return;
+    const currentSunday = getUpcomingSunday();
     setName(member.name || '');
     setPhone(member.phoneNumbers?.[0] || '');
     setRoom(member.roomNumber || '');
-    setComing(member.comingStatus ? 'yes' : 'no');
-  setReason(member.notComingReason || '');
-  setBornAgain(!!member.sonOfGodId || !!member.bornAgainMemberId);
+    setComing(member.comingStatus && member.comingStatusSunday === currentSunday ? 'yes' : 'no');
+    setReason(member.comingStatusSunday === currentSunday ? (member.notComingReason || '') : '');
+    setBornAgain(!!member.sonOfGodId || !!member.bornAgainMemberId);
   }, [member, isOpen]);
 
   const reset = () => {
@@ -62,6 +64,7 @@ const EditOutreachMemberModal: React.FC<Props> = ({ isOpen, onClose, member, bac
 
 
       const normalizedPhone = phone ? normalizePhone(phone) : '';
+      const comingStatusSunday = getUpcomingSunday();
 
       // Handle Born Again - use Sons of God system instead of creating members directly
       let sonOfGodId: string | undefined = member.sonOfGodId || undefined;
@@ -100,6 +103,7 @@ const EditOutreachMemberModal: React.FC<Props> = ({ isOpen, onClose, member, bac
         phoneNumbers: normalizedPhone ? [normalizedPhone] : [],
         roomNumber: room || undefined,
         comingStatus: coming === 'yes',
+        comingStatusSunday,
         notComingReason: coming === 'no' && reason ? reason : undefined,
       };
 

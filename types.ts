@@ -238,6 +238,11 @@ export interface OutreachMember {
   roomNumber?: string;
   bacentaId: string; // OutreachBacenta.id
   comingStatus: boolean; // Coming (Yes/No)
+  /**
+   * Sunday date (YYYY-MM-DD) for which the current comingStatus applies.
+   * If undefined or not equal to the upcoming Sunday, treat as "not coming" by default.
+   */
+  comingStatusSunday?: string;
   notComingReason?: string; // Optional reason when not coming
   outreachDate: string; // YYYY-MM-DD
   createdDate: string; // ISO

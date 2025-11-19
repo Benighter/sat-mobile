@@ -246,9 +246,12 @@ export const inviteService = {
         }
       } catch {}
 
-  if (hasOwnData) {
-        // Do NOT demote or change church. Instead, create a cross-tenant access link
-        // so the inviting admin can switch into this admin's church (super-admin style)
+      // If the invited admin already has their own data AND this is a normal-mode invite,
+      // do NOT demote or change church. Instead, create a cross-tenant access link so the
+      // inviting admin can switch into this admin's church (super-admin style).
+      // For ministry-mode invites we always convert the invited admin into a leader under
+      // the inviter's church, even if they already have data.
+      if (hasOwnData && !isMinistryInvite) {
         const linkPayload = {
           viewerUid: invite.createdBy,
           ownerUid: userUid,
@@ -297,19 +300,33 @@ export const inviteService = {
         resolvedChurchName = cData?.name;
       } catch {}
 
-  // Keep track of the user's previous context so we can restore it if removed later
-  const previousChurchId = userChurchId || userUid;
-  const previousChurchName = (userData as any)?.churchName || undefined;
-  const previousRole = (userData as any)?.role || 'admin';
+      // Keep track of the user's previous context so we can restore it if removed later
+      const previousChurchId = userChurchId || userUid;
+      const previousChurchName = (userData as any)?.churchName || undefined;
+      const previousRole = (userData as any)?.role || 'admin';
+
+      // Ensure ministry leaders see the inviting admin's church in ministry mode
+      let updatedContexts = (userData as any)?.contexts || undefined;
+      if (userData.isMinistryAccount === true) {
+        updatedContexts = {
+          ...(userData.contexts || {}),
+          ministryChurchId: invite.churchId
+        };
+      }
+
       // Update the user document (normal or ministry account depending on invite context)
-      await updateDoc(userDocRef, {
+      const userUpdate: any = {
         role: 'leader',
         churchId: invite.churchId,
         ...(resolvedChurchName ? { churchName: resolvedChurchName } : {}),
         isInvitedAdminLeader: true,
         invitedByAdminId: invite.createdBy,
         lastUpdated: new Date().toISOString()
-      });
+      };
+      if (updatedContexts) {
+        userUpdate.contexts = updatedContexts;
+      }
+      await updateDoc(userDocRef, userUpdate);
 
       const inviteDocRef = doc(db, 'adminInvites', inviteId);
       await updateDoc(inviteDocRef, {

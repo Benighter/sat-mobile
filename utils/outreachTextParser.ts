@@ -1,4 +1,5 @@
 import { OutreachMember } from '../types';
+import { getUpcomingSunday } from './dateUtils';
 
 export interface ParsedOutreachData {
   name: string;
@@ -224,12 +225,14 @@ export class OutreachTextParser {
     bacentaId: string,
     outreachDate: string
   ): Omit<OutreachMember, 'id' | 'createdDate' | 'lastUpdated'> {
+    const comingStatusSunday = getUpcomingSunday();
     return {
       name: parsed.name || 'Unknown',
       phoneNumbers: parsed.phoneNumber ? [parsed.phoneNumber] : [],
       roomNumber: parsed.roomNumber,
       bacentaId,
       comingStatus: false,
+      comingStatusSunday,
       outreachDate,
     } as any; // remaining optional props will be added by handler
   }

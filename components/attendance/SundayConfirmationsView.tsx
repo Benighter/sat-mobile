@@ -22,6 +22,8 @@ import {
   MinusIcon
 } from '../icons';
 import { Member, Bacenta, Guest } from '../../types';
+import { getActiveMembers } from '../../utils/memberUtils';
+
 import Dropdown from '../ui/Dropdown';
 import GuestFormModal from '../modals/forms/GuestFormModal';
 import GuestConversionModal from '../new-believers/GuestConversionModal';
@@ -128,9 +130,9 @@ const SundayConfirmationsView: React.FC = () => {
           setConfirmationTarget(target);
           setTargetInputValue(target.toString());
         } else {
-          // Default to total member count if no target is set
-          // Only use members.length if we actually have members loaded
-          const defaultTarget = members.length > 0 ? members.length : 0;
+          // Default to total ACTIVE member count (excluding frozen members and frozen bacentas)
+          const activeMemberCount = getActiveMembers(members, bacentas).length;
+          const defaultTarget = activeMemberCount > 0 ? activeMemberCount : 0;
           setConfirmationTarget(defaultTarget);
           setTargetInputValue(defaultTarget.toString());
         }
@@ -142,8 +144,9 @@ const SundayConfirmationsView: React.FC = () => {
           churchId: firebaseUtils.getCurrentChurchId(),
           selectedSunday
         });
-        // Fallback to member count, but only if we have members loaded
-        const defaultTarget = members.length > 0 ? members.length : 0;
+        // Fallback to active member count, but only if we have members loaded
+        const activeMemberCount = getActiveMembers(members, bacentas).length;
+        const defaultTarget = activeMemberCount > 0 ? activeMemberCount : 0;
         setConfirmationTarget(defaultTarget);
         setTargetInputValue(defaultTarget.toString());
       } finally {

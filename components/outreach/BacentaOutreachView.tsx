@@ -10,6 +10,7 @@ import Input from '../ui/Input';
 import BulkOutreachAddModal from './BulkOutreachAddModal';
 import AddOutreachMemberModal from './AddOutreachMemberModal';
 import EditOutreachMemberModal from './EditOutreachMemberModal';
+import { getUpcomingSunday } from '../../utils/dateUtils';
 
 interface BacentaOutreachViewProps {
   bacentaId: string;
@@ -37,14 +38,23 @@ const BacentaOutreachView: React.FC<BacentaOutreachViewProps> = ({ bacentaId }) 
     return allOutreachMembers.filter(m => m.bacentaId === bacentaId);
   }, [allOutreachMembers, bacentaId]);
 
+  const currentSunday = getUpcomingSunday();
+
+  const isComingThisWeek = (member: OutreachMember) => {
+    return !!(member.comingStatus && member.comingStatusSunday === currentSunday);
+  };
+
   // removed old handleAdd - handled in modal
 
   const handleToggleComing = async (member: OutreachMember) => {
+    const currentlyComing = isComingThisWeek(member);
+    const newComingStatus = !currentlyComing;
+
     try {
       await updateOutreachMemberHandler(member.id, {
-        comingStatus: !member.comingStatus,
-        notComingReason: member.comingStatus ? 'Changed to not coming' : undefined,
-        lastUpdated: new Date().toISOString(),
+        comingStatus: newComingStatus,
+        comingStatusSunday: currentSunday,
+        notComingReason: newComingStatus ? undefined : 'Changed to not coming',
       });
       showToast('success', 'Status updated');
     } catch (error) {
@@ -88,7 +98,7 @@ const BacentaOutreachView: React.FC<BacentaOutreachViewProps> = ({ bacentaId }) 
     const term = search.trim().toLowerCase();
     return allMembers.filter(m => {
       if (showSonsOfGod && !m.sonOfGodId) return false;
-      if (showComingOnly && !m.comingStatus) return false;
+      if (showComingOnly && !isComingThisWeek(m)) return false;
       if (!term) return true;
       const haystack = [
         m.name,
@@ -372,13 +382,18 @@ const BacentaOutreachView: React.FC<BacentaOutreachViewProps> = ({ bacentaId }) 
                       {member.roomNumber || '-'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-center">
-                      <Badge color={member.comingStatus ? 'green' : 'red'} size="sm">
-                        {member.comingStatus ? 'Coming' : 'Not Coming'}
+                      <Badge color={isComingThisWeek(member) ? 'green' : 'red'} size="sm">
+                        {isComingThisWeek(member) ? 'Coming' : 'Not Coming'}
                       </Badge>
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-500 max-w-xs">
-                      <div className="truncate" title={member.notComingReason || ''}>
-                        {member.notComingReason || '-'}
+                      <div
+                        className="truncate"
+                        title={member.comingStatusSunday === currentSunday && member.notComingReason ? member.notComingReason : ''}
+                      >
+                        {member.comingStatusSunday === currentSunday && member.notComingReason && !isComingThisWeek(member)
+                          ? member.notComingReason
+                          : '-'}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-center">
@@ -387,10 +402,12 @@ const BacentaOutreachView: React.FC<BacentaOutreachViewProps> = ({ bacentaId }) 
                           size="sm"
                           variant="ghost"
                           onClick={() => handleToggleComing(member)}
-                          title={member.comingStatus ? 'Mark as not coming' : 'Mark as coming'}
+                          title={isComingThisWeek(member) ? 'Mark as not coming' : 'Mark as coming'}
                           className="p-1.5"
                         >
-                          {member.comingStatus ? <ExclamationTriangleIcon className="w-4 h-4 text-orange-500" /> : <CheckIcon className="w-4 h-4 text-green-500" />}
+                          {isComingThisWeek(member)
+                            ? <ExclamationTriangleIcon className="w-4 h-4 text-orange-500" />
+                            : <CheckIcon className="w-4 h-4 text-green-500" />}
                         </Button>
 
                         {!member.convertedMemberId && (

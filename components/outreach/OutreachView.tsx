@@ -9,7 +9,12 @@ import { UsersIcon, PlusIcon, CheckIcon, ExclamationTriangleIcon, ChevronLeftIco
 import AllBacentasView from '../bacentas/AllBacentasView';
 import BulkOutreachAddModal from './BulkOutreachAddModal';
 import AddOutreachMemberModal from './AddOutreachMemberModal';
+import { getUpcomingSunday } from '../../utils/dateUtils';
 
+
+const isComingForSunday = (member: OutreachMember, sunday: string) => {
+  return !!(member.comingStatus && member.comingStatusSunday === sunday);
+};
 
 // MonthPicker not used in this composition; removed to reduce noise
 
@@ -29,6 +34,8 @@ const BacentaDetail: React.FC<{
   const [showAddModal, setShowAddModal] = useState(false);
   const [isCopying, setIsCopying] = useState(false);
 
+  const currentSunday = getUpcomingSunday();
+
   // Filters
   const [search, setSearch] = useState('');
   const [showSonsOfGod, setShowSonsOfGod] = useState(false);
@@ -37,12 +44,12 @@ const BacentaDetail: React.FC<{
     const term = search.trim().toLowerCase();
     return members.filter(m => {
       if (showSonsOfGod && !m.sonOfGodId) return false;
-      if (showComingOnly && !m.comingStatus) return false;
+      if (showComingOnly && !isComingForSunday(m, currentSunday)) return false;
       if (!term) return true;
       const haystack = [m.name, m.roomNumber || '', (m.phoneNumbers||[]).join(' '), m.notComingReason || ''].join(' ').toLowerCase();
       return haystack.includes(term);
     });
-  }, [members, search, showSonsOfGod, showComingOnly]);
+  }, [members, search, showSonsOfGod, showComingOnly, currentSunday]);
 
   // Copy phone number to clipboard
   const handleCopyPhone = async (phoneNumber: string) => {
@@ -323,7 +330,7 @@ const BacentaDetail: React.FC<{
                         <div className="flex-1 space-y-2">
                           <div className="flex items-center gap-3">
                             <h3 className="font-bold text-lg text-gray-900 dark:text-white">{m.name}</h3>
-                            {m.comingStatus ? (
+                            {isComingForSunday(m, currentSunday) ? (
                               <Badge color="green" className="font-medium">
                                 <CheckIcon className="w-3 h-3 mr-1" />
                                 Coming
@@ -357,7 +364,7 @@ const BacentaDetail: React.FC<{
                             </div>
                           </div>
 
-              {!m.comingStatus && m.notComingReason && (
+              {m.comingStatusSunday === currentSunday && m.notComingReason && !isComingForSunday(m, currentSunday) && (
                             <div className="text-sm text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 px-3 py-2 rounded-lg">
                 <span className="font-medium">Reason:</span> {m.notComingReason}
                             </div>
@@ -421,6 +428,8 @@ const OutreachView: React.FC = () => {
     currentTab,
   } = useAppContext();
 
+  const currentSunday = getUpcomingSunday();
+
   // const [newBacentaName, setNewBacentaName] = useState('');
   const [selectedBacentaId, setSelectedBacentaId] = useState<string>('');
 
@@ -464,25 +473,25 @@ const OutreachView: React.FC = () => {
   const totals = useMemo(() => {
     // Calculate totals consistently using only valid outreach members
     const overall = effectiveAllMembers.length;
-    const overallComing = effectiveAllMembers.filter(m => m.comingStatus).length;
+    const overallComing = effectiveAllMembers.filter(m => isComingForSunday(m, currentSunday)).length;
     const overallConverted = effectiveAllMembers.filter(m => !!m.convertedMemberId).length;
     const overallComingRate = overall ? Math.round((overallComing / overall) * 100) : 0;
     const overallConversionRate = overall ? Math.round((overallConverted / overall) * 100) : 0;
-    
+
     // Calculate per-outreach-bacenta stats for the individual cards in this view
     const perBacenta = outreachBacentas.map(b => {
       const list = allMembersByBacenta[b.id] || [];
       const total = list.length;
-      const coming = list.filter(m => m.comingStatus).length;
+      const coming = list.filter(m => isComingForSunday(m, currentSunday)).length;
       const converted = list.filter(m => !!m.convertedMemberId).length;
       const comingRate = total ? Math.round((coming / total) * 100) : 0;
       const conversionRate = total ? Math.round((converted / total) * 100) : 0;
-      
+
       return { bacenta: b, total, coming, converted, comingRate, conversionRate };
     });
-    
+
     return { perBacenta, overall, overallComing, overallConverted, overallComingRate, overallConversionRate };
-  }, [outreachBacentas, allMembersByBacenta, effectiveAllMembers]);
+  }, [outreachBacentas, allMembersByBacenta, effectiveAllMembers, currentSunday]);
 
   // Note: adding outreach bacenta is handled elsewhere; this view only displays
 

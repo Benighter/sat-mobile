@@ -6,6 +6,7 @@ import Checkbox from '../ui/Checkbox';
 import Button from '../ui/Button';
 import { useAppContext } from '../../contexts/FirebaseAppContext';
 import { sonsOfGodFirebaseService } from '../../services/firebaseService';
+import { getUpcomingSunday } from '../../utils/dateUtils';
 
 interface Props {
   isOpen: boolean;
@@ -48,6 +49,7 @@ const AddOutreachMemberModal: React.FC<Props> = ({ isOpen, onClose, bacentaId, w
     try {
       // Use provided weekStart or default to today's date
       const outreachDate = weekStart || new Date().toISOString().slice(0, 10);
+      const comingStatusSunday = getUpcomingSunday();
 
       // If marked born again, create a SonOfGod record instead of immediate Member creation
       let sonOfGodId: string | undefined;
@@ -74,9 +76,10 @@ const AddOutreachMemberModal: React.FC<Props> = ({ isOpen, onClose, bacentaId, w
         roomNumber: room || undefined,
         bacentaId,
         comingStatus: coming === 'yes',
+        comingStatusSunday,
         notComingReason: coming === 'no' && reason ? reason : undefined,
         outreachDate: outreachDate,
-  ...(bornAgain && sonOfGodId ? { sonOfGodId } : {}),
+        ...(bornAgain && sonOfGodId ? { sonOfGodId } : {}),
       } as any);
 
       reset();
