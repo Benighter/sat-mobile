@@ -3,7 +3,7 @@
 export const getSundaysOfMonth = (year: number, month: number): string[] => {
   const sundays: string[] = [];
   const date = new Date(year, month, 1);
-  
+
   // Find the first Sunday
   while (date.getDay() !== 0) { // 0 is Sunday
     date.setDate(date.getDate() + 1);
@@ -73,6 +73,13 @@ export const formatDateToDisplay = (dateString: string): string => {
   const date = new Date(dateString + 'T00:00:00'); // Ensure parsing as local date
   return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 };
+
+// Formats a YYYY-MM-DD string or Date object to '9 March 2025'
+export const formatDateDayMonthYear = (dateInput: string | Date): string => {
+  const date = typeof dateInput === 'string' ? new Date(dateInput + 'T00:00:00') : dateInput;
+  return date.toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' });
+};
+
 
 export const isSameDate = (date1Str: string, date2Str: string): boolean => {
   return date1Str === date2Str;
