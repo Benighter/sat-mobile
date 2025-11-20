@@ -6,6 +6,7 @@ import { firebaseUtils } from '../../services/firebaseService';
 import Button from '../ui/Button';
 import Modal from '../ui/Modal';
 import ExcelExportModal from '../modals/data/ExcelExportModal';
+import PowerPointExportModal from '../modals/data/PowerPointExportModal';
 import SelectiveDataClearingModal from '../modals/data/SelectiveDataClearingModal';
 import {
   TrashIcon,
@@ -22,6 +23,8 @@ interface DataManagementProps {
 const DataManagement: React.FC<DataManagementProps> = ({ isOpen, onClose }) => {
   const { bacentas, members, attendanceRecords, showConfirmation, showToast, userProfile, cleanupDuplicateMembers } = useAppContext();
   const [isExcelExportOpen, setIsExcelExportOpen] = useState(false);
+  const [isPowerPointExportOpen, setIsPowerPointExportOpen] = useState(false);
+
   const [isSelectiveDataClearingOpen, setIsSelectiveDataClearingOpen] = useState(false);
 
   const [isCleaningDuplicates, setIsCleaningDuplicates] = useState(false);
@@ -76,7 +79,7 @@ const DataManagement: React.FC<DataManagementProps> = ({ isOpen, onClose }) => {
   return (
     <>
       <Modal
-        isOpen={isOpen && !isExcelExportOpen}
+        isOpen={isOpen && !isExcelExportOpen && !isPowerPointExportOpen}
         onClose={onClose}
         title="Data Management"
       >
@@ -100,6 +103,22 @@ const DataManagement: React.FC<DataManagementProps> = ({ isOpen, onClose }) => {
                 <span>Create Excel Report</span>
               </Button>
             </div>
+	            <div className="bg-purple-50 border border-purple-200 rounded-xl p-4">
+	              <h4 className="font-medium text-purple-800 mb-2">📽 Hierarchy PowerPoint Report</h4>
+	              <p className="text-sm text-purple-700 mb-3">
+	                Generate a PowerPoint presentation with slides grouped by Green Bacentas, Red Bacentas,
+	                assistants and members, showing member cards with space for photos.
+	              </p>
+	              <Button
+	                onClick={() => setIsPowerPointExportOpen(true)}
+	                variant="secondary"
+	                className="flex items-center space-x-2 border-purple-300 text-purple-800 hover:bg-purple-100"
+	              >
+	                <DocumentArrowDownIcon className="w-5 h-5" />
+	                <span>Create PowerPoint Report</span>
+	              </Button>
+	            </div>
+
           </div>
 
           {/* Danger Zone - Admin Only */}
@@ -196,6 +215,12 @@ const DataManagement: React.FC<DataManagementProps> = ({ isOpen, onClose }) => {
         isOpen={isOpen && isExcelExportOpen}
         onClose={() => setIsExcelExportOpen(false)}
       />
+	      {/* PowerPoint Export Modal (separate so Data Management is hidden while exporting) */}
+	      <PowerPointExportModal
+	        isOpen={isOpen && isPowerPointExportOpen}
+	        onClose={() => setIsPowerPointExportOpen(false)}
+	      />
+
     </>
   );
 };
