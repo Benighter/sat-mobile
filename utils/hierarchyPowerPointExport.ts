@@ -40,6 +40,16 @@ const formatBirthdayDayMonth = (dateInput: string | Date): string => {
   return date.toLocaleDateString(undefined, { day: 'numeric', month: 'long' });
 };
 
+const getProfileImageDataForPpt = (profilePicture?: string): string | undefined => {
+  if (!profilePicture) return undefined;
+  if (profilePicture.startsWith('data:')) {
+    // Strip `data:` so PptxGenJS gets `image/png;base64,...`
+    return profilePicture.substring(5);
+  }
+  return profilePicture;
+};
+
+
 
 const getFullName = (member: Member): string => {
   return `${member.firstName} ${member.lastName || ''}`.trim();
@@ -238,21 +248,47 @@ export const exportHierarchyPowerPoint = async (
           line: { color: 'E5E5E5', width: 1 }
         });
 
-        // Photo placeholder
-        slide.addText('Photo', {
+        // Photo frame
+        slide.addText('', {
           x,
           y,
-          w: 1.8,
+          w: 2.1,
           h: cardH,
-          fontSize: 10,
-          align: 'center',
-          color: '7F7F7F',
           fill: { color: 'EDEDED' },
           line: { color: 'BFBFBF', width: 1 }
         });
 
-        const contentX = x + 2.1;
-        const contentWidth = cardW - 2.5;
+        const profileImageData = getProfileImageDataForPpt(member.profilePicture);
+
+        if (profileImageData) {
+          // Keep aspect ratio: fit nicely inside the wider photo frame without squishing
+          slide.addImage({
+            data: profileImageData,
+            x: x + 0.05,
+            y: y + 0.05,
+            w: 2.0,
+            h: cardH - 0.1,
+            sizing: {
+              type: 'cover',
+              w: 2.0,
+              h: cardH - 0.1
+            },
+            altText: getFullName(member)
+          });
+        } else {
+          slide.addText('Photo', {
+            x,
+            y,
+            w: 2.1,
+            h: cardH,
+            fontSize: 10,
+            align: 'center',
+            color: '7F7F7F'
+          });
+        }
+
+        const contentX = x + 2.4;
+        const contentWidth = cardW - 2.8;
         const bacentaName = getBacentaName(bacentas, member.bacentaId);
 
         // Member name as a clear heading
