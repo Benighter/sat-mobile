@@ -3,6 +3,8 @@ import { Member, Bacenta, AttendanceRecord } from '../types';
 import { DirectoryHandle, saveFileToDirectory } from './fileSystemUtils';
 import { formatDateDayMonthYear } from './dateUtils';
 import { DEFAULT_CHURCH } from '../constants';
+import { isMemberWentHome } from './memberStatus';
+import { buildHierarchyGrouping, HierarchySectionKind } from './hierarchyGrouping';
 
 export interface HierarchyExcelExportOptions {
   directory?: DirectoryHandle | null;
@@ -17,6 +19,8 @@ export interface HierarchyExcelExportOptions {
    * Falls back to the default church name if not provided.
    */
   constituencyName?: string;
+  isMinistryContext?: boolean;
+  ministryName?: string;
 }
 
 export interface HierarchyExcelData {
@@ -47,7 +51,25 @@ const ROLE_COLORS: Record<string, string> = {
   'Fellowship Leader': 'FFF4CCCC', // light red
   Assistant: 'FFC9DAF8', // light blue
   Admin: 'FFC9DAF8', // same as Assistant
-  Member: 'FFF2F2F2' // light gray
+  Member: 'FFF2F2F2', // light gray
+  MinistryHead: 'FFD9EAD3',
+  MinistryLeader: 'FFF4CCCC',
+  MinistryAssistant: 'FFC9DAF8',
+  MinistryMember: 'FFF2F2F2'
+};
+
+const DEFAULT_SECTION_COLOR_KEYS: Record<HierarchySectionKind, string> = {
+  head: 'Bacenta Leader',
+  leader: 'Fellowship Leader',
+  assistant: 'Assistant',
+  member: 'Member'
+};
+
+const MINISTRY_SECTION_COLOR_KEYS: Record<HierarchySectionKind, string> = {
+  head: 'MinistryHead',
+  leader: 'MinistryLeader',
+  assistant: 'MinistryAssistant',
+  member: 'MinistryMember'
 };
 
 const getFullName = (member: Member): string => {
@@ -61,7 +83,11 @@ const getBacentaName = (bacentas: Bacenta[], bacentaId: string | undefined): str
 };
 
 const getActiveMembers = (members: Member[]): Member[] => {
-  return members.filter(m => !m.frozen && m.isActive !== false);
+  return members.filter(m => {
+    if (m.isActive === false) return false;
+    if (m.frozen && !isMemberWentHome(m)) return false;
+    return true;
+  });
 };
 
 const getUniqueAttendanceDates = (
@@ -112,6 +138,11 @@ export const getHierarchyExportPreview = (data: HierarchyExcelData): HierarchyEx
   const { startDate, endDate } = data.options || {};
   const dates = getUniqueAttendanceDates(data.attendanceRecords, memberIds, startDate, endDate);
   const uniqueBacentas = new Set(activeMembers.map(m => m.bacentaId).filter(Boolean));
+  const grouping = buildHierarchyGrouping(activeMembers, {
+    isMinistryMode: Boolean(data.options?.isMinistryContext),
+    ministryName: data.options?.ministryName
+  });
+  const sectionNames = grouping.sections.map(section => section.title).join(', ');
 
   const firstDate = dates[0];
   const lastDate = dates[dates.length - 1];
@@ -128,7 +159,7 @@ export const getHierarchyExportPreview = (data: HierarchyExcelData): HierarchyEx
     firstDate,
     lastDate,
     features: [
-      'Single worksheet with sections for Green Bacentas, Red Bacentas, Assistants, Members',
+      `Single worksheet with sections for ${sectionNames || 'all hierarchy levels'}`,
       'Headings: Fullname, Contacts, Bacenta, then attendance across all dates',
       'Color-coded rows by role',
       'Attendance history for the selected date range (or full history)'
@@ -147,6 +178,11 @@ export const exportHierarchyExcel = async (
     const { startDate, endDate } = options || {};
     const dates = getUniqueAttendanceDates(attendanceRecords, memberIds, startDate, endDate);
     const attendanceMap = buildAttendanceMap(attendanceRecords, memberIds, startDate, endDate);
+    const grouping = buildHierarchyGrouping(activeMembers, {
+      isMinistryMode: Boolean(options?.isMinistryContext),
+      ministryName: options?.ministryName
+    });
+    const sectionColorKeys = options?.isMinistryContext ? MINISTRY_SECTION_COLOR_KEYS : DEFAULT_SECTION_COLOR_KEYS;
 
     const workbook = new ExcelJS.Workbook();
     const reportName = options?.constituencyName || CHURCH_INFO.name;
@@ -269,32 +305,9 @@ export const exportHierarchyExcel = async (
     }
 
 
-    const sortByName = (a: Member, b: Member) =>
-      getFullName(a).localeCompare(getFullName(b));
-
-    const greenBacentas = activeMembers
-      .filter(m => m.role === 'Bacenta Leader')
-      .sort(sortByName);
-    const redBacentas = activeMembers
-      .filter(m => m.role === 'Fellowship Leader')
-      .sort(sortByName);
-    const assistants = activeMembers
-      .filter(m => m.role === 'Assistant' || m.role === 'Admin')
-      .sort(sortByName);
-    const membersOnly = activeMembers
-      .filter(
-        m =>
-          m.role !== 'Bacenta Leader' &&
-          m.role !== 'Fellowship Leader' &&
-          m.role !== 'Assistant' &&
-          m.role !== 'Admin'
-      )
-      .sort(sortByName);
-
-    writeSection('Green Bacentas', greenBacentas, 'Bacenta Leader');
-    writeSection('Red Bacentas', redBacentas, 'Fellowship Leader');
-    writeSection('Assistants', assistants, 'Assistant');
-    writeSection('Members', membersOnly, 'Member');
+    grouping.sections.forEach(section => {
+      writeSection(section.title, section.members, sectionColorKeys[section.kind]);
+    });
 
     // Auto-width columns
     worksheet.columns.forEach(column => {

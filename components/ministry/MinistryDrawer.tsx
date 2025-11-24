@@ -147,16 +147,6 @@ const MinistryDrawer: React.FC<MinistryDrawerProps> = ({ isOpen, onClose }) => {
                 }}
               />
 
-              <NavigationItem
-                icon={<PeopleIcon className="w-4 h-4" />}
-                label="Ministries"
-                isActive={currentTab.id === TabKeys.MINISTRIES}
-                onClick={() => {
-                  switchTab({ id: TabKeys.MINISTRIES, name: 'Ministries' });
-                  onClose();
-                }}
-              />
-
               </>) }
             </div>
           </div>
@@ -212,13 +202,6 @@ const NavigationItem: React.FC<NavigationItemProps> = ({
           icon: 'text-blue-700 dark:text-blue-300',
           text: 'text-blue-900 dark:text-blue-100',
           hover: 'hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:border-l-blue-500 dark:hover:border-l-blue-500'
-        };
-      case 'Ministries':
-        return {
-          active: 'bg-indigo-100 dark:bg-indigo-900/40 border-l-4 border-l-indigo-600 dark:border-l-indigo-400 shadow-sm',
-          icon: 'text-indigo-700 dark:text-indigo-300',
-          text: 'text-indigo-900 dark:text-indigo-100',
-          hover: 'hover:bg-indigo-50 dark:hover:bg-indigo-900/20 hover:border-l-indigo-500 dark:hover:border-l-indigo-500'
         };
       default:
         return {

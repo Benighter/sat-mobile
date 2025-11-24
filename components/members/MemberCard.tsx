@@ -9,6 +9,7 @@ import { isDateEditable } from '../../utils/attendanceUtils';
 import { canDeleteMemberWithRole } from '../../utils/permissionUtils';
 import { SmartTextParser } from '../../utils/smartTextParser';
 import { calculateAge, formatBirthdayDisplay, isBirthdayToday } from '../../utils/birthdayUtils';
+import { isMemberWentHome } from '../../utils/memberStatus';
 import { UserIcon, EditIcon, TrashIcon, PhoneIcon, HomeIcon, CakeIcon } from '../icons';
 
 interface MemberCardProps {
@@ -50,6 +51,7 @@ const MemberCard: React.FC<MemberCardProps> = ({ member }) => {
 
 
   const memberBacenta = bacentas.find(b => b.id === member.bacentaId);
+  const wentHome = isMemberWentHome(member);
 
   const formatPhoneNumber = (phone: string) => {
     if(!phone) return 'N/A';
@@ -141,6 +143,12 @@ const MemberCard: React.FC<MemberCardProps> = ({ member }) => {
                 <div className="flex items-center space-x-1 bg-gradient-to-r from-gray-100 to-gray-200 dark:from-gray-700/30 dark:to-gray-600/30 text-gray-700 dark:text-gray-200 px-3 py-1 rounded-full text-sm font-semibold shadow-sm">
                   <span>👤</span>
                   <span>Member</span>
+                </div>
+              )}
+              {wentHome && (
+                <div className="flex items-center space-x-1 bg-gradient-to-r from-amber-100 to-amber-200 dark:from-amber-900/30 dark:to-amber-800/30 text-amber-700 dark:text-amber-200 px-3 py-1 rounded-full text-sm font-semibold shadow-sm">
+                  <span>🏡</span>
+                  <span>Went Home</span>
                 </div>
               )}
             </div>

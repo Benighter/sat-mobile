@@ -23,7 +23,15 @@ interface ExcelExportModalProps {
 }
 
 const ExcelExportModal: React.FC<ExcelExportModalProps> = ({ isOpen, onClose }) => {
-  const { members, bacentas, attendanceRecords, showToast, userProfile } = useAppContext();
+  const {
+    members,
+    bacentas,
+    attendanceRecords,
+    showToast,
+    userProfile,
+    isMinistryContext,
+    activeMinistryName
+  } = useAppContext();
   const [isExporting, setIsExporting] = useState(false);
   const [dateRange, setDateRange] = useState<{ startDate: string; endDate: string }>({
     startDate: '',
@@ -47,11 +55,19 @@ const ExcelExportModal: React.FC<ExcelExportModalProps> = ({ isOpen, onClose }) 
     }
   };
 
+  const getConstituencyName = () => {
+    const churchName = (userProfile?.churchName as string) || undefined;
+    if (isMinistryContext) {
+      return (activeMinistryName as string) || churchName;
+    }
+    return churchName;
+  };
+
   const handleExport = async () => {
     setIsExporting(true);
 
     try {
-      const constituencyName = (userProfile?.churchName as string) || undefined;
+      const constituencyName = getConstituencyName();
       const result = await exportHierarchyExcel({
         members,
         bacentas,
@@ -60,7 +76,9 @@ const ExcelExportModal: React.FC<ExcelExportModalProps> = ({ isOpen, onClose }) 
           directory: selectedDirectory,
           startDate: dateRange.startDate || undefined,
           endDate: dateRange.endDate || undefined,
-          constituencyName
+          constituencyName,
+          isMinistryContext,
+          ministryName: activeMinistryName || undefined
         }
       });
 
@@ -80,7 +98,7 @@ const ExcelExportModal: React.FC<ExcelExportModalProps> = ({ isOpen, onClose }) 
   };
 
   const getExportPreview = () => {
-    const constituencyName = (userProfile?.churchName as string) || undefined;
+    const constituencyName = getConstituencyName();
     return getHierarchyExportPreview({
       members,
       bacentas,
@@ -89,7 +107,9 @@ const ExcelExportModal: React.FC<ExcelExportModalProps> = ({ isOpen, onClose }) 
         directory: selectedDirectory,
         startDate: dateRange.startDate || undefined,
         endDate: dateRange.endDate || undefined,
-        constituencyName
+        constituencyName,
+        isMinistryContext,
+        ministryName: activeMinistryName || undefined
       }
     });
   };

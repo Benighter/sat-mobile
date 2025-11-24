@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useAppContext } from '../../contexts/FirebaseAppContext';
-import { Member, ConfirmationStatus } from '../../types';
+import { Member, ConfirmationStatus, Bacenta } from '../../types';
 import { formatDisplayDate, getMonthName, getUpcomingSunday } from '../../utils/dateUtils';
 import { isDateEditable } from '../../utils/attendanceUtils';
 import { canDeleteMemberWithRole, hasAdminPrivileges } from '../../utils/permissionUtils';
@@ -11,6 +11,7 @@ import { UserIcon, TrashIcon, PhoneIcon, CalendarIcon, ChevronLeftIcon, ChevronR
 import ConstituencyTransferModal from '../modals/ConstituencyTransferModal';
 // Removed unused UI imports
 import { getMinistryRoleLabels } from '../../constants';
+import { isMemberWentHome, isMemberActive, MemberListStatusFilter } from '../../utils/memberStatus';
 
 
 interface MembersTableViewProps {
@@ -73,7 +74,14 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
   const [searchTerm, setSearchTerm] = useState('');
   // Use global displayedDate from context for consistent month across the app
   const [roleFilter, setRoleFilter] = useState<'all' | 'head' | 'leader' | 'assistant' | 'admin' | 'member'>('all');
-  const [showFrozen, setShowFrozen] = useState(false);
+  const statusFilterOptions: MemberListStatusFilter[] = ['active', 'frozen', 'went_home', 'all'];
+  const [statusFilter, setStatusFilter] = useState<MemberListStatusFilter>(() => {
+    const preset = (currentTab?.data as any)?.statusFilter;
+    if (preset && statusFilterOptions.includes(preset as MemberListStatusFilter)) {
+      return preset as MemberListStatusFilter;
+    }
+    return (currentTab?.data as any)?.showFrozen ? 'frozen' : 'active';
+  });
   // Tithe-only UI state
   const [showPaidOnly, setShowPaidOnly] = useState(false);
   // Default to 'paid' so Tithe view shows paid members first
@@ -257,15 +265,22 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
 
   // Apply frozen visibility toggle to the filtered list
   const displayMembers = useMemo(() => {
-    return filteredMembers.filter(m => (showFrozen ? true : !m.frozen));
-  }, [filteredMembers, showFrozen]);
+    return filteredMembers.filter(member => {
+      if (statusFilter === 'went_home') return isMemberWentHome(member);
+      if (statusFilter === 'frozen') return !isMemberWentHome(member) && member.frozen;
+      if (statusFilter === 'all') return true;
+      return !isMemberWentHome(member) && !member.frozen;
+    });
+  }, [filteredMembers, statusFilter]);
 
   // Memoized counts for cleaner UI rendering
-  const activeCount = useMemo(() => filteredMembers.filter(m => !m.frozen).length, [filteredMembers]);
-  const countHead = useMemo(() => filteredMembers.filter(m => !m.frozen && (m.role || 'Member') === 'Bacenta Leader').length, [filteredMembers]);
-  const countLeader = useMemo(() => filteredMembers.filter(m => !m.frozen && (m.role || 'Member') === 'Fellowship Leader').length, [filteredMembers]);
-  const countAssistant = useMemo(() => filteredMembers.filter(m => !m.frozen && (m.role || 'Member') === 'Member' && (m.ministryPosition || '').toLowerCase() === 'assistant').length, [filteredMembers]);
-  const countMember = useMemo(() => filteredMembers.filter(m => !m.frozen && (m.role || 'Member') === 'Member' && (m.ministryPosition || '').toLowerCase() !== 'assistant').length, [filteredMembers]);
+  const activeCount = useMemo(() => filteredMembers.filter(m => isMemberActive(m)).length, [filteredMembers]);
+  const wentHomeCount = useMemo(() => filteredMembers.filter(m => isMemberWentHome(m)).length, [filteredMembers]);
+  const frozenCount = useMemo(() => filteredMembers.filter(m => m.frozen && !isMemberWentHome(m)).length, [filteredMembers]);
+  const countHead = useMemo(() => filteredMembers.filter(m => isMemberActive(m) && (m.role || 'Member') === 'Bacenta Leader').length, [filteredMembers]);
+  const countLeader = useMemo(() => filteredMembers.filter(m => isMemberActive(m) && (m.role || 'Member') === 'Fellowship Leader').length, [filteredMembers]);
+  const countAssistant = useMemo(() => filteredMembers.filter(m => isMemberActive(m) && (m.role || 'Member') === 'Member' && (m.ministryPosition || '').toLowerCase() === 'assistant').length, [filteredMembers]);
+  const countMember = useMemo(() => filteredMembers.filter(m => isMemberActive(m) && (m.role || 'Member') === 'Member' && (m.ministryPosition || '').toLowerCase() !== 'assistant').length, [filteredMembers]);
   // Ministry-specific labels for hierarchy
   const roleLabels = useMemo(() => getMinistryRoleLabels(isMinistryContext ? activeMinistryName : undefined), [isMinistryContext, activeMinistryName]);
 
@@ -276,7 +291,7 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
   const isSpecialListView = speaksInTonguesOnly || baptizedOnly;
 
   // Global stats across active (non-frozen) members
-  const allActiveMembers = useMemo(() => members.filter(m => !m.frozen), [members]);
+  const allActiveMembers = useMemo(() => members.filter(m => isMemberActive(m)), [members]);
   const baseForStats = useMemo(() => {
     if (bacentaFilter) {
       return allActiveMembers.filter(m => m.bacentaId === bacentaFilter);
@@ -456,8 +471,12 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
                         ✅
                       </span>
                     )}
-                    {member.frozen && (
-                      <span className="ml-1 text-[10px] px-1.5 py-0.5 rounded bg-sky-100 text-sky-700 border border-sky-200" title="Frozen – excluded from counts and absentees">Frozen</span>
+                    {isMemberWentHome(member) ? (
+                      <span className="ml-1 text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 border border-amber-200" title="Went Home – archived from attendance">Went Home</span>
+                    ) : (
+                      member.frozen && (
+                        <span className="ml-1 text-[10px] px-1.5 py-0.5 rounded bg-sky-100 text-sky-700 border border-sky-200" title="Frozen – excluded from counts and absentees">Frozen</span>
+                      )
                     )}
                     {isMinistryContext && (
                       <span className="ml-1 text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-700 border border-gray-200" title={computeDisplayLabel(member)}>
@@ -660,6 +679,7 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
         align: 'center' as const,
         render: (member: Member) => {
         const status = getAttendanceStatus(member.id, sundayDate);
+        const wentHome = isMemberWentHome(member);
         const isPresent = status === 'Present';
         const isEditable = isDateEditable(sundayDate, allowEditPreviousSundays);
         const today = new Date();
@@ -688,13 +708,15 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
                 handleAttendanceToggle(member.id, sundayDate);
               } : undefined}
               title={
-                member.frozen
-                  ? 'Frozen member – attendance disabled'
-                  : !isEditable
-                  ? isPastMonth
-                    ? `Past month - cannot edit ${formatDisplayDate(sundayDate)}`
-                    : `Future date - cannot edit ${formatDisplayDate(sundayDate)}`
-                  : `Click to ${!status ? 'mark present' : status === 'Present' ? 'mark absent' : 'clear attendance'} for ${formatDisplayDate(sundayDate)}`
+                wentHome
+                  ? 'Went Home – attendance locked'
+                  : member.frozen
+                    ? 'Frozen member – attendance disabled'
+                    : !isEditable
+                    ? isPastMonth
+                      ? `Past month - cannot edit ${formatDisplayDate(sundayDate)}`
+                      : `Future date - cannot edit ${formatDisplayDate(sundayDate)}`
+                    : `Click to ${!status ? 'mark present' : status === 'Present' ? 'mark absent' : 'clear attendance'} for ${formatDisplayDate(sundayDate)}`
               }
             >
               {isPresent && (
@@ -724,6 +746,7 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
         return (
           <MemberActionsDropdown
             member={member}
+            bacentas={bacentas}
             upcomingSunday={upcomingSunday}
             getConfirmationStatus={getConfirmationStatus}
             markConfirmationHandler={markConfirmationHandler}
@@ -852,6 +875,10 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
             <span>{currentMonthSundays.length} Sunday{currentMonthSundays.length !== 1 ? 's' : ''} in {currentMonthName}</span>
             <span>•</span>
             <span>{activeCount} active member{activeCount !== 1 ? 's' : ''}</span>
+            <span>•</span>
+            <span>{wentHomeCount} went home</span>
+            <span>•</span>
+            <span>{frozenCount} frozen</span>
           </div>
 
           {isTithe && (
@@ -952,17 +979,17 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
                 )}
               </select>
             </div>
-            {/* Show/Hide Frozen Toggle */}
-            <div className="w-full sm:w-auto flex items-center justify-center">
-              <label className="inline-flex items-center space-x-2 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg shadow-sm cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  className="form-checkbox h-4 w-4 text-blue-600"
-                  checked={showFrozen}
-                  onChange={(e) => setShowFrozen(e.target.checked)}
-                />
-                <span className="text-sm text-gray-700">Show Frozen</span>
-              </label>
+            <div className="w-full sm:w-56">
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value as MemberListStatusFilter)}
+                className="w-full px-3 py-3 sm:py-2 border border-gray-300 dark:border-dark-600 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent transition-colors text-base sm:text-sm bg-white dark:bg-dark-700 text-gray-900 dark:text-dark-100 text-center cursor-pointer"
+              >
+                <option value="active">Active members</option>
+                <option value="went_home">Went Home (Archive)</option>
+                <option value="frozen">Frozen members (temporary hold)</option>
+                <option value="all">All members (active + archive)</option>
+              </select>
             </div>
             {/* Tithe-only: Paid Only toggle and Sort; plus Bussing filters/sort */}
             {isTithe && (
@@ -1037,7 +1064,7 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
                       bacentaFilter,
                       searchTerm,
                       roleFilter: (roleFilter === 'head' ? 'Bacenta Leader' : roleFilter === 'leader' ? 'Fellowship Leader' : (roleFilter === 'assistant' || roleFilter === 'member') ? 'Member' : 'all'),
-                      showFrozen,
+                      statusFilter,
                       // pass ministry context if active on this tab
                       ministryOnly: (currentTab?.data as any)?.ministryOnly === true,
                       ministryName: (currentTab?.data as any)?.ministryName || null
@@ -1063,7 +1090,7 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
                       bacentaFilter,
                       searchTerm,
                       roleFilter: (roleFilter === 'head' ? 'Bacenta Leader' : roleFilter === 'leader' ? 'Fellowship Leader' : (roleFilter === 'assistant' || roleFilter === 'member') ? 'Member' : 'all'),
-                      showFrozen,
+                      statusFilter,
                       ministryOnly: (currentTab?.data as any)?.ministryOnly === true,
                       ministryName: (currentTab?.data as any)?.ministryName || null
                     }
@@ -1091,6 +1118,16 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
 
             </div>
           </div>
+          {statusFilter === 'went_home' && (
+            <div className="text-xs text-amber-700 text-center mt-2">
+              Viewing Went Home members only. Restore them when they return so they count toward attendance again.
+            </div>
+          )}
+          {statusFilter === 'frozen' && (
+            <div className="text-xs text-sky-700 text-center mt-2">
+              Viewing frozen members only. Unfreeze them once they should rejoin attendance tracking.
+            </div>
+          )}
         </div>
       </div>
 
@@ -1107,9 +1144,13 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
                 ? "No members found in this bacenta"
                 : searchTerm
                   ? "No members match your search"
-                  : showFrozen
-                    ? "No members added yet"
-                    : "No active (unfrozen) members to show"}
+                  : statusFilter === 'went_home'
+                    ? 'No "Went Home" members yet'
+                    : statusFilter === 'frozen'
+                      ? 'No frozen members right now'
+                    : statusFilter === 'all'
+                      ? 'No members added yet'
+                      : 'No active members to show'}
             </div>
           </div>
         ) : (
@@ -1214,6 +1255,7 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
 // Member Actions Dropdown Component
 interface MemberActionsDropdownProps {
   member: Member;
+  bacentas: Bacenta[];
   upcomingSunday: string;
   getConfirmationStatus: (memberId: string, date: string) => ConfirmationStatus | undefined;
   markConfirmationHandler: (memberId: string, date: string, status: ConfirmationStatus) => void;
@@ -1233,6 +1275,7 @@ interface MemberActionsDropdownProps {
 
 const MemberActionsDropdown: React.FC<MemberActionsDropdownProps> = ({
   member,
+  bacentas,
   upcomingSunday,
   getConfirmationStatus,
   markConfirmationHandler,
@@ -1291,6 +1334,9 @@ const MemberActionsDropdown: React.FC<MemberActionsDropdownProps> = ({
   const confirmationStatus = getConfirmationStatus(member.id, upcomingSunday);
   const isConfirmed = confirmationStatus === 'Confirmed';
   const canDelete = canDeleteMemberWithRole(userProfile, member.role);
+  const memberWentHome = isMemberWentHome(member);
+  const memberFrozen = Boolean(member.frozen);
+  const memberBacenta = member.bacentaId ? bacentas.find(b => b.id === member.bacentaId) : undefined;
 
   const handleConfirmationToggle = () => {
     const newStatus: ConfirmationStatus = isConfirmed ? 'Not Confirmed' : 'Confirmed';
@@ -1389,12 +1435,60 @@ const MemberActionsDropdown: React.FC<MemberActionsDropdownProps> = ({
     }
   };
 
-  const handleToggleFreeze = async () => {
+  const handleToggleWentHome = async () => {
+    const nextStatus = memberWentHome ? 'active' : 'went_home';
+    const nowIso = new Date().toISOString();
     try {
-      await updateMemberHandler({ ...member, frozen: !member.frozen, lastUpdated: new Date().toISOString() });
-      showToast('success', member.frozen ? 'Unfrozen' : 'Frozen', `${member.firstName} ${member.lastName || ''} ${member.frozen ? 'is now active' : 'has been frozen'}`);
+      await updateMemberHandler({
+        ...member,
+        memberStatus: nextStatus,
+        wentHomeDate: nextStatus === 'went_home' ? (member.wentHomeDate || nowIso) : null,
+        frozen: nextStatus === 'went_home' ? true : Boolean(memberBacenta?.frozen),
+        lastUpdated: nowIso
+      });
+      showToast(
+        'success',
+        nextStatus === 'went_home' ? 'Moved to archive' : 'Restored',
+        nextStatus === 'went_home'
+          ? `${member.firstName} ${member.lastName || ''} is now marked as Went Home.`
+          : `${member.firstName} ${member.lastName || ''} is active again.`
+      );
     } catch (e:any) {
-      showToast('error', 'Failed', 'Could not update freeze status');
+      showToast('error', 'Failed', nextStatus === 'went_home' ? 'Could not move to archive' : 'Could not restore member');
+    } finally {
+      setIsOpen(false);
+    }
+  };
+
+  const handleToggleFrozen = async () => {
+    if (memberWentHome) {
+      showToast('warning', 'Restore member first', 'Went Home members stay frozen until you restore them.');
+      setIsOpen(false);
+      return;
+    }
+    if (memberFrozen && memberBacenta?.frozen) {
+      showToast('warning', 'Bacenta is frozen', 'Unfreeze the bacenta before restoring individual members.');
+      setIsOpen(false);
+      return;
+    }
+
+    const nextFrozen = !memberFrozen;
+    const nowIso = new Date().toISOString();
+    try {
+      await updateMemberHandler({
+        ...member,
+        frozen: nextFrozen,
+        lastUpdated: nowIso
+      });
+      showToast(
+        'success',
+        nextFrozen ? 'Member frozen' : 'Member unfrozen',
+        nextFrozen
+          ? `${member.firstName} ${member.lastName || ''} is excluded from counts and attendance.`
+          : `${member.firstName} ${member.lastName || ''} is active again.`
+      );
+    } catch (e:any) {
+      showToast('error', 'Failed', nextFrozen ? 'Could not freeze member' : 'Could not unfreeze member');
     } finally {
       setIsOpen(false);
     }
@@ -1441,8 +1535,12 @@ const MemberActionsDropdown: React.FC<MemberActionsDropdownProps> = ({
                   <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-700 border border-gray-200">
                     {(member.role || 'Member') === 'Bacenta Leader' ? '💚 GB' : (member.role || 'Member') === 'Fellowship Leader' ? '❤️ RB' : '👤 M'}
                   </span>
-                  {member.frozen && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-sky-100 text-sky-700 border border-sky-200" title="Frozen – excluded from counts and absentees">Frozen</span>
+                  {memberWentHome ? (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-200" title="Went Home – archived from attendance">Went Home</span>
+                  ) : (
+                    member.frozen && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-sky-100 text-sky-700 border border-sky-200" title="Frozen – excluded from counts and absentees">Frozen</span>
+                    )
                   )}
                 </div>
                 {member.phoneNumber && member.phoneNumber !== '-' && (
@@ -1469,15 +1567,28 @@ const MemberActionsDropdown: React.FC<MemberActionsDropdownProps> = ({
               </button>
             )}
 
-            {/* Freeze/Unfreeze */}
+            {!memberWentHome && (
+              <button
+                onClick={handleToggleFrozen}
+                className="w-full px-3 py-2.5 text-left hover:bg-sky-50 rounded-lg transition-colors duration-150 flex items-start gap-3 text-sky-700"
+              >
+                <span className="mt-0.5">{memberFrozen ? '🌀' : '❄️'}</span>
+                <div className="flex-1">
+                  <div className="text-sm font-medium">{memberFrozen ? 'Unfreeze Member' : 'Freeze Member'}</div>
+                  <div className="text-xs text-sky-600">{memberFrozen ? 'Allow attendance again' : 'Temporarily exclude from attendance'}</div>
+                </div>
+              </button>
+            )}
+
+            {/* Went Home / Restore */}
             <button
-              onClick={handleToggleFreeze}
+              onClick={handleToggleWentHome}
               className="w-full px-3 py-2.5 text-left hover:bg-gray-50 rounded-lg transition-colors duration-150 flex items-start gap-3 text-gray-700"
             >
-              <span className="mt-0.5">❄️</span>
+              <span className="mt-0.5">🏡</span>
               <div className="flex-1">
-                <div className="text-sm font-medium">{member.frozen ? 'Unfreeze' : 'Freeze'}</div>
-                <div className="text-xs text-gray-500">{member.frozen ? 'Include in counts again' : 'Exclude from totals and absentees'}</div>
+                <div className="text-sm font-medium">{memberWentHome ? 'Restore to Active' : 'Mark Went Home'}</div>
+                <div className="text-xs text-gray-500">{memberWentHome ? 'Return to attendance tracking' : 'Archive without affecting attendance'}</div>
               </div>
             </button>
 

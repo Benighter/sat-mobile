@@ -3,12 +3,16 @@ import { Member, Bacenta, AttendanceRecord } from '../types';
 import { DirectoryHandle, saveFileToDirectory } from './fileSystemUtils';
 
 import { DEFAULT_CHURCH } from '../constants';
+import { isMemberWentHome } from './memberStatus';
+import { buildHierarchyGrouping, HierarchySectionKind } from './hierarchyGrouping';
 
 export interface HierarchyPowerPointExportOptions {
   directory?: DirectoryHandle | null;
   startDate?: string;
   endDate?: string;
   constituencyName?: string;
+  isMinistryContext?: boolean;
+  ministryName?: string;
 }
 
 export interface HierarchyPowerPointData {
@@ -33,6 +37,13 @@ const CHURCH_INFO = {
 const PPT_FONTS = {
   heading: 'Calibri',
   body: 'Calibri'
+};
+
+const SECTION_COLORS: Record<HierarchySectionKind, string> = {
+  head: '00703C',
+  leader: '9E1B32',
+  assistant: '2F5597',
+  member: '595959'
 };
 
 const formatBirthdayDayMonth = (dateInput: string | Date): string => {
@@ -62,7 +73,11 @@ const getBacentaName = (bacentas: Bacenta[], bacentaId: string | undefined): str
 };
 
 const getActiveMembers = (members: Member[]): Member[] => {
-  return members.filter(m => !m.frozen && m.isActive !== false);
+  return members.filter(m => {
+    if (m.isActive === false) return false;
+    if (m.frozen && !isMemberWentHome(m)) return false;
+    return true;
+  });
 };
 
 
@@ -71,13 +86,18 @@ export const getHierarchyPowerPointPreview = (
 ): HierarchyPowerPointPreview => {
   const activeMembers = getActiveMembers(data.members);
   const memberCount = activeMembers.length;
+  const grouping = buildHierarchyGrouping(activeMembers, {
+    isMinistryMode: Boolean(data.options?.isMinistryContext),
+    ministryName: data.options?.ministryName
+  });
+  const sectionNames = grouping.sections.map(section => section.title).join(', ');
 
   return {
     memberCount,
     estimatedSlides: memberCount ? memberCount + 1 : 0,
     features: [
       'Title slide with constituency name',
-      'Slides grouped into Green Bacentas, Red Bacentas, Assistants, Members',
+      `Slides grouped into ${sectionNames || 'all hierarchy levels'}`,
       'Member cards show space for photo and detailed personal, contact and church information'
     ]
   };
@@ -90,6 +110,10 @@ export const exportHierarchyPowerPoint = async (
 
   try {
     const activeMembers = getActiveMembers(members);
+    const grouping = buildHierarchyGrouping(activeMembers, {
+      isMinistryMode: Boolean(options?.isMinistryContext),
+      ministryName: options?.ministryName
+    });
 
     const pptx = new PptxGenJS();
     const reportName = options?.constituencyName || CHURCH_INFO.name;
@@ -149,18 +173,6 @@ export const exportHierarchyPowerPoint = async (
       align: 'left',
       fontFace: PPT_FONTS.body
     });
-
-    const sortByName = (a: Member, b: Member) => getFullName(a).localeCompare(getFullName(b));
-
-    const greenBacentas = activeMembers.filter(m => m.role === 'Bacenta Leader').sort(sortByName);
-    const redBacentas = activeMembers.filter(m => m.role === 'Fellowship Leader').sort(sortByName);
-    const assistants = activeMembers.filter(m => m.role === 'Assistant' || m.role === 'Admin').sort(sortByName);
-    const membersOnly = activeMembers.filter(m =>
-      m.role !== 'Bacenta Leader' &&
-      m.role !== 'Fellowship Leader' &&
-      m.role !== 'Assistant' &&
-      m.role !== 'Admin'
-    ).sort(sortByName);
 
     const addSectionSlides = (
       title: string,
@@ -389,10 +401,9 @@ export const exportHierarchyPowerPoint = async (
       });
     };
 
-    addSectionSlides('Green Bacentas', greenBacentas, '00703C');
-    addSectionSlides('Red Bacentas', redBacentas, '9E1B32');
-    addSectionSlides('Assistants', assistants, '2F5597');
-    addSectionSlides('Members', membersOnly, '595959');
+    grouping.sections.forEach(section => {
+      addSectionSlides(section.title, section.members, SECTION_COLORS[section.kind] || '595959');
+    });
 
     const timestamp = new Date().toISOString().split('T')[0];
     const safeName = reportName.replace(/\s+/g, '-');

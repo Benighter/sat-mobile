@@ -1,6 +1,8 @@
 
 export type MemberRole = 'Member' | 'Admin' | 'Assistant' | 'Fellowship Leader' | 'Bacenta Leader';
 
+export type MemberStatus = 'active' | 'went_home';
+
 export interface Member {
   id: string;
   firstName: string;
@@ -20,6 +22,10 @@ export interface Member {
   ministryPosition?: string;
   /** If true, this member is temporarily frozen (excluded from counts/absentees) */
   frozen?: boolean;
+  /** High-level lifecycle status; 'went_home' behaves like archive */
+  memberStatus?: MemberStatus;
+  /** ISO date when the member was marked as went home */
+  wentHomeDate?: string;
   /** If true, this member originated from an Outreach flow (born again from outreach) */
   outreachOrigin?: boolean;
   /**

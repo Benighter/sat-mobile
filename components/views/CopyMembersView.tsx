@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useAppContext } from '../../contexts/FirebaseAppContext';
 import { Member } from '../../types';
+import { isMemberWentHome, MemberListStatusFilter } from '../../utils/memberStatus';
 import { ArrowLeftIcon, ClipboardIcon } from '../icons';
 import { formatBirthdayDisplay } from '../../utils/birthdayUtils';
 import Button from '../ui/Button';
@@ -39,6 +40,14 @@ const CopyMembersView: React.FC = () => {
   const searchTerm = currentTab.data?.searchTerm || '';
   const roleFilter = currentTab.data?.roleFilter || 'all';
   const showFrozen: boolean = currentTab.data?.showFrozen !== undefined ? currentTab.data.showFrozen : false;
+  const allowedStatusFilters: MemberListStatusFilter[] = ['active', 'frozen', 'went_home', 'all'];
+  const statusFilter: MemberListStatusFilter = (() => {
+    const preset = currentTab.data?.statusFilter;
+    if (preset && allowedStatusFilters.includes(preset as MemberListStatusFilter)) {
+      return preset as MemberListStatusFilter;
+    }
+    return showFrozen ? 'frozen' : 'active';
+  })();
   const ministryOnly: boolean = currentTab.data?.ministryOnly === true;
   const ministryName: string | null = currentTab.data?.ministryName || null;
 
@@ -69,7 +78,12 @@ const CopyMembersView: React.FC = () => {
     };
 
   return members
-      .filter(member => (showFrozen ? true : !member.frozen))
+      .filter(member => {
+        if (statusFilter === 'went_home') return isMemberWentHome(member);
+        if (statusFilter === 'frozen') return !isMemberWentHome(member) && member.frozen;
+        if (statusFilter === 'all') return true;
+        return !isMemberWentHome(member) && !member.frozen;
+      })
       .filter(member => {
         // Filter by bacenta if specified
         if (bacentaFilter && member.bacentaId !== bacentaFilter) {
@@ -114,7 +128,7 @@ const CopyMembersView: React.FC = () => {
         const lastNameB = b.lastName || '';
         return lastNameA.localeCompare(lastNameB) || a.firstName.localeCompare(b.firstName);
     });
-  }, [members, bacentaFilter, searchTerm, roleFilter, showFrozen, ministryOnly, ministryName]);
+  }, [members, bacentaFilter, searchTerm, roleFilter, statusFilter, ministryOnly, ministryName]);
 
   // Filter members based on selected type
   const getFilteredMembersByType = () => {

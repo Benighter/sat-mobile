@@ -21,7 +21,15 @@ interface PowerPointExportModalProps {
 }
 
 const PowerPointExportModal: React.FC<PowerPointExportModalProps> = ({ isOpen, onClose }) => {
-  const { members, bacentas, attendanceRecords, showToast, userProfile } = useAppContext();
+  const {
+    members,
+    bacentas,
+    attendanceRecords,
+    showToast,
+    userProfile,
+    isMinistryContext,
+    activeMinistryName
+  } = useAppContext();
   const [isExporting, setIsExporting] = useState(false);
 
   const [selectedDirectory, setSelectedDirectory] = useState<DirectoryHandle | null>(null);
@@ -40,17 +48,27 @@ const PowerPointExportModal: React.FC<PowerPointExportModalProps> = ({ isOpen, o
     }
   };
 
+  const getConstituencyName = () => {
+    const churchName = (userProfile?.churchName as string) || undefined;
+    if (isMinistryContext) {
+      return (activeMinistryName as string) || churchName;
+    }
+    return churchName;
+  };
+
   const handleExport = async () => {
     setIsExporting(true);
     try {
-      const constituencyName = (userProfile?.churchName as string) || undefined;
+      const constituencyName = getConstituencyName();
       const result = await exportHierarchyPowerPoint({
         members,
         bacentas,
         attendanceRecords,
         options: {
           directory: selectedDirectory,
-          constituencyName
+          constituencyName,
+          isMinistryContext,
+          ministryName: activeMinistryName || undefined
         }
       });
 
@@ -70,14 +88,16 @@ const PowerPointExportModal: React.FC<PowerPointExportModalProps> = ({ isOpen, o
   };
 
   const getExportPreview = () => {
-    const constituencyName = (userProfile?.churchName as string) || undefined;
+    const constituencyName = getConstituencyName();
     return getHierarchyPowerPointPreview({
       members,
       bacentas,
       attendanceRecords,
       options: {
         directory: selectedDirectory,
-        constituencyName
+        constituencyName,
+        isMinistryContext,
+        ministryName: activeMinistryName || undefined
       }
     });
   };

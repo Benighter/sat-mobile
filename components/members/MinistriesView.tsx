@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { useAppContext } from '../../contexts/FirebaseAppContext';
 import { MINISTRY_OPTIONS } from '../../constants';
 import { Member } from '../../types';
+import { isMemberActive, isMemberWentHome } from '../../utils/memberStatus';
 import { UserIcon } from '../icons';
 
 const MinistriesView: React.FC = () => {
@@ -22,7 +23,7 @@ const MinistriesView: React.FC = () => {
       });
   }, [membersWithMinistry, selectedMinistry, selectedBacenta]);
 
-  const totalCount = filtered.filter(m => !m.frozen).length;
+  const totalCount = filtered.filter(m => isMemberActive(m)).length;
 
   // No copy actions on this screen by request; we still keep navigation available via switchTab if needed elsewhere.
 
@@ -94,8 +95,12 @@ const MinistriesView: React.FC = () => {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="font-medium text-sm text-gray-900 truncate">{m.firstName} {m.lastName || ''}</span>
-                    {m.frozen && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-sky-100 text-sky-700 border border-sky-200">Frozen</span>
+                    {isMemberWentHome(m) ? (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 border border-amber-200">Went Home</span>
+                    ) : (
+                      m.frozen && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-sky-100 text-sky-700 border border-sky-200">Frozen</span>
+                      )
                     )}
                     {(m as any).syncedFrom && (
                       <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 border border-purple-200">

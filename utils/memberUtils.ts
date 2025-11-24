@@ -1,4 +1,5 @@
 import { Member, Bacenta } from '../types';
+import { isMemberActive } from './memberStatus';
 
 /**
  * Filters out frozen members and members from frozen bacentas
@@ -10,8 +11,8 @@ export const getActiveMembers = (members: Member[], bacentas: Bacenta[]): Member
   const frozenBacentaIds = new Set(bacentas.filter(b => b.frozen).map(b => b.id));
   
   return members.filter(member => {
-    // Exclude frozen members
-    if (member.frozen) return false;
+    // Exclude frozen/archived members
+    if (!isMemberActive(member)) return false;
     
     // Exclude members from frozen bacentas
     if (member.bacentaId && frozenBacentaIds.has(member.bacentaId)) return false;
@@ -38,8 +39,8 @@ export const getActiveMembersByBacenta = (
     // Filter by bacenta
     if (member.bacentaId !== bacentaId) return false;
     
-    // Exclude frozen members
-    if (member.frozen) return false;
+    // Exclude frozen/archived members
+    if (!isMemberActive(member)) return false;
     
     // Exclude members from frozen bacentas
     if (member.bacentaId && frozenBacentaIds.has(member.bacentaId)) return false;
@@ -65,5 +66,5 @@ export const getActiveMemberCount = (
   // If bacenta is frozen, return 0
   if (bacenta?.frozen) return 0;
   
-  return members.filter(m => m.bacentaId === bacentaId && !m.frozen).length;
+  return members.filter(m => m.bacentaId === bacentaId && isMemberActive(m)).length;
 };

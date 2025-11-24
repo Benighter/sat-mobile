@@ -985,6 +985,13 @@ export const runCrossMinistrySync = async (ministryName?: string): Promise<{ suc
   // }
 };
 
+const normalizeMember = (member: Member): Member => {
+  if (!member.memberStatus) {
+    return { ...member, memberStatus: 'active' };
+  }
+  return member;
+};
+
 // Members Service
 export const membersFirebaseService = {
   // Get all members
@@ -995,10 +1002,10 @@ export const membersFirebaseService = {
         const membersRef = collection(db, getChurchCollectionPath('members'));
         const querySnapshot = await getDocs(query(membersRef, where('isActive', '==', true)));
 
-        return querySnapshot.docs.map(doc => ({
+        return querySnapshot.docs.map(doc => normalizeMember({
           ...doc.data(),
           id: doc.id
-        })) as Member[];
+        }) as Member);
       });
     } catch (error: any) {
       throw firebaseUtils.handleOfflineError('Fetch members', error);
@@ -1011,7 +1018,7 @@ export const membersFirebaseService = {
         const memberRef = doc(db, getChurchCollectionPath('members'), memberId);
         const snap = await getDoc(memberRef);
         if (!snap.exists()) return null;
-        const data = { id: snap.id, ...snap.data() } as Member;
+        const data = normalizeMember({ id: snap.id, ...snap.data() } as Member);
         // Only return if active or isActive not set; preserve soft-deleted semantics
         if ((data as any).isActive === false) return null;
         return data;
@@ -1027,7 +1034,7 @@ export const membersFirebaseService = {
         const membersRef = collection(db, getChurchCollectionPath('members'));
         const qMembers = query(membersRef, where('ministry', '==', ministryName));
         const querySnapshot = await getDocs(qMembers);
-        const items = querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as Member[];
+        const items = querySnapshot.docs.map(doc => normalizeMember({ ...doc.data(), id: doc.id } as Member));
         // Apply isActive filter client-side
         const filtered = items.filter(m => m.isActive !== false);
         filtered.sort((a, b) => (a.lastName || '').localeCompare(b.lastName || ''));
@@ -1046,9 +1053,16 @@ export const membersFirebaseService = {
       const payload = {
         ...member,
         isActive: true,
+        memberStatus: member.memberStatus || 'active',
         createdDate: nowIso,
         lastUpdated: nowIso
       } as any;
+      if (payload.memberStatus === 'went_home') {
+        payload.frozen = true;
+        payload.wentHomeDate = payload.wentHomeDate || nowIso;
+      } else {
+        delete payload.wentHomeDate;
+      }
       const docRef = await addDoc(membersRef, payload);
 
       // REMOVED: Sync simulation disabled for ministry independence
@@ -1137,10 +1151,10 @@ export const membersFirebaseService = {
     const q = query(membersRef, where('isActive', '==', true));
 
     return onSnapshot(q, (querySnapshot) => {
-      const members = querySnapshot.docs.map(doc => ({
+      const members = querySnapshot.docs.map(doc => normalizeMember({
         ...doc.data(),
         id: doc.id
-      })) as Member[];
+      } as Member));
 
       // Sort in memory for now
       members.sort((a, b) => (a.lastName || '').localeCompare(b.lastName || ''));
@@ -1152,7 +1166,7 @@ export const membersFirebaseService = {
     const membersRef = collection(db, getChurchCollectionPath('members'));
     const qMembers = query(membersRef, where('ministry', '==', ministryName));
     return onSnapshot(qMembers, (querySnapshot) => {
-      const items = querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as Member[];
+      const items = querySnapshot.docs.map(doc => normalizeMember({ ...doc.data(), id: doc.id } as Member));
       const filtered = items.filter(m => m.isActive !== false);
       filtered.sort((a, b) => (a.lastName || '').localeCompare(b.lastName || ''));
       callback(filtered);
