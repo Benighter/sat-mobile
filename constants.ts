@@ -68,18 +68,18 @@ export const getMinistryRoleLabels = (ministryName?: string) => {
   const key = name.toLowerCase();
   switch (key) {
     case 'ushers':
-      return { head: 'Ministry Head', leader: 'Ministry Leader', assistant: 'Ministry Assistant', member: 'Ministry Member' };
+      return { head: 'Ministry Head', leader: 'Ministry Leader', assistant: 'Ministry Assistant', member: 'Ministry Member', admin: 'Ministry Admin' };
     case 'choir':
-      return { head: 'Ministry Head', leader: 'Ministry Leader', assistant: 'Ministry Assistant', member: 'Ministry Member' };
+      return { head: 'Ministry Head', leader: 'Ministry Leader', assistant: 'Ministry Assistant', member: 'Ministry Member', admin: 'Ministry Admin' };
     case 'youth':
-      return { head: 'Ministry Head', leader: 'Ministry Leader', assistant: 'Ministry Assistant', member: 'Ministry Member' };
+      return { head: 'Ministry Head', leader: 'Ministry Leader', assistant: 'Ministry Assistant', member: 'Ministry Member', admin: 'Ministry Admin' };
     case 'media':
-      return { head: 'Ministry Head', leader: 'Ministry Leader', assistant: 'Ministry Assistant', member: 'Ministry Member' };
+      return { head: 'Ministry Head', leader: 'Ministry Leader', assistant: 'Ministry Assistant', member: 'Ministry Member', admin: 'Ministry Admin' };
     case 'dancing stars':
-      return { head: 'Ministry Head', leader: 'Ministry Leader', assistant: 'Ministry Assistant', member: 'Ministry Member' };
+      return { head: 'Ministry Head', leader: 'Ministry Leader', assistant: 'Ministry Assistant', member: 'Ministry Member', admin: 'Ministry Admin' };
     default: {
       // Generic labels across all ministries
-      return { head: 'Ministry Head', leader: 'Ministry Leader', assistant: 'Ministry Assistant', member: 'Ministry Member' };
+      return { head: 'Ministry Head', leader: 'Ministry Leader', assistant: 'Ministry Assistant', member: 'Ministry Member', admin: 'Ministry Admin' };
     }
   }
 };

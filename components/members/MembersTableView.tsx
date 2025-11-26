@@ -13,6 +13,27 @@ import ConstituencyTransferModal from '../modals/ConstituencyTransferModal';
 import { getMinistryRoleLabels } from '../../constants';
 import { isMemberWentHome, isMemberActive, MemberListStatusFilter } from '../../utils/memberStatus';
 
+type RoleCategory = 'head' | 'leader' | 'assistant' | 'admin' | 'member';
+
+const determineRoleCategory = (member: Member): RoleCategory => {
+  const baseRole = member.role || 'Member';
+  const pos = (member.ministryPosition || '').toLowerCase();
+  if (baseRole === 'Bacenta Leader') return 'head';
+  if (baseRole === 'Fellowship Leader') return 'leader';
+  if (baseRole === 'Assistant') return 'assistant';
+  if (baseRole === 'Admin') return 'admin';
+  if (baseRole === 'Member' && pos === 'assistant') return 'assistant';
+  return 'member';
+};
+
+const createRoleRowRefMap = (): Record<RoleCategory, HTMLTableRowElement | null> => ({
+  head: null,
+  leader: null,
+  assistant: null,
+  admin: null,
+  member: null,
+});
+
 
 interface MembersTableViewProps {
   bacentaFilter?: string | null;
@@ -89,6 +110,18 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
   // Bussing-only UI state
   const [showBussingPaidOnly, setShowBussingPaidOnly] = useState(false);
   const [bussingSort, setBussingSort] = useState<'none' | 'paid' | 'amount_desc' | 'amount_asc'>('none');
+
+  const roleRowRefs = useRef<Record<RoleCategory, HTMLTableRowElement | null>>(createRoleRowRefMap());
+  const highlightTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [highlightState, setHighlightState] = useState<{ role: RoleCategory; token: number } | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (highlightTimeoutRef.current) {
+        clearTimeout(highlightTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Tithe context flag (passed from Dashboard Tithe card)
   const isTithe = (currentTab?.data as any)?.isTithe === true;
@@ -273,16 +306,131 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
     });
   }, [filteredMembers, statusFilter]);
 
+  const roleAnchorIndexMap = useMemo(() => {
+    const map: Partial<Record<RoleCategory, number>> = {};
+    displayMembers.forEach((member, index) => {
+      const key = determineRoleCategory(member);
+      if (map[key] === undefined) {
+        map[key] = index;
+      }
+    });
+    return map;
+  }, [displayMembers]);
+
+  // Ministry-specific labels for hierarchy summary chips
+  const roleLabels = useMemo(() => getMinistryRoleLabels(isMinistryContext ? activeMinistryName : undefined), [isMinistryContext, activeMinistryName]);
+  const summaryLabels: Record<RoleCategory, string> = useMemo(() => {
+    if (isMinistryContext) return roleLabels;
+    return {
+      head: 'Green Bacenta',
+      leader: 'Red Bacenta',
+      assistant: 'Assistant',
+      admin: 'Admin',
+      member: 'Member',
+    };
+  }, [isMinistryContext, roleLabels]);
+
+  const handleRoleChipClick = (role: RoleCategory) => {
+    if (role === 'member') return;
+    const targetRow = roleRowRefs.current[role];
+    if (!targetRow) {
+      showToast('info', 'No records to show', `No ${summaryLabels[role]} match the current filters.`);
+      return;
+    }
+    targetRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setHighlightState({ role, token: Date.now() });
+    if (highlightTimeoutRef.current) {
+      clearTimeout(highlightTimeoutRef.current);
+    }
+    highlightTimeoutRef.current = setTimeout(() => setHighlightState(null), 1200);
+  };
+
   // Memoized counts for cleaner UI rendering
   const activeCount = useMemo(() => filteredMembers.filter(m => isMemberActive(m)).length, [filteredMembers]);
   const wentHomeCount = useMemo(() => filteredMembers.filter(m => isMemberWentHome(m)).length, [filteredMembers]);
   const frozenCount = useMemo(() => filteredMembers.filter(m => m.frozen && !isMemberWentHome(m)).length, [filteredMembers]);
-  const countHead = useMemo(() => filteredMembers.filter(m => isMemberActive(m) && (m.role || 'Member') === 'Bacenta Leader').length, [filteredMembers]);
-  const countLeader = useMemo(() => filteredMembers.filter(m => isMemberActive(m) && (m.role || 'Member') === 'Fellowship Leader').length, [filteredMembers]);
-  const countAssistant = useMemo(() => filteredMembers.filter(m => isMemberActive(m) && (m.role || 'Member') === 'Member' && (m.ministryPosition || '').toLowerCase() === 'assistant').length, [filteredMembers]);
-  const countMember = useMemo(() => filteredMembers.filter(m => isMemberActive(m) && (m.role || 'Member') === 'Member' && (m.ministryPosition || '').toLowerCase() !== 'assistant').length, [filteredMembers]);
-  // Ministry-specific labels for hierarchy
-  const roleLabels = useMemo(() => getMinistryRoleLabels(isMinistryContext ? activeMinistryName : undefined), [isMinistryContext, activeMinistryName]);
+  const roleCounts = useMemo(() => {
+    const totals: Record<RoleCategory, number> = {
+      head: 0,
+      leader: 0,
+      assistant: 0,
+      admin: 0,
+      member: 0,
+    };
+    filteredMembers.forEach(member => {
+      if (!isMemberActive(member)) return;
+      const roleKey = determineRoleCategory(member);
+      totals[roleKey] += 1;
+    });
+    return totals;
+  }, [filteredMembers]);
+  const countHead = roleCounts.head;
+  const countLeader = roleCounts.leader;
+  const countAssistant = roleCounts.assistant;
+  const countAdmin = roleCounts.admin;
+  const countMember = roleCounts.member;
+  const roleChipConfigs = useMemo(() => ([
+    {
+      key: 'head' as RoleCategory,
+      count: countHead,
+      label: summaryLabels.head,
+      clickable: true,
+      classes: {
+        chip: 'bg-green-50 border-green-200',
+        dot: 'bg-green-500',
+        value: 'text-green-800',
+        label: 'text-green-700',
+      },
+    },
+    {
+      key: 'leader' as RoleCategory,
+      count: countLeader,
+      label: summaryLabels.leader,
+      clickable: true,
+      classes: {
+        chip: 'bg-red-50 border-red-200',
+        dot: 'bg-red-500',
+        value: 'text-red-800',
+        label: 'text-red-700',
+      },
+    },
+    {
+      key: 'assistant' as RoleCategory,
+      count: countAssistant,
+      label: summaryLabels.assistant,
+      clickable: true,
+      classes: {
+        chip: 'bg-amber-50 border-amber-200',
+        dot: 'bg-amber-500',
+        value: 'text-amber-800',
+        label: 'text-amber-700',
+      },
+    },
+    {
+      key: 'admin' as RoleCategory,
+      count: countAdmin,
+      label: summaryLabels.admin,
+      clickable: true,
+      classes: {
+        chip: 'bg-violet-50 border-violet-200',
+        dot: 'bg-violet-500',
+        value: 'text-violet-800',
+        label: 'text-violet-700',
+      },
+    },
+    {
+      key: 'member' as RoleCategory,
+      count: countMember,
+      label: summaryLabels.member,
+      clickable: false,
+      classes: {
+        chip: 'bg-blue-50 border-blue-200',
+        dot: 'bg-blue-500',
+        value: 'text-blue-800',
+        label: 'text-blue-700',
+      },
+    },
+  ]), [countHead, countLeader, countAssistant, countAdmin, countMember, summaryLabels]);
 
 
   // Special simple views for Tongues/Baptized navigation
@@ -387,6 +535,8 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
     const pos = (m.ministryPosition || '').toLowerCase();
     if (baseRole === 'Bacenta Leader') return roleLabels.head;
     if (baseRole === 'Fellowship Leader') return roleLabels.leader;
+    if (baseRole === 'Assistant') return roleLabels.assistant;
+    if (baseRole === 'Admin') return roleLabels.admin ?? 'Admin';
     if (baseRole === 'Member' && pos === 'assistant') return roleLabels.assistant;
     if (baseRole === 'Member') return roleLabels.member;
     return baseRole;
@@ -895,27 +1045,37 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
           )}
 
           {/* Role Statistics (hierarchy-aware) */}
-          <div className="flex items-center justify-center gap-3 text-sm mb-4">
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-green-50 border border-green-200">
-              <span className="w-2.5 h-2.5 bg-green-500 rounded-full"></span>
-              <span className="text-green-800 font-semibold">{countHead}</span>
-              <span className="text-green-700 text-xs font-medium" title={roleLabels.head}>Head</span>
-            </div>
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-50 border border-red-200">
-              <span className="w-2.5 h-2.5 bg-red-500 rounded-full"></span>
-              <span className="text-red-800 font-semibold">{countLeader}</span>
-              <span className="text-red-700 text-xs font-medium" title={roleLabels.leader}>Leader</span>
-            </div>
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-50 border border-amber-200">
-              <span className="w-2.5 h-2.5 bg-amber-500 rounded-full"></span>
-              <span className="text-amber-800 font-semibold">{countAssistant}</span>
-              <span className="text-amber-700 text-xs font-medium" title={roleLabels.assistant}>Asst</span>
-            </div>
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-50 border border-blue-200">
-              <span className="w-2.5 h-2.5 bg-blue-500 rounded-full"></span>
-              <span className="text-blue-800 font-semibold">{countMember}</span>
-              <span className="text-blue-700 text-xs font-medium" title={roleLabels.member}>Member</span>
-            </div>
+          <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3 text-sm mb-4">
+            {roleChipConfigs.map((chip) => {
+              const isInteractive = chip.clickable && chip.count > 0;
+              const baseClasses = `inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border ${chip.classes.chip} ${
+                isInteractive ? 'cursor-pointer hover:shadow-md focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-blue-400 transition-shadow duration-200' : 'cursor-default opacity-80'
+              }`;
+              const content = (
+                <>
+                  <span className={`w-2.5 h-2.5 rounded-full ${chip.classes.dot}`}></span>
+                  <span className={`${chip.classes.value} font-semibold tabular-nums`}>{chip.count}</span>
+                  <span className={`${chip.classes.label} text-xs font-medium`}>
+                    {chip.label}
+                  </span>
+                </>
+              );
+              return isInteractive ? (
+                <button
+                  key={chip.key}
+                  type="button"
+                  onClick={() => handleRoleChipClick(chip.key)}
+                  className={baseClasses}
+                  title={`Jump to ${chip.label}`}
+                >
+                  {content}
+                </button>
+              ) : (
+                <div key={chip.key} className={baseClasses} title={chip.label}>
+                  {content}
+                </div>
+              );
+            })}
           </div>
 
           {/* Navigation */}
@@ -1198,14 +1358,20 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {displayMembers.map((member, rowIndex) => (
-                  <tr
-                    key={rowIndex}
-                    className={`
-                      ${rowIndex % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}
-                      hover:bg-blue-50/50 transition-colors duration-200
-                    `}
-                  >
+                {displayMembers.map((member, rowIndex) => {
+                  const rowRole = determineRoleCategory(member);
+                  const isAnchorRow = roleAnchorIndexMap[rowRole] === rowIndex;
+                  const isHighlighted = highlightState?.role === rowRole;
+                  return (
+                    <tr
+                      key={rowIndex}
+                      ref={isAnchorRow ? (el) => { roleRowRefs.current[rowRole] = el; } : undefined}
+                      className={`
+                        ${rowIndex % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}
+                        hover:bg-blue-50/50 transition-colors duration-200
+                        ${isHighlighted ? `ring-2 ring-indigo-400 ring-offset-2 ${rowIndex % 2 === 0 ? 'ring-offset-white' : 'ring-offset-gray-50'}` : ''}
+                      `}
+                    >
                     {/* Fixed Cells (Number and Name) */}
                     {fixedColumns.map((column, colIndex) => (
                       <td
@@ -1242,7 +1408,8 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
                       );
                     })}
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
