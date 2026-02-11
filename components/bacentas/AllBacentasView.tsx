@@ -7,20 +7,30 @@ import { SearchIcon, PlusIcon, ChevronRightIcon, PeopleIcon } from '../icons';
 import { TabKeys } from '../../types';
 
 const AllBacentasView: React.FC = () => {
-  const { bacentas, allOutreachMembers, switchTab, addBacentaHandler, showToast, showFrozenBacentas, setShowFrozenBacentas } = useAppContext();
+  const { bacentas, allOutreachMembers, outreachBacentas, switchTab, addBacentaHandler, showToast, showFrozenBacentas, setShowFrozenBacentas } = useAppContext();
   const [query, setQuery] = useState('');
   const [newName, setNewName] = useState('');
 
   // Calculate outreach statistics for each bacenta
   const bacentaStats = useMemo(() => {
     const stats = new Map();
-    
-    // Group outreach members by bacentaId
-    const membersByBacenta = allOutreachMembers.reduce((acc, member) => {
-      if (!acc[member.bacentaId]) acc[member.bacentaId] = [];
-      acc[member.bacentaId].push(member);
-      return acc;
-    }, {} as Record<string, typeof allOutreachMembers>);
+
+    // Build a mapping from outreach bacenta ID -> regular bacenta ID by matching names
+    const outreachIdToRegularId = new Map<string, string>();
+    outreachBacentas.forEach(ob => {
+      const matchingRegular = bacentas.find(b => b.name === ob.name);
+      if (matchingRegular) {
+        outreachIdToRegularId.set(ob.id, matchingRegular.id);
+      }
+    });
+
+    // Group outreach members by their corresponding regular bacenta ID
+    const membersByBacenta: Record<string, typeof allOutreachMembers> = {};
+    allOutreachMembers.forEach(member => {
+      const regularId = outreachIdToRegularId.get(member.bacentaId) || member.bacentaId;
+      if (!membersByBacenta[regularId]) membersByBacenta[regularId] = [];
+      membersByBacenta[regularId].push(member);
+    });
 
     // Calculate stats for each bacenta
     bacentas.forEach(bacenta => {
@@ -28,7 +38,7 @@ const AllBacentasView: React.FC = () => {
       const total = members.length;
       const coming = members.filter(m => m.comingStatus).length;
       const converted = members.filter(m => !!m.convertedMemberId).length;
-      
+
       stats.set(bacenta.id, {
         total,
         coming,
@@ -39,12 +49,12 @@ const AllBacentasView: React.FC = () => {
     });
 
     return stats;
-  }, [bacentas, allOutreachMembers]);
+  }, [bacentas, allOutreachMembers, outreachBacentas]);
 
   const filtered = useMemo(() => {
     // Filter out frozen bacentas by default unless showFrozenBacentas is true
     const visibleBacentas = bacentas.filter(b => showFrozenBacentas ? true : !b.frozen);
-    
+
     const list = query.trim()
       ? visibleBacentas.filter(b => b.name.toLowerCase().includes(query.toLowerCase()))
       : visibleBacentas;
@@ -103,7 +113,7 @@ const AllBacentasView: React.FC = () => {
                         await addBacentaHandler({ name });
                         setNewName('');
                         showToast('success', 'Bacenta added successfully');
-                      } catch {}
+                      } catch { }
                     }}
                     disabled={!newName.trim()}
                     className="px-6 py-3 rounded-xl bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 disabled:from-gray-300 disabled:to-gray-400 text-white font-semibold shadow-lg hover:shadow-xl transition-all duration-200 disabled:cursor-not-allowed flex items-center justify-center min-w-[60px]"
@@ -113,7 +123,7 @@ const AllBacentasView: React.FC = () => {
                   </button>
                 </div>
               </div>
-              
+
               {/* Show Frozen Toggle */}
               <div className="flex justify-center">
                 <label className="inline-flex items-center space-x-2 px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg shadow-sm cursor-pointer select-none hover:bg-gray-100 transition-colors">
@@ -137,7 +147,7 @@ const AllBacentasView: React.FC = () => {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
         {filtered.map(b => {
           const stats = bacentaStats.get(b.id) || { total: 0, coming: 0, converted: 0, comingRate: 0, conversionRate: 0 };
-          
+
           return (
             <div key={b.id} className="group relative">
               <div className="absolute -inset-0.5 z-0 bg-gradient-to-r from-blue-200 to-purple-200 dark:from-blue-800 dark:to-purple-800 rounded-2xl opacity-0 group-hover:opacity-100 transition duration-300 blur-sm pointer-events-none"></div>
@@ -162,7 +172,7 @@ const AllBacentasView: React.FC = () => {
                           </div>
                         </div>
                       </div>
-                      
+
                       <div className="flex items-center gap-2 mb-2">
                         <h3 className="font-bold text-lg text-slate-900 transition-colors duration-200 truncate" title={b.name}>
                           {b.name}

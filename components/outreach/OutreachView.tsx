@@ -46,7 +46,7 @@ const BacentaDetail: React.FC<{
       if (showSonsOfGod && !m.sonOfGodId) return false;
       if (showComingOnly && !isComingForSunday(m, currentSunday)) return false;
       if (!term) return true;
-      const haystack = [m.name, m.roomNumber || '', (m.phoneNumbers||[]).join(' '), m.notComingReason || ''].join(' ').toLowerCase();
+      const haystack = [m.name, m.roomNumber || '', (m.phoneNumbers || []).join(' '), m.notComingReason || ''].join(' ').toLowerCase();
       return haystack.includes(term);
     });
   }, [members, search, showSonsOfGod, showComingOnly, currentSunday]);
@@ -288,36 +288,36 @@ const BacentaDetail: React.FC<{
                       placeholder="Search name, room, phone, reason..."
                     />
                     {search && (
-                      <button onClick={()=>setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600" aria-label="Clear search">
+                      <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600" aria-label="Clear search">
                         <XMarkIcon className="w-4 h-4" />
                       </button>
                     )}
                   </div>
                   <div className="flex flex-wrap gap-2">
                     <button
-                      onClick={()=>setShowSonsOfGod(s=>!s)}
+                      onClick={() => setShowSonsOfGod(s => !s)}
                       className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-colors ${showSonsOfGod ? 'bg-purple-100 border-purple-300 text-purple-700' : 'bg-white dark:bg-dark-700 border-gray-300 dark:border-dark-500 text-gray-600 dark:text-dark-300 hover:bg-gray-100 dark:hover:bg-dark-600'}`}
                     >
                       Sons of God
                     </button>
                     <button
-                      onClick={()=>setShowComingOnly(s=>!s)}
+                      onClick={() => setShowComingOnly(s => !s)}
                       className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-colors ${showComingOnly ? 'bg-green-100 border-green-300 text-green-700' : 'bg-white dark:bg-dark-700 border-gray-300 dark:border-dark-500 text-gray-600 dark:text-dark-300 hover:bg-gray-100 dark:hover:bg-dark-600'}`}
                     >
                       Coming
                     </button>
                     {(showSonsOfGod || showComingOnly || search) && (
                       <button
-                        onClick={()=>{setSearch(''); setShowSonsOfGod(false); setShowComingOnly(false);}}
+                        onClick={() => { setSearch(''); setShowSonsOfGod(false); setShowComingOnly(false); }}
                         className="px-3 py-1.5 rounded-full text-sm font-medium border bg-gray-50 dark:bg-dark-700 hover:bg-gray-100 text-gray-600 dark:text-dark-300 border-gray-300 dark:border-dark-500"
                       >Reset</button>
                     )}
                   </div>
                   <div className="text-xs text-gray-500 dark:text-dark-400 font-medium">{filteredMembers.length} / {members.length}</div>
                 </div>
-        {filteredMembers.length === 0 && (
+                {filteredMembers.length === 0 && (
                   <div className="text-center py-10 text-gray-500 dark:text-dark-400">
-          <FilterIcon className="w-10 h-10 mx-auto mb-3 text-gray-300 dark:text-dark-500" />
+                    <FilterIcon className="w-10 h-10 mx-auto mb-3 text-gray-300 dark:text-dark-500" />
                     <p className="font-medium">No matches for current filters</p>
                     <p className="text-xs mt-1">Adjust or clear filters to see members.</p>
                   </div>
@@ -364,9 +364,9 @@ const BacentaDetail: React.FC<{
                             </div>
                           </div>
 
-              {m.comingStatusSunday === currentSunday && m.notComingReason && !isComingForSunday(m, currentSunday) && (
+                          {m.comingStatusSunday === currentSunday && m.notComingReason && !isComingForSunday(m, currentSunday) && (
                             <div className="text-sm text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 px-3 py-2 rounded-lg">
-                <span className="font-medium">Reason:</span> {m.notComingReason}
+                              <span className="font-medium">Reason:</span> {m.notComingReason}
                             </div>
                           )}
                         </div>
@@ -423,7 +423,8 @@ const OutreachView: React.FC = () => {
     outreachBacentas,
     outreachMembers,
     allOutreachMembers, // All outreach members across all time periods
-    bacentas, // Regular bacentas for validation
+    bacentas, // Regular bacentas — used to match outreach members for totals
+    showFrozenBacentas, // Whether frozen bacentas are visible
     deleteOutreachBacentaHandler,
     currentTab,
   } = useAppContext();
@@ -450,17 +451,15 @@ const OutreachView: React.FC = () => {
 
   // Overall totals using ALL outreach members (across all time periods)
   // Fallback to current monthly data if allOutreachMembers is empty
-  // Filter out orphaned members whose bacentaId doesn't exist in current bacentas
+  // Only count members in visible bacentas so total matches the displayed cards
   const effectiveAllMembers = useMemo(() => {
     const baseMembers = allOutreachMembers.length > 0 ? allOutreachMembers : outreachMembers;
-    const validBacentaIds = new Set(bacentas.map(b => b.id));
-    
-    // Filter out members whose bacentaId doesn't exist anymore
-    const validMembers = baseMembers.filter(m => validBacentaIds.has(m.bacentaId));
-    
-    return validMembers;
-  }, [allOutreachMembers, outreachMembers, bacentas]);
-  
+    const visibleBacentaIds = new Set(
+      bacentas.filter(b => showFrozenBacentas || !b.frozen).map(b => b.id)
+    );
+    return baseMembers.filter(m => visibleBacentaIds.has(m.bacentaId));
+  }, [allOutreachMembers, outreachMembers, bacentas, showFrozenBacentas]);
+
   // Group members by bacenta ID for consistent calculation
   const allMembersByBacenta = useMemo(() => {
     const map: Record<string, OutreachMember[]> = {};
@@ -545,7 +544,7 @@ const OutreachView: React.FC = () => {
                           Total people outreached across all bacentas
                         </p>
                       </div>
-                      
+
                       {/* Additional stats */}
                       <div className="pt-4 border-t border-gray-200 space-y-2">
                         <div className="text-xs text-gray-500 mb-3 font-medium uppercase tracking-wider">
@@ -630,7 +629,7 @@ const OutreachView: React.FC = () => {
                                   {b.name}
                                 </h3>
                                 <p className="text-sm text-gray-500 dark:text-dark-400 mt-1">
-                                  {total > 0 
+                                  {total > 0
                                     ? `${coming} coming • ${converted} converted`
                                     : 'No outreach members yet - click to add some'
                                   }

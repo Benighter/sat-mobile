@@ -66,9 +66,8 @@ const StatCard: React.FC<StatCardProps> = memo(({ title, value, icon, descriptio
 
   return (
     <div
-  className={`p-4 sm:p-5 md:p-6 desktop:p-5 desktop-lg:p-6 bg-white dark:bg-dark-800 border border-gray-200 dark:border-dark-600 ${accents.border} rounded-lg desktop:rounded-xl shadow-sm hover:shadow-md desktop:hover:shadow-lg relative h-[120px] sm:h-[140px] desktop:h-[160px] desktop-lg:h-[180px] flex flex-col justify-between transition-all duration-200 desktop-card-hover overflow-hidden ${
-        onClick ? `cursor-pointer ${accents.hover}` : ''
-      }`}
+      className={`p-4 sm:p-5 md:p-6 desktop:p-5 desktop-lg:p-6 bg-white dark:bg-dark-800 border border-gray-200 dark:border-dark-600 ${accents.border} rounded-lg desktop:rounded-xl shadow-sm hover:shadow-md desktop:hover:shadow-lg relative h-[120px] sm:h-[140px] desktop:h-[160px] desktop-lg:h-[180px] flex flex-col justify-between transition-all duration-200 desktop-card-hover overflow-hidden ${onClick ? `cursor-pointer ${accents.hover}` : ''
+        }`}
       onClick={onClick}
     >
       {/* Header with title and icon */}
@@ -132,10 +131,11 @@ const DashboardView: React.FC = memo(() => {
     return filtered.length;
   }, [members, isMinistryContext]);
 
-  // Filter out orphaned outreach members whose bacentaId doesn't exist anymore
+  // Filter out orphaned outreach members and members in frozen bacentas
+  // so the dashboard total matches the visible bacenta cards
   const validOutreachMembers = useMemo(() => {
-    const validBacentaIds = new Set(bacentas.map(b => b.id));
-    return allOutreachMembers.filter(m => validBacentaIds.has(m.bacentaId));
+    const activeBacentaIds = new Set(bacentas.filter(b => !b.frozen).map(b => b.id));
+    return allOutreachMembers.filter(m => activeBacentaIds.has(m.bacentaId));
   }, [allOutreachMembers, bacentas]);
 
   const totalOutreachMembers = validOutreachMembers.length;
@@ -186,7 +186,7 @@ const DashboardView: React.FC = memo(() => {
           setConfirmationTarget(defaultTarget);
         }
       } catch (error: any) {
-          console.error('Error loading confirmation target for dashboard:', {
+        console.error('Error loading confirmation target for dashboard:', {
           error: error.message,
           code: error.code,
           stack: error.stack,
@@ -194,10 +194,10 @@ const DashboardView: React.FC = memo(() => {
         });
 
         // Check if it's an offline error
-  // const isOffline = error?.code === 'unavailable' || error?.message?.includes('offline') || error?.message?.includes('network') || error?.message?.includes('backend');
+        // const isOffline = error?.code === 'unavailable' || error?.message?.includes('offline') || error?.message?.includes('network') || error?.message?.includes('backend');
 
-  // Fallback to member count, but only if we have members loaded
-  const defaultTarget = activeMembers > 0 ? activeMembers : 0;
+        // Fallback to member count, but only if we have members loaded
+        const defaultTarget = activeMembers > 0 ? activeMembers : 0;
         setConfirmationTarget(defaultTarget);
       } finally {
         setIsLoadingTarget(false);
@@ -310,10 +310,10 @@ const DashboardView: React.FC = memo(() => {
       const dayMeetingRecords = meetingRecords.filter(record => record.date === date);
       dayMeetingRecords.forEach(record => {
         // Attendance: presentMemberIds + firstTimers (fallbacks for legacy data)
-  const presentCount = Array.isArray(record.presentMemberIds) ? record.presentMemberIds.length : (Array.isArray((record as any).attendees) ? (record as any).attendees.length : 0);
-  const firstTimers = typeof record.firstTimers === 'number' ? record.firstTimers : (Array.isArray(record.guests) ? record.guests.length : 0);
-  const visitors = Array.isArray((record as any).visitors) ? (record as any).visitors.length : (typeof (record as any).visitorsCount === 'number' ? (record as any).visitorsCount : 0);
-  totalAttendance += (presentCount + firstTimers + visitors);
+        const presentCount = Array.isArray(record.presentMemberIds) ? record.presentMemberIds.length : (Array.isArray((record as any).attendees) ? (record as any).attendees.length : 0);
+        const firstTimers = typeof record.firstTimers === 'number' ? record.firstTimers : (Array.isArray(record.guests) ? record.guests.length : 0);
+        const visitors = Array.isArray((record as any).visitors) ? (record as any).visitors.length : (typeof (record as any).visitorsCount === 'number' ? (record as any).visitorsCount : 0);
+        totalAttendance += (presentCount + firstTimers + visitors);
 
         // Income: prefer totalOffering, else cash + online
         const offering = typeof record.totalOffering === 'number' && !isNaN(record.totalOffering)
@@ -444,8 +444,8 @@ const DashboardView: React.FC = memo(() => {
   useEffect(() => {
     const uid = user?.uid ?? null;
     const loaded = dashboardLayoutStorage.loadOrder(uid, defaultOrder) as CardId[];
-  // Remove deprecated/hidden cards from any previously saved layout
-  let sanitized = (loaded.filter((id) => id !== ('ministries' as any)) as CardId[]);
+    // Remove deprecated/hidden cards from any previously saved layout
+    let sanitized = (loaded.filter((id) => id !== ('ministries' as any)) as CardId[]);
     // If not admin, ensure 'tithe' is not shown
     if (!isAdmin) {
       sanitized = sanitized.filter((id) => id !== 'tithe') as CardId[];
@@ -468,15 +468,15 @@ const DashboardView: React.FC = memo(() => {
     if (isMinistryContext) {
       sanitized = sanitized.filter((id) => id !== 'outreach' && id !== 'bacentaMeetings') as CardId[];
     }
-  // Remove deprecated cards if present in persisted layouts
-  sanitized = sanitized.filter((id) => id !== ('tongues' as any) && id !== ('baptized' as any)) as CardId[];
+    // Remove deprecated cards if present in persisted layouts
+    sanitized = sanitized.filter((id) => id !== ('tongues' as any) && id !== ('baptized' as any)) as CardId[];
     setCardOrder(sanitized);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.uid, isMinistryContext, isAdmin, shouldShowSundayHeadCounts]);
 
   const persistOrder = useCallback((next: CardId[]) => {
     const uid = user?.uid ?? null;
-  let sanitized = next.filter((id) => id !== ('ministries' as any)) as CardId[];
+    let sanitized = next.filter((id) => id !== ('ministries' as any)) as CardId[];
     // Ensure admin-only tithe card is not stored for non-admins
     if (!isAdmin) {
       sanitized = sanitized.filter((id) => id !== 'tithe') as CardId[];
@@ -489,8 +489,8 @@ const DashboardView: React.FC = memo(() => {
     if (isMinistryContext) {
       sanitized = sanitized.filter((id) => id !== 'outreach' && id !== 'bacentaMeetings') as CardId[];
     }
-  // Remove deprecated cards
-  sanitized = sanitized.filter((id) => id !== ('tongues' as any) && id !== ('baptized' as any)) as CardId[];
+    // Remove deprecated cards
+    sanitized = sanitized.filter((id) => id !== ('tongues' as any) && id !== ('baptized' as any)) as CardId[];
     setCardOrder(sanitized);
     dashboardLayoutStorage.saveOrder(uid, sanitized);
   }, [user?.uid, isMinistryContext, isAdmin, shouldShowSundayHeadCounts]);
@@ -561,7 +561,7 @@ const DashboardView: React.FC = memo(() => {
             onClick={() => !rearrangeMode && switchTab({ id: 'all_members', name: 'Tithe & Transport', data: { isTithe: true } })}
           />
         );
-  }
+      }
       case 'confirmations':
         return (
           <EnhancedConfirmationCard
@@ -633,13 +633,13 @@ const DashboardView: React.FC = memo(() => {
           />
         );
 
-  case 'prayerOverall':
+      case 'prayerOverall':
         return (
           <StatCard
             key={id}
             title="Prayer (Overall)"
             value={`${overallPrayerHours} h`}
-    icon={<PrayerIcon className="w-full h-full" />}
+            icon={<PrayerIcon className="w-full h-full" />}
             accentColor="indigo"
             description={`All-time prayers marked • ${overallPrayerMarks}`}
             onClick={() => !rearrangeMode && switchTab({ id: TabKeys.PRAYER, name: 'Prayer' })}
@@ -715,7 +715,7 @@ const DashboardView: React.FC = memo(() => {
         </div>
       </div>
 
-  {/* No modal for Tithe; clicking card routes to All Members tab */}
+      {/* No modal for Tithe; clicking card routes to All Members tab */}
 
       {/* Stats Grid - Enhanced responsive layout with improved desktop scaling */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 desktop:grid-cols-auto-fit-280 desktop-lg:grid-cols-auto-fit-300 desktop-xl:grid-cols-auto-fit-320 ultra-wide:grid-cols-auto-fit-350 gap-4 sm:gap-5 md:gap-6 desktop:gap-5 desktop-lg:gap-6 ultra-wide:gap-8">
@@ -789,7 +789,7 @@ const EnhancedConfirmationCard: React.FC<EnhancedConfirmationCardProps> = memo((
 
   return (
     <div
-  className={`p-4 sm:p-5 md:p-6 desktop:p-5 desktop-lg:p-6 bg-white dark:bg-dark-800 border border-gray-200 dark:border-dark-600 border-l-4 ${borderColor} rounded-lg desktop:rounded-xl shadow-sm hover:shadow-md desktop:hover:shadow-lg relative h-[120px] sm:h-[140px] desktop:h-[160px] desktop-lg:h-[180px] flex flex-col justify-between cursor-pointer transition-all duration-200 desktop-card-hover overflow-hidden`}
+      className={`p-4 sm:p-5 md:p-6 desktop:p-5 desktop-lg:p-6 bg-white dark:bg-dark-800 border border-gray-200 dark:border-dark-600 border-l-4 ${borderColor} rounded-lg desktop:rounded-xl shadow-sm hover:shadow-md desktop:hover:shadow-lg relative h-[120px] sm:h-[140px] desktop:h-[160px] desktop-lg:h-[180px] flex flex-col justify-between cursor-pointer transition-all duration-200 desktop-card-hover overflow-hidden`}
       onClick={onClick}
     >
       {/* Header with title */}
