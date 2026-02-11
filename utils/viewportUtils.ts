@@ -16,7 +16,7 @@ export interface ViewportSize {
 export const getViewportSize = (): ViewportSize => {
   const width = window.innerWidth;
   const height = window.innerHeight;
-  
+
   return {
     width,
     height,
@@ -34,48 +34,74 @@ export const calculateMobileDropdownPosition = (
   dropdownWidth: number,
   dropdownHeight: number
 ): { top: number; left: number; maxHeight: number; positioning: 'fixed' | 'absolute' } => {
+  // Unified positioning logic for both mobile and desktop
+  // We use 'fixed' positioning to escape any overflow:hidden containers
+
   const viewport = getViewportSize();
   const triggerRect = triggerElement.getBoundingClientRect();
-  
-  if (!viewport.isMobile) {
-    // Use default positioning for desktop
-    return {
-      top: triggerRect.bottom + 8,
-      left: Math.max(8, triggerRect.right - dropdownWidth),
-      maxHeight: viewport.availableHeight - triggerRect.bottom - 16,
-      positioning: 'absolute'
-    };
-  }
+  const safeMargin = 8;
+  const headerHeight = viewport.isMobile ? 60 : 0;
 
-  // Mobile positioning logic
-  const safeMargin = viewport.isSmallMobile ? 8 : 16;
-  const headerHeight = 60; // Approximate header height
-  const maxHeight = viewport.height - headerHeight - safeMargin * 2;
-  
   let top: number;
   let left: number;
+  let maxHeight: number;
 
-  if (viewport.isSmallMobile) {
-    // Center dropdown on very small screens
-    top = headerHeight + safeMargin;
-    left = safeMargin;
-  } else {
-    // Position below trigger but constrain to viewport
-    const preferredTop = triggerRect.bottom + 8;
-    const wouldOverflow = preferredTop + dropdownHeight > viewport.height - safeMargin;
-    
-    if (wouldOverflow) {
-      // Position above trigger if it would overflow below
-      top = Math.max(safeMargin, triggerRect.top - dropdownHeight - 8);
+  if (viewport.isMobile) {
+    // Mobile specific logic
+    const mobileMargin = viewport.isSmallMobile ? 8 : 16;
+    maxHeight = viewport.height - headerHeight - mobileMargin * 2;
+
+    if (viewport.isSmallMobile) {
+      // Center dropdown on very small screens
+      top = headerHeight + mobileMargin;
+      left = mobileMargin;
     } else {
-      top = preferredTop;
+      // Position below trigger but constrain to viewport
+      const preferredTop = triggerRect.bottom + 8;
+      const wouldOverflow = preferredTop + dropdownHeight > viewport.height - mobileMargin;
+
+      if (wouldOverflow) {
+        // Position above trigger if it would overflow below
+        top = Math.max(mobileMargin, triggerRect.top - dropdownHeight - 8);
+      } else {
+        top = preferredTop;
+      }
+
+      // Horizontal positioning
+      left = Math.max(mobileMargin, Math.min(
+        triggerRect.right - dropdownWidth,
+        viewport.width - dropdownWidth - mobileMargin
+      ));
     }
-    
-    // Horizontal positioning
-    left = Math.max(safeMargin, Math.min(
-      triggerRect.right - dropdownWidth,
-      viewport.width - dropdownWidth - safeMargin
-    ));
+  } else {
+    // Desktop logic - use fixed positioning relative to viewport
+    // This solves the issue of menus being cut off by overflow:hidden parents
+
+    // Default: bottom-right aligned to trigger
+    const preferredTop = triggerRect.bottom + 4;
+    const preferredLeft = triggerRect.right - dropdownWidth;
+
+    // Check vertical overflow
+    const spaceBelow = viewport.height - preferredTop - safeMargin;
+    const spaceAbove = triggerRect.top - safeMargin;
+
+    if (spaceBelow < dropdownHeight && spaceAbove > spaceBelow) {
+      // Position above if better fit
+      top = triggerRect.top - dropdownHeight - 4;
+      maxHeight = Math.min(dropdownHeight, spaceAbove);
+    } else {
+      // Position below
+      top = preferredTop;
+      maxHeight = Math.min(dropdownHeight, spaceBelow);
+    }
+
+    // Check horizontal overflow
+    if (preferredLeft < safeMargin) {
+      // If goes off-screen left, align to left of trigger or viewport left
+      left = Math.max(safeMargin, triggerRect.left);
+    } else {
+      left = preferredLeft;
+    }
   }
 
   return {
@@ -98,10 +124,10 @@ export const needsScrolling = (contentHeight: number, maxHeight: number): boolea
  */
 export const getScrollIndicators = (element: HTMLElement) => {
   if (!element) return { showTop: false, showBottom: false };
-  
+
   const { scrollTop, scrollHeight, clientHeight } = element;
   const threshold = 10; // Pixels threshold for showing indicators
-  
+
   return {
     showTop: scrollTop > threshold,
     showBottom: scrollTop < scrollHeight - clientHeight - threshold
@@ -112,23 +138,23 @@ export const getScrollIndicators = (element: HTMLElement) => {
  * Add touch scroll enhancements to dropdown element
  */
 export const enhanceDropdownScrolling = (element: HTMLElement): (() => void) => {
-  if (!element) return () => {};
+  if (!element) return () => { };
 
   const viewport = getViewportSize();
-  if (!viewport.isMobile) return () => {};
+  if (!viewport.isMobile) return () => { };
 
   // Add CSS classes for mobile optimization
   element.classList.add('mobile-dropdown-container', 'smooth-scroll');
-  
+
   // Prevent scroll chaining
   const handleTouchMove = (e: TouchEvent) => {
     const { scrollTop, scrollHeight, clientHeight } = element;
     const isAtTop = scrollTop === 0;
     const isAtBottom = scrollTop + clientHeight >= scrollHeight;
-    
+
     // Prevent overscroll bounce
-    if ((isAtTop && e.touches[0].clientY > e.touches[0].clientY) || 
-        (isAtBottom && e.touches[0].clientY < e.touches[0].clientY)) {
+    if ((isAtTop && e.touches[0].clientY > e.touches[0].clientY) ||
+      (isAtBottom && e.touches[0].clientY < e.touches[0].clientY)) {
       e.preventDefault();
     }
   };
@@ -149,11 +175,11 @@ export const createScrollIndicators = (): { top: HTMLElement; bottom: HTMLElemen
   const topIndicator = document.createElement('div');
   topIndicator.className = 'mobile-dropdown-scroll-indicator top';
   topIndicator.style.display = 'none';
-  
+
   const bottomIndicator = document.createElement('div');
   bottomIndicator.className = 'mobile-dropdown-scroll-indicator bottom';
   bottomIndicator.style.display = 'none';
-  
+
   return { top: topIndicator, bottom: bottomIndicator };
 };
 
@@ -166,7 +192,7 @@ export const updateScrollIndicators = (
   bottomIndicator: HTMLElement
 ) => {
   const { showTop, showBottom } = getScrollIndicators(scrollContainer);
-  
+
   topIndicator.style.display = showTop ? 'block' : 'none';
   bottomIndicator.style.display = showBottom ? 'block' : 'none';
 };
@@ -179,7 +205,7 @@ export const debounce = <T extends (...args: any[]) => any>(
   wait: number
 ): ((...args: Parameters<T>) => void) => {
   let timeout: NodeJS.Timeout;
-  
+
   return (...args: Parameters<T>) => {
     clearTimeout(timeout);
     timeout = setTimeout(() => func(...args), wait);

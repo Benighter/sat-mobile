@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { EllipsisVerticalIcon } from '../icons';
-import { 
-  getViewportSize, 
+import {
+  getViewportSize,
   calculateMobileDropdownPosition,
   enhanceDropdownScrolling,
   createScrollIndicators,
@@ -40,7 +40,7 @@ const Dropdown: React.FC<DropdownProps> = ({
     maxHeight: number;
     positioning: 'fixed' | 'absolute';
   } | null>(null);
-  
+
   const dropdownRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLDivElement>(null);
@@ -50,9 +50,8 @@ const Dropdown: React.FC<DropdownProps> = ({
   const calculatePosition = useCallback(() => {
     if (!triggerRef.current || !isOpen) return;
 
-    const viewport = getViewportSize();
     const estimatedHeight = items.length * 40 + 16; // Rough estimate
-    const estimatedWidth = 192; // w-48 = 12rem = 192px
+    const estimatedWidth = 240; // w-60 = 15rem = 240px
 
     const position = calculateMobileDropdownPosition(
       triggerRef.current,
@@ -65,10 +64,10 @@ const Dropdown: React.FC<DropdownProps> = ({
 
   // Enhanced scroll handling for mobile
   const setupMobileScrolling = useCallback(() => {
-    if (!menuRef.current) return () => {};
+    if (!menuRef.current) return () => { };
 
     const viewport = getViewportSize();
-    if (!viewport.isMobile) return () => {};
+    if (!viewport.isMobile) return () => { };
 
     // Add mobile scroll enhancements
     const cleanup = enhanceDropdownScrolling(menuRef.current);
@@ -120,10 +119,10 @@ const Dropdown: React.FC<DropdownProps> = ({
     if (isOpen) {
       document.addEventListener('mousedown', handleClickOutside);
       calculatePosition();
-      
+
       // Setup mobile scrolling
       const cleanupScrolling = setupMobileScrolling();
-      
+
       return () => {
         document.removeEventListener('mousedown', handleClickOutside);
         cleanupScrolling();
@@ -135,16 +134,23 @@ const Dropdown: React.FC<DropdownProps> = ({
     };
   }, [isOpen, calculatePosition, setupMobileScrolling]);
 
-  // Handle window resize
+  // Handle window resize and scroll
   useEffect(() => {
-    const handleResize = debounce(() => {
+    const handleUpdate = () => {
       if (isOpen) {
         calculatePosition();
       }
-    }, 100);
+    };
 
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+    const debouncedUpdate = debounce(handleUpdate, 16); // ~60fps
+
+    window.addEventListener('resize', debouncedUpdate);
+    window.addEventListener('scroll', debouncedUpdate, { capture: true }); // Capture scroll on any element
+
+    return () => {
+      window.removeEventListener('resize', debouncedUpdate);
+      window.removeEventListener('scroll', debouncedUpdate, { capture: true });
+    };
   }, [isOpen, calculatePosition]);
 
   // Close dropdown on escape key
@@ -180,11 +186,10 @@ const Dropdown: React.FC<DropdownProps> = ({
   const defaultTrigger = (
     <button
       type="button"
-      className={`p-1 rounded-md transition-colors touch-manipulation ${
-        disabled 
-          ? 'text-gray-300 cursor-not-allowed' 
-          : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
-      }`}
+      className={`p-1 rounded-md transition-colors touch-manipulation ${disabled
+        ? 'text-gray-300 cursor-not-allowed'
+        : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
+        }`}
       disabled={disabled}
     >
       <EllipsisVerticalIcon className="w-4 h-4" />
@@ -195,8 +200,8 @@ const Dropdown: React.FC<DropdownProps> = ({
   const isMobile = viewport.isMobile;
 
   // Mobile dropdown styles
-  const mobileDropdownClasses = isMobile 
-    ? 'mobile-dropdown-menu mobile-dropdown-content' 
+  const mobileDropdownClasses = isMobile
+    ? 'mobile-dropdown-menu mobile-dropdown-content'
     : '';
 
   const dropdownStyles = dropdownPosition ? {
@@ -204,7 +209,8 @@ const Dropdown: React.FC<DropdownProps> = ({
     top: `${dropdownPosition.top}px`,
     left: `${dropdownPosition.left}px`,
     maxHeight: `${dropdownPosition.maxHeight}px`,
-    width: isMobile ? (viewport.isSmallMobile ? 'calc(100vw - 1rem)' : 'calc(100vw - 2rem)') : '12rem'
+    width: isMobile ? (viewport.isSmallMobile ? 'calc(100vw - 1rem)' : 'calc(100vw - 2rem)') : '15rem',
+    scrollbarWidth: 'thin' as const, // For Firefox
   } : {};
 
   return (
@@ -223,13 +229,10 @@ const Dropdown: React.FC<DropdownProps> = ({
         {isOpen && (
           <div
             ref={menuRef}
-            className={`bg-white dark:bg-dark-800 rounded-md shadow-lg border border-gray-300 dark:border-dark-600 py-1 z-50 overflow-y-auto ${mobileDropdownClasses} ${
-              !dropdownPosition && align === 'right' ? 'absolute right-0' : ''
-            } ${
-              !dropdownPosition && align === 'left' ? 'absolute left-0' : ''
-            } ${
-              !dropdownPosition && position === 'above' ? 'bottom-full mb-1' : 'top-full mt-1'
-            }`}
+            className={`bg-white dark:bg-dark-800 rounded-md shadow-lg border border-gray-300 dark:border-dark-600 py-1 z-50 overflow-y-auto ${mobileDropdownClasses} ${!dropdownPosition && align === 'right' ? 'absolute right-0' : ''
+              } ${!dropdownPosition && align === 'left' ? 'absolute left-0' : ''
+              } ${!dropdownPosition && position === 'above' ? 'bottom-full mb-1' : 'top-full mt-1'
+              }`}
             style={dropdownStyles}
           >
             {items.map((item) => (
@@ -237,23 +240,22 @@ const Dropdown: React.FC<DropdownProps> = ({
                 key={item.id}
                 onClick={() => handleItemClick(item)}
                 disabled={item.disabled}
-                className={`w-full px-4 py-2 text-left text-sm flex items-center space-x-2 transition-colors touch-manipulation mobile-dropdown-item ${
-                  item.disabled
-                    ? 'text-gray-400 dark:text-dark-500 cursor-not-allowed'
-                    : item.destructive
+                className={`w-full px-4 py-2 text-left text-sm flex items-center space-x-2 transition-colors touch-manipulation whitespace-nowrap mobile-dropdown-item ${item.disabled
+                  ? 'text-gray-400 dark:text-dark-500 cursor-not-allowed'
+                  : item.destructive
                     ? 'text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-700 dark:hover:text-red-300'
                     : 'text-gray-800 dark:text-dark-100 hover:bg-gray-100 dark:hover:bg-dark-700'
-                }`}
+                  }`}
               >
                 {item.icon && (
                   <span className="flex-shrink-0 w-4 h-4">
                     {item.icon}
                   </span>
                 )}
-                <span className="break-words">{item.label}</span>
+                <span className="truncate">{item.label}</span>
               </button>
             ))}
-            
+
             {items.length === 0 && (
               <div className="px-4 py-2 text-sm text-gray-500 italic">
                 No actions available
@@ -265,7 +267,7 @@ const Dropdown: React.FC<DropdownProps> = ({
 
       {/* Mobile backdrop */}
       {isOpen && isMobile && (
-        <div 
+        <div
           className="fixed inset-0 bg-black/20 mobile-dropdown-backdrop z-40"
           onClick={() => setIsOpen(false)}
         />
