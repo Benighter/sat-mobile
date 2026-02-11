@@ -1,6 +1,4 @@
-// Simplified Enhanced Notification Integration (push + extra admin notifications disabled)
-// This stripped version avoids compile errors while the feature is temporarily disabled.
-
+// Enhanced Notification Integration (push + in-app)
 import { setNotificationContext } from './notificationService';
 import {
   membersFirebaseService,
@@ -9,26 +7,43 @@ import {
   confirmationFirebaseService
 } from './firebaseService';
 import { User } from '../types';
+import { pushNotificationService } from './pushNotificationService';
 
 export const setEnhancedNotificationContext = (user: User | null, churchId: string | null) => {
-  // Context still forwarded so in‑app notifications continue to work
+  // Forward context to both in-app and push services
   setNotificationContext(user, churchId);
+  pushNotificationService.setUserContext(user, churchId);
 };
 
-// Direct pass‑through exports (no extra notification side effects)
+// Export operations with notifications (currently just pass-throughs, but could be enhanced)
 export const memberOperationsWithNotifications = membersFirebaseService;
 export const newBelieverOperationsWithNotifications = newBelieversFirebaseService;
 export const guestOperationsWithNotifications = guestFirebaseService;
 export const confirmationOperationsWithNotifications = confirmationFirebaseService;
 
-// Stubbed push helpers – always disabled
+// Export push notification helpers
 export const pushNotificationHelpers = {
-  async initialize() { return false; },
-  async isSupported() { return false; },
-  async getPermissionStatus(): Promise<'granted' | 'denied' | 'default'> { return 'default'; },
-  async requestPermissions() { return false; },
-  async sendTestNotification() { return false; }
+  initialize: () => pushNotificationService.initialize(),
+  isSupported: () => Promise.resolve(pushNotificationService.isSupported()),
+  getPermissionStatus: () => pushNotificationService.getPermissionStatus(),
+  requestPermissions: () => pushNotificationService.requestPermissions(),
+  sendTestNotification: async () => {
+    // Send a local test notification
+    if ('Notification' in window && Notification.permission === 'granted') {
+      try {
+        const registration = await navigator.serviceWorker.ready;
+        await registration.showNotification('Test Notification', {
+          body: 'This is a test push notification from SAT Mobile',
+          icon: '/icon-192.png',
+          badge: '/icon-192.png'
+        });
+        return true;
+      } catch (e) {
+        console.error('Failed to send test notification:', e);
+        return false;
+      }
+    }
+    return false;
+  }
 };
 
-// NOTE: To restore full functionality, replace this file with the previous implementation
-// and resolve any missing helper functions (e.g., bacentaAssignmentChanged) in notificationService.

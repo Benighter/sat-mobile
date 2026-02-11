@@ -14,7 +14,7 @@ import ImageUpload from '../ui/ImageUpload';
 import ChangePasswordModal from '../auth/ChangePasswordModal';
 import AdminInviteManager from '../admin/AdminInviteManager';
 import InviteMigrationPanel from '../admin/InviteMigrationPanel';
-// import PushNotificationSettings from '../notifications/PushNotificationSettings';
+import PushNotificationSettings from '../notifications/PushNotificationSettings';
 import { hasAdminPrivileges, hasLeaderPrivileges } from '../../utils/permissionUtils';
 import {
   SunIcon,
@@ -53,7 +53,7 @@ const ProfileSettingsView: React.FC = () => {
     showToast,
     refreshUserProfile,
     // Cross-tenant switching
-  refreshAccessibleChurchLinks,
+    refreshAccessibleChurchLinks,
     accessibleChurchLinks,
     switchToExternalChurch,
     switchBackToOwnChurch,
@@ -222,7 +222,7 @@ const ProfileSettingsView: React.FC = () => {
         displayName: `${profileData.firstName.trim()} ${profileData.lastName.trim()}`,
         phoneNumber: profileData.phoneNumber.trim(),
         profilePicture: profileData.profilePicture,
-  preferences: { ...preferences, allowEditPreviousSundays: true, theme: 'light' as any },
+        preferences: { ...preferences, allowEditPreviousSundays: true, theme: 'light' as any },
         notificationPreferences: notificationPreferences
       };
 
@@ -276,7 +276,7 @@ const ProfileSettingsView: React.FC = () => {
                 });
               }
               if (writes.length) await Promise.allSettled(writes);
-              try { window.dispatchEvent(new CustomEvent('constituencyUpdated', { detail: { adminId: user.uid, newName } })); } catch {}
+              try { window.dispatchEvent(new CustomEvent('constituencyUpdated', { detail: { adminId: user.uid, newName } })); } catch { }
             } catch (e) {
               console.warn('Background propagation of constituency rename failed', e);
             }
@@ -287,7 +287,7 @@ const ProfileSettingsView: React.FC = () => {
       }
       await refreshUserProfile();
 
-  showToast('success', 'Profile Updated!', 'Your profile and preferences have been saved successfully');
+      showToast('success', 'Profile Updated!', 'Your profile and preferences have been saved successfully');
     } catch (error: any) {
       showToast('error', 'Save Failed', error.message);
     } finally {
@@ -671,12 +671,8 @@ const ProfileSettingsView: React.FC = () => {
           </div>
         </div>
 
-        {/* Push Notification Settings (temporarily disabled)
-            Original (restore when re‑enabling push):
-            {hasAdminPrivileges(userProfile) && (
-              <PushNotificationSettings className="mb-8" />
-            )}
-        */}
+        {/* Push Notification Settings */}
+        <PushNotificationSettings className="mb-8" />
 
         {/* Leader Features - Show for both admin and leader roles */}
         {hasLeaderPrivileges(userProfile) && (
@@ -826,7 +822,7 @@ const ProfileSettingsView: React.FC = () => {
           setIsConstituencyManagerOpen(false);
           // Always grant full access during cross-tenant impersonation
           switchToExternalChurch({ ...link, permission: 'read-write' });
-          try { await refreshAccessibleChurchLinks?.(); } catch {}
+          try { await refreshAccessibleChurchLinks?.(); } catch { }
         }}
         onSwitchBack={switchBackToOwnChurch}
       />
@@ -947,11 +943,11 @@ const ConstituenciesList: React.FC<ConstituenciesListProps> = ({ links, isImpers
                         const { crossTenantService } = await import('../../services/crossTenantService');
                         await crossTenantService.revokeAccess(link.id);
                         if (isImpersonating && link.ownerChurchId === currentChurchId) {
-                          try { await switchBackToOwnChurch(); } catch {}
+                          try { await switchBackToOwnChurch(); } catch { }
                         }
-                        try { await refreshAccessibleChurchLinks?.(); } catch {}
+                        try { await refreshAccessibleChurchLinks?.(); } catch { }
                         showToast('success', 'Access revoked', 'This constituency has been removed from your list');
-                      } catch (err:any) {
+                      } catch (err: any) {
                         console.warn('Revoke access failed', err);
                         showToast('error', 'Failed to revoke access', err.message || String(err));
                       }
@@ -1032,7 +1028,7 @@ const ConstituencyManagerScreen: React.FC<ConstituencyManagerScreenProps> = ({
       if (!user?.uid) return;
       const items = await crossTenantService.getOutgoingInvites(user.uid);
       setPendingInvites(items);
-    } catch (e:any) {
+    } catch (e: any) {
       console.warn('Failed to load pending invites', e);
     }
   };
@@ -1052,7 +1048,7 @@ const ConstituencyManagerScreen: React.FC<ConstituencyManagerScreenProps> = ({
     try {
       setIsInviting(true);
       // Look up the target admin by email
-  const target = await inviteService.searchUserByEmail(email, { inviterIsMinistry: !!user?.isMinistryAccount });
+      const target = await inviteService.searchUserByEmail(email, { inviterIsMinistry: !!user?.isMinistryAccount });
       if (!target) {
         showToast('error', 'Admin not found', 'No active user matches that email');
         setIsInviting(false);
@@ -1078,7 +1074,7 @@ const ConstituencyManagerScreen: React.FC<ConstituencyManagerScreenProps> = ({
       setInviteEmail('');
       showToast('success', 'Invite sent', 'They’ll see your request to grant access');
       await refreshPending();
-    } catch (e:any) {
+    } catch (e: any) {
       console.warn('sendInvite failed', e);
       showToast('error', 'Failed to send invite', e.message || String(e));
     } finally {
@@ -1214,7 +1210,7 @@ const ConstituencyManagerScreen: React.FC<ConstituencyManagerScreenProps> = ({
                       <Button
                         type="button"
                         variant="ghost"
-                        onClick={async () => { try { await crossTenantService.cancelInvite(inv.id); await refreshPending(); showToast('success', 'Invite cancelled'); } catch (e:any) { showToast('error', 'Failed to cancel invite', e.message || String(e)); } }}
+                        onClick={async () => { try { await crossTenantService.cancelInvite(inv.id); await refreshPending(); showToast('success', 'Invite cancelled'); } catch (e: any) { showToast('error', 'Failed to cancel invite', e.message || String(e)); } }}
                         className="h-9 px-3 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 border border-red-200"
                       >
                         Cancel
@@ -1235,5 +1231,5 @@ const ConstituencyManagerScreen: React.FC<ConstituencyManagerScreenProps> = ({
         </div>
       </div>
     </div>
-  : null);
+    : null);
 };
