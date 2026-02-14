@@ -1,20 +1,20 @@
-import { 
-  collection, 
-  doc, 
-  addDoc, 
-  updateDoc, 
-  getDocs, 
-  query, 
-  where, 
-  orderBy, 
+import {
+  collection,
+  doc,
+  addDoc,
+  updateDoc,
+  getDocs,
+  query,
+  where,
+  orderBy,
   limit,
   deleteDoc
 } from 'firebase/firestore';
 import { db } from '../firebase.config';
 import { BirthdayNotification, Member, User, Bacenta } from '../types';
-import { 
-  determineNotificationRecipients, 
-  hasNotificationBeenSent, 
+import {
+  determineNotificationRecipients,
+  hasNotificationBeenSent,
   getMembersNeedingNotifications,
   createBirthdayNotificationRecord
 } from '../utils/notificationUtils';
@@ -29,12 +29,12 @@ export class BirthdayNotificationService {
   private static instance: BirthdayNotificationService;
   private emailService: EmailNotificationService;
   // Feature flag: set to true to enable email delivery; false uses in-app notifications only
-  private static ENABLE_BIRTHDAY_EMAILS = false;
-  
+  private static ENABLE_BIRTHDAY_EMAILS = true;
+
   private constructor() {
     this.emailService = EmailNotificationService.getInstance();
   }
-  
+
   public static getInstance(): BirthdayNotificationService {
     if (!BirthdayNotificationService.instance) {
       BirthdayNotificationService.instance = new BirthdayNotificationService();
@@ -53,7 +53,7 @@ export class BirthdayNotificationService {
     try {
       const startDateStr = startDate.toISOString().split('T')[0];
       const endDateStr = endDate.toISOString().split('T')[0];
-      
+
       const notificationsRef = collection(db, `churches/${churchId}/birthdayNotifications`);
       const q = query(
         notificationsRef,
@@ -61,13 +61,13 @@ export class BirthdayNotificationService {
         where('notificationDate', '<=', endDateStr),
         orderBy('notificationDate', 'desc')
       );
-      
+
       const snapshot = await getDocs(q);
       return snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       } as BirthdayNotification));
-      
+
     } catch (error: any) {
       console.error('Error fetching existing notifications:', error);
       throw new Error(`Failed to fetch existing notifications: ${error.message}`);
@@ -126,9 +126,9 @@ export class BirthdayNotificationService {
     members: Member[],
     users: User[],
     bacentas: Bacenta[],
-  notificationDays: number[] = [7, 3, 1, 0],
-  referenceDate: Date = new Date(),
-  options?: { force?: boolean; actorAdminId?: string }
+    notificationDays: number[] = [7, 3, 1, 0],
+    referenceDate: Date = new Date(),
+    options?: { force?: boolean; actorAdminId?: string }
   ): Promise<{
     processed: number;
     sent: number;
@@ -175,8 +175,8 @@ export class BirthdayNotificationService {
 
       // Get members who need notifications today
       const membersNeedingNotifications = getMembersNeedingNotifications(
-        members, 
-        notificationDays, 
+        members,
+        notificationDays,
         referenceDate
       );
 
@@ -190,10 +190,10 @@ export class BirthdayNotificationService {
       startDate.setDate(startDate.getDate() - 1);
       const endDate = new Date(referenceDate);
       endDate.setDate(endDate.getDate() + 1);
-      
+
       const existingNotifications = await this.getExistingNotifications(
-        churchId, 
-        startDate, 
+        churchId,
+        startDate,
         endDate
       );
 
@@ -213,15 +213,15 @@ export class BirthdayNotificationService {
         });
       };
 
-    const force = options?.force === true;
+      const force = options?.force === true;
 
-    // Process each member
+      // Process each member
       for (const { member, daysUntilBirthday } of membersNeedingNotifications) {
         results.processed++;
 
         try {
           // Check if notification already sent
-      if (!force && hasNotificationBeenSent(existingNotifications, member.id, daysUntilBirthday, referenceDate)) {
+          if (!force && hasNotificationBeenSent(existingNotifications, member.id, daysUntilBirthday, referenceDate)) {
             console.log(`Notification already sent for ${member.firstName} ${member.lastName} (${daysUntilBirthday} days)`);
             results.skipped++;
             continue;
@@ -287,7 +287,7 @@ export class BirthdayNotificationService {
               console.warn('Failed to augment recipients via adminInvites linkage:', linkErr);
             }
           }
-          
+
           if (recipients.length === 0) {
             console.log(`No valid recipients found for ${member.firstName} ${member.lastName}`);
             results.skipped++;
@@ -343,14 +343,14 @@ export class BirthdayNotificationService {
             const emailTemplates = recipients
               .filter(r => !!r.email) // only those with emails
               .map(recipient => ({
-              template: this.emailService.generateBirthdayEmailTemplate(
-                member,
-                recipient,
-                bacentaName,
-                daysUntilBirthday
-              ),
-              recipient
-            }));
+                template: this.emailService.generateBirthdayEmailTemplate(
+                  member,
+                  recipient,
+                  bacentaName,
+                  daysUntilBirthday
+                ),
+                recipient
+              }));
 
             try {
               const emailResults = await withTimeout(
@@ -450,7 +450,7 @@ export class BirthdayNotificationService {
   }> {
     try {
       const notifications = await this.getExistingNotifications(churchId, startDate, endDate);
-      
+
       const stats = {
         totalNotifications: notifications.length,
         sentNotifications: notifications.filter(n => n.status === 'sent').length,
