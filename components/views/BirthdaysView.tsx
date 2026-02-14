@@ -7,6 +7,7 @@ import Modal from '../ui/Modal';
 import Button from '../ui/Button';
 import { BirthdayNotificationService } from '../../services/birthdayNotificationService';
 import { userService } from '../../services/userService';
+import { BellIcon } from '../icons';
 
 // Minimal stat item to keep layout clean
 const StatItem = ({ icon, label, value, bg, onClick }: { icon: React.ReactNode; label: string; value: React.ReactNode; bg?: string; onClick?: () => void }) => (
@@ -25,6 +26,8 @@ const BirthdaysView: React.FC = () => {
 
   const [isTriggering, setIsTriggering] = useState(false);
   const [triggeredNow, setTriggeredNow] = useState(false);
+  const [isTestingPushEmail, setIsTestingPushEmail] = useState(false);
+  const [testPushEmailDone, setTestPushEmailDone] = useState(false);
 
   const upcomingBirthdays = useMemo(() => getUpcomingBirthdays(members), [members]);
   const selectedMonthBirthdays = useMemo(() => getBirthdaysForMonth(members, displayedDate), [members, displayedDate]);
@@ -118,7 +121,7 @@ const BirthdaysView: React.FC = () => {
   const BirthdayCard = ({ birthday }: { birthday: any }) => {
     const { member, age, daysUntil, isToday, displayDate, hasPassedThisYear, currentAge } = birthday;
     const ageToday = useMemo(() => calculateAge(member.birthday, new Date()), [member.birthday]);
-    
+
     // Determine age label based on whether birthday has passed
     let ageLabel: string;
     if (isToday) {
@@ -131,13 +134,12 @@ const BirthdaysView: React.FC = () => {
 
     return (
       <div
-        className={`group p-3 sm:p-4 rounded-xl border transition-all duration-200 ${
-          isToday
+        className={`group p-3 sm:p-4 rounded-xl border transition-all duration-200 ${isToday
             ? 'border-amber-300 bg-amber-50 dark:bg-amber-900/20'
             : hasPassedThisYear
-            ? 'border-gray-300 bg-gray-50 dark:bg-gray-700/30 opacity-75'
-            : 'border-gray-200 dark:border-dark-600 bg-white dark:bg-dark-800 hover:border-slate-300 dark:hover:border-dark-500 hover:shadow-md'
-        }`}
+              ? 'border-gray-300 bg-gray-50 dark:bg-gray-700/30 opacity-75'
+              : 'border-gray-200 dark:border-dark-600 bg-white dark:bg-dark-800 hover:border-slate-300 dark:hover:border-dark-500 hover:shadow-md'
+          }`}
       >
         <div className="flex items-center">
           <div className="mr-3 sm:mr-4 flex-shrink-0">
@@ -150,13 +152,12 @@ const BirthdaysView: React.FC = () => {
                 {member.firstName} {member.lastName || ''}
               </h3>
               <span
-                className={`ml-3 inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${
-                  isToday
+                className={`ml-3 inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${isToday
                     ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200'
                     : hasPassedThisYear
-                    ? 'bg-gray-200 text-gray-600 dark:bg-gray-600 dark:text-gray-300'
-                    : 'bg-gray-100 text-gray-700 dark:bg-dark-700 dark:text-dark-200'
-                }`}
+                      ? 'bg-gray-200 text-gray-600 dark:bg-gray-600 dark:text-gray-300'
+                      : 'bg-gray-100 text-gray-700 dark:bg-dark-700 dark:text-dark-200'
+                  }`}
               >
                 <CalendarIcon className="w-3.5 h-3.5 mr-1" />
                 {displayDate}
@@ -206,7 +207,7 @@ const BirthdaysView: React.FC = () => {
     <div className="space-y-5 sm:space-y-6">
       {/* Header - cleaner, single-line, aligned, responsive sizing */}
       <div className="text-center">
-  <div className="inline-flex max-w-full min-w-0 items-center rounded-full bg-white dark:bg-dark-800 border border-gray-200 dark:border-dark-600 px-3 py-2 sm:px-5 sm:py-2 shadow-sm">
+        <div className="inline-flex max-w-full min-w-0 items-center rounded-full bg-white dark:bg-dark-800 border border-gray-200 dark:border-dark-600 px-3 py-2 sm:px-5 sm:py-2 shadow-sm">
           <h1
             className="leading-none font-bold text-gray-900 dark:text-dark-100 text-[clamp(0.8rem,4.2vw,1.4rem)]"
           >
@@ -216,58 +217,111 @@ const BirthdaysView: React.FC = () => {
         <p className="mt-3 text-xs sm:text-sm md:text-base text-gray-600 dark:text-dark-300 max-w-2xl mx-auto">
           Celebrate with your church family. This month and the next 7 days.
         </p>
-  {/* Quick action: trigger all birthday notifications now (admin only) */}
-  {userProfile?.role === 'admin' && (
-  <div className="mt-3 flex flex-col items-center">
-          <Button
-            variant="primary"
-            onClick={async () => {
-              if (!currentChurchId) {
-                showToast('error', 'No church context', 'Cannot determine church to process');
-                return;
-              }
-              setIsTriggering(true);
-              try {
-                const users = await userService.getChurchUsers(currentChurchId);
-                // Only send for members listed under "Upcoming This Month" plus Today, within 7 days
-                const targetEntries = [...monthTodaysBirthdays, ...monthFutureBirthdays].filter(e => e.daysUntil <= 7);
-                if (targetEntries.length === 0) {
-                  showToast('info', 'No Upcoming in 7 Days', 'No birthdays today or in the next 7 days for this month');
-                  setIsTriggering(false);
+        {/* Quick action: trigger all birthday notifications now (admin only) */}
+        {userProfile?.role === 'admin' && (
+          <div className="mt-3 flex flex-col items-center">
+            <Button
+              variant="primary"
+              onClick={async () => {
+                if (!currentChurchId) {
+                  showToast('error', 'No church context', 'Cannot determine church to process');
                   return;
                 }
-                const membersWithBirthdays = targetEntries.map(e => e.member);
-                const days = Array.from(new Set(targetEntries.map(e => e.daysUntil)));
+                setIsTriggering(true);
+                try {
+                  const users = await userService.getChurchUsers(currentChurchId);
+                  // Only send for members listed under "Upcoming This Month" plus Today, within 7 days
+                  const targetEntries = [...monthTodaysBirthdays, ...monthFutureBirthdays].filter(e => e.daysUntil <= 7);
+                  if (targetEntries.length === 0) {
+                    showToast('info', 'No Upcoming in 7 Days', 'No birthdays today or in the next 7 days for this month');
+                    setIsTriggering(false);
+                    return;
+                  }
+                  const membersWithBirthdays = targetEntries.map(e => e.member);
+                  const days = Array.from(new Set(targetEntries.map(e => e.daysUntil)));
 
-                const svc = BirthdayNotificationService.getInstance();
-                const results = await svc.processBirthdayNotifications(
-                  currentChurchId,
-                  membersWithBirthdays,
-                  users as any,
-                  bacentas,
-                  days,
-                  new Date(),
-                  { force: true, actorAdminId: userProfile?.uid }
-                );
-                setTriggeredNow(true);
-                showToast('success', 'Notifications Sent', `Processed ${results.processed}, sent ${results.sent}, failed ${results.failed}`);
-                setTimeout(() => setTriggeredNow(false), 5000);
-              } catch (error: any) {
-                showToast('error', 'Trigger Failed', error?.message || 'Failed to trigger processing');
-              } finally {
-                setIsTriggering(false);
-              }
-            }}
-            loading={isTriggering}
-            leftIcon={triggeredNow ? <CheckIcon className="w-4 h-4" /> : <CalendarIcon className="w-4 h-4" />}
-          >
-            {triggeredNow ? 'Triggered!' : 'Send Birthday Notifications Now'}
-          </Button>
-          <p className="mt-2 text-xs text-gray-500 dark:text-dark-400">
-            {`Will send ${next7DaysCount} birthday${next7DaysCount !== 1 ? 's' : ''} in the next 7 days`}
-          </p>
-  </div>
-  )}
+                  const svc = BirthdayNotificationService.getInstance();
+                  const results = await svc.processBirthdayNotifications(
+                    currentChurchId,
+                    membersWithBirthdays,
+                    users as any,
+                    bacentas,
+                    days,
+                    new Date(),
+                    { force: true, actorAdminId: userProfile?.uid }
+                  );
+                  setTriggeredNow(true);
+                  showToast('success', 'Notifications Sent', `Processed ${results.processed}, sent ${results.sent}, failed ${results.failed}`);
+                  setTimeout(() => setTriggeredNow(false), 5000);
+                } catch (error: any) {
+                  showToast('error', 'Trigger Failed', error?.message || 'Failed to trigger processing');
+                } finally {
+                  setIsTriggering(false);
+                }
+              }}
+              loading={isTriggering}
+              leftIcon={triggeredNow ? <CheckIcon className="w-4 h-4" /> : <CalendarIcon className="w-4 h-4" />}
+            >
+              {triggeredNow ? 'Triggered!' : 'Send Birthday Notifications Now'}
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={async () => {
+                if (!currentChurchId) {
+                  showToast('error', 'No context', 'Cannot determine church');
+                  return;
+                }
+                setIsTestingPushEmail(true);
+                try {
+                  const fakeMember = {
+                    id: `test-${userProfile?.uid || 'unknown'}`,
+                    firstName: userProfile?.firstName || 'Test',
+                    lastName: userProfile?.lastName || 'User',
+                    birthday: new Date().toISOString().split('T')[0],
+                    phoneNumber: '',
+                    buildingAddress: '',
+                    roomNumber: '',
+                    role: 'Member' as const,
+                    bornAgainStatus: false,
+                    bacentaId: bacentas[0]?.id || '',
+                    status: 'active' as const,
+                    createdDate: new Date().toISOString(),
+                    lastUpdated: new Date().toISOString(),
+                  };
+                  const users = await userService.getChurchUsers(currentChurchId);
+                  const svc = BirthdayNotificationService.getInstance();
+                  const results = await svc.processBirthdayNotifications(
+                    currentChurchId,
+                    [fakeMember as any],
+                    users as any,
+                    bacentas,
+                    [0],
+                    new Date(),
+                    { force: true, actorAdminId: userProfile?.uid }
+                  );
+                  setTestPushEmailDone(true);
+                  showToast(
+                    results.sent > 0 ? 'success' : 'warning',
+                    'Test Complete',
+                    `Push + Email: ${results.sent} sent, ${results.failed} failed. Check inbox & browser notifications.`
+                  );
+                  setTimeout(() => setTestPushEmailDone(false), 5000);
+                } catch (error: any) {
+                  showToast('error', 'Test Failed', error.message || 'Test failed');
+                } finally {
+                  setIsTestingPushEmail(false);
+                }
+              }}
+              loading={isTestingPushEmail}
+              leftIcon={testPushEmailDone ? <CheckIcon className="w-4 h-4" /> : <BellIcon className="w-4 h-4" />}
+            >
+              {testPushEmailDone ? 'Test Sent!' : '🧪 Test Push + Email'}
+            </Button>
+            <p className="mt-2 text-xs text-gray-500 dark:text-dark-400">
+              {`Will send ${next7DaysCount} birthday${next7DaysCount !== 1 ? 's' : ''} in the next 7 days`}
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Month navigator */}
@@ -352,7 +406,7 @@ const BirthdaysView: React.FC = () => {
                   ))}
                 </div>
               )}
-              
+
               {/* Future birthdays in month view */}
               {monthFutureBirthdays.length > 0 && (
                 <div className="space-y-3">
@@ -362,7 +416,7 @@ const BirthdaysView: React.FC = () => {
                   ))}
                 </div>
               )}
-              
+
               {/* Passed birthdays in month view */}
               {passedBirthdays.length > 0 && (
                 <div className="space-y-3">
@@ -372,7 +426,7 @@ const BirthdaysView: React.FC = () => {
                   ))}
                 </div>
               )}
-              
+
               {selectedMonthBirthdays.length === 0 && (
                 <p className="text-sm text-gray-500">No birthdays found in {monthLabel}.</p>
               )}

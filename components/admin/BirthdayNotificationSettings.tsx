@@ -16,7 +16,7 @@ interface BirthdayNotificationSettingsProps {
 
 const BirthdayNotificationSettings: React.FC<BirthdayNotificationSettingsProps> = ({ onClose }) => {
   const { user, userProfile, showToast, members, bacentas, currentChurchId } = useAppContext();
-  
+
   // Force fixed defaults for birthday notifications: enabled, days [7,3,1,0], time '00:00'
   const forcedBirthdayDefaults = {
     enabled: true,
@@ -36,12 +36,13 @@ const BirthdayNotificationSettings: React.FC<BirthdayNotificationSettingsProps> 
       } as NotificationPreferences;
     })()
   );
-  
+
   const [isLoading, setIsLoading] = useState(false);
   const [testEmailSent, setTestEmailSent] = useState(false);
   const [digestEmailSent, setDigestEmailSent] = useState(false);
   const [groupDigestSent, setGroupDigestSent] = useState(false);
   const [triggeredNow, setTriggeredNow] = useState(false);
+  const [testPushEmailSent, setTestPushEmailSent] = useState(false);
 
   useEffect(() => {
     if (userProfile?.notificationPreferences) {
@@ -68,15 +69,15 @@ const BirthdayNotificationSettings: React.FC<BirthdayNotificationSettingsProps> 
 
   const handleSaveSettings = async () => {
     if (!user) return;
-    
+
     setIsLoading(true);
     try {
       // TODO: Implement user service update for notification preferences
       // await userService.updateNotificationPreferences(user.uid, settings);
-      
+
       // For now, simulate the save
       await new Promise(resolve => setTimeout(resolve, 1000));
-      
+
       showToast('success', 'Settings Saved', 'Your notification preferences have been updated successfully');
       onClose?.();
     } catch (error: any) {
@@ -95,8 +96,8 @@ const BirthdayNotificationSettings: React.FC<BirthdayNotificationSettingsProps> 
     try {
       const res = await emailServiceClient.sendTestBirthdayEmail({
         uid: user.uid,
-  email: user.email,
-  displayName: user.displayName ?? undefined
+        email: user.email,
+        displayName: user.displayName ?? undefined
       });
 
       if (res?.success) {
@@ -200,9 +201,9 @@ const BirthdayNotificationSettings: React.FC<BirthdayNotificationSettingsProps> 
       // Use client-side service to process now (sends emails + creates bell notifications)
       const users = await userService.getChurchUsers(currentChurchId);
       // Mirror Birthdays page: Upcoming This Month within 7 days (exclude Today and Already Celebrated)
-  const monthEntries = getBirthdaysForMonth(members, new Date());
-  // Include Today (isToday) and future within 7 days; exclude already celebrated
-  const targetEntries = monthEntries.filter(e => !e.hasPassedThisYear && e.daysUntil <= 7);
+      const monthEntries = getBirthdaysForMonth(members, new Date());
+      // Include Today (isToday) and future within 7 days; exclude already celebrated
+      const targetEntries = monthEntries.filter(e => !e.hasPassedThisYear && e.daysUntil <= 7);
 
       if (targetEntries.length === 0) {
         showToast('info', 'No Upcoming in 7 Days', 'There are no upcoming birthdays in the next 7 days for this month');
@@ -217,16 +218,68 @@ const BirthdayNotificationSettings: React.FC<BirthdayNotificationSettingsProps> 
         currentChurchId,
         membersWithBirthdays,
         users as any,
-  bacentas,
-  days,
-  new Date(),
-  { force: true, actorAdminId: userProfile?.uid }
+        bacentas,
+        days,
+        new Date(),
+        { force: true, actorAdminId: userProfile?.uid }
       );
       setTriggeredNow(true);
       showToast('success', 'Notifications Sent', `Processed ${results.processed}, sent ${results.sent}, failed ${results.failed}`);
       setTimeout(() => setTriggeredNow(false), 5000);
     } catch (error: any) {
       showToast('error', 'Trigger Failed', error.message || 'Failed to trigger processing');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Test the full push + email pipeline by sending a single fake birthday notification to the current user
+  const handleTestPushAndEmail = async () => {
+    if (!currentChurchId || !user) {
+      showToast('error', 'No context', 'Cannot determine church or user');
+      return;
+    }
+    setIsLoading(true);
+    try {
+      // Build a fake member from the current user to test the full pipeline
+      const fakeMember = {
+        id: `test-${user.uid}`,
+        firstName: userProfile?.firstName || user.displayName?.split(' ')[0] || 'Test',
+        lastName: userProfile?.lastName || user.displayName?.split(' ').slice(1).join(' ') || 'User',
+        birthday: new Date().toISOString().split('T')[0], // today
+        phoneNumber: '',
+        buildingAddress: '',
+        roomNumber: '',
+        role: 'Member' as const,
+        bornAgainStatus: false,
+        bacentaId: bacentas[0]?.id || '',
+        status: 'active' as const,
+        createdDate: new Date().toISOString(),
+        lastUpdated: new Date().toISOString(),
+      };
+
+      // Use the birthday service with force=true to bypass duplicate checking
+      const svc = BirthdayNotificationService.getInstance();
+      const users = await userService.getChurchUsers(currentChurchId);
+      const results = await svc.processBirthdayNotifications(
+        currentChurchId,
+        [fakeMember as any],
+        users as any,
+        bacentas,
+        [0], // today only
+        new Date(),
+        { force: true, actorAdminId: userProfile?.uid }
+      );
+
+      setTestPushEmailSent(true);
+      showToast(
+        results.sent > 0 ? 'success' : 'warning',
+        'Test Complete',
+        `Push + Email test: ${results.sent} sent, ${results.failed} failed. Check your inbox and browser notifications.`
+      );
+      setTimeout(() => setTestPushEmailSent(false), 5000);
+    } catch (error: any) {
+      showToast('error', 'Test Failed', error.message || 'Failed to test push + email');
     } finally {
       setIsLoading(false);
     }
@@ -271,7 +324,7 @@ const BirthdayNotificationSettings: React.FC<BirthdayNotificationSettingsProps> 
             <EnvelopeIcon className="w-5 h-5 mr-2 text-blue-600" />
             General Email Settings
           </h3>
-          
+
           <div className="space-y-4">
             <label className="flex items-center space-x-3 cursor-pointer">
               <input
@@ -307,7 +360,7 @@ const BirthdayNotificationSettings: React.FC<BirthdayNotificationSettingsProps> 
             <CakeIcon className="w-5 h-5 mr-2 text-pink-600" />
             Birthday Notification Settings
           </h3>
-          
+
           <div className="space-y-6">
             {/* Birthday Notifications are managed by the organization and cannot be changed here */}
             <label className="flex items-center space-x-3">
@@ -393,6 +446,14 @@ const BirthdayNotificationSettings: React.FC<BirthdayNotificationSettingsProps> 
                   >
                     {triggeredNow ? 'Triggered!' : 'Send Birthday Notifications Now'}
                   </Button>
+                  <Button
+                    variant="secondary"
+                    onClick={handleTestPushAndEmail}
+                    loading={isLoading}
+                    leftIcon={testPushEmailSent ? <CheckIcon className="w-4 h-4" /> : <BellIcon className="w-4 h-4" />}
+                  >
+                    {testPushEmailSent ? 'Test Sent!' : '🧪 Test Push + Email'}
+                  </Button>
                 </div>
               </>
             )}
@@ -403,7 +464,7 @@ const BirthdayNotificationSettings: React.FC<BirthdayNotificationSettingsProps> 
         <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
           <h4 className="text-sm font-semibold text-blue-900 mb-2">Privacy Notice</h4>
           <p className="text-xs text-blue-800">
-            You will only receive birthday notifications for members within your organizational responsibility. 
+            You will only receive birthday notifications for members within your organizational responsibility.
             This includes members in bacentas you lead or oversee. We respect data privacy and organizational boundaries.
           </p>
         </div>
