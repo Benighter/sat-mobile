@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Bell, BellOff, Smartphone, Globe, Check, AlertCircle, Settings, TestTube, CheckCircle } from 'lucide-react';
+import { Bell, BellOff, Smartphone, Globe, Check, AlertCircle, Settings, CheckCircle } from 'lucide-react';
 import { useAppContext } from '../../contexts/FirebaseAppContext';
 import { pushNotificationHelpers } from '../../services/enhancedNotificationIntegration';
 import { pushNotificationService } from '../../services/pushNotificationService';
@@ -14,8 +14,7 @@ const PushNotificationSettings: React.FC<PushNotificationSettingsProps> = ({ cla
   const [permissionStatus, setPermissionStatus] = useState<'granted' | 'denied' | 'default'>('default');
   const [isInitialized, setIsInitialized] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [isTesting, setIsTesting] = useState(false);
-  const [testResult, setTestResult] = useState<'success' | 'error' | null>(null);
+
   const [showDeniedHelp, setShowDeniedHelp] = useState(false);
 
   const { showToast } = useAppContext();
@@ -27,7 +26,7 @@ const PushNotificationSettings: React.FC<PushNotificationSettingsProps> = ({ cla
   const checkPushNotificationStatus = async () => {
     try {
       setIsLoading(true);
-      
+
       // Check if push notifications are supported
       const supported = await pushNotificationHelpers.isSupported();
       setIsSupported(supported);
@@ -35,7 +34,7 @@ const PushNotificationSettings: React.FC<PushNotificationSettingsProps> = ({ cla
         // Direct access to diagnostics (optional chain if service not yet exported)
         const d: any = (pushNotificationService as any).getSupportDiagnostics?.();
         if (d) setDiagnostics(d);
-      } catch {}
+      } catch { }
 
       if (supported) {
         // Check current permission status
@@ -54,14 +53,14 @@ const PushNotificationSettings: React.FC<PushNotificationSettingsProps> = ({ cla
   const handleEnablePushNotifications = async () => {
     try {
       setIsLoading(true);
-      
+
       // Request permissions
       const granted = await pushNotificationHelpers.requestPermissions();
-      
+
       if (granted) {
         // Initialize push notifications
         const initialized = await pushNotificationHelpers.initialize();
-        
+
         if (initialized) {
           setIsInitialized(true);
           setPermissionStatus('granted');
@@ -81,30 +80,7 @@ const PushNotificationSettings: React.FC<PushNotificationSettingsProps> = ({ cla
     }
   };
 
-  const handleTestNotification = async () => {
-    try {
-      setIsTesting(true);
-      setTestResult(null);
-      
-      const success = await pushNotificationHelpers.sendTestNotification();
-      
-      if (success) {
-        setTestResult('success');
-        showToast('success', 'Test Sent', 'Check your device for the test notification!');
-      } else {
-        setTestResult('error');
-        showToast('error', 'Test Failed', 'Failed to send test notification');
-      }
-    } catch (error) {
-      console.error('Failed to send test notification:', error);
-      setTestResult('error');
-      showToast('error', 'Error', 'Failed to send test notification');
-    } finally {
-      setIsTesting(false);
-      // Clear test result after 5 seconds
-      setTimeout(() => setTestResult(null), 5000);
-    }
-  };
+
 
   const getPlatformIcon = () => {
     const userAgent = navigator.userAgent;
@@ -223,7 +199,7 @@ const PushNotificationSettings: React.FC<PushNotificationSettingsProps> = ({ cla
                 )}
               </button>
               <button
-                onClick={() => { localStorage.setItem('forcePushSupport','true'); checkPushNotificationStatus(); }}
+                onClick={() => { localStorage.setItem('forcePushSupport', 'true'); checkPushNotificationStatus(); }}
                 className="text-xs text-blue-600 hover:underline"
               >Force support & recheck</button>
             </div>
@@ -261,7 +237,7 @@ const PushNotificationSettings: React.FC<PushNotificationSettingsProps> = ({ cla
                   <p className="text-xs text-red-600">After changing the setting, come back and press "Recheck" below.</p>
                   <div className="flex flex-wrap gap-2 pt-2">
                     <button
-                      onClick={() => { localStorage.setItem('forcePushSupport','true'); checkPushNotificationStatus(); }}
+                      onClick={() => { localStorage.setItem('forcePushSupport', 'true'); checkPushNotificationStatus(); }}
                       className="px-3 py-1.5 text-xs rounded-md bg-white border border-red-300 text-red-700 hover:bg-red-100"
                     >Force Recheck</button>
                     <button
@@ -283,7 +259,7 @@ const PushNotificationSettings: React.FC<PushNotificationSettingsProps> = ({ cla
             <p className="text-gray-500 max-w-sm mx-auto mb-6">
               Get instant notifications on your device when important activities happen, even when the app is closed.
             </p>
-            
+
             {/* Features list */}
             <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg p-4 mb-6 max-w-sm mx-auto">
               <h5 className="font-medium text-gray-900 mb-3">You'll be notified about:</h5>
@@ -342,8 +318,8 @@ const PushNotificationSettings: React.FC<PushNotificationSettingsProps> = ({ cla
                   <div className="flex items-center space-x-2 text-xs text-gray-500">
                     {getPlatformIcon()}
                     <span>
-                      {navigator.userAgent.includes('Mobile') || navigator.userAgent.includes('Android') || navigator.userAgent.includes('iPhone') 
-                        ? 'Mobile Device' 
+                      {navigator.userAgent.includes('Mobile') || navigator.userAgent.includes('Android') || navigator.userAgent.includes('iPhone')
+                        ? 'Mobile Device'
                         : 'Desktop Browser'
                       }
                     </span>
@@ -352,48 +328,6 @@ const PushNotificationSettings: React.FC<PushNotificationSettingsProps> = ({ cla
               </div>
             </div>
 
-            {/* Test notification */}
-            <div className="border border-gray-200 rounded-lg p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h5 className="font-medium text-gray-900">Test Notifications</h5>
-                  <p className="text-sm text-gray-500">Send a test notification to verify everything works</p>
-                </div>
-                <button
-                  onClick={handleTestNotification}
-                  disabled={isTesting}
-                  className={`inline-flex items-center space-x-2 px-4 py-2 rounded-lg transition-all duration-200 ${
-                    testResult === 'success' 
-                      ? 'bg-green-100 text-green-700 border border-green-200'
-                      : testResult === 'error'
-                      ? 'bg-red-100 text-red-700 border border-red-200'
-                      : 'bg-blue-600 text-white hover:bg-blue-700'
-                  } disabled:opacity-50 disabled:cursor-not-allowed`}
-                >
-                  {isTesting ? (
-                    <>
-                      <div className="animate-spin w-4 h-4 border-2 border-current border-t-transparent rounded-full"></div>
-                      <span>Sending...</span>
-                    </>
-                  ) : testResult === 'success' ? (
-                    <>
-                      <CheckCircle className="w-4 h-4" />
-                      <span>Sent!</span>
-                    </>
-                  ) : testResult === 'error' ? (
-                    <>
-                      <AlertCircle className="w-4 h-4" />
-                      <span>Failed</span>
-                    </>
-                  ) : (
-                    <>
-                      <TestTube className="w-4 h-4" />
-                      <span>Send Test</span>
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
 
             {/* Privacy note */}
             <div className="bg-gray-50 rounded-lg p-4">

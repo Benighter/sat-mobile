@@ -54,8 +54,8 @@ export const notificationService = {
         throw new Error('User context not set');
       }
 
-  // Find all admins who are linked to this leader
-  const linkedAdminIds = await getAdminsLinkedToLeader(leaderId);
+      // Find all admins who are linked to this leader
+      const linkedAdminIds = await getAdminsLinkedToLeader(leaderId);
 
       if (linkedAdminIds.length === 0) {
         console.log(`⚠️ No linked admins found for leader ${leaderId}, skipping notification creation`);
@@ -96,6 +96,29 @@ export const notificationService = {
 
       await batch.commit();
       console.log(`✅ Successfully created ${linkedAdminIds.length} notification(s) for activity: ${activityType}`);
+
+      // Fire-and-forget: send push notifications to each admin
+      try {
+        const { pushNotificationService } = await import('./pushNotificationService');
+        const pushPayload = pushNotificationService.createNotificationPayload({
+          id: '',
+          activityType,
+          details,
+          leaderName,
+          leaderId,
+          adminId: '',
+          timestamp: new Date().toISOString(),
+          isRead: false,
+          churchId: currentChurchId!
+        } as any);
+        for (const adminId of linkedAdminIds) {
+          pushNotificationService.sendToUser(adminId, pushPayload).catch(e =>
+            console.warn(`📲 Push to admin ${adminId} failed (non-blocking):`, e)
+          );
+        }
+      } catch (pushErr) {
+        console.warn('📲 Push notification dispatch skipped:', pushErr);
+      }
     } catch (error: any) {
       console.error('❌ Failed to create notification:', error);
       console.error('Context:', { leaderId, leaderName, activityType, currentChurchId, currentUser: currentUser?.uid });
@@ -140,6 +163,29 @@ export const notificationService = {
       }
 
       await batch.commit();
+
+      // Fire-and-forget: send push notifications to each recipient
+      try {
+        const { pushNotificationService } = await import('./pushNotificationService');
+        const pushPayload = pushNotificationService.createNotificationPayload({
+          id: '',
+          activityType,
+          details: { description, ...details },
+          leaderName: actor?.name || currentUser?.displayName || 'System',
+          leaderId: actor?.id || currentUser?.uid || 'system',
+          adminId: '',
+          timestamp: new Date().toISOString(),
+          isRead: false,
+          churchId: currentChurchId!
+        } as any);
+        for (const recipientId of recipients) {
+          pushNotificationService.sendToUser(recipientId, pushPayload).catch(e =>
+            console.warn(`📲 Push to recipient ${recipientId} failed (non-blocking):`, e)
+          );
+        }
+      } catch (pushErr) {
+        console.warn('📲 Push notification dispatch skipped:', pushErr);
+      }
     } catch (error: any) {
       console.error('Failed to create recipient notifications:', error);
     }
@@ -301,7 +347,7 @@ export const notificationService = {
     if (!currentChurchId) {
       console.warn('Church context not set for notification listener');
       // Return a dummy unsubscribe function
-      return () => {};
+      return () => { };
     }
 
     try {
@@ -331,7 +377,7 @@ export const notificationService = {
     } catch (error) {
       console.error('Failed to set up notification listener:', error);
       // Return a dummy unsubscribe function
-      return () => {};
+      return () => { };
     }
   },
 
@@ -479,7 +525,7 @@ export const createNotificationHelpers = {
   // Attendance confirmed notification
   attendanceConfirmed: async (leaderName: string, attendanceDate: string, attendanceCount: number) => {
     if (!currentUser) return;
-    
+
     await notificationService.create(
       currentUser.uid,
       leaderName,
