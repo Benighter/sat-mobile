@@ -1,0 +1,1456 @@
+/* Enhanced Church Connect Mobile Styles */
+/* Tailwind CSS temporarily disabled to focus on Firebase testing */
+
+/* Touch-friendly mobile interactions */
+.touch-manipulation {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Smooth scrolling enhancements */
+.smooth-scroll {
+  scroll-behavior: smooth;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  /* Enable hardware acceleration for smooth scrolling */
+  -webkit-transform: translate3d(0, 0, 0);
+  transform: translate3d(0, 0, 0);
+  /* Improve scroll performance */
+  will-change: scroll-position;
+  /* Ensure momentum scrolling on iOS */
+  -webkit-overflow-scrolling: touch;
+  /* Prevent scroll chaining */
+  overscroll-behavior-y: contain;
+  /* Optimize for touch devices */
+  touch-action: auto;
+}
+
+/* Improved mobile navbar spacing */
+@media (max-width: 474px) {
+  .mobile-navbar-compact {
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+  }
+
+  .mobile-navbar-compact .navbar-item {
+    padding: 0.375rem;
+  }
+}
+
+/* Main content scroll optimization */
+main[data-scrollable="true"] {
+  /* Ensure smooth, natural scrolling */
+  scroll-behavior: smooth;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  /* Remove any scroll snap that might interfere */
+  scroll-snap-type: none;
+  /* Optimize scroll performance */
+  contain: layout style paint;
+  /* Ensure proper touch handling */
+  touch-action: auto;
+}
+
+/* Global Animations */
+@keyframes slideInFromLeft {
+  0% {
+    transform: translateX(-100%);
+    opacity: 0;
+  }
+  100% {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideInFromRight {
+  0% {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  100% {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideInFromBottom {
+  0% {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideInFromTop {
+  0% {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes zoomIn {
+  0% {
+    transform: scale(0.5);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes rotateIn {
+  0% {
+    transform: rotate(-180deg) scale(0.5);
+    opacity: 0;
+  }
+  100% {
+    transform: rotate(0deg) scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes heartbeat {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+}
+
+@keyframes glow {
+  0%, 100% {
+    box-shadow: 0 0 5px rgba(103, 126, 234, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(103, 126, 234, 0.8), 0 0 30px rgba(103, 126, 234, 0.6);
+  }
+}
+
+@keyframes typewriter {
+  from {
+    width: 0;
+  }
+  to {
+    width: 100%;
+  }
+}
+
+@keyframes blink {
+  0%, 50% {
+    opacity: 1;
+  }
+  51%, 100% {
+    opacity: 0;
+  }
+}
+
+/* Utility Classes */
+.slide-in-left {
+  animation: slideInFromLeft 0.6s ease-out;
+}
+
+.slide-in-right {
+  animation: slideInFromRight 0.6s ease-out;
+}
+
+.slide-in-bottom {
+  animation: slideInFromBottom 0.6s ease-out;
+}
+
+.slide-in-top {
+  animation: slideInFromTop 0.6s ease-out;
+}
+
+.zoom-in {
+  animation: zoomIn 0.5s ease-out;
+}
+
+.rotate-in {
+  animation: rotateIn 0.8s ease-out;
+}
+
+.heartbeat {
+  animation: heartbeat 1.5s ease-in-out infinite;
+}
+
+.glow {
+  animation: glow 2s ease-in-out infinite;
+}
+
+.typewriter {
+  overflow: hidden;
+  border-right: 2px solid;
+  white-space: nowrap;
+  animation: typewriter 2s steps(40, end), blink 0.75s step-end infinite;
+}
+
+/* Enhanced Glass Morphism */
+.glass-card {
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+}
+
+.glass-card-dark {
+  background: rgba(0, 0, 0, 0.15);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+/* Interactive Elements - Optimized for performance */
+.interactive-card {
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s ease;
+  cursor: pointer;
+  will-change: transform;
+}
+
+.interactive-card:hover {
+  transform: translateY(-4px) scale(1.01);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.12);
+}
+
+.interactive-card:active {
+  transform: translateY(-2px) scale(1.005);
+}
+
+/* Button Enhancements - Performance optimized */
+.btn-primary-enhanced {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border: none;
+  color: white;
+  padding: 12px 24px;
+  border-radius: 12px;
+  font-weight: 600;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  position: relative;
+  overflow: hidden;
+  will-change: transform;
+}
+
+.btn-primary-enhanced::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+  transition: left 0.5s;
+}
+
+.btn-primary-enhanced:hover::before {
+  left: 100%;
+}
+
+.btn-primary-enhanced:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 25px rgba(103, 126, 234, 0.4);
+}
+
+/* Loading States */
+.skeleton {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: loading 1.5s infinite;
+}
+
+@keyframes loading {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* Mobile Touch Enhancements - Updated for better scrolling */
+.touch-pan-y {
+  touch-action: auto; /* Allow natural scrolling */
+  /* Allow text selection & copy (previously disabled) */
+  -webkit-touch-callout: default;
+  -webkit-user-select: text;
+  -khtml-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+  user-select: text;
+}
+
+/* Modal scroll fixes for mobile */
+.modal-backdrop {
+  touch-action: none;
+  overscroll-behavior: contain;
+}
+
+.modal-content {
+  touch-action: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.modal-scrollable {
+  touch-action: pan-y;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Prevent body scroll when modal is open */
+body.modal-open {
+  overflow: hidden !important;
+  position: fixed !important;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* Gesture feedback */
+.gesture-feedback {
+  transition: transform 0.2s ease-out, opacity 0.2s ease-out;
+}
+
+/* Enhanced Outreach Screen Optimizations */
+.outreach-container {
+  min-height: 100vh;
+  min-height: 100dvh; /* Dynamic viewport height for mobile */
+}
+
+.outreach-grid {
+  display: grid;
+  gap: 2rem;
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 1024px) {
+  .outreach-grid {
+    grid-template-columns: 1fr 2fr;
+    gap: 3rem;
+  }
+}
+
+@media (min-width: 1280px) {
+  .outreach-grid {
+    grid-template-columns: 1fr 2fr;
+    gap: 4rem;
+  }
+}
+
+/* Sticky sidebar for larger screens */
+@media (min-width: 1024px) {
+  .outreach-sidebar {
+    position: sticky;
+    top: 2rem;
+    height: fit-content;
+  }
+}
+
+/* Enhanced card hover effects with professional animations */
+.outreach-card {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transform-origin: center;
+}
+
+.outreach-card:hover {
+  transform: translateY(-4px) scale(1.02);
+  box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.15), 0 10px 20px -5px rgba(0, 0, 0, 0.08);
+}
+
+/* Professional glass morphism effects */
+.glass {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.dark .glass {
+  background: rgba(30, 41, 59, 0.95);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.glass-dark {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+}
+
+.dark .glass-dark {
+  background: rgba(30, 41, 59, 0.85);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+}
+
+/* Custom hover states for glass elements */
+.glass:hover {
+  background: rgba(255, 255, 255, 0.98);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  transform: translateY(-1px);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+}
+
+.dark .glass:hover {
+  background: rgba(30, 41, 59, 0.98);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+}
+
+/* Enhanced gradient animations */
+@keyframes gradient-shift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+.animate-gradient {
+  background-size: 200% 200%;
+  animation: gradient-shift 6s ease infinite;
+}
+
+/* Smooth slide-in animations */
+@keyframes slide-in-from-top {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-in {
+  animation: slide-in-from-top 0.3s ease-out;
+}
+
+/* Professional button hover effects */
+.btn-gradient {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.btn-gradient:hover {
+  background: linear-gradient(135deg, #5a67d8 0%, #6b46c1 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 10px 20px -5px rgba(102, 126, 234, 0.4);
+}
+
+/* Enhanced Responsive Design - Mobile First */
+@media (max-width: 768px) {
+  .glass {
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    background: rgba(255, 255, 255, 0.9);
+  }
+
+  .dark .glass {
+    background: rgba(30, 41, 59, 0.9);
+  }
+
+  .interactive-card:hover {
+    transform: translateY(-1px) scale(1.01);
+  }
+
+  /* Enhanced touch targets for mobile */
+  button, .interactive-card {
+    min-height: 48px;
+    min-width: 48px;
+  }
+
+  /* Optimized container padding for mobile */
+  .container {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+
+  /* Mobile-optimized spacing */
+  .compact-layout {
+    padding-top: 1rem !important;
+    padding-bottom: 1rem !important;
+  }
+
+  /* Reduce motion for better mobile performance */
+  @media (prefers-reduced-motion: reduce) {
+    .floating, .shimmer, .animate-gradient {
+      animation: none;
+    }
+
+    .outreach-card:hover {
+      transform: none;
+    }
+  }
+
+  /* Mobile outreach optimizations */
+  .outreach-grid {
+    gap: 1.5rem;
+  }
+
+  .outreach-card {
+    transition: all 0.2s ease;
+  }
+
+  .outreach-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 16px -4px rgba(0, 0, 0, 0.1);
+  }
+
+  /* Mobile typography adjustments */
+  h1 {
+    font-size: 2.5rem !important;
+    line-height: 1.1 !important;
+  }
+
+  h2 {
+    font-size: 1.875rem !important;
+    line-height: 1.2 !important;
+  }
+
+  h3 {
+    font-size: 1.5rem !important;
+    line-height: 1.3 !important;
+  }
+
+  /* Mobile form optimizations */
+  input, select, textarea {
+    font-size: 16px !important; /* Prevent zoom on iOS */
+    padding: 0.875rem !important;
+  }
+
+  /* Fix input icon overlap on mobile */
+  .input-with-left-icon {
+    padding-left: 2.75rem !important; /* Increased from 2rem (pl-8) */
+  }
+
+  .input-with-right-icon {
+    padding-right: 2.75rem !important; /* Increased from 2rem (pr-8) */
+  }
+
+  /* Currency symbol spacing fix */
+  .currency-input {
+    padding-left: 2.5rem !important;
+  }
+
+  /* Search icon spacing fix */
+  .search-input {
+    padding-left: 2.75rem !important;
+  }
+
+  /* Mobile button optimizations */
+  .btn-gradient {
+    padding: 0.875rem 1.5rem !important;
+    font-size: 1rem !important;
+  }
+}
+
+/* Extra small screens */
+@media (max-width: 480px) {
+  .glass {
+    backdrop-filter: blur(6px);
+  }
+
+  /* Further reduce spacing on very small screens */
+  .container {
+    padding-left: 0.25rem;
+    padding-right: 0.25rem;
+  }
+
+  /* Extra spacing for inputs with icons on very small screens */
+  .input-with-left-icon {
+    padding-left: 3rem !important; /* Even more space on tiny screens */
+  }
+
+  .input-with-right-icon {
+    padding-right: 3rem !important;
+  }
+
+  .currency-input {
+    padding-left: 2.75rem !important;
+  }
+
+  .search-input {
+    padding-left: 3rem !important;
+  }
+
+  /* Extra compact layout for small screens */
+  .compact-layout {
+    padding-top: 0.25rem !important;
+    padding-bottom: 0.25rem !important;
+  }
+
+  .compact-layout .space-y-4 > * + * {
+    margin-top: 0.5rem !important;
+  }
+
+  .compact-layout .space-y-6 > * + * {
+    margin-top: 0.75rem !important;
+  }
+
+  /* Ensure text doesn't get too small */
+  .text-xs {
+    font-size: 0.75rem;
+  }
+
+  /* Compact buttons on small screens */
+
+/* Professional Polish - Premium Visual Enhancements */
+
+/* Subtle scroll animations */
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.fade-in-up {
+  animation: fade-in-up 0.6s ease-out;
+}
+
+/* Staggered animations for lists */
+.stagger-animation > * {
+  animation: fade-in-up 0.6s ease-out;
+}
+
+.stagger-animation > *:nth-child(1) { animation-delay: 0.1s; }
+.stagger-animation > *:nth-child(2) { animation-delay: 0.2s; }
+.stagger-animation > *:nth-child(3) { animation-delay: 0.3s; }
+.stagger-animation > *:nth-child(4) { animation-delay: 0.4s; }
+.stagger-animation > *:nth-child(5) { animation-delay: 0.5s; }
+
+/* Premium loading states */
+@keyframes pulse-premium {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.8;
+    transform: scale(1.02);
+  }
+}
+
+.pulse-premium {
+  animation: pulse-premium 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Enhanced focus states for accessibility */
+button:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
+}
+
+/* Premium text gradients */
+.text-gradient-premium {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-size: 200% 200%;
+  animation: gradient-shift 8s ease infinite;
+}
+
+/* Smooth page transitions */
+.page-transition {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Enhanced card interactions */
+.card-premium {
+  position: relative;
+  overflow: hidden;
+}
+
+.card-premium::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+  transition: left 0.5s;
+}
+
+.card-premium:hover::before {
+  left: 100%;
+}
+
+/* Professional status indicators */
+.status-indicator {
+  position: relative;
+}
+
+.status-indicator::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: -12px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  transform: translateY(-50%);
+}
+
+.status-indicator.status-success::before {
+  background: #10b981;
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.4);
+}
+
+.status-indicator.status-warning::before {
+  background: #f59e0b;
+  box-shadow: 0 0 8px rgba(245, 158, 11, 0.4);
+}
+
+.status-indicator.status-error::before {
+  background: #ef4444;
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.4);
+}
+
+/* Premium scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  border-radius: 4px;
+  transition: all 0.3s ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(135deg, #5a67d8, #6b46c1);
+}
+  button {
+    min-height: 40px;
+    min-width: 40px;
+  }
+}
+
+/* Accessibility Enhancements */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Focus States */
+.focus-ring {
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+}
+
+.focus-ring:focus {
+  outline: 2px solid #667eea;
+  outline-offset: 2px;
+}
+
+/* Custom Scrollbar for specific containers */
+.custom-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+
+.custom-scroll::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+}
+
+.custom-scroll::-webkit-scrollbar-thumb {
+  background: linear-gradient(45deg, #667eea, #764ba2);
+  border-radius: 10px;
+}
+
+.custom-scroll::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(45deg, #5a67d8, #6b46c1);
+}
+
+/* Confirmation Modal Animations */
+.animate-scale-in {
+  animation: scaleIn 0.3s ease-out;
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.4s ease-out;
+}
+
+@keyframes scaleIn {
+  0% {
+    transform: scale(0.8);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes fadeIn {
+  0% {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Floating Action Button Animation */
+.floating {
+  animation: float 3s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px) rotate(0deg); }
+  50% { transform: translateY(-10px) rotate(2deg); }
+}
+
+/* Toast Animations */
+@keyframes shrink {
+  from { width: 100%; }
+  to { width: 0%; }
+}
+
+/* Gentle bounce animation for interactive elements */
+@keyframes bounce-gentle {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+
+.animate-bounce-gentle {
+  animation: bounce-gentle 2s ease-in-out infinite;
+}
+
+/* Enhanced Sidebar Scrollbar */
+.sidebar-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(156, 163, 175, 0.5) rgba(243, 244, 246, 0.3);
+  scroll-behavior: smooth;
+}
+
+.sidebar-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.sidebar-scroll::-webkit-scrollbar-track {
+  background: rgba(243, 244, 246, 0.3);
+  border-radius: 3px;
+}
+
+.sidebar-scroll::-webkit-scrollbar-thumb {
+  background: rgba(156, 163, 175, 0.5);
+  border-radius: 3px;
+  transition: background 0.2s ease;
+}
+
+.sidebar-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(107, 114, 128, 0.7);
+}
+
+/* Scroll fade indicators */
+.scroll-fade-top {
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 1) 0%, rgba(255, 255, 255, 0) 100%);
+  height: 16px;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.scroll-fade-bottom {
+  background: linear-gradient(to top, rgba(255, 255, 255, 1) 0%, rgba(255, 255, 255, 0) 100%);
+  height: 16px;
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
+  pointer-events: none;
+}
+
+/* Dark mode scroll fade indicators */
+.dark .scroll-fade-top {
+  background: linear-gradient(to bottom, rgba(31, 41, 55, 1) 0%, rgba(31, 41, 55, 0) 100%);
+}
+
+.dark .scroll-fade-bottom {
+  background: linear-gradient(to top, rgba(31, 41, 55, 1) 0%, rgba(31, 41, 55, 0) 100%);
+}
+
+/* Mobile optimized scroll fade indicators */
+@media (max-width: 640px) {
+  .scroll-fade-top,
+  .scroll-fade-bottom {
+    height: 12px;
+  }
+}
+
+/* Month Navigation Enhancements */
+.month-nav-button {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.month-nav-button::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transition: left 0.5s;
+}
+
+.month-nav-button:hover::before {
+  left: 100%;
+}
+
+.month-nav-button:hover {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.3);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+}
+
+.month-nav-button:active {
+  transform: scale(0.98);
+}
+
+/* Month display styling */
+.month-display {
+  background: linear-gradient(135deg, rgba(103, 126, 234, 0.1), rgba(118, 75, 162, 0.1));
+  border: 1px solid rgba(103, 126, 234, 0.2);
+  backdrop-filter: blur(10px);
+  border-radius: 12px;
+  padding: 8px 16px;
+  font-weight: 600;
+  color: #374151;
+  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.8);
+}
+
+/* Chart Animations */
+@keyframes drawLine {
+  from {
+    stroke-dashoffset: 200;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* Interactive Chart Enhancements */
+.chart-container {
+  position: relative;
+  overflow: hidden;
+}
+
+.chart-bar {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transform-origin: bottom;
+}
+
+.chart-bar:hover {
+  filter: brightness(1.1);
+  transform: scaleY(1.02);
+}
+
+.chart-point {
+  transition: all 0.2s ease-out;
+  cursor: pointer;
+}
+
+.chart-point:hover {
+  transform: scale(1.5);
+  filter: drop-shadow(0 4px 8px rgba(59, 130, 246, 0.4));
+}
+
+.chart-tooltip {
+  animation: fadeInUp 0.2s ease-out;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ===== DESKTOP RESPONSIVE ENHANCEMENTS ===== */
+
+/* Text overflow and wrapping utilities */
+.break-words {
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+
+.overflow-wrap-anywhere {
+  overflow-wrap: anywhere;
+}
+
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2; /* Standard property */
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.line-clamp-3 {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  line-clamp: 3; /* Standard property */
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Enhanced card responsive behavior */
+.responsive-card {
+  min-height: 120px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@media (min-width: 640px) {
+  .responsive-card {
+    min-height: 140px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .responsive-card {
+    min-height: 160px;
+  }
+}
+
+@media (min-width: 1280px) {
+  .responsive-card {
+    min-height: 180px;
+  }
+}
+
+/* Desktop-specific card hover effects */
+@media (min-width: 1024px) {
+  .desktop-card-hover {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .desktop-card-hover:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+  }
+
+  /* Desktop interactive elements */
+  .desktop-interactive {
+    cursor: pointer;
+    transition: all 0.2s ease-out;
+  }
+
+  .desktop-interactive:hover {
+    transform: scale(1.02);
+  }
+
+  /* Desktop glass effects with better performance */
+  .desktop-glass {
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  }
+
+  .desktop-glass-dark {
+    background: rgba(0, 0, 0, 0.1);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  }
+
+  /* Desktop navigation enhancements */
+  .desktop-nav {
+    backdrop-filter: blur(20px);
+    background: rgba(255, 255, 255, 0.9);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+  }
+
+  .desktop-nav-dark {
+    backdrop-filter: blur(20px);
+    background: rgba(0, 0, 0, 0.9);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  /* Desktop scrollbar enhancements */
+  .desktop-scroll::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  .desktop-scroll::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.05);
+    border-radius: 4px;
+  }
+
+  .desktop-scroll::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 4px;
+    transition: background 0.2s ease;
+  }
+
+  .desktop-scroll::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 0, 0, 0.3);
+  }
+
+  /* Desktop table enhancements */
+  .desktop-table {
+    border-collapse: separate;
+    border-spacing: 0;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  }
+
+  .desktop-table th {
+    background: rgba(249, 250, 251, 0.8);
+    backdrop-filter: blur(10px);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+
+  .desktop-table tr:hover {
+    background: rgba(59, 130, 246, 0.05);
+    transform: scale(1.005);
+    transition: all 0.2s ease;
+  }
+
+  /* Desktop form enhancements */
+  .desktop-form {
+    max-width: 800px;
+    margin: 0 auto;
+  }
+
+  .desktop-form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1.5rem;
+  }
+
+  .desktop-form-two-column {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+  }
+
+  /* Desktop button enhancements */
+  .desktop-button-group {
+    display: flex;
+    gap: 1rem;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+  }
+
+  .desktop-button-primary {
+    min-width: 120px;
+    padding: 0.75rem 1.5rem;
+  }
+
+  /* Desktop modal enhancements */
+  .desktop-modal-backdrop {
+    backdrop-filter: blur(8px);
+    background: rgba(0, 0, 0, 0.4);
+  }
+
+  .desktop-modal-content {
+    border-radius: 16px;
+    box-shadow: 0 25px 50px rgba(0, 0, 0, 0.25);
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+
+  /* Enhanced desktop card grid spacing */
+  .desktop-card-grid {
+    gap: 1.25rem;
+  }
+
+  .desktop-card-grid-lg {
+    gap: 1.5rem;
+  }
+
+  .desktop-card-grid-xl {
+    gap: 2rem;
+  }
+
+  /* Desktop dense layout for better space utilization */
+  .desktop-dense-layout {
+    padding-top: 1rem !important;
+    padding-bottom: 1rem !important;
+  }
+
+  .desktop-dense-layout .space-y-4 > * + * {
+    margin-top: 0.75rem !important;
+  }
+
+  .desktop-dense-layout .space-y-6 > * + * {
+    margin-top: 1rem !important;
+  }
+}
+
+/* ===== MOBILE DROPDOWN RESPONSIVE STYLES ===== */
+
+/* Mobile dropdown container with responsive behavior */
+.mobile-dropdown-container {
+  /* Enable smooth scrolling and touch optimization */
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  /* Hardware acceleration for smooth performance */
+  -webkit-transform: translate3d(0, 0, 0);
+  transform: translate3d(0, 0, 0);
+  /* Touch optimization */
+  touch-action: auto;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Mobile dropdown positioning and sizing for small screens */
+@media (max-width: 414px) {
+  .mobile-dropdown-menu {
+    /* Constrain width to screen with safe margins */
+    max-width: calc(100vw - 2rem) !important;
+    /* Limit height to prevent overflow beyond viewport */
+    max-height: calc(100vh - 8rem) !important;
+    /* Enable scrolling when content exceeds max height */
+    overflow-y: auto !important;
+    /* Touch-friendly scrolling */
+    -webkit-overflow-scrolling: touch !important;
+    /* Prevent scroll chaining to parent */
+    overscroll-behavior: contain !important;
+    /* Position properly on mobile */
+    position: fixed !important;
+    z-index: 9999 !important;
+    /* Mobile-friendly border radius */
+    border-radius: 1rem !important;
+    /* Enhanced shadow for mobile */
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3) !important;
+    /* Hardware acceleration */
+    -webkit-transform: translate3d(0, 0, 0);
+    transform: translate3d(0, 0, 0);
+  }
+
+  /* Mobile dropdown content padding adjustment */
+  .mobile-dropdown-content {
+    padding: 0.75rem !important;
+  }
+
+  /* Mobile dropdown items with larger touch targets */
+  .mobile-dropdown-item {
+    min-height: 44px !important; /* iOS recommended minimum touch target */
+    padding: 0.75rem 1rem !important;
+    touch-action: manipulation !important;
+    -webkit-tap-highlight-color: transparent !important;
+  }
+
+  /* Profile dropdown specific mobile styles */
+  .mobile-profile-dropdown {
+    /* Take most of screen width on very small devices */
+    width: calc(100vw - 1.5rem) !important;
+    max-width: 24rem !important;
+    /* Responsive height constraint */
+    max-height: calc(100vh - 6rem) !important;
+    /* Position from top on mobile */
+    top: 4rem !important;
+    left: 50% !important;
+    transform: translateX(-50%) !important;
+    /* Enhanced mobile styling */
+    border-radius: 1.25rem !important;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4) !important;
+  }
+
+  /* Scroll indicators for mobile dropdowns */
+  .mobile-dropdown-scroll-indicator {
+    position: sticky;
+    height: 4px;
+    background: linear-gradient(to right, transparent, rgba(59, 130, 246, 0.3), transparent);
+    z-index: 10;
+    margin: 0 -0.5rem;
+  }
+
+  .mobile-dropdown-scroll-indicator.top {
+    top: 0;
+    background: linear-gradient(to bottom, rgba(255, 255, 255, 0.9), transparent);
+  }
+
+  .mobile-dropdown-scroll-indicator.bottom {
+    bottom: 0;
+    background: linear-gradient(to top, rgba(255, 255, 255, 0.9), transparent);
+  }
+}
+
+/* iPhone SE and smaller devices (≤ 375px) */
+@media (max-width: 375px) {
+  .mobile-dropdown-menu {
+    max-width: calc(100vw - 1rem) !important;
+    max-height: calc(100vh - 6rem) !important;
+  }
+
+  .mobile-profile-dropdown {
+    width: calc(100vw - 1rem) !important;
+    max-height: calc(100vh - 5rem) !important;
+    top: 3.5rem !important;
+  }
+
+  .mobile-dropdown-content {
+    padding: 0.5rem !important;
+  }
+
+  .mobile-dropdown-item {
+    padding: 0.625rem 0.75rem !important;
+  }
+}
+
+/* Custom scrollbar for mobile dropdowns */
+@media (max-width: 414px) {
+  .mobile-dropdown-menu::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  .mobile-dropdown-menu::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.1);
+    border-radius: 2px;
+  }
+
+  .mobile-dropdown-menu::-webkit-scrollbar-thumb {
+    background: rgba(59, 130, 246, 0.5);
+    border-radius: 2px;
+  }
+
+  .mobile-dropdown-menu::-webkit-scrollbar-thumb:hover {
+    background: rgba(59, 130, 246, 0.7);
+  }
+}
+
+/* Backdrop blur enhancement for mobile dropdowns */
+.mobile-dropdown-backdrop {
+  backdrop-filter: blur(4px) !important;
+  -webkit-backdrop-filter: blur(4px) !important;
+}
+
+/* Animation classes for mobile dropdown entrance */
+.mobile-dropdown-enter {
+  opacity: 0;
+  transform: translateY(-10px) scale(0.95);
+}
+
+.mobile-dropdown-enter-active {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  transition: opacity 200ms ease-out, transform 200ms ease-out;
+}
+
+.mobile-dropdown-exit {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+.mobile-dropdown-exit-active {
+  opacity: 0;
+  transform: translateY(-10px) scale(0.95);
+  transition: opacity 150ms ease-in, transform 150ms ease-in;
+}
+
+/* ===== ADMIN INVITE SCREEN SCROLLING FIXES ===== */
+
+/* Enhanced scrolling for Leadership Management screen */
+.admin-invite-screen {
+  /* Ensure proper flexbox layout */
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.admin-invite-content {
+  /* Flex grow to take remaining space */
+  flex: 1;
+  /* Allow scrolling with proper mobile optimizations */
+  overflow-y: auto;
+  overflow-x: hidden;
+  /* Mobile scroll optimizations */
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  scroll-behavior: smooth;
+  /* Hardware acceleration */
+  -webkit-transform: translate3d(0, 0, 0);
+  transform: translate3d(0, 0, 0);
+  will-change: scroll-position;
+  /* Touch optimization */
+  touch-action: auto;
+}
+
+/* Mobile specific improvements for admin invite screen */
+@media (max-width: 768px) {
+  .admin-invite-content {
+    /* Ensure momentum scrolling on iOS */
+    -webkit-overflow-scrolling: touch;
+    /* Prevent rubber band effect */
+    overscroll-behavior-y: contain;
+    /* Optimize for touch devices */
+    touch-action: pan-y;
+  }
+  
+  /* Enhanced scrollbar for mobile */
+  .admin-invite-content::-webkit-scrollbar {
+    width: 4px;
+  }
+  
+  .admin-invite-content::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.1);
+    border-radius: 2px;
+  }
+  
+  .admin-invite-content::-webkit-scrollbar-thumb {
+    background: rgba(59, 130, 246, 0.5);
+    border-radius: 2px;
+  }
+  
+  .admin-invite-content::-webkit-scrollbar-thumb:hover {
+    background: rgba(59, 130, 246, 0.7);
+  }
+}
+
+/* Ensure invite cards don't cause layout issues */
+.invite-card {
+  /* Prevent shrinking */
+  flex-shrink: 0;
+  /* Ensure proper spacing */
+  margin-bottom: 1rem;
+}
+
+/* Last invite card spacing */
+.invite-card:last-child {
+  margin-bottom: 2rem;
+}

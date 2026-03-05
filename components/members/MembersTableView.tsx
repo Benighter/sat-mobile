@@ -1,0 +1,1839 @@
+import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
+import { useAppContext } from '../../contexts/FirebaseAppContext';
+import { Member, ConfirmationStatus, Bacenta } from '../../types';
+import { formatDisplayDate, getMonthName, getUpcomingSunday } from '../../utils/dateUtils';
+import { isDateEditable } from '../../utils/attendanceUtils';
+import { canDeleteMemberWithRole, hasAdminPrivileges } from '../../utils/permissionUtils';
+import { SmartTextParser } from '../../utils/smartTextParser';
+import { memberDeletionRequestService, ministryExclusionsService } from '../../services/firebaseService';
+import { UserIcon, TrashIcon, PhoneIcon, CalendarIcon, ChevronLeftIcon, ChevronRightIcon, EllipsisVerticalIcon, CheckIcon, ClockIcon, ClipboardIcon, ArrowRightIcon, CogIcon, SearchIcon, UserPlusIcon, ExclamationTriangleIcon } from '../icons';
+import ConstituencyTransferModal from '../modals/ConstituencyTransferModal';
+// Removed unused UI imports
+import { getMinistryRoleLabels } from '../../constants';
+import { isMemberWentHome, isMemberActive, MemberListStatusFilter } from '../../utils/memberStatus';
+
+type RoleCategory = 'head' | 'leader' | 'assistant' | 'admin' | 'member';
+
+const determineRoleCategory = (member: Member): RoleCategory => {
+  const baseRole = member.role || 'Member';
+  const pos = (member.ministryPosition || '').toLowerCase();
+  if (baseRole === 'Bacenta Leader') return 'head';
+  if (baseRole === 'Fellowship Leader') return 'leader';
+  if (baseRole === 'Assistant') return 'assistant';
+  if (baseRole === 'Admin') return 'admin';
+  if (baseRole === 'Member' && pos === 'assistant') return 'assistant';
+  return 'member';
+};
+
+const createRoleRowRefMap = (): Record<RoleCategory, HTMLTableRowElement | null> => ({
+  head: null,
+  leader: null,
+  assistant: null,
+  admin: null,
+  member: null,
+});
+
+
+interface MembersTableViewProps {
+  bacentaFilter?: string | null;
+}
+
+const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) => {
+  const {
+    members,
+    bacentas,
+    sundayConfirmations,
+    openMemberForm,
+    openBacentaForm,
+    deleteMemberHandler,
+    attendanceRecords,
+    markAttendanceHandler,
+    clearAttendanceHandler,
+    markConfirmationHandler,
+  updateMemberHandler,
+    isLoading,
+    userProfile,
+    showConfirmation,
+    showToast,
+    switchTab,
+    currentTab,
+    isMinistryContext,
+    activeMinistryName,
+    transferMemberToConstituencyHandler,
+  titheRecords,
+  transportRecords,
+  markTitheHandler,
+  markTransportHandler,
+  // Global month navigation/state from context (unifies month across views)
+  displayedDate,
+  displayedSundays,
+  navigateToPreviousMonth,
+  navigateToNextMonth,
+  cleanupDuplicateMembers,
+  } = useAppContext();
+
+  // Get user preference for editing previous Sundays
+  const allowEditPreviousSundays = userProfile?.preferences?.allowEditPreviousSundays ?? false;
+  const isAdmin = hasAdminPrivileges(userProfile);
+
+  const [isCleaningDuplicates, setIsCleaningDuplicates] = useState(false);
+  const handleCleanupDuplicates = async () => {
+    const proceed = window.confirm('Remove duplicate members in this church? This keeps the earliest record and cleans linked confirmations/attendance/prayer.');
+    if (!proceed) return;
+    try {
+      setIsCleaningDuplicates(true);
+      await cleanupDuplicateMembers();
+    } catch (e: any) {
+      showToast('error', 'Cleanup failed', e?.message || 'Could not complete cleanup');
+    } finally {
+      setIsCleaningDuplicates(false);
+    }
+  };
+
+
+  const [searchTerm, setSearchTerm] = useState('');
+  // Use global displayedDate from context for consistent month across the app
+  const [roleFilter, setRoleFilter] = useState<'all' | 'head' | 'leader' | 'assistant' | 'admin' | 'member'>('all');
+  const statusFilterOptions: MemberListStatusFilter[] = ['active', 'frozen', 'went_home', 'all'];
+  const [statusFilter, setStatusFilter] = useState<MemberListStatusFilter>(() => {
+    const preset = (currentTab?.data as any)?.statusFilter;
+    if (preset && statusFilterOptions.includes(preset as MemberListStatusFilter)) {
+      return preset as MemberListStatusFilter;
+    }
+    return (currentTab?.data as any)?.showFrozen ? 'frozen' : 'active';
+  });
+  // Tithe-only UI state
+  const [showPaidOnly, setShowPaidOnly] = useState(false);
+  // Default to 'paid' so Tithe view shows paid members first
+  const [titheSort, setTitheSort] = useState<'none' | 'paid' | 'amount_desc' | 'amount_asc'>('paid');
+  // Bussing-only UI state
+  const [showBussingPaidOnly, setShowBussingPaidOnly] = useState(false);
+  const [bussingSort, setBussingSort] = useState<'none' | 'paid' | 'amount_desc' | 'amount_asc'>('none');
+
+  const roleRowRefs = useRef<Record<RoleCategory, HTMLTableRowElement | null>>(createRoleRowRefMap());
+  const highlightTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [highlightState, setHighlightState] = useState<{ role: RoleCategory; token: number } | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (highlightTimeoutRef.current) {
+        clearTimeout(highlightTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // Tithe context flag (passed from Dashboard Tithe card)
+  const isTithe = (currentTab?.data as any)?.isTithe === true;
+
+  // Map tithe records by member for quick lookup (current month only, provided by context listener)
+  const titheByMember = useMemo(() => {
+    const map = new Map<string, { paid: boolean; amount: number; lastUpdated?: string }>();
+    for (const r of titheRecords || []) {
+      map.set(r.memberId, { paid: !!r.paid, amount: Number(r.amount || 0), lastUpdated: r.lastUpdated });
+    }
+    return map;
+  }, [titheRecords]);
+
+  // Map transport records by member for quick lookup (backed by transportRecords in context)
+  const bussingByMember = useMemo(() => {
+    const map = new Map<string, { paid: boolean; amount: number; lastUpdated?: string }>();
+    for (const r of transportRecords || []) {
+      map.set(r.memberId, { paid: !!r.paid, amount: Number(r.amount || 0), lastUpdated: r.lastUpdated });
+    }
+    return map;
+  }, [transportRecords]);
+
+  // Get upcoming Sunday for confirmation
+  const upcomingSunday = useMemo(() => getUpcomingSunday(), []);
+
+  // Use context-provided Sundays for the displayed month
+  const currentMonthSundays = useMemo(() => displayedSundays, [displayedSundays]);
+
+  // Tithe editing is allowed for any displayed month
+
+  // Month navigation is provided by context
+
+  const handlePhoneClick = async (phoneNumber: string) => {
+    await SmartTextParser.copyPhoneToClipboard(phoneNumber, showToast);
+  };
+
+  // Get attendance status for a member on a specific date
+  const getAttendanceStatus = (memberId: string, date: string) => {
+    const record = attendanceRecords.find(ar => ar.memberId === memberId && ar.date === date);
+    return record?.status;
+  };
+
+  // Get confirmation status for a member on a specific date
+  const getConfirmationStatus = (memberId: string, date: string) => {
+
+    const record = sundayConfirmations.find(cr => cr.memberId === memberId && cr.date === date);
+    return record?.status;
+  };
+
+  // Handle attendance toggle with three states: empty -> Present -> Absent -> empty
+  const handleAttendanceToggle = async (memberId: string, date: string) => {
+    if (!isDateEditable(date, allowEditPreviousSundays)) {
+      return; // Don't allow editing
+    }
+
+    const currentStatus = getAttendanceStatus(memberId, date);
+
+    // Three-state cycle: empty -> Present -> Absent -> empty
+    if (!currentStatus) {
+      await markAttendanceHandler(memberId, date, 'Present');
+    } else if (currentStatus === 'Present') {
+      await markAttendanceHandler(memberId, date, 'Absent');
+    } else if (currentStatus === 'Absent') {
+      await clearAttendanceHandler(memberId, date);
+    }
+  };
+
+  // Filter and search members
+  const filteredMembers = useMemo(() => {
+    // Optional ministry-only filter passed via current tab data
+  const ministryOnly: boolean = (currentTab?.data as any)?.ministryOnly === true;
+  const speaksInTonguesOnly: boolean = (currentTab?.data as any)?.speaksInTonguesOnly === true;
+  const baptizedOnly: boolean = (currentTab?.data as any)?.baptizedOnly === true;
+    const getHierarchyRank = (m: Member) => {
+      if ((m.role || 'Member') === 'Bacenta Leader') return 1; // Green Bacenta (Head)
+      if ((m.role || 'Member') === 'Fellowship Leader') return 2; // Red Bacenta (Leader)
+      if ((m.role || 'Member') === 'Assistant') return 3; // Assistant
+      if ((m.role || 'Member') === 'Admin') return 4; // Admin
+      const pos = (m.ministryPosition || '').toLowerCase();
+      if ((m.role || 'Member') === 'Member' && pos === 'assistant') return 3; // Ministry Assistant (legacy)
+      return 5; // Member (or other positions)
+    };
+
+  return members
+      .filter(member => {
+        // Tithe: filter paid only if requested
+        if (isTithe && showPaidOnly) {
+          const rec = titheByMember.get(member.id);
+          if (!rec || !rec.paid) return false;
+        }
+        // Bussing: filter paid only if requested
+        if (isTithe && showBussingPaidOnly) {
+          const recB = bussingByMember.get(member.id);
+          if (!recB || !recB.paid) return false;
+        }
+        // Filter by bacenta if specified
+        if (bacentaFilter && member.bacentaId !== bacentaFilter) {
+          return false;
+        }
+
+        // Filter by ministry if requested
+        if (ministryOnly && !(member.ministry && member.ministry.trim() !== '')) {
+          return false;
+        }
+
+        // Filter by spiritual milestones if requested via nav
+        if (speaksInTonguesOnly && member.speaksInTongues !== true) {
+          return false;
+        }
+        if (baptizedOnly && member.baptized !== true) {
+          return false;
+        }
+
+        // Filter by hierarchy role (ministry-aware)
+        if (roleFilter !== 'all') {
+          const rank = getHierarchyRank(member);
+          if (roleFilter === 'head' && rank !== 1) return false;
+          if (roleFilter === 'leader' && rank !== 2) return false;
+          if (roleFilter === 'assistant' && rank !== 3) return false;
+          if (roleFilter === 'admin' && rank !== 4) return false;
+          if (roleFilter === 'member' && rank !== 5) return false;
+        }
+
+        // Filter by search term
+        if (searchTerm) {
+          const searchLower = searchTerm.toLowerCase();
+          return (
+            member.firstName.toLowerCase().includes(searchLower) ||
+            (member.lastName || '').toLowerCase().includes(searchLower) ||
+            member.phoneNumber.includes(searchTerm) ||
+            member.buildingAddress.toLowerCase().includes(searchLower)
+          );
+        }
+
+        return true;
+      })
+      .sort((a, b) => {
+        // Tithe-specific sorting (primary)
+        if (isTithe && titheSort !== 'none') {
+          const ra = titheByMember.get(a.id);
+          const rb = titheByMember.get(b.id);
+          if (titheSort === 'paid') {
+            const pa = ra?.paid ? 1 : 0;
+            const pb = rb?.paid ? 1 : 0;
+            if (pa !== pb) return pb - pa; // paid first
+          } else {
+            const aa = Number(ra?.amount || 0);
+            const ab = Number(rb?.amount || 0);
+            if (aa !== ab) return titheSort === 'amount_desc' ? ab - aa : aa - ab;
+          }
+        }
+        // Bussing-specific sorting (secondary)
+        if (isTithe && bussingSort !== 'none') {
+          const ra = bussingByMember.get(a.id);
+          const rb = bussingByMember.get(b.id);
+          if (bussingSort === 'paid') {
+            const pa = ra?.paid ? 1 : 0;
+            const pb = rb?.paid ? 1 : 0;
+            if (pa !== pb) return pb - pa; // paid first
+          } else {
+            const aa = Number(ra?.amount || 0);
+            const ab = Number(rb?.amount || 0);
+            if (aa !== ab) return bussingSort === 'amount_desc' ? ab - aa : aa - ab;
+          }
+        }
+
+        // Default sort by hierarchy (Head > Leader > Assistant > Member) then name
+        const rolePriorityA = getHierarchyRank(a);
+        const rolePriorityB = getHierarchyRank(b);
+        if (rolePriorityA !== rolePriorityB) return rolePriorityA - rolePriorityB;
+        return (a.lastName || '').localeCompare(b.lastName || '') || a.firstName.localeCompare(b.firstName);
+  });
+  }, [members, bacentaFilter, searchTerm, roleFilter, isTithe, showPaidOnly, showBussingPaidOnly, titheSort, bussingSort, titheByMember, bussingByMember]);
+
+  // Apply frozen visibility toggle to the filtered list
+  const displayMembers = useMemo(() => {
+    return filteredMembers.filter(member => {
+      if (statusFilter === 'went_home') return isMemberWentHome(member);
+      if (statusFilter === 'frozen') return !isMemberWentHome(member) && member.frozen;
+      if (statusFilter === 'all') return true;
+      return !isMemberWentHome(member) && !member.frozen;
+    });
+  }, [filteredMembers, statusFilter]);
+
+  const roleAnchorIndexMap = useMemo(() => {
+    const map: Partial<Record<RoleCategory, number>> = {};
+    displayMembers.forEach((member, index) => {
+      const key = determineRoleCategory(member);
+      if (map[key] === undefined) {
+        map[key] = index;
+      }
+    });
+    return map;
+  }, [displayMembers]);
+
+  // Ministry-specific labels for hierarchy summary chips
+  const roleLabels = useMemo(() => getMinistryRoleLabels(isMinistryContext ? activeMinistryName : undefined), [isMinistryContext, activeMinistryName]);
+  const summaryLabels: Record<RoleCategory, string> = useMemo(() => {
+    if (isMinistryContext) return roleLabels;
+    return {
+      head: 'Green Bacenta',
+      leader: 'Red Bacenta',
+      assistant: 'Assistant',
+      admin: 'Admin',
+      member: 'Member',
+    };
+  }, [isMinistryContext, roleLabels]);
+
+  const handleRoleChipClick = (role: RoleCategory) => {
+    if (role === 'member') return;
+    const targetRow = roleRowRefs.current[role];
+    if (!targetRow) {
+      showToast('info', 'No records to show', `No ${summaryLabels[role]} match the current filters.`);
+      return;
+    }
+    targetRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setHighlightState({ role, token: Date.now() });
+    if (highlightTimeoutRef.current) {
+      clearTimeout(highlightTimeoutRef.current);
+    }
+    highlightTimeoutRef.current = setTimeout(() => setHighlightState(null), 1200);
+  };
+
+  // Memoized counts for cleaner UI rendering
+  const activeCount = useMemo(() => filteredMembers.filter(m => isMemberActive(m)).length, [filteredMembers]);
+  const wentHomeCount = useMemo(() => filteredMembers.filter(m => isMemberWentHome(m)).length, [filteredMembers]);
+  const frozenCount = useMemo(() => filteredMembers.filter(m => m.frozen && !isMemberWentHome(m)).length, [filteredMembers]);
+  const roleCounts = useMemo(() => {
+    const totals: Record<RoleCategory, number> = {
+      head: 0,
+      leader: 0,
+      assistant: 0,
+      admin: 0,
+      member: 0,
+    };
+    filteredMembers.forEach(member => {
+      if (!isMemberActive(member)) return;
+      const roleKey = determineRoleCategory(member);
+      totals[roleKey] += 1;
+    });
+    return totals;
+  }, [filteredMembers]);
+  const countHead = roleCounts.head;
+  const countLeader = roleCounts.leader;
+  const countAssistant = roleCounts.assistant;
+  const countAdmin = roleCounts.admin;
+  const countMember = roleCounts.member;
+  const roleChipConfigs = useMemo(() => ([
+    {
+      key: 'head' as RoleCategory,
+      count: countHead,
+      label: summaryLabels.head,
+      clickable: true,
+      classes: {
+        chip: 'bg-green-50 border-green-200',
+        dot: 'bg-green-500',
+        value: 'text-green-800',
+        label: 'text-green-700',
+      },
+    },
+    {
+      key: 'leader' as RoleCategory,
+      count: countLeader,
+      label: summaryLabels.leader,
+      clickable: true,
+      classes: {
+        chip: 'bg-red-50 border-red-200',
+        dot: 'bg-red-500',
+        value: 'text-red-800',
+        label: 'text-red-700',
+      },
+    },
+    {
+      key: 'assistant' as RoleCategory,
+      count: countAssistant,
+      label: summaryLabels.assistant,
+      clickable: true,
+      classes: {
+        chip: 'bg-amber-50 border-amber-200',
+        dot: 'bg-amber-500',
+        value: 'text-amber-800',
+        label: 'text-amber-700',
+      },
+    },
+    {
+      key: 'admin' as RoleCategory,
+      count: countAdmin,
+      label: summaryLabels.admin,
+      clickable: true,
+      classes: {
+        chip: 'bg-violet-50 border-violet-200',
+        dot: 'bg-violet-500',
+        value: 'text-violet-800',
+        label: 'text-violet-700',
+      },
+    },
+    {
+      key: 'member' as RoleCategory,
+      count: countMember,
+      label: summaryLabels.member,
+      clickable: false,
+      classes: {
+        chip: 'bg-blue-50 border-blue-200',
+        dot: 'bg-blue-500',
+        value: 'text-blue-800',
+        label: 'text-blue-700',
+      },
+    },
+  ]), [countHead, countLeader, countAssistant, countAdmin, countMember, summaryLabels]);
+
+
+  // Special simple views for Tongues/Baptized navigation
+  const speaksInTonguesOnly: boolean = (currentTab?.data as any)?.speaksInTonguesOnly === true;
+  const baptizedOnly: boolean = (currentTab?.data as any)?.baptizedOnly === true;
+  const isSpecialListView = speaksInTonguesOnly || baptizedOnly;
+
+  // Global stats across active (non-frozen) members
+  const allActiveMembers = useMemo(() => members.filter(m => isMemberActive(m)), [members]);
+  const baseForStats = useMemo(() => {
+    if (bacentaFilter) {
+      return allActiveMembers.filter(m => m.bacentaId === bacentaFilter);
+    }
+    return allActiveMembers;
+  }, [allActiveMembers, bacentaFilter]);
+  const tonguesYesCount = useMemo(() => baseForStats.filter(m => m.speaksInTongues === true).length, [baseForStats]);
+  const tonguesNoCount = useMemo(() => baseForStats.length - tonguesYesCount, [baseForStats, tonguesYesCount]);
+  const baptizedYesCount = useMemo(() => baseForStats.filter(m => m.baptized === true).length, [baseForStats]);
+  const baptizedNoCount = useMemo(() => baseForStats.length - baptizedYesCount, [baseForStats, baptizedYesCount]);
+
+  if (isSpecialListView) {
+  const title = speaksInTonguesOnly ? 'Praying in Tongues' : 'Water Baptized';
+    const stats = speaksInTonguesOnly
+      ? [
+          { label: 'Can pray in tongues', value: tonguesYesCount, color: 'text-emerald-700' },
+          { label: "Can't pray in tongues", value: tonguesNoCount, color: 'text-gray-700' },
+          { label: 'Total members', value: baseForStats.length, color: 'text-slate-700' },
+        ]
+      : [
+          { label: 'Baptized', value: baptizedYesCount, color: 'text-emerald-700' },
+          { label: 'Not baptized', value: baptizedNoCount, color: 'text-gray-700' },
+          { label: 'Total members', value: baseForStats.length, color: 'text-slate-700' },
+        ];
+    const currentBacentaName = bacentaFilter ? (bacentas.find(b => b.id === bacentaFilter)?.name || '') : '';
+
+    return (
+      <div className="space-y-5 animate-fade-in">
+        {/* Centered header */}
+        <div className="text-center">
+          <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">{title}</h1>
+          {currentBacentaName && (
+            <p className="mt-1 text-sm text-slate-500">Filtered to {currentBacentaName}</p>
+          )}
+        </div>
+
+        {/* Stats */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {stats.map((s) => (
+            <div key={s.label} className="glass rounded-xl px-5 py-4 text-center shadow-sm">
+              <div className="text-[11px] uppercase tracking-wide text-gray-500">{s.label}</div>
+              <div className={`mt-1 text-2xl font-bold ${s.color}`}>{s.value}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Numbered simple list */}
+        <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+          {displayMembers.length === 0 ? (
+            <div className="p-6 text-sm text-gray-500 text-center">No members found.</div>
+          ) : (
+            displayMembers.map((member, idx) => (
+              <div
+                key={member.id}
+                className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 cursor-pointer transition-colors group"
+                onClick={() => openMemberForm(member)}
+                title="Open member"
+              >
+                <div className="w-8 h-8 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center text-xs font-semibold">
+                  {idx + 1}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-base font-semibold text-gray-900 truncate">
+                    {member.firstName} {member.lastName || ''}
+                  </div>
+                  <div className="text-xs text-gray-500 truncate">
+                    {(member.role || 'Member')}{member.ministry ? ` • ${member.ministry}` : ''}
+                  </div>
+                </div>
+                {member.phoneNumber && member.phoneNumber !== '-' && (
+                  <button
+                    className="ml-auto text-xs px-2 py-1 rounded-full bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200"
+                    onClick={(e) => { e.stopPropagation(); handlePhoneClick(member.phoneNumber); }}
+                  >
+                    {member.phoneNumber}
+                  </button>
+                )}
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    );
+  }
+
+
+
+  // Define fixed columns (numbering and name)
+  // Compute display label for a member's role, ministry-aware (used for badges)
+  const computeDisplayLabel = (m: Member): string => {
+    if (!isMinistryContext) return m.role || 'Member';
+    const baseRole = (m.role || 'Member');
+    const pos = (m.ministryPosition || '').toLowerCase();
+    if (baseRole === 'Bacenta Leader') return roleLabels.head;
+    if (baseRole === 'Fellowship Leader') return roleLabels.leader;
+    if (baseRole === 'Assistant') return roleLabels.assistant;
+    if (baseRole === 'Admin') return roleLabels.admin ?? 'Admin';
+    if (baseRole === 'Member' && pos === 'assistant') return roleLabels.assistant;
+    if (baseRole === 'Member') return roleLabels.member;
+    return baseRole;
+  };
+
+  const fixedColumns = useMemo(() => [
+  {
+      key: 'number',
+      header: '#',
+      width: '50px',
+  render: (_member: Member, index: number) => (
+        <div className="flex items-center justify-center">
+          <span className="text-sm font-medium text-gray-600">
+            {index + 1}
+          </span>
+        </div>
+      ),
+    },
+    {
+      key: 'name',
+      header: 'Name',
+  // Make name column slimmer so other columns are visible
+  width: '110px',
+      render: (member: Member) => {
+        const roleConfig = {
+          'Bacenta Leader': { icon: '💚', displayName: 'Green Bacenta' },
+          'Fellowship Leader': { icon: '❤️', displayName: 'Red Bacenta' },
+          'Assistant': { icon: '🤝', displayName: 'Assistant' },
+          'Admin': { icon: '⚙️', displayName: 'Admin' },
+          'Member': { icon: '👤', displayName: 'Member' }
+        };
+        const roleIcon = roleConfig[member.role || 'Member'].icon;
+
+        // Check if member is confirmed for upcoming Sunday
+        const isConfirmedForSunday = getConfirmationStatus(member.id, upcomingSunday) === 'Confirmed';
+
+        return (
+          <div
+            className="flex items-center space-x-2 cursor-pointer hover:bg-blue-50 rounded-lg p-1 -m-1 transition-colors duration-200"
+            onClick={(e) => {
+              e.stopPropagation();
+              openMemberForm(member);
+            }}
+          >
+            <div className={`w-7 h-7 rounded-full flex items-center justify-center overflow-hidden flex-shrink-0 ${
+              member.bornAgainStatus
+                ? 'bg-gradient-to-br from-green-100 to-green-200 ring-2 ring-green-300'
+                : 'bg-gradient-to-br from-gray-100 to-gray-200'
+            }`}>
+              {member.profilePicture ? (
+                <img
+                  src={member.profilePicture}
+                  alt={member.firstName}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <UserIcon className={`w-3 h-3 ${member.bornAgainStatus ? 'text-green-600' : 'text-gray-600'}`} />
+              )}
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center space-x-1">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center space-x-1">
+                    <span className={`font-semibold text-sm truncate ${
+                      member.bornAgainStatus ? 'text-green-900' : 'text-gray-900'
+                    }`}>
+                      {member.firstName}
+                    </span>
+                    <span className="text-xs flex-shrink-0" title={member.role || 'Member'}>
+                      {roleIcon}
+                    </span>
+                    {member.bornAgainStatus && (
+                      <span className="text-xs text-green-600 flex-shrink-0" title="Born Again">
+                        ⭐
+                      </span>
+                    )}
+                    {isConfirmedForSunday && (
+                      <span
+                        className="text-xs flex-shrink-0 animate-pulse"
+                        title={`Confirmed for Sunday ${formatDisplayDate(upcomingSunday)}`}
+                      >
+                        ✅
+                      </span>
+                    )}
+                    {isMemberWentHome(member) ? (
+                      <span className="ml-1 text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 border border-amber-200" title="Went Home – archived from attendance">Went Home</span>
+                    ) : (
+                      member.frozen && (
+                        <span className="ml-1 text-[10px] px-1.5 py-0.5 rounded bg-sky-100 text-sky-700 border border-sky-200" title="Frozen – excluded from counts and absentees">Frozen</span>
+                      )
+                    )}
+                    {isMinistryContext && (
+                      <span className="ml-1 text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-700 border border-gray-200" title={computeDisplayLabel(member)}>
+                        {computeDisplayLabel(member)}
+                      </span>
+                    )}
+
+                  </div>
+                  {member.ministry && member.ministry.trim() !== '' && (
+                    <p className="text-xs text-gray-500 truncate mt-0.5">{member.ministry}</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      },
+    }
+  ], [openMemberForm, isTithe, upcomingSunday, getConfirmationStatus]);
+
+  // Define scrollable columns (phone, role, born again, attendance dates, remove)
+  const scrollableColumns = useMemo(() => {
+    // Base scrollable columns (role and born again status now integrated into name column)
+  const baseScrollableColumns = isTithe
+      ? [
+          {
+            key: 'tithe_paid',
+            header: 'Paid',
+            width: '80px',
+            align: 'center' as const,
+            render: (member: Member) => {
+              const rec = titheByMember.get(member.id);
+              const checked = !!rec?.paid;
+              const amount = Number(rec?.amount || 0);
+      return (
+                <div className="flex justify-center">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 text-emerald-600"
+                    checked={checked}
+  disabled={false}
+                    onChange={(e) => {
+                      const nextPaid = e.target.checked;
+                      markTitheHandler(member.id, nextPaid, amount);
+                    }}
+  title={(checked ? 'Mark as not paid' : 'Mark as paid')}
+                  />
+                </div>
+              );
+            }
+          },
+          {
+            key: 'tithe_amount',
+            header: 'Amount (ZAR)',
+            width: '140px',
+            align: 'center' as const,
+            render: (member: Member) => {
+              const rec = titheByMember.get(member.id);
+              const value = rec ? String(rec.amount ?? 0) : '';
+      return (
+                <div className="flex justify-center">
+                  <input
+                    key={`tithe_amount_${member.id}_${rec?.amount ?? 0}`}
+                    type="text"
+                    inputMode="decimal"
+                    defaultValue={value ? formatCurrency(Number(value)) : ''}
+  disabled={false}
+                    onFocus={(e) => {
+                      // Show raw number on focus
+                      const raw = (rec?.amount ?? 0).toString();
+                      e.currentTarget.value = raw === '0' ? '' : raw;
+                      e.currentTarget.select();
+                    }}
+                    onKeyDown={(e) => {
+                      const allowed = '0123456789.';
+                      if (
+                        e.key.length === 1 && !allowed.includes(e.key)
+                      ) {
+                        e.preventDefault();
+                      }
+                    }}
+                    onBlur={(e) => {
+                      const amt = Number(e.currentTarget.value.replace(/[^0-9.]/g, '') || 0);
+                      const paid = amt > 0 ? true : (titheByMember.get(member.id)?.paid || false);
+                      markTitheHandler(member.id, paid, amt);
+                      // Format after saving
+                      e.currentTarget.value = amt ? formatCurrency(amt) : '';
+                    }}
+                    className="w-28 px-2 py-1 border border-gray-300 rounded-md text-sm text-gray-900"
+                    placeholder="0.00"
+                    title={(rec?.lastUpdated ? `Last updated: ${new Date(rec.lastUpdated).toLocaleString()}` : 'Enter tithe amount')}
+                  />
+                </div>
+              );
+            }
+          },
+    // Transport columns
+          {
+            key: 'bussing_paid',
+      header: 'Transport',
+            width: '90px',
+            align: 'center' as const,
+            render: (member: Member) => {
+              const rec = bussingByMember.get(member.id);
+              const checked = !!rec?.paid;
+              const amount = Number(rec?.amount || 0);
+              return (
+                <div className="flex justify-center">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 text-emerald-600"
+                    checked={checked}
+                    onChange={(e) => {
+                      const nextPaid = e.target.checked;
+                      markTransportHandler(member.id, nextPaid, amount);
+                    }}
+        title={(checked ? 'Mark transport as not paid' : 'Mark transport as paid')}
+                  />
+                </div>
+              );
+            }
+          },
+          {
+            key: 'bussing_amount',
+      header: 'Transport (ZAR)',
+            width: '150px',
+            align: 'center' as const,
+            render: (member: Member) => {
+              const rec = bussingByMember.get(member.id);
+              const value = rec ? String(rec.amount ?? 0) : '';
+              return (
+                <div className="flex justify-center">
+                  <input
+                    key={`bussing_amount_${member.id}_${rec?.amount ?? 0}`}
+                    type="text"
+                    inputMode="decimal"
+                    defaultValue={value ? formatCurrency(Number(value)) : ''}
+                    onFocus={(e) => {
+                      const raw = (rec?.amount ?? 0).toString();
+                      e.currentTarget.value = raw === '0' ? '' : raw;
+                      e.currentTarget.select();
+                    }}
+                    onKeyDown={(e) => {
+                      const allowed = '0123456789.';
+                      if (e.key.length === 1 && !allowed.includes(e.key)) {
+                        e.preventDefault();
+                      }
+                    }}
+                    onBlur={(e) => {
+                      const amt = Number(e.currentTarget.value.replace(/[^0-9.]/g, '') || 0);
+                      const paid = amt > 0 ? true : (bussingByMember.get(member.id)?.paid || false);
+                      markTransportHandler(member.id, paid, amt);
+                      e.currentTarget.value = amt ? formatCurrency(amt) : '';
+                    }}
+                    className="w-32 px-2 py-1 border border-gray-300 rounded-md text-sm text-gray-900"
+                    placeholder="0.00"
+        title={(rec?.lastUpdated ? `Last updated: ${new Date(rec.lastUpdated).toLocaleString()}` : 'Enter transport amount')}
+                  />
+                </div>
+              );
+            }
+          }
+        ]
+      : [
+          {
+            key: 'phoneNumber',
+            header: 'Phone',
+            width: '120px',
+            align: 'left' as const,
+            render: (member: Member) => (
+              <div
+                className={`flex items-center space-x-2 ${
+                  member.phoneNumber && member.phoneNumber.trim() !== '' && member.phoneNumber !== '-'
+                    ? 'cursor-pointer hover:bg-blue-50 rounded px-1 py-1 transition-colors'
+                    : ''
+                }`}
+                onClick={() => member.phoneNumber && member.phoneNumber !== '-' && handlePhoneClick(member.phoneNumber)}
+              >
+                <PhoneIcon className="w-4 h-4 text-gray-400" />
+                <span className="text-sm">{member.phoneNumber || '-'}</span>
+              </div>
+            ),
+          },
+        ];
+
+    // Add attendance columns for each Sunday
+  const attendanceColumns = isTithe ? [] : currentMonthSundays.map((sundayDate) => {
+      const isEditable = isDateEditable(sundayDate, allowEditPreviousSundays);
+
+      return {
+        key: `attendance_${sundayDate}`,
+        header: (
+          <div className="flex flex-col items-center space-y-1">
+            <span className={`text-xs ${!isEditable ? 'text-gray-400' : 'text-gray-700'}`}>
+              {formatDisplayDate(sundayDate)}
+            </span>
+          </div>
+        ),
+        width: '80px',
+        align: 'center' as const,
+        render: (member: Member) => {
+        const status = getAttendanceStatus(member.id, sundayDate);
+        const wentHome = isMemberWentHome(member);
+        const isPresent = status === 'Present';
+        const isEditable = isDateEditable(sundayDate, allowEditPreviousSundays);
+        const today = new Date();
+        const targetDate = new Date(sundayDate + 'T00:00:00');
+        const isPastMonth = targetDate.getFullYear() < today.getFullYear() ||
+                          (targetDate.getFullYear() === today.getFullYear() && targetDate.getMonth() < today.getMonth());
+
+        return (
+          <div className="flex justify-center">
+            <div
+              className={`w-6 h-6 rounded border-2 flex items-center justify-center transition-all duration-200 ${
+                member.frozen
+                  ? 'bg-gray-100 border-gray-200 text-gray-300 cursor-not-allowed opacity-60'
+                  : !isEditable
+                  ? isPastMonth
+                    ? 'bg-gray-200 border-gray-300 cursor-not-allowed opacity-60'
+                    : 'bg-blue-50 border-blue-200 cursor-not-allowed opacity-60'
+                  : isPresent
+                  ? 'bg-green-500 border-green-500 text-white hover:bg-green-600 cursor-pointer'
+                  : status === 'Absent'
+                  ? 'bg-red-500 border-red-500 text-white hover:bg-red-600 cursor-pointer'
+                  : 'bg-gray-100 border-gray-300 text-gray-400 hover:bg-gray-200 cursor-pointer'
+              }`}
+              onClick={isEditable && !member.frozen ? (e) => {
+                e.stopPropagation();
+                handleAttendanceToggle(member.id, sundayDate);
+              } : undefined}
+              title={
+                wentHome
+                  ? 'Went Home – attendance locked'
+                  : member.frozen
+                    ? 'Frozen member – attendance disabled'
+                    : !isEditable
+                    ? isPastMonth
+                      ? `Past month - cannot edit ${formatDisplayDate(sundayDate)}`
+                      : `Future date - cannot edit ${formatDisplayDate(sundayDate)}`
+                    : `Click to ${!status ? 'mark present' : status === 'Present' ? 'mark absent' : 'clear attendance'} for ${formatDisplayDate(sundayDate)}`
+              }
+            >
+              {isPresent && (
+                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                </svg>
+              )}
+              {status === 'Absent' && (
+                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                </svg>
+              )}
+            </div>
+          </div>
+        );
+        },
+      };
+    });
+
+    // Add actions dropdown column
+  const actionsColumn = {
+      key: 'actions',
+      header: 'Actions',
+      width: '80px',
+      align: 'center' as const,
+      render: (member: Member) => {
+        return (
+          <MemberActionsDropdown
+            member={member}
+            bacentas={bacentas}
+            upcomingSunday={upcomingSunday}
+            getConfirmationStatus={getConfirmationStatus}
+            markConfirmationHandler={markConfirmationHandler}
+            deleteMemberHandler={deleteMemberHandler}
+            showConfirmation={showConfirmation}
+            userProfile={userProfile}
+            members={members}
+            showToast={showToast}
+            updateMemberHandler={updateMemberHandler}
+            isMinistryContext={isMinistryContext}
+            transferMemberToConstituencyHandler={transferMemberToConstituencyHandler}
+          />
+        );
+      },
+    };
+
+    const cols = [...baseScrollableColumns, ...attendanceColumns];
+    if (!isTithe) cols.push(actionsColumn);
+    return cols;
+  }, [currentMonthSundays, attendanceRecords, sundayConfirmations, deleteMemberHandler, getAttendanceStatus, getConfirmationStatus, handleAttendanceToggle, upcomingSunday, markConfirmationHandler, isTithe, titheByMember, bussingByMember, markTitheHandler, markTransportHandler]);
+
+  // Get displayed month name
+  const currentMonthName = getMonthName(displayedDate.getMonth());
+  const currentYear = displayedDate.getFullYear();
+
+  // Totals for displayed members (current month only)
+  const totalTithe = useMemo(() => {
+    if (!isTithe) return 0;
+    return displayMembers.reduce((sum, m) => sum + (titheByMember.get(m.id)?.amount || 0), 0);
+  }, [displayMembers, titheByMember, isTithe]);
+
+  const paidCount = useMemo(() => {
+    if (!isTithe) return 0;
+    return displayMembers.filter(m => titheByMember.get(m.id)?.paid).length;
+  }, [displayMembers, titheByMember, isTithe]);
+
+  const totalBussing = useMemo(() => {
+    if (!isTithe) return 0;
+    return displayMembers.reduce((sum, m) => sum + (bussingByMember.get(m.id)?.amount || 0), 0);
+  }, [displayMembers, bussingByMember, isTithe]);
+
+  const bussingPaidCount = useMemo(() => {
+    if (!isTithe) return 0;
+    return displayMembers.filter(m => bussingByMember.get(m.id)?.paid).length;
+  }, [displayMembers, bussingByMember, isTithe]);
+
+  const formatCurrency = (n: number) => {
+    try {
+      return new Intl.NumberFormat('en-ZA', { style: 'currency', currency: 'ZAR', maximumFractionDigits: 2 }).format(n);
+    } catch {
+      return `R${(n || 0).toFixed(2)}`;
+    }
+  };
+
+  // Get bacenta name if filtering by bacenta
+  const getBacentaName = (bacentaId: string) => {
+    if (!bacentaId) return null;
+    const bacenta = bacentas.find(b => b.id === bacentaId);
+    return bacenta?.name || 'Unknown Bacenta';
+  };
+
+  const currentBacentaName = bacentaFilter ? getBacentaName(bacentaFilter) : null;
+
+  return (
+    <div className="space-y-3 desktop:space-y-4">
+      {/* Bacenta Name Header - Only show when filtering by bacenta */}
+      {currentBacentaName && (
+        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg desktop:rounded-xl shadow-sm border border-blue-200 p-3 desktop:p-4 relative">
+          {/* Settings Button - Positioned absolutely to not affect centering */}
+          <button
+            onClick={() => {
+              const currentBacenta = bacentas.find(b => b.id === bacentaFilter);
+              if (currentBacenta) {
+                openBacentaForm(currentBacenta);
+              }
+            }}
+            className="absolute top-3 right-3 desktop:top-4 desktop:right-4 flex items-center justify-center w-8 h-8 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-lg transition-colors duration-200 shadow-sm"
+            title="Configure Bacenta Settings"
+            aria-label="Configure Bacenta Settings"
+          >
+            <CogIcon className="w-4 h-4" />
+          </button>
+
+          {/* Centered Content */}
+          <div className="text-center">
+            <h1 className="text-lg desktop:text-xl desktop-lg:text-2xl font-bold text-blue-900">
+              {currentBacentaName}
+            </h1>
+            <p className="text-sm desktop:text-base text-blue-700 font-medium">
+              Bacenta
+            </p>
+            {/* Meeting Schedule Display */}
+            {(() => {
+              const currentBacenta = bacentas.find(b => b.id === bacentaFilter);
+              if (currentBacenta && (currentBacenta.meetingDay || currentBacenta.meetingTime)) {
+                return (
+                  <div className="flex items-center justify-center mt-1 text-xs text-blue-600">
+                    <CalendarIcon className="w-3 h-3 mr-1" />
+                    <span>
+                      {currentBacenta.meetingDay && currentBacenta.meetingTime
+                        ? `${currentBacenta.meetingDay} ${currentBacenta.meetingTime}`
+                        : currentBacenta.meetingDay
+                          ? currentBacenta.meetingDay
+                          : currentBacenta.meetingTime
+                      }
+                    </span>
+                  </div>
+                );
+              }
+              return null;
+            })()}
+          </div>
+        </div>
+      )}
+
+      {/* Clean Header */}
+      <div className="bg-white rounded-lg desktop:rounded-xl shadow-sm desktop:shadow-md border border-gray-200 p-4 desktop:p-5 desktop-lg:p-6">
+        <div className="text-center">
+          {/* Title (centered, no icon) */}
+          <h2 className="text-xl desktop:text-2xl desktop-lg:text-3xl font-semibold text-gray-900 mb-3">
+            {isTithe ? `Tithe for ${currentMonthName}` : `Attendance for ${currentMonthName} ${currentYear}`}
+          </h2>
+
+          {/* Summary */}
+          <div className="flex items-center justify-center space-x-2 text-sm text-gray-600 mb-3">
+            <span>{currentMonthSundays.length} Sunday{currentMonthSundays.length !== 1 ? 's' : ''} in {currentMonthName}</span>
+            <span>•</span>
+            <span>{activeCount} active member{activeCount !== 1 ? 's' : ''}</span>
+            <span>•</span>
+            <span>{wentHomeCount} went home</span>
+            <span>•</span>
+            <span>{frozenCount} frozen</span>
+          </div>
+
+          {isTithe && (
+            <div className="text-center text-sm text-gray-800 font-semibold mb-2 space-y-1">
+              <div>
+                Total Tithe: {formatCurrency(totalTithe)}
+                <div className="text-xs text-gray-600 font-normal mt-1">Paid: {paidCount} / {activeCount}</div>
+              </div>
+              <div>
+                Total Transport: {formatCurrency(totalBussing)}
+                <div className="text-xs text-gray-600 font-normal mt-1">Paid: {bussingPaidCount} / {activeCount}</div>
+              </div>
+            </div>
+          )}
+
+          {/* Role Statistics (hierarchy-aware) */}
+          <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3 text-sm mb-4">
+            {roleChipConfigs.map((chip) => {
+              const isInteractive = chip.clickable && chip.count > 0;
+              const baseClasses = `inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border ${chip.classes.chip} ${
+                isInteractive ? 'cursor-pointer hover:shadow-md focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-blue-400 transition-shadow duration-200' : 'cursor-default opacity-80'
+              }`;
+              const content = (
+                <>
+                  <span className={`w-2.5 h-2.5 rounded-full ${chip.classes.dot}`}></span>
+                  <span className={`${chip.classes.value} font-semibold tabular-nums`}>{chip.count}</span>
+                  <span className={`${chip.classes.label} text-xs font-medium`}>
+                    {chip.label}
+                  </span>
+                </>
+              );
+              return isInteractive ? (
+                <button
+                  key={chip.key}
+                  type="button"
+                  onClick={() => handleRoleChipClick(chip.key)}
+                  className={baseClasses}
+                  title={`Jump to ${chip.label}`}
+                >
+                  {content}
+                </button>
+              ) : (
+                <div key={chip.key} className={baseClasses} title={chip.label}>
+                  {content}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Navigation */}
+          <div className="flex items-center justify-center mb-4">
+            <div className="inline-flex items-center bg-white border border-gray-300 rounded-xl shadow-sm overflow-hidden">
+              <button
+                onClick={navigateToPreviousMonth}
+                className="flex items-center justify-center w-10 h-10 hover:bg-gray-50 text-gray-700 transition-colors duration-200 border-r border-gray-300"
+                aria-label="Previous month"
+                title="Previous month"
+              >
+                <ChevronLeftIcon className="w-5 h-5" />
+              </button>
+              <button
+                onClick={navigateToNextMonth}
+                className="flex items-center justify-center w-10 h-10 hover:bg-gray-50 text-gray-700 transition-colors duration-200"
+                aria-label="Next month"
+                title="Next month"
+              >
+                <ChevronRightIcon className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
+
+          {/* Search, Filter, Frozen Toggle, and Copy */}
+          <div className="flex flex-col space-y-3 sm:flex-row sm:space-y-0 sm:space-x-3 sm:items-end justify-center">
+            <div className="w-full sm:w-64">
+              <div className="relative">
+                <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Search members..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-10 sm:pl-12 pr-10 sm:pr-12 py-3 sm:py-2 border border-gray-300 dark:border-dark-600 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent transition-colors text-base sm:text-sm bg-white dark:bg-dark-700 text-gray-900 dark:text-dark-100 placeholder-gray-500 dark:placeholder-dark-400 text-center search-input"
+                />
+              </div>
+            </div>
+            <div className="w-full sm:w-56">
+              <select
+                value={roleFilter}
+                onChange={(e) => setRoleFilter(e.target.value as 'all' | 'head' | 'leader' | 'assistant' | 'admin' | 'member')}
+                className="w-full px-3 py-3 sm:py-2 border border-gray-300 dark:border-dark-600 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent transition-colors text-base sm:text-sm bg-white dark:bg-dark-700 text-gray-900 dark:text-dark-100 text-center cursor-pointer"
+              >
+                <option value="all">All Roles</option>
+                {isMinistryContext ? (
+                  <>
+                    <option value="head">👑 {roleLabels.head}</option>
+                    <option value="leader">⭐ {roleLabels.leader}</option>
+                    <option value="assistant">�️ {roleLabels.assistant}</option>
+                    <option value="member">👤 {roleLabels.member}</option>
+                  </>
+                ) : (
+                  <>
+                    <option value="head">💚 Green Bacentas</option>
+                    <option value="leader">❤️ Red Bacentas</option>
+                    <option value="assistant">🤝 Assistants</option>
+                    <option value="admin">⚙️ Admins</option>
+                    <option value="member">👤 Members</option>
+                  </>
+                )}
+              </select>
+            </div>
+            <div className="w-full sm:w-56">
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value as MemberListStatusFilter)}
+                className="w-full px-3 py-3 sm:py-2 border border-gray-300 dark:border-dark-600 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent transition-colors text-base sm:text-sm bg-white dark:bg-dark-700 text-gray-900 dark:text-dark-100 text-center cursor-pointer"
+              >
+                <option value="active">Active members</option>
+                <option value="went_home">Went Home (Archive)</option>
+                <option value="frozen">Frozen members (temporary hold)</option>
+                <option value="all">All members (active + archive)</option>
+              </select>
+            </div>
+            {/* Tithe-only: Paid Only toggle and Sort; plus Bussing filters/sort */}
+            {isTithe && (
+              <>
+                <div className="w-full sm:w-auto flex items-center justify-center">
+                  <label className="inline-flex items-center space-x-2 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg shadow-sm cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      className="form-checkbox h-4 w-4 text-emerald-600"
+                      checked={showPaidOnly}
+                      onChange={(e) => setShowPaidOnly(e.target.checked)}
+                    />
+                    <span className="text-sm text-gray-700">Show Paid Only</span>
+                  </label>
+                </div>
+                <div className="w-full sm:w-48">
+                  <select
+                    value={titheSort}
+                    onChange={(e) => setTitheSort(e.target.value as any)}
+                    className="w-full px-3 py-3 sm:py-2 border border-gray-300 dark:border-dark-600 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent transition-colors text-base sm:text-sm bg-white dark:bg-dark-700 text-gray-900 dark:text-dark-100 text-center cursor-pointer"
+                  >
+                    <option value="none">Sort: Default</option>
+                    <option value="paid">Sort: Paid first</option>
+                    <option value="amount_desc">Sort: Amount (High → Low)</option>
+                    <option value="amount_asc">Sort: Amount (Low → High)</option>
+                  </select>
+                </div>
+                <div className="w-full sm:w-auto flex items-center justify-center">
+                  <label className="inline-flex items-center space-x-2 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg shadow-sm cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      className="form-checkbox h-4 w-4 text-emerald-600"
+                      checked={showBussingPaidOnly}
+                      onChange={(e) => setShowBussingPaidOnly(e.target.checked)}
+                    />
+                    <span className="text-sm text-gray-700">Show Transport Paid Only</span>
+                  </label>
+                </div>
+                <div className="w-full sm:w-56">
+                  <select
+                    value={bussingSort}
+                    onChange={(e) => setBussingSort(e.target.value as any)}
+                    className="w-full px-3 py-3 sm:py-2 border border-gray-300 dark:border-dark-600 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent transition-colors text-base sm:text-sm bg-white dark:bg-dark-700 text-gray-900 dark:text-dark-100 text-center cursor-pointer"
+                  >
+                    <option value="none">Transport sort: Default</option>
+                    <option value="paid">Transport sort: Paid first</option>
+                    <option value="amount_desc">Transport sort: Amount (High → Low)</option>
+                    <option value="amount_asc">Transport sort: Amount (Low → High)</option>
+                  </select>
+                </div>
+              </>
+            )}
+            <div className="w-full sm:w-auto flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
+              {isMinistryContext && ((currentTab?.data as any)?.isTithe === true ? false : true) && (
+                <button
+                  onClick={() => openMemberForm()}
+                  className="w-full sm:w-auto flex items-center justify-center space-x-2 px-4 py-3 sm:py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg shadow-sm transition-colors text-base sm:text-sm font-medium"
+                  title="Add a new member to this ministry"
+                >
+                  <UserPlusIcon className="w-4 h-4" />
+                  <span>Add Member</span>
+                </button>
+              )}
+              {((currentTab?.data as any)?.isTithe === true) ? null : (
+              <button
+                onClick={() => {
+                  // Navigate to Copy Members page with current context
+                  switchTab({
+                    id: 'copy_members',
+                    name: 'Copy Members',
+                    data: {
+                      bacentaFilter,
+                      searchTerm,
+                      roleFilter: (roleFilter === 'head' ? 'Bacenta Leader' : roleFilter === 'leader' ? 'Fellowship Leader' : (roleFilter === 'assistant' || roleFilter === 'member') ? 'Member' : 'all'),
+                      statusFilter,
+                      // pass ministry context if active on this tab
+                      ministryOnly: (currentTab?.data as any)?.ministryOnly === true,
+                      ministryName: (currentTab?.data as any)?.ministryName || null
+                    }
+                  });
+                }}
+                disabled={displayMembers.length === 0}
+                className="w-full sm:w-auto flex items-center justify-center space-x-2 px-4 py-3 sm:py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg shadow-sm transition-colors text-base sm:text-sm font-medium"
+                title={`Copy ${displayMembers.length} member${displayMembers.length !== 1 ? 's' : ''} information to clipboard`}
+              >
+                <ClipboardIcon className="w-4 h-4" />
+                <span>Copy Members ({displayMembers.length})</span>
+              </button>
+              )}
+              {((currentTab?.data as any)?.isTithe === true) ? null : (
+              <button
+                onClick={() => {
+                  // Navigate to Copy Absentees page with current context
+                  switchTab({
+                    id: 'copy_absentees',
+                    name: 'Copy Absentees',
+                    data: {
+                      bacentaFilter,
+                      searchTerm,
+                      roleFilter: (roleFilter === 'head' ? 'Bacenta Leader' : roleFilter === 'leader' ? 'Fellowship Leader' : (roleFilter === 'assistant' || roleFilter === 'member') ? 'Member' : 'all'),
+                      statusFilter,
+                      ministryOnly: (currentTab?.data as any)?.ministryOnly === true,
+                      ministryName: (currentTab?.data as any)?.ministryName || null
+                    }
+                  });
+                }}
+                disabled={displayMembers.length === 0}
+                className="w-full sm:w-auto flex items-center justify-center space-x-2 px-4 py-3 sm:py-2 bg-orange-600 hover:bg-orange-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg shadow-sm transition-colors text-base sm:text-sm font-medium"
+                title="Copy absentee information for selected dates"
+              >
+                <ClipboardIcon className="w-4 h-4" />
+                <span>Copy Absentees</span>
+              </button>
+              )}
+              {isAdmin && !isTithe && (
+                <button
+                  onClick={handleCleanupDuplicates}
+                  disabled={isCleaningDuplicates}
+                  className="w-full sm:w-auto flex items-center justify-center space-x-2 px-4 py-3 sm:py-2 bg-yellow-100 hover:bg-yellow-200 text-yellow-900 border border-yellow-300 rounded-lg shadow-sm transition-colors text-base sm:text-sm font-medium disabled:opacity-60 disabled:cursor-not-allowed"
+                  title="Remove duplicate members in this church"
+                >
+                  <ExclamationTriangleIcon className="w-4 h-4" />
+                  <span>{isCleaningDuplicates ? 'Cleaning...' : 'Remove Duplicates'}</span>
+                </button>
+              )}
+
+            </div>
+          </div>
+          {statusFilter === 'went_home' && (
+            <div className="text-xs text-amber-700 text-center mt-2">
+              Viewing Went Home members only. Restore them when they return so they count toward attendance again.
+            </div>
+          )}
+          {statusFilter === 'frozen' && (
+            <div className="text-xs text-sky-700 text-center mt-2">
+              Viewing frozen members only. Unfreeze them once they should rejoin attendance tracking.
+            </div>
+          )}
+        </div>
+      </div>
+
+  {/* Members Attendance Table with Fixed Name Column */}
+  <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-visible">
+        {isLoading ? (
+          <div className="flex items-center justify-center py-8">
+            <div className="text-gray-500">Loading...</div>
+          </div>
+  ) : displayMembers.length === 0 ? (
+          <div className="flex items-center justify-center py-8">
+            <div className="text-gray-500">
+              {bacentaFilter
+                ? "No members found in this bacenta"
+                : searchTerm
+                  ? "No members match your search"
+                  : statusFilter === 'went_home'
+                    ? 'No "Went Home" members yet'
+                    : statusFilter === 'frozen'
+                      ? 'No frozen members right now'
+                    : statusFilter === 'all'
+                      ? 'No members added yet'
+                      : 'No active members to show'}
+            </div>
+          </div>
+        ) : (
+          <div className="overflow-x-auto desktop:overflow-x-visible desktop-table-container">
+            <table className="min-w-full border-collapse desktop-table desktop:w-full">
+              <thead>
+                <tr className="bg-gradient-to-r from-gray-50 to-gray-100 desktop:from-gray-50 desktop:to-gray-50 border-b border-gray-200 desktop:border-gray-300">
+                  {/* Fixed Headers (Number and Name) */}
+                  {fixedColumns.map((column, index) => (
+                    <th
+                      key={column.key}
+                      className={`sticky z-20 px-3 py-3 text-xs font-semibold text-gray-700 uppercase tracking-wider ${
+                        column.key === 'number' ? 'text-center' : 'text-left'
+                      } ${index === fixedColumns.length - 1 ? 'border-r border-gray-200' : ''}`}
+                      style={{
+                        left: index === 0 ? '0px' : '50px',
+                        width: column.width,
+                        minWidth: column.width,
+                        background: 'linear-gradient(to right, rgb(249 250 251), rgb(243 244 246))',
+                        boxShadow: index === fixedColumns.length - 1 ? '2px 0 4px rgba(0, 0, 0, 0.1)' : 'none'
+                      }}
+                    >
+                      <div className="truncate">{column.header}</div>
+                    </th>
+                  ))}
+                  {/* Scrollable Headers */}
+                  {scrollableColumns.map((column, index) => {
+                    const alignment = (column as any).align as 'left' | 'center' | 'right' | undefined;
+                    const thClass = `px-3 py-3 text-xs font-semibold text-gray-700 uppercase tracking-wider ${
+                      alignment === 'center' ? 'text-center' : alignment === 'right' ? 'text-right' : 'text-left'
+                    }`;
+                    return (
+                      <th
+                        key={index}
+                        className={thClass}
+                        style={{
+                          width: column.width,
+                          minWidth: column.width || '80px'
+                        }}
+                      >
+                        <div className="truncate">{column.header}</div>
+                      </th>
+                    );
+                  })}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {displayMembers.map((member, rowIndex) => {
+                  const rowRole = determineRoleCategory(member);
+                  const isAnchorRow = roleAnchorIndexMap[rowRole] === rowIndex;
+                  const isHighlighted = highlightState?.role === rowRole;
+                  return (
+                    <tr
+                      key={rowIndex}
+                      ref={isAnchorRow ? (el) => { roleRowRefs.current[rowRole] = el; } : undefined}
+                      className={`
+                        ${rowIndex % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}
+                        hover:bg-blue-50/50 transition-colors duration-200
+                        ${isHighlighted ? `ring-2 ring-indigo-400 ring-offset-2 ${rowIndex % 2 === 0 ? 'ring-offset-white' : 'ring-offset-gray-50'}` : ''}
+                      `}
+                    >
+                    {/* Fixed Cells (Number and Name) */}
+                    {fixedColumns.map((column, colIndex) => (
+                      <td
+                        key={column.key}
+                        className={`sticky z-10 px-3 py-3 text-sm ${
+                          column.key === 'number' ? 'text-center' : 'text-left'
+                        } ${colIndex === fixedColumns.length - 1 ? 'border-r border-gray-200' : ''}`}
+                        style={{
+                          left: colIndex === 0 ? '0px' : '50px',
+                          width: column.width,
+                          minWidth: column.width,
+                          backgroundColor: rowIndex % 2 === 0 ? 'white' : 'rgb(249 250 251)',
+                          boxShadow: colIndex === fixedColumns.length - 1 ? '2px 0 4px rgba(0, 0, 0, 0.1)' : 'none'
+                        }}
+                      >
+                        {column.render(member, rowIndex)}
+                      </td>
+                    ))}
+                    {/* Scrollable Cells */}
+                    {scrollableColumns.map((column, colIndex) => {
+                      const alignment = (column as any).align as 'left' | 'center' | 'right' | undefined;
+                      const value = member[column.key as keyof Member];
+                      return (
+                        <td
+                          key={colIndex}
+                          className={`px-3 py-3 text-sm ${alignment === 'center' ? 'text-center' : alignment === 'right' ? 'text-right' : 'text-left'}`}
+                          style={{
+                            width: column.width,
+                            minWidth: column.width || '80px'
+                          }}
+                        >
+                          {column.render ? column.render(member) : value}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// Member Actions Dropdown Component
+interface MemberActionsDropdownProps {
+  member: Member;
+  bacentas: Bacenta[];
+  upcomingSunday: string;
+  getConfirmationStatus: (memberId: string, date: string) => ConfirmationStatus | undefined;
+  markConfirmationHandler: (memberId: string, date: string, status: ConfirmationStatus) => void;
+  deleteMemberHandler: (memberId: string) => void;
+  showConfirmation: (
+    type: 'deleteMember' | 'createDeletionRequest' | 'deleteBacenta' | 'deleteNewBeliever' | 'clearData' | 'clearSelectedData' | 'clearAllNewBelievers',
+    data: any,
+    onConfirm: () => void
+  ) => void;
+  userProfile: any;
+  members: Member[];
+  showToast: (type: 'error' | 'success' | 'warning' | 'info', title: string, message?: string) => void;
+  updateMemberHandler: (member: Member) => Promise<void>;
+  isMinistryContext: boolean;
+  transferMemberToConstituencyHandler: (memberId: string, targetConstituencyId: string) => Promise<void>;
+}
+
+const MemberActionsDropdown: React.FC<MemberActionsDropdownProps> = ({
+  member,
+  bacentas,
+  upcomingSunday,
+  getConfirmationStatus,
+  markConfirmationHandler,
+  deleteMemberHandler,
+  showConfirmation,
+  userProfile,
+  members,
+  showToast,
+  updateMemberHandler,
+  isMinistryContext,
+  // transferMemberToConstituencyHandler
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [placement, setPlacement] = useState<'above' | 'below'>('above');
+  const [menuCoords, setMenuCoords] = useState<{ top: number; left: number } | null>(null);
+
+  const updatePosition = () => {
+    const btn = buttonRef.current?.getBoundingClientRect();
+    const viewportH = window.innerHeight;
+    const viewportW = window.innerWidth;
+    const menuW = 288; // w-72
+    const gap = 8;
+    if (!btn) return;
+    const estimatedH = 260; // rough height
+    let nextPlacement: 'above' | 'below' = 'above';
+    const spaceAbove = btn.top;
+    const spaceBelow = viewportH - btn.bottom;
+    if (spaceAbove >= estimatedH) nextPlacement = 'above';
+    else if (spaceBelow >= estimatedH) nextPlacement = 'below';
+    else nextPlacement = spaceAbove > spaceBelow ? 'above' : 'below';
+    setPlacement(nextPlacement);
+    const top = nextPlacement === 'above' ? Math.max(8, btn.top - estimatedH - gap) : Math.min(viewportH - 8, btn.bottom + gap);
+    const left = Math.min(Math.max(8, btn.right - menuW), viewportW - menuW - 8);
+    setMenuCoords({ top, left });
+  };
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Node;
+      const clickedInsideButton = dropdownRef.current?.contains(target);
+      const clickedInsideMenu = menuRef.current?.contains(target);
+      if (!clickedInsideButton && !clickedInsideMenu) {
+        setIsOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const confirmationStatus = getConfirmationStatus(member.id, upcomingSunday);
+  const isConfirmed = confirmationStatus === 'Confirmed';
+  const canDelete = canDeleteMemberWithRole(userProfile, member.role);
+  const memberWentHome = isMemberWentHome(member);
+  const memberFrozen = Boolean(member.frozen);
+  const memberBacenta = member.bacentaId ? bacentas.find(b => b.id === member.bacentaId) : undefined;
+
+  const handleConfirmationToggle = () => {
+    const newStatus: ConfirmationStatus = isConfirmed ? 'Not Confirmed' : 'Confirmed';
+    markConfirmationHandler(member.id, upcomingSunday, newStatus);
+    setIsOpen(false);
+  };
+
+  // Hide-only removal from Ministry UI (does not touch admin/source church)
+  const handleExcludeFromMinistry = async () => {
+    setIsOpen(false);
+    try {
+      const sourceChurchId = (member as any)?.sourceChurchId || userProfile?.churchId;
+      if (!sourceChurchId) {
+        showToast('error', 'Cannot remove', 'Missing source church information.');
+        return;
+      }
+      await ministryExclusionsService.excludeMember(member.id, sourceChurchId);
+      showToast('success', 'Removed from Ministry', 'This member is now hidden from the ministry. Admin-side data is unaffected.');
+    } catch (e: any) {
+      console.error('Failed to exclude member from ministry view:', e);
+      showToast('error', 'Failed', e?.message || 'Could not remove from ministry');
+    }
+  };
+
+  const handleRemove = async () => {
+    setIsOpen(false);
+
+    const isAdmin = hasAdminPrivileges(userProfile);
+
+    if (isAdmin) {
+      // Admins can delete directly
+      showConfirmation(
+        'deleteMember',
+        { member },
+        () => deleteMemberHandler(member.id)
+      );
+    } else {
+      // Leaders must create deletion requests
+      try {
+        // Check if there's already a pending request for this member
+        const hasPending = await memberDeletionRequestService.hasPendingRequest(member.id);
+
+        if (hasPending) {
+          showToast('warning', 'Request Already Exists',
+            `A deletion request for ${member.firstName} ${member.lastName || ''} is already pending admin approval.`);
+          return;
+        }
+
+        // Verify member still exists and hasn't been modified
+        const currentMember = members.find(m => m.id === member.id);
+        if (!currentMember) {
+          showToast('error', 'Member Not Found',
+            'This member no longer exists and cannot be deleted.');
+          return;
+        }
+
+        // Check if member details have changed significantly
+        if (currentMember.firstName !== member.firstName ||
+            currentMember.lastName !== member.lastName ||
+            currentMember.role !== member.role) {
+          showToast('warning', 'Member Details Changed',
+            'This member\'s details have been updated. Please refresh and try again.');
+          return;
+        }
+
+        // Show confirmation dialog explaining the approval process
+        showConfirmation(
+          'createDeletionRequest',
+          { member },
+          async () => {
+            try {
+              await memberDeletionRequestService.create({
+                memberId: member.id,
+                memberName: `${member.firstName} ${member.lastName || ''}`.trim(),
+                requestedBy: userProfile?.uid || '',
+                requestedByName: `${userProfile?.firstName || ''} ${userProfile?.lastName || ''}`.trim(),
+                requestedAt: new Date().toISOString(),
+                status: 'pending',
+                reason: '', // Could be enhanced to ask for reason
+                churchId: userProfile?.churchId || ''
+              });
+
+              showToast('success', 'Deletion Request Submitted',
+                `Your request to delete ${member.firstName} ${member.lastName || ''} has been submitted for admin approval.`);
+            } catch (error: any) {
+              console.error('Error creating deletion request:', error);
+              showToast('error', 'Request Failed',
+                'Failed to submit deletion request. Please try again.');
+            }
+          }
+        );
+      } catch (error: any) {
+        console.error('Error checking pending requests:', error);
+        showToast('error', 'Error', 'Failed to check existing requests. Please try again.');
+      }
+    }
+  };
+
+  const handleToggleWentHome = async () => {
+    const nextStatus = memberWentHome ? 'active' : 'went_home';
+    const nowIso = new Date().toISOString();
+    try {
+      await updateMemberHandler({
+        ...member,
+        memberStatus: nextStatus,
+        wentHomeDate: nextStatus === 'went_home' ? (member.wentHomeDate || nowIso) : null,
+        frozen: nextStatus === 'went_home' ? true : Boolean(memberBacenta?.frozen),
+        lastUpdated: nowIso
+      });
+      showToast(
+        'success',
+        nextStatus === 'went_home' ? 'Moved to archive' : 'Restored',
+        nextStatus === 'went_home'
+          ? `${member.firstName} ${member.lastName || ''} is now marked as Went Home.`
+          : `${member.firstName} ${member.lastName || ''} is active again.`
+      );
+    } catch (e:any) {
+      showToast('error', 'Failed', nextStatus === 'went_home' ? 'Could not move to archive' : 'Could not restore member');
+    } finally {
+      setIsOpen(false);
+    }
+  };
+
+  const handleToggleFrozen = async () => {
+    if (memberWentHome) {
+      showToast('warning', 'Restore member first', 'Went Home members stay frozen until you restore them.');
+      setIsOpen(false);
+      return;
+    }
+    if (memberFrozen && memberBacenta?.frozen) {
+      showToast('warning', 'Bacenta is frozen', 'Unfreeze the bacenta before restoring individual members.');
+      setIsOpen(false);
+      return;
+    }
+
+    const nextFrozen = !memberFrozen;
+    const nowIso = new Date().toISOString();
+    try {
+      await updateMemberHandler({
+        ...member,
+        frozen: nextFrozen,
+        lastUpdated: nowIso
+      });
+      showToast(
+        'success',
+        nextFrozen ? 'Member frozen' : 'Member unfrozen',
+        nextFrozen
+          ? `${member.firstName} ${member.lastName || ''} is excluded from counts and attendance.`
+          : `${member.firstName} ${member.lastName || ''} is active again.`
+      );
+    } catch (e:any) {
+      showToast('error', 'Failed', nextFrozen ? 'Could not freeze member' : 'Could not unfreeze member');
+    } finally {
+      setIsOpen(false);
+    }
+  };
+
+  return (
+    <div className="relative" ref={dropdownRef}>
+      {/* Actions Button */}
+      <button
+        ref={buttonRef}
+    onClick={(e) => {
+          e.stopPropagation();
+          const next = !isOpen;
+          setIsOpen(next);
+          if (next) {
+            // Compute smart placement on open
+      requestAnimationFrame(() => updatePosition());
+          }
+        }}
+        className={`p-1.5 rounded-md transition-colors duration-200 ${isOpen ? 'bg-gray-100 ring-1 ring-gray-200' : 'hover:bg-gray-100'}`}
+        title="Member actions"
+        aria-haspopup="menu"
+        aria-expanded={isOpen}
+      >
+        <EllipsisVerticalIcon className="w-4 h-4 text-gray-600" />
+      </button>
+
+      {/* Dropdown Menu */}
+      {isOpen && menuCoords && createPortal(
+        <div
+          ref={menuRef}
+          className="fixed w-72 bg-white rounded-xl shadow-xl border border-gray-100 ring-1 ring-black/5 overflow-visible z-[1000]"
+          style={{ top: menuCoords.top, left: menuCoords.left }}
+        >
+          {/* Header */}
+          <div className="px-4 py-3 bg-gradient-to-r from-gray-50 to-white border-b border-gray-100">
+            <div className="flex items-center gap-3">
+              <div className={`w-9 h-9 rounded-full flex items-center justify-center overflow-hidden flex-shrink-0 ${member.bornAgainStatus ? 'bg-green-100 ring-2 ring-green-300' : 'bg-gray-100'}`}>
+                <UserIcon className={`w-4 h-4 ${member.bornAgainStatus ? 'text-green-700' : 'text-gray-500'}`} />
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-sm text-gray-900 truncate">{`${member.firstName} ${member.lastName || ''}`.trim()}</span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-700 border border-gray-200">
+                    {(member.role || 'Member') === 'Bacenta Leader' ? '💚 GB' : (member.role || 'Member') === 'Fellowship Leader' ? '❤️ RB' : '👤 M'}
+                  </span>
+                  {memberWentHome ? (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-200" title="Went Home – archived from attendance">Went Home</span>
+                  ) : (
+                    member.frozen && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-sky-100 text-sky-700 border border-sky-200" title="Frozen – excluded from counts and absentees">Frozen</span>
+                    )
+                  )}
+                </div>
+                {member.phoneNumber && member.phoneNumber !== '-' && (
+                  <div className="text-xs text-gray-500 truncate">{member.phoneNumber}</div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Actions */}
+          <div className="p-1 relative">
+            {/* Confirm/Unconfirm for Sunday */}
+            <button
+              onClick={handleConfirmationToggle}
+              className={`w-full px-3 py-2.5 text-left hover:bg-gray-50 rounded-lg transition-colors duration-150 flex items-start gap-3 ${isConfirmed ? 'text-green-700' : 'text-gray-700'}`}
+            >
+              {isConfirmed ? (
+                <CheckIcon className="w-4 h-4 mt-0.5 text-green-600" />
+              ) : (
+                <ClockIcon className="w-4 h-4 mt-0.5 text-gray-500" />
+              )}
+              <div className="flex-1">
+                <div className="text-sm font-medium">{isConfirmed ? 'Unconfirm for Sunday' : 'Confirm for Sunday'}</div>
+                <div className="text-xs text-gray-500">{formatDisplayDate(upcomingSunday)}</div>
+              </div>
+            </button>
+
+            {/* Hide from Ministry (UI only) */}
+            {isMinistryContext && (
+              <button
+                onClick={handleExcludeFromMinistry}
+                className="w-full px-3 py-2.5 text-left hover:bg-amber-50 rounded-lg transition-colors duration-150 flex items-start gap-3 text-amber-800"
+                title="Hide this member from the ministry view only"
+              >
+                <span className="mt-0.5">🚫</span>
+                <div className="flex-1">
+                  <div className="text-sm font-medium">Remove from Ministry</div>
+                  <div className="text-xs text-amber-700">Hides in ministry app only; admin side not affected</div>
+                </div>
+              </button>
+            )}
+
+            {!memberWentHome && (
+              <button
+                onClick={handleToggleFrozen}
+                className="w-full px-3 py-2.5 text-left hover:bg-sky-50 rounded-lg transition-colors duration-150 flex items-start gap-3 text-sky-700"
+              >
+                <span className="mt-0.5">{memberFrozen ? '🌀' : '❄️'}</span>
+                <div className="flex-1">
+                  <div className="text-sm font-medium">{memberFrozen ? 'Unfreeze Member' : 'Freeze Member'}</div>
+                  <div className="text-xs text-sky-600">{memberFrozen ? 'Allow attendance again' : 'Temporarily exclude from attendance'}</div>
+                </div>
+              </button>
+            )}
+
+            {/* Went Home / Restore */}
+            <button
+              onClick={handleToggleWentHome}
+              className="w-full px-3 py-2.5 text-left hover:bg-gray-50 rounded-lg transition-colors duration-150 flex items-start gap-3 text-gray-700"
+            >
+              <span className="mt-0.5">🏡</span>
+              <div className="flex-1">
+                <div className="text-sm font-medium">{memberWentHome ? 'Restore to Active' : 'Mark Went Home'}</div>
+                <div className="text-xs text-gray-500">{memberWentHome ? 'Return to attendance tracking' : 'Archive without affecting attendance'}</div>
+              </div>
+            </button>
+
+            {/* Transfer to Constituency (only for native ministry members) */}
+            {isMinistryContext && member.isNativeMinistryMember && (
+              <button
+                onClick={() => {
+                  setIsTransferModalOpen(true);
+                  setIsOpen(false);
+                }}
+                className="w-full px-3 py-2.5 text-left hover:bg-blue-50 rounded-lg transition-colors duration-150 flex items-start gap-3 text-blue-700"
+              >
+                <ArrowRightIcon className="w-4 h-4 mt-0.5 text-blue-600" />
+                <div className="flex-1">
+                  <div className="text-sm font-medium">Transfer to Constituency</div>
+                  <div className="text-xs text-gray-500">Move to a specific constituency</div>
+                </div>
+              </button>
+            )}
+
+            {/* Danger zone */}
+            <div className="my-1 border-t border-gray-100"></div>
+            {canDelete ? (
+              <button
+                onClick={handleRemove}
+                className="w-full px-3 py-2.5 text-left hover:bg-red-50 rounded-lg transition-colors duration-150 flex items-start gap-3 text-red-700"
+              >
+                <TrashIcon className="w-4 h-4 mt-0.5 text-red-600" />
+                <div className="text-sm font-medium">Remove Member</div>
+              </button>
+            ) : (
+              <div
+                className="w-full px-3 py-2.5 flex items-start gap-3 text-gray-400 cursor-not-allowed"
+                title={member.role === 'Bacenta Leader' || member.role === 'Fellowship Leader'
+                  ? 'You cannot delete leaders. Only original administrators can delete Bacenta Leaders and Fellowship Leaders.'
+                  : 'You do not have permission to delete this member'
+                }
+              >
+                <TrashIcon className="w-4 h-4 mt-0.5 text-gray-400" />
+                <div className="text-sm">Remove Member</div>
+              </div>
+            )}
+
+            {/* Pointer arrow (auto positions based on placement) */}
+            {placement === 'above' ? (
+              <div className="pointer-events-none absolute -bottom-2 right-4 h-3 w-3 bg-white rotate-45 border-b border-r border-gray-100 ring-1 ring-black/5"></div>
+            ) : (
+              <div className="pointer-events-none absolute -top-2 right-4 h-3 w-3 bg-white rotate-45 border-t border-l border-gray-100 ring-1 ring-black/5"></div>
+            )}
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Transfer Modal */}
+      <ConstituencyTransferModal
+        isOpen={isTransferModalOpen}
+        onClose={() => setIsTransferModalOpen(false)}
+        member={member}
+      />
+    </div>
+  );
+};
+
+export default MembersTableView;

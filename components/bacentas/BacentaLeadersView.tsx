@@ -1,0 +1,322 @@
+import React, { useState, useMemo } from 'react';
+import { useAppContext } from '../../contexts/FirebaseAppContext';
+import { Member } from '../../types';
+import Table from '../ui/Table';
+import { UserIcon, EditIcon, TrashIcon, UsersIcon, TrendingUpIcon, PhoneIcon, MapPinIcon, SearchIcon } from '../icons';
+import Button from '../ui/Button';
+import Badge from '../ui/Badge';
+import Input from '../ui/Input';
+// import { formatDisplayDate } from '../../utils/dateUtils';
+import { canManageMembers, canManageHierarchy } from '../../utils/permissionUtils';
+
+const BacentaLeadersView: React.FC = () => {
+  const {
+    members,
+    bacentas,
+    attendanceRecords,
+    openMemberForm,
+    deleteMemberHandler,
+    isLoading,
+    displayedSundays,
+    openHierarchyModal,
+    showConfirmation,
+    userProfile
+  } = useAppContext();
+
+  // Check permissions
+  const canEdit = canManageMembers(userProfile);
+  const canManageHierarchyActions = canManageHierarchy(userProfile);
+  
+  const [searchTerm, setSearchTerm] = useState('');
+
+  // Filter to show only Green Bacentas (Bacenta Leaders)
+  const bacentaLeaders = useMemo(() => {
+    return members
+      .filter(member => member.role === 'Bacenta Leader')
+      .filter(member => {
+        if (searchTerm) {
+          const searchLower = searchTerm.toLowerCase();
+          return (
+            member.firstName.toLowerCase().includes(searchLower) ||
+            (member.lastName || '').toLowerCase().includes(searchLower) ||
+            member.phoneNumber.toLowerCase().includes(searchLower)
+          );
+        }
+        return true;
+      })
+      .sort((a, b) => (a.lastName || '').localeCompare(b.lastName || '') || a.firstName.localeCompare(b.firstName));
+  }, [members, searchTerm]);
+
+  // Get current month info
+  const currentDate = new Date();
+  const currentMonthName = currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  const currentMonthSundays = displayedSundays;
+
+  // Helper functions
+  const getBacentaName = (bacentaId: string) => {
+    if (!bacentaId) return 'Unassigned';
+    const bacenta = bacentas.find(b => b.id === bacentaId);
+    return bacenta?.name || 'Unknown';
+  };
+
+  const getFellowshipLeadersCount = (bacentaLeaderId: string) => {
+    return members.filter(m => m.role === 'Fellowship Leader' && m.bacentaLeaderId === bacentaLeaderId && !m.frozen).length;
+  };
+
+  const getTotalMembersUnderLeader = (bacentaLeaderId: string) => {
+    // Count Red Bacentas (fellowship leaders) + regular members under this Green Bacenta (bacenta leader) - only active members
+    return members.filter(m =>
+      !m.frozen && (
+        (m.role === 'Fellowship Leader' && m.bacentaLeaderId === bacentaLeaderId) ||
+        (m.role === 'Member' && m.bacentaId === members.find(bl => bl.id === bacentaLeaderId)?.bacentaId)
+      )
+    ).length;
+  };
+
+  const getAttendanceRate = (memberId: string) => {
+    if (currentMonthSundays.length === 0) return 0;
+    
+    const memberAttendance = attendanceRecords.filter(record =>
+      record.memberId === memberId &&
+      currentMonthSundays.includes(record.date) &&
+      record.status === 'Present'
+    ).length;
+
+    return Math.round((memberAttendance / currentMonthSundays.length) * 100);
+  };
+
+  // Define base table columns
+  const baseColumns = [
+    {
+      key: 'name',
+      header: 'Green Bacenta',
+      width: canEdit ? '25%' : '30%',
+      render: (leader: Member) => (
+        <div className="flex items-center space-x-3">
+          <div className="w-10 h-10 bg-gradient-to-br from-green-100 to-green-200 rounded-xl flex items-center justify-center">
+            <UserIcon className="w-5 h-5 text-green-600" />
+          </div>
+          <div>
+            <div className="font-semibold text-gray-900 text-lg">
+              {leader.firstName}
+            </div>
+            <div className="flex items-center space-x-1">
+              <span className="px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium flex items-center">
+                <span className="mr-1">💚</span>
+                Green Bacenta
+              </span>
+            </div>
+          </div>
+        </div>
+      ),
+    },
+    {
+      key: 'contact',
+      header: 'Contact Info',
+      width: canEdit ? '20%' : '25%',
+      render: (leader: Member) => (
+        <div className="space-y-1">
+          <div className="flex items-center space-x-2 text-sm">
+            <PhoneIcon className="w-4 h-4 text-blue-500" />
+            <span className="text-gray-700">{leader.phoneNumber || 'No phone'}</span>
+          </div>
+          <div className="flex items-center space-x-2 text-sm">
+            <MapPinIcon className="w-4 h-4 text-red-500" />
+            <span className="text-gray-600 truncate">{leader.buildingAddress || 'No address'}</span>
+          </div>
+        </div>
+      ),
+    },
+    {
+      key: 'bacenta',
+      header: 'Bacenta',
+      width: canEdit ? '15%' : '20%',
+      render: (leader: Member) => (
+        <div className="text-center">
+          <div className="font-medium text-gray-900">{getBacentaName(leader.bacentaId)}</div>
+          <div className="text-xs text-gray-500 mt-1">&nbsp;</div>
+        </div>
+      ),
+    },
+    {
+      key: 'hierarchy',
+      header: 'Leadership',
+      width: canEdit ? '15%' : '15%',
+      align: 'center' as const,
+      render: (leader: Member) => {
+        const fellowshipLeaders = getFellowshipLeadersCount(leader.id);
+        const totalMembers = getTotalMembersUnderLeader(leader.id);
+        return (
+          <div className="flex flex-col items-center">
+            <div className="flex items-center space-x-2">
+              <UsersIcon className="w-4 h-4 text-purple-500" />
+              <span className="font-semibold text-lg">{fellowshipLeaders}</span>
+            </div>
+            <div className="text-xs text-gray-500">Red Bacentas</div>
+            <div className="text-xs text-gray-600 mt-1">
+              {totalMembers} total under leadership
+            </div>
+          </div>
+        );
+      },
+    },
+    {
+      key: 'attendance',
+      header: 'Attendance',
+      width: '10%',
+      align: 'center' as const,
+      render: (leader: Member) => {
+        const rate = getAttendanceRate(leader.id);
+        return (
+          <div className="flex flex-col items-center">
+            <div className="flex items-center space-x-2">
+              <TrendingUpIcon className="w-4 h-4 text-green-500" />
+              <span className="font-semibold text-lg">{rate}%</span>
+            </div>
+            <Badge
+              color={rate >= 80 ? 'green' : rate >= 60 ? 'yellow' : 'red'}
+              size="sm"
+              className="mt-1"
+            >
+              {rate >= 80 ? 'Excellent' : rate >= 60 ? 'Good' : 'Needs Attention'}
+            </Badge>
+          </div>
+        );
+      },
+    },
+  ];
+
+  // Add actions column only for users who can edit (admins)
+  const columns = canEdit ? [
+    ...baseColumns,
+    {
+      key: 'actions',
+      header: 'Actions',
+      width: '15%',
+      align: 'center' as const,
+      render: (leader: Member) => (
+        <div className="flex items-center justify-center space-x-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={(e) => {
+              e.stopPropagation();
+              openHierarchyModal(leader);
+            }}
+            className="p-2 hover:bg-purple-100"
+            title={canManageHierarchyActions ? "Manage Hierarchy" : "View Hierarchy"}
+          >
+            <UsersIcon className="w-4 h-4 text-purple-600" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={(e) => {
+              e.stopPropagation();
+              openMemberForm(leader);
+            }}
+            className="p-2 hover:bg-blue-100"
+            title="Edit Leader"
+          >
+            <EditIcon className="w-4 h-4 text-blue-600" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={(e) => {
+              e.stopPropagation();
+              showConfirmation(
+                'deleteMember',
+                { member: leader },
+                () => deleteMemberHandler(leader.id)
+              );
+            }}
+            className="p-2 hover:bg-red-100"
+            title="Delete Leader"
+          >
+            <TrashIcon className="w-4 h-4 text-red-600" />
+          </Button>
+        </div>
+      ),
+    },
+  ] : baseColumns;
+
+  return (
+    <div className="space-y-6 desktop:space-y-8">
+      {/* Header with current month and search */}
+      <div className="glass p-4 desktop:p-5 desktop-lg:p-6 rounded-2xl desktop:rounded-xl desktop-lg:rounded-2xl shadow-lg desktop:shadow-md desktop-lg:shadow-lg">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-4 sm:space-y-0">
+          <div>
+            <h3 className="text-lg desktop:text-xl desktop-lg:text-2xl font-semibold text-gray-800 flex items-center">
+              <UserIcon className="w-5 h-5 desktop:w-6 desktop:h-6 mr-2 text-green-600" />
+              Green Bacentas - {currentMonthName}
+            </h3>
+            <p className="text-sm text-gray-600 mt-1">
+              {canEdit
+                ? 'Leadership overview and hierarchy management'
+                : 'Leadership overview - Click on any leader to view their hierarchy'}
+            </p>
+          </div>
+          <div className="w-full sm:w-64">
+            <Input
+              placeholder="Search leaders..."
+              value={searchTerm}
+              onChange={(value) => setSearchTerm(value)}
+              className="border-0 bg-white/50 focus:bg-white/80 transition-colors"
+              leftIcon={<SearchIcon className="w-4 h-4 sm:w-5 sm:h-5" />}
+              iconType="search"
+              wrapperClassName="mb-0"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Green Bacentas Table */}
+      <Table
+        data={bacentaLeaders}
+        columns={columns}
+        loading={isLoading}
+        emptyMessage={
+          searchTerm
+            ? "No green bacentas match your search"
+            : "No green bacentas assigned yet"
+        }
+        onRowClick={(leader) => canEdit ? openMemberForm(leader) : openHierarchyModal(leader)}
+      />
+
+      {/* Summary */}
+      {bacentaLeaders.length > 0 && (
+        <div className="glass p-4 desktop:p-5 desktop-lg:p-6 rounded-2xl desktop:rounded-xl desktop-lg:rounded-2xl shadow-lg desktop:shadow-md desktop-lg:shadow-lg">
+          <div className="grid grid-cols-1 md:grid-cols-4 desktop:grid-cols-4 desktop-lg:grid-cols-4 gap-4 desktop:gap-6 text-sm desktop:text-base">
+            <div className="text-center">
+              <div className="font-semibold text-gray-900">Total Leaders</div>
+              <div className="text-2xl font-bold text-green-600">{bacentaLeaders.length}</div>
+            </div>
+            <div className="text-center">
+              <div className="font-semibold text-gray-900">Red Bacentas</div>
+              <div className="text-2xl font-bold text-purple-600">
+                {bacentaLeaders.reduce((sum, leader) => sum + getFellowshipLeadersCount(leader.id), 0)}
+              </div>
+            </div>
+            <div className="text-center">
+              <div className="font-semibold text-gray-900">Total Under Leadership</div>
+              <div className="text-2xl font-bold text-blue-600">
+                {bacentaLeaders.reduce((sum, leader) => sum + getTotalMembersUnderLeader(leader.id), 0)}
+              </div>
+            </div>
+            <div className="text-center">
+              <div className="font-semibold text-gray-900">Avg Attendance</div>
+              <div className="text-2xl font-bold text-orange-600">
+                {bacentaLeaders.length > 0 
+                  ? Math.round(bacentaLeaders.reduce((sum, leader) => sum + getAttendanceRate(leader.id), 0) / bacentaLeaders.length)
+                  : 0}%
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default BacentaLeadersView;

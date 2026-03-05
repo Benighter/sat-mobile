@@ -1,0 +1,768 @@
+// Admin Notification Service for SAT Mobile
+// 
+// ⚠️ IMPORTANT: This service currently uses in-memory sorting to avoid Firebase index requirements.
+// For optimal performance, create the required composite index in Firebase Console.
+// See docs/FIREBASE_INDEXES_SETUP.md for detailed instructions.
+//
+import {
+  collection,
+  doc,
+  getDocs,
+  updateDoc,
+  deleteDoc,
+  query,
+  where,
+  onSnapshot,
+  Unsubscribe,
+  writeBatch
+} from 'firebase/firestore';
+import { db } from '../firebase.config';
+import { AdminNotification, NotificationActivityType, User } from '../types';
+
+// Get church collection path for notifications
+const getNotificationCollectionPath = (churchId: string) => `churches/${churchId}/notifications`;
+
+// Current user context (will be set from auth context)
+let currentUser: User | null = null;
+let currentChurchId: string | null = null;
+
+export const setNotificationContext = (user: User | null, churchId: string | null) => {
+  currentUser = user;
+  currentChurchId = churchId;
+};
+
+// Admin Notification Service
+export const notificationService = {
+  // Create a new notification for admin(s) linked to a leader
+  create: async (
+    leaderId: string,
+    leaderName: string,
+    activityType: NotificationActivityType,
+    details: AdminNotification['details'],
+    metadata?: AdminNotification['metadata']
+  ): Promise<void> => {
+    try {
+      console.log(`🔔 Creating notification: ${activityType} by leader ${leaderId} (${leaderName})`);
+
+      if (!currentChurchId) {
+        console.error('❌ Church context not set for notification creation');
+        throw new Error('Church context not set');
+      }
+
+      if (!currentUser) {
+        console.error('❌ User context not set for notification creation');
+        throw new Error('User context not set');
+      }
+
+      // Find all admins who are linked to this leader
+      const linkedAdminIds = await getAdminsLinkedToLeader(leaderId);
+
+      if (linkedAdminIds.length === 0) {
+        console.log(`⚠️ No linked admins found for leader ${leaderId}, skipping notification creation`);
+        return;
+      }
+
+      console.log(`📤 Creating notifications for ${linkedAdminIds.length} admin(s):`, linkedAdminIds);
+
+      const notificationsRef = collection(db, getNotificationCollectionPath(currentChurchId));
+      const batch = writeBatch(db);
+
+      // Create a notification for each linked admin
+      for (const adminId of linkedAdminIds) {
+        const notificationData: Omit<AdminNotification, 'id'> = {
+          leaderId,
+          leaderName,
+          adminId,
+          activityType,
+          timestamp: new Date().toISOString(),
+          isRead: false,
+          churchId: currentChurchId,
+          details
+        };
+
+        // Only include metadata if it has actual data
+        if (metadata && Object.keys(metadata).length > 0) {
+          notificationData.metadata = metadata;
+        }
+
+        const newNotificationRef = doc(notificationsRef);
+        batch.set(newNotificationRef, notificationData);
+        console.log(`📝 Prepared notification for admin ${adminId}:`, {
+          activityType,
+          description: details.description,
+          hasMetadata: !!metadata && Object.keys(metadata).length > 0
+        });
+      }
+
+      await batch.commit();
+      console.log(`✅ Successfully created ${linkedAdminIds.length} notification(s) for activity: ${activityType}`);
+
+      // Fire-and-forget: send push notifications to each admin
+      try {
+        const { pushNotificationService } = await import('./pushNotificationService');
+        const pushPayload = pushNotificationService.createNotificationPayload({
+          id: '',
+          activityType,
+          details,
+          leaderName,
+          leaderId,
+          adminId: '',
+          timestamp: new Date().toISOString(),
+          isRead: false,
+          churchId: currentChurchId!
+        } as any);
+        for (const adminId of linkedAdminIds) {
+          pushNotificationService.sendToUser(adminId, pushPayload).catch(e =>
+            console.warn(`📲 Push to admin ${adminId} failed (non-blocking):`, e)
+          );
+        }
+      } catch (pushErr) {
+        console.warn('📲 Push notification dispatch skipped:', pushErr);
+      }
+    } catch (error: any) {
+      console.error('❌ Failed to create notification:', error);
+      console.error('Context:', { leaderId, leaderName, activityType, currentChurchId, currentUser: currentUser?.uid });
+      throw new Error(`Failed to create notification: ${error.message}`);
+    }
+  },
+
+  // Create direct notifications to specific recipients (used by birthday reminders)
+  createForRecipients: async (
+    recipients: string[],
+    activityType: NotificationActivityType,
+    description: string,
+    details: Partial<AdminNotification['details']>,
+    metadata?: AdminNotification['metadata'],
+    actor?: { id: string; name: string }
+  ): Promise<void> => {
+    try {
+      if (!currentChurchId) {
+        throw new Error('Church context not set');
+      }
+
+      const notificationsRef = collection(db, getNotificationCollectionPath(currentChurchId));
+      const batch = writeBatch(db);
+
+      for (const adminId of recipients) {
+        const notificationData: Omit<AdminNotification, 'id'> = {
+          leaderId: actor?.id || currentUser?.uid || 'system',
+          leaderName: actor?.name || currentUser?.displayName || `${currentUser?.firstName || ''} ${currentUser?.lastName || ''}`.trim() || 'System',
+          adminId,
+          activityType,
+          timestamp: new Date().toISOString(),
+          isRead: false,
+          churchId: currentChurchId,
+          details: {
+            description,
+            ...details
+          },
+          metadata
+        };
+        const newNotificationRef = doc(notificationsRef);
+        batch.set(newNotificationRef, notificationData);
+      }
+
+      await batch.commit();
+
+      // Fire-and-forget: send push notifications to each recipient
+      try {
+        const { pushNotificationService } = await import('./pushNotificationService');
+        const pushPayload = pushNotificationService.createNotificationPayload({
+          id: '',
+          activityType,
+          details: { description, ...details },
+          leaderName: actor?.name || currentUser?.displayName || 'System',
+          leaderId: actor?.id || currentUser?.uid || 'system',
+          adminId: '',
+          timestamp: new Date().toISOString(),
+          isRead: false,
+          churchId: currentChurchId!
+        } as any);
+        for (const recipientId of recipients) {
+          pushNotificationService.sendToUser(recipientId, pushPayload).catch(e =>
+            console.warn(`📲 Push to recipient ${recipientId} failed (non-blocking):`, e)
+          );
+        }
+      } catch (pushErr) {
+        console.warn('📲 Push notification dispatch skipped:', pushErr);
+      }
+    } catch (error: any) {
+      console.error('Failed to create recipient notifications:', error);
+    }
+  },
+
+  // Get notifications for the current admin
+  getForAdmin: async (adminId: string, limitCount: number = 50): Promise<AdminNotification[]> => {
+    try {
+      if (!currentChurchId) {
+        console.warn('Church context not set for notifications');
+        return []; // Return empty array instead of throwing error
+      }
+
+      const notificationsRef = collection(db, getNotificationCollectionPath(currentChurchId));
+      // Temporarily remove orderBy to avoid index requirement - sort in memory instead
+      const q = query(
+        notificationsRef,
+        where('adminId', '==', adminId)
+      );
+
+      const querySnapshot = await getDocs(q);
+      const notifications = querySnapshot.docs.map(doc => ({
+        ...doc.data(),
+        id: doc.id
+      })) as AdminNotification[];
+
+      // Sort in memory by timestamp (newest first) and apply limit
+      notifications.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+      return notifications.slice(0, limitCount);
+    } catch (error: any) {
+      console.error('Failed to fetch notifications:', error);
+      return []; // Return empty array on error
+    }
+  },
+
+  // Generic get for any user (admin or leader)
+  getForUser: async (userId: string, limitCount: number = 50): Promise<AdminNotification[]> => {
+    return notificationService.getForAdmin(userId, limitCount);
+  },
+
+  // Get unread notification count for admin
+  getUnreadCount: async (adminId: string): Promise<number> => {
+    try {
+      if (!currentChurchId) {
+        console.warn('Church context not set for unread count');
+        return 0; // Return 0 instead of throwing error
+      }
+
+      const notificationsRef = collection(db, getNotificationCollectionPath(currentChurchId));
+      const q = query(
+        notificationsRef,
+        where('adminId', '==', adminId),
+        where('isRead', '==', false)
+      );
+
+      const querySnapshot = await getDocs(q);
+      return querySnapshot.size;
+    } catch (error: any) {
+      console.error('Failed to fetch unread count:', error);
+      return 0; // Return 0 on error
+    }
+  },
+
+  // Get unread count for any user
+  getUnreadCountForUser: async (userId: string): Promise<number> => {
+    return notificationService.getUnreadCount(userId);
+  },
+
+  // Mark notification as read
+  markAsRead: async (notificationId: string): Promise<void> => {
+    try {
+      if (!currentChurchId) {
+        throw new Error('Church context not set');
+      }
+
+      const notificationRef = doc(db, getNotificationCollectionPath(currentChurchId), notificationId);
+      await updateDoc(notificationRef, {
+        isRead: true
+      });
+    } catch (error: any) {
+      throw new Error(`Failed to mark notification as read: ${error.message}`);
+    }
+  },
+
+  // Mark all notifications as read for an admin
+  markAllAsRead: async (adminId: string): Promise<void> => {
+    try {
+      if (!currentChurchId) {
+        throw new Error('Church context not set');
+      }
+
+      const notificationsRef = collection(db, getNotificationCollectionPath(currentChurchId));
+      const q = query(
+        notificationsRef,
+        where('adminId', '==', adminId),
+        where('isRead', '==', false)
+      );
+
+      const querySnapshot = await getDocs(q);
+      const batch = writeBatch(db);
+
+      querySnapshot.docs.forEach((doc) => {
+        batch.update(doc.ref, { isRead: true });
+      });
+
+      await batch.commit();
+    } catch (error: any) {
+      throw new Error(`Failed to mark all notifications as read: ${error.message}`);
+    }
+  },
+
+  // Permanently delete all notifications for an admin
+  clearAll: async (adminId: string): Promise<void> => {
+    try {
+      if (!currentChurchId) {
+        throw new Error('Church context not set');
+      }
+
+      const notificationsRef = collection(db, getNotificationCollectionPath(currentChurchId));
+      const q = query(
+        notificationsRef,
+        where('adminId', '==', adminId)
+      );
+
+      const querySnapshot = await getDocs(q);
+      if (querySnapshot.empty) return;
+
+      // Firestore batch supports up to 500 operations per batch. If there are more,
+      // process in chunks of 400 to be safe.
+      const chunkSize = 400;
+      const docs = querySnapshot.docs;
+      for (let i = 0; i < docs.length; i += chunkSize) {
+        const batch = writeBatch(db);
+        const slice = docs.slice(i, i + chunkSize);
+        slice.forEach(docSnap => batch.delete(docSnap.ref));
+        await batch.commit();
+      }
+    } catch (error: any) {
+      throw new Error(`Failed to clear all notifications: ${error.message}`);
+    }
+  },
+
+  // Delete notification
+  delete: async (notificationId: string): Promise<void> => {
+    try {
+      if (!currentChurchId) {
+        throw new Error('Church context not set');
+      }
+
+      const notificationRef = doc(db, getNotificationCollectionPath(currentChurchId), notificationId);
+      await deleteDoc(notificationRef);
+    } catch (error: any) {
+      throw new Error(`Failed to delete notification: ${error.message}`);
+    }
+  },
+
+  // Listen to notifications for an admin (real-time updates)
+  onSnapshot: (adminId: string, callback: (notifications: AdminNotification[]) => void): Unsubscribe => {
+    if (!currentChurchId) {
+      console.warn('Church context not set for notification listener');
+      // Return a dummy unsubscribe function
+      return () => { };
+    }
+
+    try {
+      const notificationsRef = collection(db, getNotificationCollectionPath(currentChurchId));
+      // Temporarily remove orderBy to avoid index requirement - sort in memory instead
+      const q = query(
+        notificationsRef,
+        where('adminId', '==', adminId)
+      );
+
+      return onSnapshot(q, (querySnapshot) => {
+        const notifications = querySnapshot.docs.map(doc => ({
+          ...doc.data(),
+          id: doc.id
+        })) as AdminNotification[];
+
+        // Sort in memory by timestamp (newest first) and apply limit
+        notifications.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+        const limitedNotifications = notifications.slice(0, 100);
+
+        callback(limitedNotifications);
+      }, (error) => {
+        console.error('Notification listener error:', error);
+        // Call callback with empty array on error
+        callback([]);
+      });
+    } catch (error) {
+      console.error('Failed to set up notification listener:', error);
+      // Return a dummy unsubscribe function
+      return () => { };
+    }
+  },
+
+  // Clean up old notifications (older than 30 days)
+  cleanupOldNotifications: async (): Promise<void> => {
+    try {
+      if (!currentChurchId) {
+        throw new Error('Church context not set');
+      }
+
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+      const notificationsRef = collection(db, getNotificationCollectionPath(currentChurchId));
+      const q = query(
+        notificationsRef,
+        where('timestamp', '<', thirtyDaysAgo.toISOString())
+      );
+
+      const querySnapshot = await getDocs(q);
+      const batch = writeBatch(db);
+
+      querySnapshot.docs.forEach((doc) => {
+        batch.delete(doc.ref);
+      });
+
+      await batch.commit();
+    } catch (error: any) {
+      throw new Error(`Failed to cleanup old notifications: ${error.message}`);
+    }
+  }
+};
+
+// Helper function to find admins linked to a specific leader
+// Uses two sources and deduplicates:
+//   1. PRIMARY: users.invitedByAdminId — updated correctly when a leader is promoted/demoted in SuperAdmin
+//   2. FALLBACK: adminInvites.createdBy — the original invite record (may be stale after a promotion)
+const getAdminsLinkedToLeader = async (leaderId: string): Promise<string[]> => {
+  try {
+    if (!currentChurchId) {
+      console.warn('No church context set for notification system');
+      return [];
+    }
+
+    console.log(`🔍 Looking for linked admins for leader ${leaderId} in church ${currentChurchId}`);
+
+    const linkedAdminIds = new Set<string>();
+
+    // ── PRIMARY SOURCE: users.invitedByAdminId ──────────────────────────────
+    // This field is updated by SuperAdmin's promoteLeaderToAdmin, so it always
+    // reflects the current admin relationship even after a role swap.
+    try {
+      const { getDoc, doc: docRef } = await import('firebase/firestore');
+      const leaderSnap = await getDoc(docRef(db, 'users', leaderId));
+      if (leaderSnap.exists()) {
+        const leaderData = leaderSnap.data();
+        const invitedByAdminId: string | null = leaderData?.invitedByAdminId || null;
+        if (invitedByAdminId) {
+          console.log(`✅ PRIMARY: leader ${leaderId} → invitedByAdminId = ${invitedByAdminId}`);
+          linkedAdminIds.add(invitedByAdminId);
+        }
+      }
+    } catch (primaryErr) {
+      console.warn('Primary admin lookup (invitedByAdminId) failed, falling back:', primaryErr);
+    }
+
+    // ── FALLBACK SOURCE: adminInvites.createdBy ─────────────────────────────
+    // Only used when the primary source returns nothing (e.g., legacy users
+    // who were invited before invitedByAdminId was introduced, or if the
+    // user doc lookup above failed).
+    if (linkedAdminIds.size === 0) {
+      try {
+        const invitesRef = collection(db, 'adminInvites');
+        const invitesQuery = query(
+          invitesRef,
+          where('invitedUserId', '==', leaderId),
+          where('status', '==', 'accepted'),
+          where('churchId', '==', currentChurchId)
+        );
+        const querySnapshot = await getDocs(invitesQuery);
+        querySnapshot.docs.forEach((doc) => {
+          const inviteData = doc.data();
+          console.log(`📋 FALLBACK invite: ${doc.id}`, {
+            createdBy: inviteData.createdBy,
+            invitedUserId: inviteData.invitedUserId,
+            status: inviteData.status,
+          });
+          if (inviteData.createdBy) {
+            linkedAdminIds.add(inviteData.createdBy);
+          }
+        });
+      } catch (fallbackErr) {
+        console.warn('Fallback admin lookup (adminInvites) failed:', fallbackErr);
+      }
+    }
+
+    const uniqueAdminIds = [...linkedAdminIds];
+    console.log(`✅ Found ${uniqueAdminIds.length} linked admin(s) for leader ${leaderId}:`, uniqueAdminIds);
+    return uniqueAdminIds;
+  } catch (error: any) {
+    console.error('❌ Failed to get linked admins:', error);
+    return [];
+  }
+};
+
+// Utility functions for creating specific notification types
+export const createNotificationHelpers = {
+  // Resolve leader display name once
+  _leaderDisplayName(): string | null {
+    if (!currentUser) return null;
+    const display = currentUser.displayName || `${currentUser.firstName || ''} ${currentUser.lastName || ''}`.trim();
+    return display && display.length > 0 ? display : 'Unknown Leader';
+  },
+
+  // Member added notification
+  memberAdded: async (leaderName: string, memberName: string, memberRole: string, bacentaName?: string) => {
+    if (!currentUser) return;
+
+    await notificationService.create(
+      currentUser.uid,
+      leaderName,
+      'member_added',
+      {
+        memberName,
+        memberRole,
+        bacentaName,
+        description: `${leaderName} added new member: ${memberName}${memberRole !== 'Member' ? ` (${memberRole})` : ''}${bacentaName ? ` to ${bacentaName}` : ''}`
+      },
+      {
+        memberRole,
+        bacentaName: bacentaName || null
+      }
+    );
+  },
+
+  // Member updated notification
+  memberUpdated: async (leaderName: string, memberName: string, changes: string[]) => {
+    if (!currentUser) return;
+
+    await notificationService.create(
+      currentUser.uid,
+      leaderName,
+      'member_updated',
+      {
+        memberName,
+        description: `${leaderName} updated member: ${memberName} (${changes.join(', ')})`
+      },
+      {
+        changes
+      }
+    );
+  },
+
+  // Member deleted notification
+  memberDeleted: async (leaderName: string, memberName: string) => {
+    if (!currentUser) return;
+
+    await notificationService.create(
+      currentUser.uid,
+      leaderName,
+      'member_deleted',
+      {
+        memberName,
+        description: `${leaderName} deleted member: ${memberName}`
+      },
+      {
+        action: 'deleted'
+      }
+    );
+  },
+
+  // Attendance confirmed notification
+  attendanceConfirmed: async (leaderName: string, attendanceDate: string, attendanceCount: number) => {
+    if (!currentUser) return;
+
+    await notificationService.create(
+      currentUser.uid,
+      leaderName,
+      'attendance_confirmed',
+      {
+        attendanceDate,
+        description: `${leaderName} confirmed attendance for ${attendanceDate}`
+      },
+      {
+        attendanceCount
+      }
+    );
+  },
+
+  // New believer added notification
+  newBelieverAdded: async (leaderName: string, newBelieverName: string) => {
+    if (!currentUser) return;
+
+    await notificationService.create(
+      currentUser.uid,
+      leaderName,
+      'new_believer_added',
+      {
+        newBelieverName,
+        description: `${leaderName} added new believer: ${newBelieverName}`
+      },
+      {
+        action: 'added'
+      }
+    );
+  },
+
+  // Guest added notification
+  guestAdded: async (leaderName: string, guestName: string, bacentaName?: string) => {
+    if (!currentUser) return;
+
+    await notificationService.create(
+      currentUser.uid,
+      leaderName,
+      'guest_added',
+      {
+        guestName,
+        bacentaName,
+        description: `${leaderName} added guest: ${guestName}${bacentaName ? ` to ${bacentaName}` : ''}`
+      },
+      {
+        bacentaName: bacentaName || null,
+        action: 'added'
+      }
+    );
+  },
+
+  // Attendance removed notification
+  attendanceRemoved: async (leaderName: string, attendanceDate: string, count: number) => {
+    if (!currentUser) return;
+
+    await notificationService.create(
+      currentUser.uid,
+      leaderName,
+      'attendance_updated',
+      {
+        attendanceDate,
+        description: `${leaderName} removed ${count} attendance confirmation${count !== 1 ? 's' : ''} for ${attendanceDate}`
+      },
+      {
+        attendanceCount: -count, // Negative to indicate removal
+        action: 'removed'
+      }
+    );
+  },
+
+  // Bacenta assignment changed
+  bacentaAssignmentChanged: async (leaderName: string, memberName: string, previousBacenta?: string, newBacenta?: string) => {
+    if (!currentUser) return;
+
+    await notificationService.create(
+      currentUser.uid,
+      leaderName,
+      'bacenta_assignment_changed',
+      {
+        memberName,
+        bacentaName: newBacenta,
+        description: `${leaderName} moved ${memberName} ${previousBacenta ? `from ${previousBacenta} ` : ''}to ${newBacenta || 'another bacenta'}`
+      },
+      {
+        previousValue: previousBacenta || undefined,
+        newValue: newBacenta || undefined
+      }
+    );
+  },
+
+  // Member freeze/unfreeze toggled
+  memberFreezeToggled: async (leaderName: string, memberName: string, frozen: boolean) => {
+    if (!currentUser) return;
+
+    await notificationService.create(
+      currentUser.uid,
+      leaderName,
+      'member_freeze_toggled',
+      {
+        memberName,
+        description: `${leaderName} ${frozen ? 'froze' : 'unfroze'} member: ${memberName}`
+      },
+      {
+        newValue: frozen ? 'frozen' : 'active'
+      }
+    );
+  },
+
+  // Outreach/Guest converted to permanent member
+  memberConverted: async (leaderName: string, personName: string, source: 'guest' | 'outreach') => {
+    if (!currentUser) return;
+
+    await notificationService.create(
+      currentUser.uid,
+      leaderName,
+      'member_converted',
+      {
+        memberName: personName,
+        description: `${leaderName} converted ${personName} from ${source === 'guest' ? 'guest' : 'outreach'} to permanent member`
+      },
+      {
+        source
+      }
+    );
+  },
+
+  // Bacenta meeting record created
+  meetingRecordAdded: async (
+    leaderName: string,
+    bacentaName: string,
+    date: string,
+    totals: { attendance?: number; firstTimers?: number; converts?: number; cash?: number; online?: number; offering?: number }
+  ) => {
+    if (!currentUser) return;
+
+    const description = `${leaderName} added bacenta meeting • ${bacentaName} • ${date}`;
+    await notificationService.create(
+      currentUser.uid,
+      leaderName,
+      'meeting_record_added',
+      {
+        bacentaName,
+        attendanceDate: date,
+        description
+      },
+      {
+        attendanceCount: totals.attendance ?? undefined,
+        firstTimers: totals.firstTimers ?? undefined,
+        converts: totals.converts ?? undefined,
+        cashOffering: totals.cash ?? undefined,
+        onlineOffering: totals.online ?? undefined,
+        totalOffering: totals.offering ?? undefined
+      }
+    );
+  },
+
+  // Bacenta meeting record updated
+  meetingRecordUpdated: async (
+    leaderName: string,
+    bacentaName: string,
+    date: string,
+    changes?: string[],
+    totals?: { attendance?: number; firstTimers?: number; converts?: number; cash?: number; online?: number; offering?: number }
+  ) => {
+    if (!currentUser) return;
+
+    const description = `${leaderName} updated bacenta meeting • ${bacentaName} • ${date}${changes && changes.length ? ` (${changes.join(', ')})` : ''}`;
+    await notificationService.create(
+      currentUser.uid,
+      leaderName,
+      'meeting_record_updated',
+      {
+        bacentaName,
+        attendanceDate: date,
+        description
+      },
+      {
+        changes,
+        attendanceCount: totals?.attendance ?? undefined,
+        firstTimers: totals?.firstTimers ?? undefined,
+        converts: totals?.converts ?? undefined,
+        cashOffering: totals?.cash ?? undefined,
+        onlineOffering: totals?.online ?? undefined,
+        totalOffering: totals?.offering ?? undefined
+      }
+    );
+  },
+
+  // Bacenta meeting record deleted
+  meetingRecordDeleted: async (
+    leaderName: string,
+    bacentaName: string,
+    date: string
+  ) => {
+    if (!currentUser) return;
+
+    const description = `${leaderName} deleted bacenta meeting • ${bacentaName} • ${date}`;
+    await notificationService.create(
+      currentUser.uid,
+      leaderName,
+      'meeting_record_deleted',
+      {
+        bacentaName,
+        attendanceDate: date,
+        description
+      },
+      {
+        action: 'deleted'
+      }
+    );
+  }
+};

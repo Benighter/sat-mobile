@@ -1,0 +1,1025 @@
+import React, { useEffect, useMemo, useState } from 'react';
+import { useAppContext } from '../../contexts/FirebaseAppContext';
+import { getTuesdayToSundayRange, getPreviousPrayerWeekAnchor, getNextPrayerWeekAnchor, formatFullDate, getTuesdayOfWeek } from '../../utils/dateUtils';
+import { hasAdminPrivileges } from '../../utils/permissionUtils';
+import { CheckIcon, XMarkIcon, ChevronLeftIcon, ChevronRightIcon, CalendarIcon, ClipboardIcon, SearchIcon } from '../icons';
+import { Member, PrayerStatus, TabKeys } from '../../types';
+import { getPrayerSessionInfo } from '../../utils/prayerUtils';
+import EditPrayerTimesModal from './EditPrayerTimesModal';
+
+const PrayerView: React.FC = () => {
+  const { members, bacentas, prayerRecords, prayerSchedules, markPrayerHandler, clearPrayerHandler, savePrayerScheduleHandler, userProfile, switchTab, showToast } = useAppContext();
+  const [anchorDate, setAnchorDate] = useState<string>(getTuesdayToSundayRange()[0]);
+  const [searchTerm, setSearchTerm] = useState<string>('');
+  const [bacentaFilter, setBacentaFilter] = useState<string>(''); // empty => all
+  type RoleFilter = 'all' | 'Bacenta Leader' | 'Fellowship Leader' | 'Assistant' | 'Admin' | 'Member';
+  const [roleFilter, setRoleFilter] = useState<RoleFilter>('all');
+  const coerceRoleFilter = (v: string): RoleFilter => {
+    if (v === 'Bacenta Leader' || v === 'Fellowship Leader' || v === 'Assistant' || v === 'Admin' || v === 'Member' || v === 'all') return v;
+    return 'all';
+  };
+
+  // Prayer times modal state
+  const [isEditTimesModalOpen, setIsEditTimesModalOpen] = useState(false);
+  const [editingDate, setEditingDate] = useState<string | null>(null);
+
+  // const allowEditPreviousSundays = userProfile?.preferences?.allowEditPreviousSundays ?? false;
+  const isAdmin = hasAdminPrivileges(userProfile);
+
+  // Admin day-toggle state
+  const [dayToggleSaving, setDayToggleSaving] = useState<string | null>(null);
+
+  // Day name mapping for week dates (index matches weekDates array: Tue=0...Sun=5)
+  const DAY_KEYS: Array<'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday'> = [
+    'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'
+  ];
+
+  // Quickly toggle a day's disabled status for the current week only
+  const handleQuickDayToggle = async (dayIndex: number) => {
+    if (!isAdmin || dayToggleSaving) return;
+    const date = weekDates[dayIndex];
+    const dayKey = DAY_KEYS[dayIndex];
+    const weekStart = weekDates[0];
+    const today = new Date().toISOString().slice(0, 10);
+
+    // Find existing week-specific schedule or build one from the default
+    const existingWeekSchedule = prayerSchedules.find(s => !s.isPermanent && s.weekStart === weekStart);
+    const defaultSchedule = prayerSchedules.find(s => s.isPermanent && s.id === 'default');
+    const baseSchedule = existingWeekSchedule || defaultSchedule;
+
+    // Check current disabled state
+    const currentDisabledFrom = existingWeekSchedule?.disabledDays?.[dayKey]
+      ?? defaultSchedule?.disabledDays?.[dayKey];
+    const isCurrentlyDisabled = !!(currentDisabledFrom && date >= currentDisabledFrom);
+
+    const defaultTimes = {
+      tuesday: { start: '04:30', end: '06:30' },
+      wednesday: { start: '04:00', end: '06:00' },
+      thursday: { start: '04:00', end: '06:00' },
+      friday: { start: '04:30', end: '06:30' },
+      saturday: { start: '05:00', end: '07:00' },
+      sunday: { start: '05:00', end: '07:00' }
+    };
+
+    const newDisabledDays = { ...(existingWeekSchedule?.disabledDays || defaultSchedule?.disabledDays || {}) };
+    if (isCurrentlyDisabled) {
+      delete newDisabledDays[dayKey]; // re-enable
+    } else {
+      newDisabledDays[dayKey] = today; // disable from today
+    }
+
+    const schedule = {
+      id: weekStart,
+      weekStart,
+      isPermanent: false,
+      times: baseSchedule?.times || defaultTimes,
+      disabledDays: newDisabledDays
+    };
+
+    setDayToggleSaving(dayKey);
+    try {
+      await savePrayerScheduleHandler(schedule);
+      const label = dayKey.charAt(0).toUpperCase() + dayKey.slice(1);
+      showToast('success', isCurrentlyDisabled ? `${label} Enabled` : `${label} Disabled`,
+        isCurrentlyDisabled
+          ? `${label} is now active for this week`
+          : `${label} has been removed from this week's schedule`);
+    } catch (err: any) {
+      showToast('error', 'Failed to update', err?.message || 'Could not update day schedule');
+    } finally {
+      setDayToggleSaving(null);
+    }
+  };
+
+  // Delayed sorting state to prevent immediate reordering when toggling prayer status
+  const [sortingEnabled, setSortingEnabled] = useState<boolean>(true);
+  const [sortDelayTimer, setSortDelayTimer] = useState<NodeJS.Timeout | null>(null);
+
+  // Auto-mark missed state
+  const [autoMarkTimer, setAutoMarkTimer] = useState<NodeJS.Timeout | null>(null);
+  const [lastAutoMarkDate, setLastAutoMarkDate] = useState<string | null>(() => {
+    // Load from localStorage to persist across page refreshes
+    return localStorage.getItem('prayerAutoMarkLastDate');
+  });
+
+  const weekDates = useMemo(() => getTuesdayToSundayRange(anchorDate), [anchorDate]);
+
+  // Selected day for copy/bulk actions (defaults to the latest day in the current range up to today)
+  const [selectedDay, setSelectedDay] = useState<string>(() => {
+    const dates = getTuesdayToSundayRange(anchorDate);
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const valid = dates.filter(d => d <= todayStr);
+    return valid.length ? valid[valid.length - 1] : dates[0];
+  });
+
+  // Ensure selected day stays within the current week range when navigating
+  useEffect(() => {
+    if (!weekDates.includes(selectedDay)) {
+      const todayStr = new Date().toISOString().slice(0, 10);
+      const valid = weekDates.filter(d => d <= todayStr);
+      setSelectedDay(valid.length ? valid[valid.length - 1] : weekDates[0]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [weekDates.join(',')]);
+
+  // Cleanup timers on unmount
+  useEffect(() => {
+    return () => {
+      if (sortDelayTimer) {
+        clearTimeout(sortDelayTimer);
+      }
+      if (autoMarkTimer) {
+        clearTimeout(autoMarkTimer);
+      }
+    };
+  }, [sortDelayTimer, autoMarkTimer]);
+
+  // Re-enable sorting when navigating to a different week
+  useEffect(() => {
+    setSortingEnabled(true);
+    if (sortDelayTimer) {
+      clearTimeout(sortDelayTimer);
+      setSortDelayTimer(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [anchorDate]);
+
+  // Listen for storage changes to sync auto-mark state across tabs
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'prayerAutoMarkLastDate' && e.newValue) {
+        setLastAutoMarkDate(e.newValue);
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+    };
+  }, []);
+
+  // Map of memberId_date -> status for quick lookups
+  const recordsByKey = useMemo(() => {
+    const map = new Map<string, PrayerStatus>();
+    for (const r of prayerRecords) {
+      map.set(`${r.memberId}_${r.date}`, r.status);
+    }
+    return map;
+  }, [prayerRecords]);
+
+  // Session info per day: start, end, hours (uses custom schedules if available)
+  const getSessionInfoForDate = (date: string) => {
+    return getPrayerSessionInfo(date, prayerSchedules);
+  };
+
+  // Compute per-member weekly hours and combined total hours for filtered set
+  const memberWeeklyHours = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const m of members) {
+      let sum = 0;
+      for (const d of weekDates) {
+        const status = recordsByKey.get(`${m.id}_${d}`);
+        if (status === 'Prayed') sum += getSessionInfoForDate(d).hours;
+      }
+      map.set(m.id, sum);
+    }
+    return map;
+  }, [members, weekDates, recordsByKey]);
+
+  // Compute lifetime/overall prayer totals for each member (all historical "Prayed" statuses)
+  const memberLifetimePrayerTotals = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const m of members) {
+      let count = 0;
+      for (const record of prayerRecords) {
+        if (record.memberId === m.id && record.status === 'Prayed') {
+          count++;
+        }
+      }
+      map.set(m.id, count);
+    }
+    return map;
+  }, [members, prayerRecords]);
+
+  const weekday = (d: string) => {
+    const dt = new Date(d + 'T00:00:00');
+    return dt.toLocaleDateString(undefined, { weekday: 'long' });
+  };
+
+  // recordsByKey moved above to ensure availability
+
+  // Helpers matching Members table behavior
+  const getRolePriority = (role?: string) => {
+    switch (role) {
+      case 'Bacenta Leader': return 1; // Green Bacenta
+      case 'Fellowship Leader': return 2; // Red Bacenta
+      case 'Assistant': return 3;
+      case 'Admin': return 4;
+      case 'Member': return 5;
+      default: return 6;
+    }
+  };
+
+  // Filtered and sorted members
+  const filteredAndSortedMembers = useMemo<Member[]>(() => {
+    const searchLower = searchTerm.trim().toLowerCase();
+    const filtered = members.filter(m => {
+      // Hide frozen members by default
+      if (m.frozen) return false;
+      // Bacenta filter
+      if (bacentaFilter && m.bacentaId !== bacentaFilter) return false;
+      // Role filter
+      if (roleFilter !== 'all' && (m.role || 'Member') !== roleFilter) return false;
+      // Search filter (name, phone, address)
+      if (searchLower) {
+        return (
+          m.firstName.toLowerCase().includes(searchLower) ||
+          (m.lastName || '').toLowerCase().includes(searchLower) ||
+          (m.phoneNumber || '').includes(searchTerm) ||
+          (m.buildingAddress || '').toLowerCase().includes(searchLower)
+        );
+      }
+      return true;
+    });
+
+    // Only apply sorting if sorting is enabled
+    if (!sortingEnabled) {
+      return filtered;
+    }
+
+    return filtered.sort((a, b) => {
+      // Calculate current week prayer totals for each member (count of 'Prayed' statuses in current week)
+      const getPrayerTotal = (memberId: string): number => {
+        let count = 0;
+        for (const date of weekDates) {
+          const status = recordsByKey.get(`${memberId}_${date}`);
+          if (status === 'Prayed') count++;
+        }
+        return count;
+      };
+
+      const weekTotalA = getPrayerTotal(a.id);
+      const weekTotalB = getPrayerTotal(b.id);
+
+      // Check if member has at least one prayer session in current week (is "ticked")
+      const isTickedA = weekTotalA > 0;
+      const isTickedB = weekTotalB > 0;
+
+      // Get lifetime prayer totals for predictive sorting
+      const lifetimeTotalA = memberLifetimePrayerTotals.get(a.id) || 0;
+      const lifetimeTotalB = memberLifetimePrayerTotals.get(b.id) || 0;
+
+      // Primary sort: Ticked members first (those who have prayed in current week)
+      if (isTickedA && !isTickedB) return -1;
+      if (!isTickedA && isTickedB) return 1;
+
+      // Secondary sort: Within ticked group, sort by current week prayer total descending
+      if (isTickedA && isTickedB) {
+        if (weekTotalA !== weekTotalB) return weekTotalB - weekTotalA;
+      }
+
+      // Tertiary sort: Within unticked group (or when week totals are equal),
+      // use predictive sorting based on lifetime prayer totals (descending)
+      // This helps prioritize members most likely to pray based on historical patterns
+      if (lifetimeTotalA !== lifetimeTotalB) return lifetimeTotalB - lifetimeTotalA;
+
+      // Quaternary sort: If lifetime totals are equal, sort by role priority
+      const pa = getRolePriority(a.role);
+      const pb = getRolePriority(b.role);
+      if (pa !== pb) return pa - pb;
+
+      // Quinary sort: If roles are equal, sort by name
+      const last = (a.lastName || '').localeCompare(b.lastName || '');
+      if (last !== 0) return last;
+      return a.firstName.localeCompare(b.firstName);
+    });
+  }, [members, bacentaFilter, roleFilter, searchTerm, weekDates, recordsByKey, memberLifetimePrayerTotals, sortingEnabled]);
+
+  // Create a stable snapshot of member order when sorting is disabled
+  // This prevents the list from reordering while the user is actively marking attendance
+  const [memberOrderSnapshot, setMemberOrderSnapshot] = useState<string[]>([]);
+
+  // Update snapshot when sorting is re-enabled or filters change
+  useEffect(() => {
+    if (sortingEnabled) {
+      setMemberOrderSnapshot(filteredAndSortedMembers.map(m => m.id));
+    }
+  }, [sortingEnabled, filteredAndSortedMembers]);
+
+  // Apply the snapshot order when sorting is disabled
+  const filteredMembers = useMemo<Member[]>(() => {
+    if (sortingEnabled || memberOrderSnapshot.length === 0) {
+      return filteredAndSortedMembers;
+    }
+
+    // Preserve the snapshot order
+    const memberMap = new Map(filteredAndSortedMembers.map(m => [m.id, m]));
+    const ordered: Member[] = [];
+
+    // First, add members in the snapshot order
+    for (const id of memberOrderSnapshot) {
+      const member = memberMap.get(id);
+      if (member) {
+        ordered.push(member);
+        memberMap.delete(id);
+      }
+    }
+
+    // Then add any new members that weren't in the snapshot (e.g., from filter changes)
+    for (const member of memberMap.values()) {
+      ordered.push(member);
+    }
+
+    return ordered;
+  }, [sortingEnabled, filteredAndSortedMembers, memberOrderSnapshot]);
+
+  const combinedWeeklyHours = useMemo(() => {
+    return (filteredMembers || []).reduce((acc, m) => acc + (memberWeeklyHours.get(m.id) || 0), 0);
+  }, [filteredMembers, memberWeeklyHours]);
+
+  const onToggle = async (memberId: string, date: string) => {
+    const key = `${memberId}_${date}`;
+    const current = recordsByKey.get(key);
+
+    // Disable sorting to prevent immediate reordering
+    setSortingEnabled(false);
+
+    // Clear any existing timer
+    if (sortDelayTimer) {
+      clearTimeout(sortDelayTimer);
+    }
+
+    // Set a new timer to re-enable sorting after 3 seconds of inactivity
+    const newTimer = setTimeout(() => {
+      setSortingEnabled(true);
+      setSortDelayTimer(null);
+    }, 3000);
+
+    setSortDelayTimer(newTimer);
+
+    // Perform the toggle action
+    if (!current) {
+      await markPrayerHandler(memberId, date, 'Prayed');
+    } else if (current === 'Prayed') {
+      await markPrayerHandler(memberId, date, 'Missed');
+    } else {
+      await clearPrayerHandler(memberId, date);
+    }
+  };
+
+  // Prayer editability rules:
+  // - Future dates: not editable for anyone
+  // - Past dates: only admins can edit
+  // - Today: leaders can edit
+  const isPrayerDateEditable = (date: string) => {
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const target = new Date(date + 'T00:00:00');
+    if (target.getTime() > startOfToday.getTime()) return false; // future date
+    if (isAdmin) return true; // admin can edit past and today
+    return target.getTime() === startOfToday.getTime(); // leaders: only today
+  };
+
+  // Auto-mark members as "Missed" after prayer session ends
+  const autoMarkMissedForDate = async (date: string) => {
+    // Check if we've already auto-marked for this date
+    if (lastAutoMarkDate === date) {
+      return; // Already auto-marked for this date
+    }
+
+    // Only auto-mark if the date is editable
+    if (!isPrayerDateEditable(date)) {
+      return;
+    }
+
+    // Get all members who need to be marked as missed
+    const toMark: { id: string; name: string }[] = [];
+    for (const m of members) {
+      // Skip frozen members
+      if (m.frozen) continue;
+
+      const key = `${m.id}_${date}`;
+      const status = recordsByKey.get(key);
+
+      // Only mark if no status exists yet (not Prayed or Missed)
+      if (!status) {
+        toMark.push({ id: m.id, name: m.firstName });
+      }
+    }
+
+    if (toMark.length === 0) {
+      return; // Nothing to mark
+    }
+
+    try {
+      // Mark all unmarked members as Missed
+      const promises = toMark.map(m => markPrayerHandler(m.id, date, 'Missed'));
+      await Promise.all(promises);
+
+      // Update last auto-mark date
+      setLastAutoMarkDate(date);
+      localStorage.setItem('prayerAutoMarkLastDate', date);
+
+      // Show success notification
+      const weekdayLabel = new Date(date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'long' });
+      showToast(
+        'success',
+        'Auto-marked Missed',
+        `Automatically marked ${toMark.length} member${toMark.length !== 1 ? 's' : ''} as Missed for ${weekdayLabel}'s prayer session`
+      );
+    } catch (error: any) {
+      console.error('Auto-mark missed failed:', error);
+      showToast('error', 'Auto-mark Failed', error?.message || 'Failed to auto-mark members as missed');
+    }
+  };
+
+  // Schedule auto-mark for today's prayer session
+  useEffect(() => {
+    // Clear any existing timer
+    if (autoMarkTimer) {
+      clearTimeout(autoMarkTimer);
+      setAutoMarkTimer(null);
+    }
+
+    const scheduleAutoMark = () => {
+      const now = new Date();
+      const todayStr = now.toISOString().slice(0, 10);
+
+      // Check if today is a prayer day (Tuesday-Sunday)
+      const dayOfWeek = now.getDay(); // 0=Sun, 1=Mon, 2=Tue...6=Sat
+      if (dayOfWeek === 1) {
+        // Monday is not a prayer day
+        return;
+      }
+
+      // Get session info for today
+      const sessionInfo = getSessionInfoForDate(todayStr);
+      if (!sessionInfo.end || sessionInfo.end === '00:00') {
+        return; // No valid session
+      }
+
+      // Parse session end time (format: "HH:MM")
+      const [endHour, endMinute] = sessionInfo.end.split(':').map(Number);
+
+      // Calculate auto-mark time (1 minute after session ends)
+      const autoMarkTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), endHour, endMinute + 1, 0, 0);
+
+      // Calculate milliseconds until auto-mark time
+      const msUntilAutoMark = autoMarkTime.getTime() - now.getTime();
+
+      if (msUntilAutoMark > 0) {
+        // Schedule auto-mark for the future
+        const timer = setTimeout(() => {
+          autoMarkMissedForDate(todayStr);
+        }, msUntilAutoMark);
+        setAutoMarkTimer(timer);
+      } else {
+        // Auto-mark time has already passed today
+        // Check if we should run it now (user came online late)
+        const timeSinceAutoMark = now.getTime() - autoMarkTime.getTime();
+        const oneHour = 60 * 60 * 1000;
+
+        // Only auto-mark if less than 1 hour has passed since the scheduled time
+        // This prevents auto-marking if the user opens the app much later in the day
+        if (timeSinceAutoMark < oneHour && lastAutoMarkDate !== todayStr) {
+          autoMarkMissedForDate(todayStr);
+        }
+      }
+    };
+
+    // Initial schedule
+    scheduleAutoMark();
+
+    // Set up periodic check every 5 minutes to handle edge cases
+    // (e.g., user keeps app open across the auto-mark time)
+    const periodicCheckInterval = setInterval(() => {
+      scheduleAutoMark();
+    }, 5 * 60 * 1000); // Check every 5 minutes
+
+    // Cleanup on unmount or when dependencies change
+    return () => {
+      if (autoMarkTimer) {
+        clearTimeout(autoMarkTimer);
+      }
+      clearInterval(periodicCheckInterval);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [members, recordsByKey, lastAutoMarkDate]);
+
+  // Helper to get bacenta name (no longer used in copy formatting)
+
+  // Build clean text for a day: ONLY prayed names (no bacenta groups)
+  const buildCopyTextForDay = (date: string) => {
+    const weekdayLabel = new Date(date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'long' });
+    const prayed: Member[] = [];
+    for (const m of filteredMembers) {
+      const s = recordsByKey.get(`${m.id}_${date}`);
+      if (s === 'Prayed') prayed.push(m);
+    }
+
+    // Sort by last name then first name
+    prayed.sort((a, b) => (a.lastName || '').localeCompare(b.lastName || '') || a.firstName.localeCompare(b.firstName));
+
+    const header = `Prayer — ${weekdayLabel}, ${formatFullDate(date)}`;
+    if (prayed.length === 0) {
+      return `${header}\n\nNo prayed records yet.`;
+    }
+    const lines: string[] = [header, ''];
+    prayed.forEach((m, idx) => {
+      const fullName = `${m.firstName}${m.lastName ? ' ' + m.lastName : ''}`.trim();
+      lines.push(`${idx + 1}. ${fullName}`);
+    });
+    lines.push('', `Total: ${prayed.length}`);
+    return lines.join('\n');
+  };
+
+  const handleCopyDay = async () => {
+    try {
+      const text = buildCopyTextForDay(selectedDay);
+      await navigator.clipboard.writeText(text);
+      showToast('success', 'Copied', `Prayer attendance for ${formatFullDate(selectedDay)} copied to clipboard`);
+    } catch (err: any) {
+      console.error('Copy failed', err);
+      showToast('error', 'Copy Failed', err?.message || 'Unable to copy to clipboard');
+    }
+  };
+
+  // Removed bulk mark missed feature per request
+  // Bulk mark "Missed" for selected day: marks every filtered member who is NOT marked "Prayed"
+  const [bulkMarkLoading, setBulkMarkLoading] = useState(false);
+  const handleAutoMarkMissedForDay = async () => {
+    if (bulkMarkLoading) return;
+    const editable = isPrayerDateEditable(selectedDay);
+    if (!editable) {
+      const now = new Date();
+      const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const target = new Date(selectedDay + 'T00:00:00');
+      const isFuture = target.getTime() > startOfToday.getTime();
+      showToast(
+        'warning',
+        'Not allowed',
+        isFuture ? 'Future date cannot be edited' : 'Past dates are editable by admins only'
+      );
+      return;
+    }
+
+    setBulkMarkLoading(true);
+    try {
+      let toMiss: { id: string; name: string }[] = [];
+      let alreadyMissed = 0;
+      let prayed = 0;
+
+      for (const m of filteredMembers) {
+        if (m.frozen) continue; // keep frozen out of bulk ops
+        const key = `${m.id}_${selectedDay}`;
+        const status = recordsByKey.get(key);
+        if (status === 'Prayed') {
+          prayed += 1;
+          continue;
+        }
+        if (status === 'Missed') {
+          alreadyMissed += 1;
+          continue;
+        }
+        toMiss.push({ id: m.id, name: m.firstName });
+      }
+
+      if (toMiss.length === 0) {
+        showToast('info', 'Nothing to do', prayed
+          ? `All editable members are already marked (Prayed: ${prayed}, Missed: ${alreadyMissed}).`
+          : 'No members to mark for this day.');
+        return;
+      }
+
+      const ops = toMiss.map(m => markPrayerHandler(m.id, selectedDay, 'Missed'));
+      const results = await Promise.allSettled(ops);
+      const success = results.filter(r => r.status === 'fulfilled').length;
+      const failed = results.length - success;
+
+      showToast(
+        failed ? 'warning' : 'success',
+        failed ? 'Marked with some errors' : 'Marked missed',
+        `Missed: ${success} • Already missed: ${alreadyMissed} • Prayed (skipped): ${prayed}${failed ? ` • Failed: ${failed}` : ''}`
+      );
+    } catch (e: any) {
+      console.error('Bulk mark missed failed', e);
+      showToast('error', 'Bulk mark failed', e?.message || 'Unexpected error while marking missed');
+    } finally {
+      setBulkMarkLoading(false);
+    }
+  };
+
+  return (
+    <div className="container mx-auto max-w-7xl px-3 sm:px-4 lg:px-6 space-y-4">
+      {/* Centered, clean header card */}
+      <div className="bg-white dark:bg-dark-800 rounded-lg md:rounded-xl shadow-sm border border-gray-200 dark:border-dark-600 p-4 md:p-6">
+        <div className="text-center">
+          {/* Title */}
+          <div className="flex items-center justify-center space-x-2 mb-3">
+            <CalendarIcon className="w-5 h-5 md:w-6 md:h-6 text-blue-600" />
+            <h2 className="text-xl md:text-2xl font-semibold text-gray-900">Prayer (Tue–Sun)</h2>
+          </div>
+
+          {/* Week navigation */}
+          <div className="flex items-center justify-center space-x-4 mb-3">
+            <button
+              onClick={() => setAnchorDate(getPreviousPrayerWeekAnchor(anchorDate))}
+              className="flex items-center justify-center w-10 h-10 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-lg transition-colors duration-200 shadow-sm"
+              aria-label="Previous week"
+              title="Previous week"
+            >
+              <ChevronLeftIcon className="w-5 h-5" />
+            </button>
+            <div className="text-sm text-gray-700 dark:text-dark-300 font-medium">
+              {formatFullDate(weekDates[0])} - {formatFullDate(weekDates[weekDates.length - 1])}
+            </div>
+            <button
+              onClick={() => setAnchorDate(getNextPrayerWeekAnchor(anchorDate))}
+              className="flex items-center justify-center w-10 h-10 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-lg transition-colors duration-200 shadow-sm"
+              aria-label="Next week"
+              title="Next week"
+            >
+              <ChevronRightIcon className="w-5 h-5" />
+            </button>
+          </div>
+
+          {/* Summary */}
+          <div className="text-sm text-gray-600 mb-2 flex items-center justify-center gap-2">
+            <span>
+              {filteredMembers.length} member{filteredMembers.length !== 1 ? 's' : ''}
+            </span>
+            <span>•</span>
+            <span>
+              {combinedWeeklyHours} h this week
+            </span>
+          </div>
+
+          {/* Admin Controls Panel - admin only */}
+          {isAdmin && (
+            <div className="mt-3 mb-2 rounded-xl border-2 border-amber-400 bg-amber-50 shadow-sm overflow-hidden">
+              {/* Panel header */}
+              <div className="flex items-center justify-between px-4 py-2.5 bg-amber-400">
+                <div className="flex items-center gap-2">
+                  <svg className="w-4 h-4 text-amber-900" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                  <span className="font-bold text-amber-900 text-sm tracking-wide">Admin Controls</span>
+                </div>
+                <span className="text-xs font-semibold bg-amber-900 text-amber-100 px-2 py-0.5 rounded-full">Admin Only</span>
+              </div>
+
+              {/* Panel body */}
+              <div className="px-4 py-3 space-y-3">
+                {/* Quick day toggles */}
+                <div>
+                  <div className="text-xs font-semibold text-amber-800 uppercase tracking-wider mb-2">This Week's Active Days</div>
+                  <div className="flex flex-wrap gap-2 justify-center">
+                    {weekDates.map((date, idx) => {
+                      const dayKey = DAY_KEYS[idx];
+                      const info = getPrayerSessionInfo(date, prayerSchedules);
+                      const isDisabled = info.disabled || false;
+                      const isSaving = dayToggleSaving === dayKey;
+                      const dayLabel = new Date(date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'short' });
+                      return (
+                        <button
+                          key={date}
+                          onClick={() => handleQuickDayToggle(idx)}
+                          disabled={!!dayToggleSaving}
+                          title={isDisabled ? `Click to re-enable ${dayLabel} for this week` : `Click to remove ${dayLabel} from this week's schedule`}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border-2 transition-all duration-200 ${isSaving
+                            ? 'border-amber-300 bg-amber-100 text-amber-500 cursor-wait'
+                            : isDisabled
+                              ? 'border-red-400 bg-red-100 text-red-700 hover:bg-red-200'
+                              : 'border-green-400 bg-green-100 text-green-800 hover:bg-green-200'
+                            } disabled:opacity-60`}
+                        >
+                          <span className={`w-2 h-2 rounded-full ${isSaving ? 'bg-amber-400 animate-pulse' : isDisabled ? 'bg-red-500' : 'bg-green-500'}`} />
+                          {dayLabel}
+                          {isDisabled ? (
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
+                          ) : (
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="text-xs text-amber-700 mt-1.5 text-center">Click a day to enable or disable it for this week only</p>
+                </div>
+
+                {/* Divider */}
+                <div className="border-t border-amber-200" />
+
+                {/* Edit full schedule button */}
+                <div className="flex flex-col sm:flex-row items-center gap-2 justify-center">
+                  <button
+                    onClick={() => {
+                      setEditingDate(weekDates[0]);
+                      setIsEditTimesModalOpen(true);
+                    }}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold shadow-sm transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                    Edit Prayer Times &amp; Schedule
+                  </button>
+                  <span className="text-xs text-amber-700">or click any column header to edit that day</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Quick analytics strip */}
+          {filteredMembers.length > 0 && (
+            <div className="flex items-center justify-center gap-4 text-xs sm:text-sm text-gray-700 dark:text-dark-300 mb-2">
+              {(() => {
+                const totals = weekDates.reduce((acc, d) => {
+                  for (const m of filteredMembers) {
+                    const s = recordsByKey.get(`${m.id}_${d}`);
+                    if (s === 'Prayed') acc.prayed += 1;
+                    else if (s === 'Missed') acc.missed += 1;
+                    else acc.unmarked += 1;
+                  }
+                  return acc;
+                }, { prayed: 0, missed: 0, unmarked: 0 });
+                return (
+                  <>
+                    <span className="flex items-center gap-1"><span className="w-2 h-2 bg-green-500 rounded-full"></span> Prayed: <strong>{totals.prayed}</strong></span>
+                    <span className="flex items-center gap-1"><span className="w-2 h-2 bg-red-500 rounded-full"></span> Missed: <strong>{totals.missed}</strong></span>
+                  </>
+                );
+              })()}
+            </div>
+          )}
+
+          {/* Search, Bacenta Filter, Role Filter */}
+          <div className="flex flex-col md:flex-row md:flex-wrap items-stretch md:items-center justify-center md:justify-between gap-3">
+            <div className="sm:w-64 w-full">
+              <div className="relative">
+                <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Search members..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-10 sm:pl-12 pr-10 sm:pr-12 py-3 sm:py-2 border border-gray-300 dark:border-dark-600 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent bg-white dark:bg-dark-700 text-gray-900 dark:text-dark-100 placeholder-gray-500 dark:placeholder-dark-400 text-center search-input"
+                />
+              </div>
+            </div>
+            <div className="sm:w-64 w-full">
+              <select
+                value={bacentaFilter}
+                onChange={(e) => setBacentaFilter(e.target.value)}
+                className="w-full px-3 py-3 sm:py-2 border border-gray-300 dark:border-dark-600 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent bg-white dark:bg-dark-700 text-gray-900 dark:text-dark-100 text-center cursor-pointer"
+              >
+                <option value="">All Bacentas</option>
+                {bacentas.map(b => (
+                  <option key={b.id} value={b.id}>{b.name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="sm:w-56 w-full">
+              <select
+                value={roleFilter}
+                onChange={(e) => setRoleFilter(coerceRoleFilter(e.target.value))}
+                className="w-full px-3 py-3 sm:py-2 border border-gray-300 dark:border-dark-600 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent bg-white dark:bg-dark-700 text-gray-900 dark:text-dark-100 text-center cursor-pointer"
+              >
+                <option value="all">All Roles</option>
+                <option value="Bacenta Leader">💚 Green Bacentas</option>
+                <option value="Fellowship Leader">❤️ Red Bacentas</option>
+                <option value="Assistant">🤝 Assistants</option>
+                <option value="Admin">⚙️ Admins</option>
+                <option value="Member">👤 Members</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Day tools: copy and bulk mark (uses auto-selected day) */}
+          <div className="mt-4 flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3">
+            <div>
+              <button
+                onClick={handleCopyDay}
+                className="inline-flex items-center justify-center gap-2 px-3.5 py-2 rounded-lg border border-blue-300 text-blue-700 bg-white hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-300 shadow-sm font-medium"
+                title="Copy prayed names for selected day"
+              >
+                <ClipboardIcon className="w-4 h-4" />
+                <span>Copy Attendance</span>
+              </button>
+            </div>
+            <div>
+              {(() => {
+                const editable = isPrayerDateEditable(selectedDay);
+                const now = new Date();
+                const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                const target = new Date(selectedDay + 'T00:00:00');
+                const isFuture = target.getTime() > startOfToday.getTime();
+                const title = editable
+                  ? 'Mark all not-present members as Missed for the selected day'
+                  : (isFuture
+                    ? `Future date - cannot edit ${formatFullDate(selectedDay)}`
+                    : `Past date - only admins can edit ${formatFullDate(selectedDay)}`);
+                return (
+                  <button
+                    onClick={handleAutoMarkMissedForDay}
+                    disabled={!editable || bulkMarkLoading}
+                    className={`inline-flex items-center justify-center gap-2 px-3.5 py-2 rounded-lg border text-red-700 bg-white focus:outline-none shadow-sm font-medium focus:ring-2 ${!editable ? 'border-gray-300 text-gray-400 cursor-not-allowed opacity-60' : 'border-red-300 hover:bg-red-50 focus:ring-red-300'
+                      }`}
+                    title={title}
+                  >
+                    <XMarkIcon className="w-4 h-4" />
+                    <span>{bulkMarkLoading ? 'Marking…' : 'Mark Missed'}</span>
+                  </button>
+                );
+              })()}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-lg md:rounded-xl shadow-sm border border-gray-200 overflow-x-auto">
+        <table className="min-w-full text-sm">
+          <thead>
+            <tr className="bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200">
+              {/* Row number column */}
+              <th
+                className="px-3 py-2 text-center sticky top-0 z-30"
+                style={{ left: 0, width: '50px', minWidth: '50px', background: 'linear-gradient(to right, rgb(249 250 251), rgb(243 244 246))' }}
+              >
+                #
+              </th>
+              {/* Member column */}
+              <th
+                className="px-3 py-2 text-left sticky top-0 z-30"
+                style={{ left: 50, width: '110px', minWidth: '110px', background: 'linear-gradient(to right, rgb(249 250 251), rgb(243 244 246))', boxShadow: '2px 0 4px rgba(0,0,0,0.08)' }}
+              >
+                Member
+              </th>
+              {weekDates.map(d => {
+                const info = getSessionInfoForDate(d);
+                const isDayDisabled = info.disabled || false;
+
+                return (
+                  <th key={d} className={`px-3 py-2 text-center whitespace-nowrap sticky top-0 z-10 ${isDayDisabled ? 'bg-red-50' : 'bg-white dark:bg-dark-700'}`}>
+                    {isAdmin ? (
+                      <button
+                        onClick={() => {
+                          setEditingDate(d);
+                          setIsEditTimesModalOpen(true);
+                        }}
+                        className={`flex flex-col items-center leading-tight rounded px-2 py-1 transition-colors cursor-pointer ${isDayDisabled ? 'hover:bg-red-100' : 'hover:bg-blue-50'}`}
+                        title={isDayDisabled ? `${formatFullDate(d)} • DISABLED\nClick to edit prayer times` : `${formatFullDate(d)} • ${info.start}–${info.end}\nClick to edit prayer times`}
+                      >
+                        <span className={`font-medium ${isDayDisabled ? 'text-red-600' : ''}`}>{weekday(d)}</span>
+                        <span className={`text-xs ${isDayDisabled ? 'text-red-500 font-semibold' : 'text-gray-500'}`}>
+                          {isDayDisabled ? 'DISABLED' : `${info.start}–${info.end}`}
+                        </span>
+                      </button>
+                    ) : (
+                      <div className="flex flex-col items-center leading-tight px-2 py-1" title={isDayDisabled ? `${formatFullDate(d)} • DISABLED` : `${formatFullDate(d)} • ${info.start}–${info.end}`}>
+                        <span className={`font-medium ${isDayDisabled ? 'text-red-600' : ''}`}>{weekday(d)}</span>
+                        <span className={`text-xs ${isDayDisabled ? 'text-red-500 font-semibold' : 'text-gray-500'}`}>
+                          {isDayDisabled ? 'DISABLED' : `${info.start}–${info.end}`}
+                        </span>
+                      </div>
+                    )}
+                  </th>
+                );
+              })}
+              {/* Weekly total column */}
+              <th className="px-3 py-2 text-center whitespace-nowrap sticky top-0 z-10 bg-white dark:bg-dark-700">Total (h)</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-200">
+            {filteredMembers.length === 0 ? (
+              <tr>
+                <td className="px-3 py-6 text-center text-gray-500" colSpan={3 + weekDates.length}>
+                  {bacentaFilter || searchTerm ? 'No members match your filter' : 'No members to show (frozen members are hidden by default)'}
+                </td>
+              </tr>
+            ) : (
+              filteredMembers.map((m, rowIndex) => (
+                <tr
+                  key={m.id}
+                  className={`${rowIndex % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'} hover:bg-blue-50/50 transition-colors duration-200`}
+                >
+                  {/* Row number cell */}
+                  <td
+                    className="px-3 py-2 text-center sticky z-10"
+                    style={{ left: 0, width: '50px', minWidth: '50px', backgroundColor: rowIndex % 2 === 0 ? 'white' : 'rgb(249 250 251)' }}
+                  >
+                    <span className="text-sm font-medium text-gray-600">{rowIndex + 1}</span>
+                  </td>
+                  {/* Member cell with role badge */}
+                  <td
+                    className="px-3 py-2 sticky z-10"
+                    style={{ left: 50, width: '110px', minWidth: '110px', backgroundColor: rowIndex % 2 === 0 ? 'white' : 'rgb(249 250 251)', boxShadow: '2px 0 4px rgba(0,0,0,0.06)' }}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => switchTab({ id: TabKeys.PRAYER_MEMBER_DETAILS, name: 'Prayer Details', data: { memberId: m.id } })}
+                      className="w-full text-left flex items-center space-x-1 group"
+                      title="View prayer details"
+                    >
+                      <span className="font-semibold text-sm text-gray-900 truncate group-hover:text-blue-700">
+                        {m.firstName}
+                      </span>
+                      <span className="text-xs" title={m.role || 'Member'}>
+                        {m.role === 'Bacenta Leader' ? '💚' : m.role === 'Fellowship Leader' ? '❤️' : '👤'}
+                      </span>
+                      {m.frozen && (
+                        <span className="ml-1 text-[10px] px-1.5 py-0.5 rounded bg-sky-100 text-sky-700 border border-sky-200" title="Frozen – excluded from counts and absentees">Frozen</span>
+                      )}
+                    </button>
+                  </td>
+                  {weekDates.map(date => {
+                    const key = `${m.id}_${date}`;
+                    const status = recordsByKey.get(key);
+                    const dateEditable = isPrayerDateEditable(date);
+                    const sessionInfo = getSessionInfoForDate(date);
+                    const isDayDisabled = sessionInfo.disabled || false;
+                    const editable = dateEditable && !m.frozen && !isDayDisabled; // disable edits for frozen members and disabled days
+
+                    // Compute disabled styling and reason
+                    const now = new Date();
+                    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                    const target = new Date(date + 'T00:00:00');
+                    const isFuture = target.getTime() > startOfToday.getTime();
+
+                    const baseClasses = 'w-6 h-6 md:w-7 md:h-7 rounded border-2 flex items-center justify-center transition-all duration-200';
+                    const classes = !editable
+                      ? (isDayDisabled
+                        ? 'bg-red-100 border-red-300 cursor-not-allowed opacity-60'
+                        : (m.frozen
+                          ? 'bg-gray-200 border-gray-300 cursor-not-allowed opacity-60'
+                          : (isFuture ? 'bg-blue-50 border-blue-200 cursor-not-allowed opacity-60' : 'bg-gray-200 border-gray-300 cursor-not-allowed opacity-60')))
+                      : status === 'Prayed'
+                        ? 'bg-green-500 border-green-500 text-white hover:bg-green-600 cursor-pointer'
+                        : status === 'Missed'
+                          ? 'bg-red-500 border-red-500 text-white hover:bg-red-600 cursor-pointer'
+                          : 'bg-gray-100 border-gray-300 text-gray-400 hover:bg-gray-200 cursor-pointer';
+
+                    const title = !editable
+                      ? (isDayDisabled
+                        ? `Day disabled - prayer attendance not counted for ${formatFullDate(date)}`
+                        : (m.frozen
+                          ? 'Frozen member – prayer marking disabled'
+                          : (isFuture
+                            ? `Future date - cannot edit ${formatFullDate(date)}`
+                            : `Past date - only admins can edit ${formatFullDate(date)}`)))
+                      : `Click to ${!status ? 'mark prayed' : status === 'Prayed' ? 'mark missed' : 'clear'} for ${formatFullDate(date)}`;
+
+                    return (
+                      <td key={date} className={`px-3 py-2 text-center ${isDayDisabled ? 'bg-red-50' : ''}`}>
+                        <div className="flex justify-center">
+                          <div
+                            className={`${baseClasses} ${classes}`}
+                            onClick={editable ? (e) => { e.stopPropagation(); onToggle(m.id, date); } : undefined}
+                            title={title}
+                          >
+                            {status === 'Prayed' && (
+                              <CheckIcon className="w-4 h-4" />
+                            )}
+                            {status === 'Missed' && (
+                              <XMarkIcon className="w-4 h-4" />
+                            )}
+                          </div>
+                        </div>
+                      </td>
+                    );
+                  })}
+                  {/* Weekly total hours cell */}
+                  <td className="px-3 py-2 text-center text-sm font-medium text-gray-700">
+                    {memberWeeklyHours.get(m.id) || 0}
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Edit Prayer Times Modal */}
+      {isEditTimesModalOpen && editingDate && (
+        <EditPrayerTimesModal
+          isOpen={isEditTimesModalOpen}
+          onClose={() => {
+            setIsEditTimesModalOpen(false);
+            setEditingDate(null);
+          }}
+          onSave={async (schedule, _isPermanent) => {
+            await savePrayerScheduleHandler(schedule);
+          }}
+          weekStart={getTuesdayOfWeek(editingDate)}
+          currentSchedule={prayerSchedules.find(s => !s.isPermanent && s.weekStart === getTuesdayOfWeek(editingDate))}
+          defaultSchedule={prayerSchedules.find(s => s.isPermanent && s.id === 'default')}
+        />
+      )}
+
+      {/* Bulk mark modal removed */}
+    </div>
+  );
+};
+
+export default PrayerView;

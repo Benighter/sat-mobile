@@ -1,0 +1,639 @@
+
+export type MemberRole = 'Member' | 'Admin' | 'Assistant' | 'Fellowship Leader' | 'Bacenta Leader';
+
+export type MemberStatus = 'active' | 'went_home';
+
+export interface Member {
+  id: string;
+  firstName: string;
+  lastName?: string; // Made optional - Last name is no longer required
+  phoneNumber: string;
+  buildingAddress: string;
+  roomNumber?: string; // Room number for members
+  profilePicture?: string; // Base64 encoded image string
+  bornAgainStatus: boolean;
+  /** If true, member prays/speaks in tongues */
+  speaksInTongues?: boolean;
+  /** If true, member has been water baptized */
+  baptized?: boolean;
+  /** Optional ministry assignment for the member */
+  ministry?: string;
+  /** Optional ministry-specific position/title (e.g., Ushers: Usher at the door) */
+  ministryPosition?: string;
+  /** If true, this member is temporarily frozen (excluded from counts/absentees) */
+  frozen?: boolean;
+  /** High-level lifecycle status; 'went_home' behaves like archive */
+  memberStatus?: MemberStatus;
+  /** ISO date when the member was marked as went home */
+  wentHomeDate?: string;
+  /** If true, this member originated from an Outreach flow (born again from outreach) */
+  outreachOrigin?: boolean;
+  /**
+   * If true, this member is native to the ministry church (not synced from any constituency).
+   * In the new independent ministry app architecture, ALL members created in ministry mode
+   * should have this set to TRUE.
+   */
+  isNativeMinistryMember?: boolean;
+  // REMOVED: targetConstituencyId - transfer functionality removed with ministry independence
+  // /** Target constituency for transfer (when transferring native members to constituencies) */
+  // targetConstituencyId?: string;
+  bacentaId: string; // Renamed from congregationGroup, stores Bacenta.id, empty if unassigned
+  /**
+   * Additional bacentas this leader is linked to. The member officially belongs
+   * to `bacentaId` only (for counting), but can be linked to others for weekly
+   * structure display. Leader should not be duplicated in those linked bacentas' member lists.
+   */
+  linkedBacentaIds?: string[]; // Secondary/linked bacentas (leaders only)
+  bacentaLeaderId?: string; // For Red Bacentas (Fellowship Leaders): ID of the Green Bacenta (Bacenta Leader) they report to
+  assignedLeaderId?: string; // For Assistants and Admins: ID of the leader (Green or Red Bacenta) they are assigned to
+  role: MemberRole; // Role assignment: Member (default), Red Bacenta (Fellowship Leader), or Green Bacenta (Bacenta Leader)
+  birthday?: string; // Optional birthday field in YYYY-MM-DD format
+  createdDate: string; // ISO string
+  lastUpdated: string; // ISO string
+  /** Active flag; when false, member is hidden. Optional for legacy docs. */
+  isActive?: boolean;
+}
+
+export interface NewBeliever {
+  id: string;
+  name: string; // Required field
+  surname: string;
+  contact: string;
+  dateOfBirth: string; // ISO string, YYYY-MM-DD
+  residence: string;
+  studies: string;
+  campus: string;
+  occupation: string;
+  year: string;
+  isFirstTime: boolean; // First Time? boolean field
+  ministry: string; // Ministry dropdown selection
+  joinedDate: string; // ISO string, YYYY-MM-DD - when they joined
+  createdDate: string; // ISO string
+  lastUpdated: string; // ISO string
+  /** Active flag; when false, record is hidden. Optional for legacy docs. */
+  isActive?: boolean;
+}
+
+export type AttendanceStatus = 'Present' | 'Absent';
+
+export interface AttendanceRecord {
+  id: string; // memberId_date (YYYY-MM-DD) or newBelieverId_date (YYYY-MM-DD)
+  memberId?: string; // For regular members
+  newBelieverId?: string; // For new believers
+  date: string; // Sunday date as YYYY-MM-DD
+  status: AttendanceStatus;
+}
+
+// Tithe tracking types
+export interface TitheRecord {
+  id: string; // memberId_YYYY-MM
+  memberId: string;
+  month: string; // YYYY-MM
+  paid: boolean;
+  amount: number; // in ZAR
+  recordedAt?: string; // ISO timestamp
+  recordedBy?: string; // User ID who recorded
+  lastUpdated?: string; // ISO timestamp
+}
+
+// Transport tracking types (mirrors TitheRecord)
+export interface TransportRecord {
+  id: string; // memberId_YYYY-MM
+  memberId: string;
+  month: string; // YYYY-MM
+  paid: boolean;
+  amount: number; // in ZAR
+  recordedAt?: string; // ISO timestamp
+  recordedBy?: string; // User ID who recorded
+  lastUpdated?: string; // ISO timestamp
+}
+
+// Backward compatibility: BussingRecord now aliases TransportRecord
+export type BussingRecord = TransportRecord;
+
+// Prayer tracking types
+export type PrayerStatus = 'Prayed' | 'Missed';
+
+export interface PrayerRecord {
+  id: string; // memberId_date (YYYY-MM-DD)
+  memberId: string;
+  date: string; // Any date (Tue–Sun) as YYYY-MM-DD
+  status: PrayerStatus;
+}
+
+// Custom prayer schedule types
+export interface PrayerSchedule {
+  id: string; // 'default' for permanent schedule, or weekStart date (YYYY-MM-DD) for week-specific
+  weekStart?: string; // Tuesday date (YYYY-MM-DD) for week-specific schedules, undefined for default
+  isPermanent: boolean; // true if this is the default schedule for all future weeks
+  times: {
+    tuesday: { start: string; end: string }; // HH:MM format
+    wednesday: { start: string; end: string };
+    thursday: { start: string; end: string };
+    friday: { start: string; end: string };
+    saturday: { start: string; end: string };
+    sunday: { start: string; end: string };
+  };
+  // Disabled days tracking - maps day name to the date from which it was disabled (YYYY-MM-DD)
+  // When a day is disabled, it affects current and future dates only
+  // When re-enabled, it only affects current and future dates (past disabled days remain unaffected)
+  disabledDays?: {
+    tuesday?: string; // Date from which Tuesday is disabled (undefined = enabled)
+    wednesday?: string;
+    thursday?: string;
+    friday?: string;
+    saturday?: string;
+    sunday?: string;
+  };
+  createdAt?: string; // ISO timestamp
+  createdBy?: string; // User ID
+  updatedAt?: string; // ISO timestamp
+  updatedBy?: string; // User ID
+}
+
+// Custom Prayer Types
+export type CustomPrayerCategory = 'Personal' | 'All-night Vigil' | 'Quiet Time' | 'Other';
+
+export interface CustomPrayer {
+  id: string;
+  memberId: string;
+  name: string; // e.g., "Personal Prayer", "All-night Vigil"
+  category: CustomPrayerCategory;
+  customCategory?: string; // For 'Other' category
+
+  // Days of week (true = active on that day)
+  days: {
+    monday: boolean;
+    tuesday: boolean;
+    wednesday: boolean;
+    thursday: boolean;
+    friday: boolean;
+    saturday: boolean;
+    sunday: boolean;
+  };
+
+  // Time configuration
+  startTime: string; // HH:MM format (24-hour)
+  endTime: string; // HH:MM format (24-hour)
+
+  // Metadata
+  isActive: boolean;
+  createdAt: string; // ISO timestamp
+  createdBy: string; // User ID
+  updatedAt?: string; // ISO timestamp
+  updatedBy?: string; // User ID
+}
+
+export interface CustomPrayerRecord {
+  id: string; // customPrayerId_memberId_date
+  customPrayerId: string;
+  memberId: string;
+  date: string; // YYYY-MM-DD
+  status: 'Prayed' | 'Missed';
+  recordedAt?: string; // ISO timestamp
+  recordedBy?: string; // User ID
+}
+
+export type ConfirmationStatus = 'Confirmed' | 'Not Confirmed';
+
+export interface SundayConfirmation {
+  id: string; // memberId_date (YYYY-MM-DD) or guestId_date (YYYY-MM-DD)
+  memberId?: string; // For regular members
+  guestId?: string; // For guests/visitors
+  date: string; // Sunday date as YYYY-MM-DD
+  status: ConfirmationStatus;
+  confirmationTimestamp: string; // ISO string when confirmation was made
+  confirmedBy?: string; // User ID who made the confirmation
+  removedBy?: string; // User ID who removed the confirmation (if applicable)
+  removedAt?: string; // ISO string when confirmation was removed
+}
+
+export interface Guest {
+  id: string; // Unique guest ID
+  firstName: string;
+  lastName?: string;
+  bacentaId: string; // Required bacenta assignment
+  roomNumber?: string; // Room number for guests
+  phoneNumber?: string;
+  notes?: string; // Additional notes about the guest
+  createdDate: string; // ISO string
+  lastUpdated: string; // ISO string
+  createdBy: string; // User ID who added the guest
+}
+
+export interface Bacenta { // Renamed from CongregationGroup
+  id: string;
+  name: string;
+  // Meeting schedule configuration
+  meetingDay?: 'Wednesday' | 'Thursday'; // Day of the week for bible study
+  meetingTime?: string; // Time in HH:MM format (24-hour)
+  /** If true, this bacenta is temporarily frozen (excluded from counts/visibility along with all its members) */
+  frozen?: boolean;
+}
+
+
+export interface OutreachBacenta {
+  id: string;
+  name: string;
+}
+
+export interface OutreachMember {
+  id: string;
+  name: string; // Full name
+  phoneNumbers?: string[];
+  roomNumber?: string;
+  bacentaId: string; // OutreachBacenta.id
+  comingStatus: boolean; // Coming (Yes/No)
+  /**
+   * Sunday date (YYYY-MM-DD) for which the current comingStatus applies.
+   * If undefined or not equal to the upcoming Sunday, treat as "not coming" by default.
+   */
+  comingStatusSunday?: string;
+  notComingReason?: string; // Optional reason when not coming
+  outreachDate: string; // YYYY-MM-DD
+  createdDate: string; // ISO
+  lastUpdated: string; // ISO
+  convertedMemberId?: string; // If converted to permanent member
+  guestId?: string; // Linked guest (for confirmations/migration)
+  /** If set, links to the created 'Born Again' member record */
+  bornAgainMemberId?: string;
+  /** New flow: if set, this outreach contact is a Son of God awaiting integration */
+  sonOfGodId?: string;
+}
+
+// Sons of God (born again from outreach but not yet integrated as full members)
+export interface SonOfGod {
+  id: string;
+  name: string;
+  phoneNumber?: string;
+  roomNumber?: string;
+  outreachMemberId?: string; // link back to outreach record
+  outreachDate: string; // YYYY-MM-DD
+  bacentaId: string; // outreach bacenta context
+  integrated?: boolean; // once true, has been turned into a Member
+  integratedMemberId?: string; // resulting member id after integration
+  createdDate: string; // ISO
+  lastUpdated: string; // ISO
+}
+
+// Bacenta Meetings types
+export type MeetingAttendanceStatus = 'Present' | 'Absent';
+
+export interface BacentaMeetingRecord {
+  id: string; // memberId_date (YYYY-MM-DD)
+  memberId: string;
+  date: string; // Meeting date (Wednesday or Thursday) as YYYY-MM-DD
+  status: MeetingAttendanceStatus;
+  notes?: string; // Optional notes about the meeting attendance
+  createdDate: string; // ISO
+  lastUpdated: string; // ISO
+}
+
+// Meeting Record for storing complete meeting information
+export interface MeetingRecord {
+  id: string; // bacentaId_date (YYYY-MM-DD)
+  bacentaId: string;
+  date: string; // Meeting date as YYYY-MM-DD
+  meetingImage?: string; // Base64 image string
+  bacentaLeaderName: string;
+  messagePreached: string;
+  discussionLedBy: string;
+  /** IDs of members marked present in the Name List */
+  presentMemberIds?: string[];
+  cashOffering: number;
+  onlineOffering: number;
+  totalOffering: number;
+  converts: number;
+  firstTimers: number;
+  testimonies: number;
+  guests: string[]; // Array of guest names
+  createdAt: string; // ISO string
+  updatedAt: string; // ISO string
+  createdBy?: string; // User ID who created the record
+}
+
+export interface TabOption {
+  id: string;
+  name: string;
+  data?: any; // For storing additional context like bacenta filters, search terms, etc.
+}
+
+export enum TabKeys {
+  DASHBOARD = 'dashboard',
+  ALL_CONGREGATIONS = 'all_members', // Kept ID for now, name will change in FIXED_TABS
+  ALL_BACENTAS = 'all_bacentas',
+  ATTENDANCE_ANALYTICS = 'attendance_analytics',
+  WEEKLY_ATTENDANCE = 'weekly_attendance',
+  SUNDAY_HEAD_COUNTS = 'sunday_head_counts',
+  SUNDAY_HEAD_COUNT_SECTION = 'sunday_head_count_section',
+  SUNDAY_CONFIRMATIONS = 'sunday_confirmations',
+  NEW_BELIEVERS = 'new_believers',
+  SONS_OF_GOD = 'sons_of_god',
+  OUTREACH = 'outreach',
+  PRAYER = 'prayer',
+  PRAYER_MEMBER_DETAILS = 'prayer_member_details',
+  BACENTA_MEETINGS = 'bacenta_meetings',
+  BIRTHDAYS = 'birthdays',
+  PROFILE_SETTINGS = 'profile_settings',
+  MY_DELETION_REQUESTS = 'my_deletion_requests',
+  ADMIN_DELETION_REQUESTS = 'admin_deletion_requests',
+  COPY_MEMBERS = 'copy_members',
+  COPY_ABSENTEES = 'copy_absentees',
+  BACENTA_OUTREACH = 'bacenta_outreach',
+  MINISTRIES = 'ministries',
+  BIDIRECTIONAL_SYNC_TEST = 'bidirectional_sync_test',
+  CONTACT = 'contact',
+  CHAT = 'chat',
+  ASSIGNMENT_MANAGEMENT = 'assignment_management',
+  LEADER_HIERARCHY = 'leader_hierarchy',
+}
+
+export interface NavigationHistoryItem {
+  tabId: string;
+  timestamp: number;
+  data?: any; // For storing additional context like bacenta filters
+}
+
+export interface NavigationHistoryItem {
+  tabId: string;
+  timestamp: number;
+  data?: any; // For storing additional context like bacenta filters
+}
+
+export interface UserPreferences {
+  theme: 'light' | 'dark' | 'system';
+  allowEditPreviousSundays: boolean;
+  /** Optional custom app display name shown in header */
+  appDisplayName?: string;
+  /** Optional selected ministry name; can be used as default app name */
+  ministryName?: string;
+}
+
+export interface NotificationPreferences {
+  birthdayNotifications: {
+    enabled: boolean;
+    daysBeforeNotification: number[]; // e.g., [7, 3, 1] for 7, 3, and 1 day notifications
+    emailTime: string; // Time in HH:MM format (24-hour), e.g., "09:00"
+  };
+  emailNotifications: boolean;
+  pushNotifications: boolean;
+}
+
+export interface User {
+  id: string;
+  uid: string;
+  email: string;
+  displayName: string;
+  firstName?: string;
+  lastName?: string;
+  phoneNumber?: string;
+  profilePicture?: string;
+  churchId: string;
+  churchName?: string;
+  role: 'admin' | 'leader' | 'member';
+  /** True if this account is a Ministry Mode account (separate ministry church context) */
+  isMinistryAccount?: boolean;
+  /** Contextual church IDs e.g. default/ministry church associations */
+  contexts?: {
+    defaultChurchId?: string;
+    ministryChurchId?: string;
+  };
+  /** Access control for viewing cross-church data in Ministry Mode */
+  ministryAccess?: {
+    status: 'none' | 'pending' | 'approved' | 'revoked';
+    approvedBy?: string;
+    approvedByName?: string;
+    approvedAt?: string; // ISO timestamp
+    invitedBy?: string; // when approved via invite from ministry admin
+    invitedByName?: string;
+    notes?: string;
+  };
+  preferences?: UserPreferences;
+  notificationPreferences?: NotificationPreferences;
+  createdAt: string;
+  lastLoginAt: string;
+  lastUpdated?: string;
+  isActive: boolean;
+  isInvitedAdminLeader?: boolean; // True if this user became a leader through an admin invite
+  invitedByAdminId?: string; // UID of the admin who invited this user to become a leader
+}
+
+export interface Church {
+  id: string;
+  name: string;
+  address?: string;
+  contactInfo?: {
+    phone?: string;
+    email?: string;
+  };
+  settings?: {
+    timezone?: string;
+    defaultMinistries?: string[];
+    notificationSettings?: {
+  birthdayNotificationsEnabled: boolean;
+  // Days before birthday to notify (e.g., [7,5,3,2,1,0])
+  defaultNotificationDays: number[];
+  // Local time of day for sending notifications, 'HH:mm' (e.g., '00:00' for midnight)
+  defaultNotificationTime: string;
+    };
+  };
+  createdAt: string;
+  lastUpdated: string;
+}
+
+// Birthday Notification System Types
+export interface BirthdayNotification {
+  id: string;
+  memberId: string;
+  memberName: string;
+  memberBirthday: string; // YYYY-MM-DD format
+  bacentaId: string;
+  bacentaName: string;
+  notificationDate: string; // YYYY-MM-DD format - when notification was sent
+  daysBeforeBirthday: number; // e.g., 7, 5, 3, 2, 1, or 0 (on the day)
+  sentTo: string[]; // Array of user IDs who received the notification
+  status: 'sent' | 'failed' | 'pending';
+  emailDetails?: {
+    subject: string;
+    sentAt: string; // ISO timestamp
+    failureReason?: string;
+  };
+  createdAt: string; // ISO timestamp
+  lastUpdated: string; // ISO timestamp
+}
+
+export interface NotificationRecipient {
+  userId: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  role: 'admin' | 'leader' | 'member';
+  relationshipToMember: 'admin' | 'bacenta_leader' | 'fellowship_leader';
+  bacentaId?: string; // For leaders, the bacenta they oversee
+}
+
+export interface BirthdayEmailTemplate {
+  subject: string;
+  htmlContent: string;
+  textContent: string;
+  memberData: {
+    firstName: string;
+    lastName?: string;
+    birthday: string;
+    age: number;
+    profilePicture?: string;
+    phoneNumber: string;
+    buildingAddress: string;
+    roomNumber?: string;
+    role: MemberRole;
+    bornAgainStatus: boolean;
+    bacentaName: string;
+  };
+  recipientData: {
+    firstName: string;
+    lastName: string;
+    role: string;
+  };
+  daysUntilBirthday: number;
+}
+
+export interface AdminInvite {
+  id: string;
+  invitedUserEmail: string;
+  invitedUserId: string;
+  invitedUserName: string;
+  invitedUserChurchId: string; // Church ID of the invited user
+  invitedUserChurchName?: string; // Church name of the invited user
+  createdBy: string; // Admin UID who created the invite
+  createdByName: string; // Admin display name
+  churchId: string; // Church ID of the admin who created the invite
+  targetRole: 'leader'; // Role the invitee will get
+  status: 'pending' | 'accepted' | 'rejected' | 'revoked';
+  createdAt: string;
+  expiresAt: string;
+  respondedAt?: string;
+  revokedAt?: string; // When leader access was revoked
+  accessChurchId?: string; // Church ID that the leader should have access to
+  handledAs?: 'cross-tenant-link'; // When accepted without role change, provide cross-tenant access instead
+  isMinistryInvite?: boolean; // True if this is a ministry mode invitation
+}
+
+// Cross-tenant (admin-to-admin) access sharing
+export type CrossTenantPermission = 'read-only' | 'read-write';
+
+export interface CrossTenantInvite {
+  id: string;
+  fromAdminUid: string; // Requester who wants access
+  fromAdminName: string;
+  fromChurchId: string;
+  fromChurchName?: string;
+  toAdminUid: string; // Target admin who owns a different church
+  toAdminEmail: string;
+  toAdminName?: string;
+  permission: CrossTenantPermission; // Requested permission
+  status: 'pending' | 'accepted' | 'rejected' | 'cancelled';
+  createdAt: string;
+  respondedAt?: string;
+}
+
+export interface CrossTenantAccessLink {
+  id: string;
+  viewerUid: string; // The admin who can view/switch into another church
+  ownerUid: string; // The admin who granted access
+  ownerName?: string;
+  ownerChurchId: string;
+  ownerChurchName?: string;
+  permission: CrossTenantPermission;
+  createdAt: string;
+  revoked?: boolean;
+  revokedAt?: string;
+}
+
+// Member Deletion Request System Types
+export type DeletionRequestStatus = 'pending' | 'approved' | 'rejected';
+
+export interface MemberDeletionRequest {
+  id: string; // Auto-generated document ID
+  memberId: string; // ID of member to be deleted
+  memberName: string; // Cached member name for display purposes
+  requestedBy: string; // ID of leader who requested deletion
+  requestedByName: string; // Cached requester name for display
+  requestedAt: string; // ISO timestamp of request
+  status: DeletionRequestStatus;
+  reason?: string; // Optional reason for deletion request
+  reviewedBy?: string; // ID of admin who approved/rejected (if applicable)
+  reviewedByName?: string; // Cached reviewer name for display
+  reviewedAt?: string; // ISO timestamp of admin decision (if applicable)
+  adminNotes?: string; // Optional notes from admin during review
+  churchId: string; // Church context for the request
+  expiresAt?: string; // Optional expiration timestamp (auto-reject after 7 days)
+}
+
+// Admin Notification System Types
+export type NotificationActivityType =
+  | 'member_added'
+  | 'member_updated'
+  | 'member_deleted'
+  | 'attendance_confirmed'
+  | 'attendance_updated'
+  | 'new_believer_added'
+  | 'new_believer_updated'
+  | 'guest_added'
+  | 'bacenta_assignment_changed'
+  | 'member_freeze_toggled'
+  | 'member_converted'
+  | 'birthday_reminder'
+  // Bacenta meeting record lifecycle
+  | 'meeting_record_added'
+  | 'meeting_record_updated'
+  | 'meeting_record_deleted'
+  | 'system_message';
+
+export interface AdminNotification {
+  id: string; // Auto-generated document ID
+  leaderId: string; // ID of leader who performed the action
+  leaderName: string; // Cached leader name for display
+  adminId: string; // ID of admin who should receive this notification
+  activityType: NotificationActivityType;
+  timestamp: string; // ISO timestamp of the activity
+  isRead: boolean; // Whether the admin has read this notification
+  churchId: string; // Church context for the notification
+
+  // Activity-specific details
+  details: {
+    memberName?: string; // For member-related activities
+    memberRole?: string; // For member role changes
+    bacentaName?: string; // For bacenta-related activities
+    attendanceDate?: string; // For attendance activities
+    newBelieverName?: string; // For new believer activities
+    guestName?: string; // For guest activities
+    description: string; // Human-readable description of the activity
+  };
+
+  // Optional metadata
+  metadata?: {
+    previousValue?: string; // For update activities
+    newValue?: string; // For update activities
+    attendanceCount?: number; // For attendance activities
+    [key: string]: any; // Flexible metadata
+  };
+}
+
+// REMOVED: Ministry Access Approval Flow - Ministry app now operates independently
+// Ministry leaders get immediate access without approval workflow
+// export interface MinistryAccessRequest {
+//   id: string; // Auto ID
+//   requesterUid: string;
+//   requesterName?: string;
+//   requesterEmail?: string;
+//   ministryName: string;
+//   ministryChurchId?: string; // if known
+//   status: 'pending' | 'approved' | 'rejected' | 'cancelled';
+//   createdAt: string; // ISO
+//   updatedAt?: string; // ISO
+//   approvedBy?: string;
+//   approvedByName?: string;
+//   approvedAt?: string; // ISO
+//   rejectionReason?: string;
+//   approvalSource?: 'superadmin' | 'ministry_admin_invite';
+// }

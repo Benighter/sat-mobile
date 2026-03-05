@@ -1,0 +1,936 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* CSS Custom Properties for Theme Colors */
+:root {
+  /* Light theme colors */
+  --bg-primary: #f8fafc;
+  --bg-secondary: #f1f5f9;
+  --bg-tertiary: #e2e8f0;
+  --bg-quaternary: #cbd5e1;
+  --text-primary: #0f172a;
+  --text-secondary: #334155;
+  --text-tertiary: #64748b;
+  --border-primary: #e2e8f0;
+  --border-secondary: #cbd5e1;
+  --glass-bg: rgba(255, 255, 255, 0.25);
+  --glass-border: rgba(255, 255, 255, 0.18);
+  --scrollbar-track: rgba(255, 255, 255, 0.1);
+  --scrollbar-thumb: linear-gradient(45deg, #64748b, #475569);
+  --scrollbar-thumb-hover: linear-gradient(45deg, #475569, #334155);
+}
+
+.dark {
+  /* Dark theme colors */
+  --bg-primary: #0f172a;
+  --bg-secondary: #1e293b;
+  --bg-tertiary: #334155;
+  --bg-quaternary: #475569;
+  --text-primary: #f8fafc;
+  --text-secondary: #e2e8f0;
+  --text-tertiary: #94a3b8;
+  --border-primary: #334155;
+  --border-secondary: #475569;
+  --glass-bg: rgba(30, 41, 59, 0.25);
+  --glass-border: rgba(148, 163, 184, 0.18);
+  --scrollbar-track: rgba(0, 0, 0, 0.2);
+  --scrollbar-thumb: linear-gradient(45deg, #475569, #64748b);
+  --scrollbar-thumb-hover: linear-gradient(45deg, #64748b, #94a3b8);
+}
+
+body {
+  margin: 0;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+  background: linear-gradient(-45deg, var(--bg-primary), var(--bg-secondary), var(--bg-tertiary), var(--bg-quaternary));
+  background-size: 400% 400%;
+  animation: gradient 30s ease infinite;
+  color: var(--text-primary);
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Dashboard Progress Circle Animation */
+@keyframes dashOffset {
+  0% {
+    stroke-dashoffset: 176; /* Full circle (2 * π * 28) */
+  }
+  100% {
+    stroke-dashoffset: var(--final-offset);
+  }
+}
+
+/* Enhanced scrollbar with theme support */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+  border-radius: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+}
+
+/* Glass morphism utility with theme support */
+.glass {
+  background: var(--glass-bg);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--glass-border);
+  transition: background-color 0.3s ease, border-color 0.3s ease;
+}
+
+.glass-dark {
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--glass-border);
+}
+
+/* Optimized transitions - only for specific properties */
+button, .interactive-card, .glass {
+  transition: transform 0.2s ease, opacity 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* Prevent horizontal scroll on mobile and enable smooth scrolling */
+html, body {
+  overflow-x: hidden;
+  width: 100%;
+  max-width: 100vw;
+  scroll-behavior: smooth;
+  /* Ensure proper mobile scrolling */
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+/* Ensure smooth scrolling for all scrollable elements */
+* {
+  scroll-behavior: smooth;
+}
+
+/* Mobile scrolling optimizations */
+@media (max-width: 768px) {
+  /* Ensure body allows natural scrolling on mobile */
+  body {
+    height: auto;
+    min-height: 100vh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
+  }
+
+  /* Optimize main content scrolling on mobile */
+  main {
+    overflow: visible;
+    height: auto;
+    min-height: calc(100vh - 3rem);
+  }
+
+  /* Ensure dashboard cards are fully scrollable */
+  .dashboard-container {
+    overflow: visible;
+    height: auto;
+  }
+}
+
+/* Ensure proper box sizing */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+/* Compact Layout Utilities */
+.compact-layout {
+  /* Reduce default spacing for a more professional, dense layout */
+}
+
+.compact-layout .space-y-4 > * + * {
+  margin-top: 0.75rem !important; /* Reduce from 1rem to 0.75rem */
+}
+
+.compact-layout .space-y-6 > * + * {
+  margin-top: 1rem !important; /* Reduce from 1.5rem to 1rem */
+}
+
+.compact-layout .space-y-8 > * + * {
+  margin-top: 1.25rem !important; /* Reduce from 2rem to 1.25rem */
+}
+
+/* Reduce excessive margins in headers and sections */
+.compact-layout .mb-4 {
+  margin-bottom: 0.75rem !important;
+}
+
+.compact-layout .mb-6 {
+  margin-bottom: 1rem !important;
+}
+
+.compact-layout .mb-8 {
+  margin-bottom: 1.25rem !important;
+}
+
+.compact-layout .mt-4 {
+  margin-top: 0.75rem !important;
+}
+
+.compact-layout .mt-6 {
+  margin-top: 1rem !important;
+}
+
+.compact-layout .mt-8 {
+  margin-top: 1.25rem !important;
+}
+
+/* Custom gradient text */
+.gradient-text {
+  background: linear-gradient(45deg, #334155, #1e293b);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Floating animation */
+.floating {
+  animation: float 3s ease-in-out infinite;
+}
+
+/* Shimmer effect */
+.shimmer {
+  position: relative;
+  overflow: hidden;
+}
+
+.shimmer::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+  animation: shimmer 2s linear infinite;
+}
+
+@keyframes gradient {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+}
+
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+@keyframes toast-progress {
+  0% { width: 100%; }
+  100% { width: 0%; }
+}
+
+/* Enhanced animations for the redesigned AdminInviteManager */
+@keyframes slideInUp {
+  0% {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeInScale {
+  0% {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes pulseGlow {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(59, 130, 246, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 30px rgba(59, 130, 246, 0.5);
+  }
+}
+
+/* Utility classes for enhanced animations */
+.animate-slide-in-up {
+  animation: slideInUp 0.6s ease-out;
+}
+
+.animate-fade-in-scale {
+  animation: fadeInScale 0.5s ease-out;
+}
+
+.animate-pulse-glow {
+  animation: pulseGlow 2s ease-in-out infinite;
+}
+
+.animate-toast-progress {
+  animation: toast-progress linear forwards;
+}
+
+/* Enhanced hover effects */
+.hover-lift {
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.hover-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+}
+
+/* CSS Custom Properties for Dynamic Modal Positioning */
+:root {
+  --navbar-height: 0px;
+  --safe-area-top: env(safe-area-inset-top, 0px);
+  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-area-left: env(safe-area-inset-left, 0px);
+  --safe-area-right: env(safe-area-inset-right, 0px);
+  --total-top-offset: calc(var(--navbar-height) + var(--safe-area-top));
+  --available-height: calc(100vh - var(--total-top-offset) - var(--safe-area-bottom));
+  --available-height-dvh: calc(100dvh - var(--total-top-offset) - var(--safe-area-bottom));
+}
+
+/* Modal scroll prevention - mobile-friendly approach */
+.modal-open {
+  overflow: hidden !important;
+  position: fixed !important;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* Enhanced Modal Backdrop with Dynamic Positioning */
+.modal-backdrop {
+  /* Perfect centering using flexbox */
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+
+  /* Dynamic positioning based on navbar height */
+  position: fixed !important;
+  top: var(--total-top-offset) !important;
+  left: var(--safe-area-left) !important;
+  right: var(--safe-area-right) !important;
+  bottom: var(--safe-area-bottom) !important;
+
+  /* Dynamic height calculation */
+  height: var(--available-height) !important;
+  min-height: var(--available-height-dvh) !important;
+
+  /* Responsive padding */
+  padding: clamp(0.5rem, 2vw, 1rem) !important;
+
+  /* Scroll and touch behavior */
+  overflow-y: auto !important;
+  overscroll-behavior: contain !important;
+  -webkit-overflow-scrolling: touch !important;
+
+  /* Visual styling */
+  background: rgba(0, 0, 0, 0.5) !important;
+  backdrop-filter: blur(4px) !important;
+  z-index: 10000 !important;
+}
+
+/* Enhanced modal scrolling - mobile optimized */
+.modal-scrollable {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(156, 163, 175, 0.5) transparent;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  /* Allow touch scrolling in all directions within modal */
+  touch-action: auto;
+  /* Enable hardware acceleration for smooth scrolling */
+  -webkit-transform: translate3d(0, 0, 0);
+  transform: translate3d(0, 0, 0);
+  /* Ensure smooth scrolling */
+  scroll-behavior: smooth;
+}
+
+.modal-scrollable::-webkit-scrollbar {
+  width: 6px;
+}
+
+.modal-scrollable::-webkit-scrollbar-track {
+  background: rgba(243, 244, 246, 0.5);
+  border-radius: 3px;
+}
+
+.modal-scrollable::-webkit-scrollbar-thumb {
+  background: rgba(156, 163, 175, 0.5);
+  border-radius: 3px;
+}
+
+.modal-scrollable::-webkit-scrollbar-thumb:hover {
+  background: rgba(107, 114, 128, 0.7);
+}
+
+/* Ensure modal content doesn't interfere with background */
+.modal-content {
+  isolation: isolate;
+}
+
+/* Dynamic Modal Content Styling */
+.modal-content {
+  /* Perfect centering - no hardcoded margins */
+  margin: auto !important;
+  flex-shrink: 0 !important;
+
+  /* Responsive width constraints */
+  width: 100% !important;
+  max-width: min(90vw, 100%) !important;
+
+  /* Dynamic height based on available space */
+  max-height: calc(var(--available-height) - 2rem) !important;
+  min-height: auto !important;
+
+  /* Ensure proper isolation */
+  isolation: isolate !important;
+
+  /* Smooth transitions */
+  transition: transform 0.2s ease, opacity 0.2s ease !important;
+}
+
+/* Responsive Breakpoints for Modal Content */
+
+/* Small phones (320px - 480px) */
+@media (max-width: 480px) {
+  .modal-content {
+    max-width: 95vw !important;
+    max-height: calc(var(--available-height) - 1rem) !important;
+  }
+
+  .modal-backdrop {
+    padding: 0.5rem !important;
+  }
+}
+
+/* Large phones (481px - 768px) */
+@media (min-width: 481px) and (max-width: 768px) {
+  .modal-content {
+    max-width: 90vw !important;
+    max-height: calc(var(--available-height) - 1.5rem) !important;
+  }
+
+  .modal-backdrop {
+    padding: 0.75rem !important;
+  }
+}
+
+/* Tablets and larger (769px+) */
+@media (min-width: 769px) {
+  .modal-content {
+    max-width: min(85vw, 100%) !important;
+    max-height: calc(var(--available-height) - 2rem) !important;
+  }
+
+  .modal-backdrop {
+    padding: 1rem !important;
+  }
+}
+
+/* Desktop Modal Enhancements (1024px+) */
+@media (min-width: 1024px) {
+  .desktop-modal-backdrop {
+    backdrop-filter: blur(8px) !important;
+    background: rgba(0, 0, 0, 0.4) !important;
+    padding: 2rem !important;
+  }
+
+  .desktop-modal-content {
+    border-radius: 16px !important;
+    box-shadow: 0 25px 50px rgba(0, 0, 0, 0.25) !important;
+    max-height: 90vh !important;
+    overflow-y: auto;
+    max-width: min(80vw, 100%) !important;
+  }
+
+  /* Desktop form layouts */
+  .desktop-form {
+    max-width: none;
+  }
+
+  .desktop-form .grid {
+    gap: 1.5rem;
+  }
+
+  .desktop-form .space-y-6 > * + * {
+    margin-top: 1rem;
+  }
+
+  .desktop-form .space-y-8 > * + * {
+    margin-top: 1.5rem;
+  }
+
+  /* Desktop form sections */
+  .desktop-form-section {
+    background: rgba(249, 250, 251, 0.5);
+    border-radius: 12px;
+    padding: 1.5rem;
+    border: 1px solid rgba(229, 231, 235, 0.8);
+  }
+
+  .desktop-form-section h3 {
+    font-size: 1.25rem;
+    margin-bottom: 1rem;
+  }
+
+  /* Desktop button groups */
+  .desktop-button-group {
+    display: flex;
+    gap: 1rem;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    margin-top: 2rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid rgba(229, 231, 235, 0.8);
+  }
+
+  .desktop-button-group button {
+    min-width: 120px;
+    padding: 0.75rem 1.5rem;
+  }
+}
+
+/* Large Desktop Modal Enhancements (1280px+) */
+@media (min-width: 1280px) {
+  .desktop-modal-content {
+    max-width: min(75vw, 100%) !important;
+    border-radius: 20px !important;
+  }
+
+  .desktop-modal-backdrop {
+    padding: 3rem !important;
+  }
+
+  .desktop-form {
+    padding: 0 1rem;
+  }
+
+  .desktop-form-section {
+    padding: 2rem;
+    border-radius: 16px;
+  }
+
+  .desktop-button-group {
+    margin-top: 2.5rem;
+    padding-top: 2rem;
+  }
+}
+
+/* Ultra-wide Desktop Modal Enhancements (1536px+) */
+@media (min-width: 1536px) {
+  .desktop-modal-content {
+    max-width: min(70vw, 100%) !important;
+  }
+
+  .desktop-modal-backdrop {
+    padding: 4rem !important;
+  }
+
+  .desktop-form {
+    padding: 0 2rem;
+  }
+}
+
+/* Handle very short screens */
+@media (max-height: 500px) {
+  .modal-backdrop {
+    align-items: flex-start !important;
+    padding-top: 0.5rem !important;
+    padding-bottom: 0.5rem !important;
+  }
+
+  .modal-content {
+    max-height: calc(var(--available-height) - 1rem) !important;
+  }
+}
+
+/* Landscape orientation adjustments */
+@media (orientation: landscape) and (max-height: 600px) {
+  .modal-backdrop {
+    align-items: flex-start !important;
+    padding: 0.5rem !important;
+  }
+
+  .modal-content {
+    max-height: calc(var(--available-height) - 1rem) !important;
+  }
+}
+
+/* ===== DESKTOP RESPONSIVE DESIGN ENHANCEMENTS ===== */
+
+/* Desktop-specific layout utilities */
+@media (min-width: 1024px) {
+  /* Desktop container with better max-width */
+  .desktop-container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 0 2rem;
+  }
+
+  /* Desktop grid systems for better space utilization */
+  .desktop-grid-2 {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 2rem;
+  }
+
+  .desktop-grid-3 {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 2rem;
+  }
+
+  .desktop-grid-4 {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1.5rem;
+  }
+
+  .desktop-grid-5 {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 1.5rem;
+  }
+
+  .desktop-grid-6 {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 1rem;
+  }
+
+  /* Desktop card layouts with optimized spacing */
+  .desktop-card-compact {
+    padding: 1.25rem;
+    min-height: 140px;
+  }
+
+  .desktop-card-dense {
+    padding: 1rem;
+    min-height: 120px;
+  }
+
+  /* Desktop-optimized spacing */
+  .desktop-space-y-3 > * + * {
+    margin-top: 0.75rem;
+  }
+
+  .desktop-space-y-4 > * + * {
+    margin-top: 1rem;
+  }
+
+  .desktop-space-y-6 > * + * {
+    margin-top: 1.5rem;
+  }
+
+  /* Desktop layout density improvements */
+  .desktop-dense-layout {
+    padding: 1rem 2rem;
+  }
+
+  .desktop-dense-layout .space-y-4 > * + * {
+    margin-top: 0.75rem;
+  }
+
+  .desktop-dense-layout .space-y-6 > * + * {
+    margin-top: 1rem;
+  }
+
+  .desktop-dense-layout .space-y-8 > * + * {
+    margin-top: 1.5rem;
+  }
+
+  /* Desktop sidebar layout */
+  .desktop-sidebar-layout {
+    display: grid;
+    grid-template-columns: 300px 1fr;
+    gap: 2rem;
+    min-height: calc(100vh - 5rem);
+  }
+
+  .desktop-sidebar-layout.wide {
+    grid-template-columns: 350px 1fr;
+  }
+
+  /* Desktop two-column content layout */
+  .desktop-two-column {
+    display: grid;
+    grid-template-columns: 1fr 400px;
+    gap: 2rem;
+  }
+
+  .desktop-two-column.balanced {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  /* Desktop three-column layout */
+  .desktop-three-column {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 1.5rem;
+  }
+
+  /* Desktop masonry-style layout */
+  .desktop-masonry {
+    columns: 3;
+    column-gap: 1.5rem;
+  }
+
+  .desktop-masonry-item {
+    break-inside: avoid;
+    margin-bottom: 1.5rem;
+  }
+}
+
+/* Large desktop optimizations (1280px+) */
+@media (min-width: 1280px) {
+  .desktop-container {
+    max-width: 1600px;
+    padding: 0 3rem;
+  }
+
+  .desktop-grid-auto {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1.5rem;
+  }
+
+  .desktop-grid-auto-large {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+    gap: 2rem;
+  }
+
+  /* Enhanced desktop card layouts */
+  .desktop-card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1.25rem;
+  }
+
+  .desktop-card-grid-large {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+    gap: 1.5rem;
+  }
+
+  /* Desktop dashboard specific layouts */
+  .desktop-dashboard-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1.25rem;
+    max-width: none;
+  }
+
+  /* Desktop table optimizations */
+  .desktop-table-container {
+    overflow-x: visible;
+    border-radius: 1rem;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+  }
+
+  /* Desktop modal optimizations */
+  .desktop-modal-large {
+    max-width: 80vw;
+    max-height: 85vh;
+  }
+
+  .desktop-modal-medium {
+    max-width: 60vw;
+    max-height: 75vh;
+  }
+
+  .desktop-modal-small {
+    max-width: 40vw;
+    max-height: 60vh;
+  }
+}
+
+/* Extra large desktop (1536px+) */
+@media (min-width: 1536px) {
+  .desktop-container {
+    max-width: 1800px;
+    padding: 0 4rem;
+  }
+
+  /* Ultra-wide desktop layouts */
+  .desktop-ultra-wide {
+    display: grid;
+    grid-template-columns: 300px 1fr 300px;
+    gap: 2rem;
+  }
+
+  .desktop-ultra-wide-balanced {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr 1fr;
+    gap: 1.5rem;
+  }
+
+  /* Enhanced dashboard for ultra-wide screens */
+  .desktop-dashboard-ultra {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 1.25rem;
+  }
+
+  /* Navigation Arrow Improvements for Desktop */
+  .nav-arrow-container {
+    min-width: 320px;
+    max-width: 480px;
+    margin: 0 auto;
+  }
+
+  .nav-arrow-button {
+    min-width: 48px;
+    min-height: 48px;
+    touch-action: manipulation;
+  }
+
+  .nav-arrow-button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
+  }
+
+  .nav-arrow-button:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  }
+
+  /* Date display improvements */
+  .date-display {
+    min-width: 0;
+    flex: 1;
+    padding: 0 1.5rem;
+  }
+
+  .date-display h2,
+  .date-display div {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+/* Navigation Arrow Base Styles - All Screen Sizes */
+.nav-arrow-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  max-width: 400px;
+  margin: 0 auto;
+  padding: 0 1rem;
+}
+
+.nav-arrow-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  border-radius: 0.75rem;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  touch-action: manipulation;
+  flex-shrink: 0;
+}
+
+.nav-arrow-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.nav-arrow-button:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+.nav-arrow-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+/* Date display base styles */
+.date-display {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+  padding: 0 0.75rem;
+}
+
+.date-display h2,
+.date-display div {
+  word-break: break-word;
+  hyphens: auto;
+}
+
+/* Specific styles for date navigation containers */
+.date-nav-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  max-width: 400px;
+  margin: 0 auto;
+}
+
+.date-nav-text {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+  line-height: 1.2;
+}
+
+.date-nav-text h2,
+.date-nav-text div {
+  word-break: break-word;
+  hyphens: auto;
+}
+
+/* Toast Notification Enhancements */
+.toast-container {
+  animation: slideInFromTop 0.3s ease-out;
+}
+
+.toast-container:hover .animate-toast-progress {
+  animation-play-state: paused;
+}
+
+@keyframes slideInFromTop {
+  0% {
+    transform: translate(-50%, -100%);
+    opacity: 0;
+  }
+  100% {
+    transform: translate(-50%, 0);
+    opacity: 1;
+  }
+}
+
+/* Toast exit animation */
+.toast-exit {
+  animation: slideOutToTop 0.2s ease-in forwards;
+}
+
+@keyframes slideOutToTop {
+  0% {
+    transform: translate(-50%, 0);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -100%);
+    opacity: 0;
+  }
+}
