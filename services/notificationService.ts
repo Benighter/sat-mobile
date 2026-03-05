@@ -12,6 +12,7 @@ import {
   deleteDoc,
   query,
   where,
+  limit,
   onSnapshot,
   Unsubscribe,
   writeBatch
@@ -426,6 +427,31 @@ const getAdminsLinkedToLeader = async (leaderId: string): Promise<string[]> => {
 
     const linkedAdminIds = new Set<string>();
 
+    // Helper: verify a UID is still an actual admin (role === 'admin')
+    // Returns the UID if valid, or null if the user has been demoted.
+    const resolveActiveAdmin = async (uid: string): Promise<string | null> => {
+      try {
+        const { getDoc, doc: docRef } = await import('firebase/firestore');
+        const snap = await getDoc(docRef(db, 'users', uid));
+        if (snap.exists() && snap.data()?.role === 'admin') return uid;
+      } catch { }
+      return null;
+    };
+
+    // Helper: find the current active admin for the church (used when resolved admin was demoted)
+    const findChurchAdmin = async (): Promise<string | null> => {
+      try {
+        const adminsSnap = await getDocs(query(
+          collection(db, 'users'),
+          where('churchId', '==', currentChurchId),
+          where('role', '==', 'admin'),
+          limit(1)
+        ));
+        if (!adminsSnap.empty) return adminsSnap.docs[0].id;
+      } catch { }
+      return null;
+    };
+
     // ── PRIMARY SOURCE: users.invitedByAdminId ──────────────────────────────
     // This field is updated by SuperAdmin's promoteLeaderToAdmin, so it always
     // reflects the current admin relationship even after a role swap.
@@ -436,8 +462,17 @@ const getAdminsLinkedToLeader = async (leaderId: string): Promise<string[]> => {
         const leaderData = leaderSnap.data();
         const invitedByAdminId: string | null = leaderData?.invitedByAdminId || null;
         if (invitedByAdminId) {
-          console.log(`✅ PRIMARY: leader ${leaderId} → invitedByAdminId = ${invitedByAdminId}`);
-          linkedAdminIds.add(invitedByAdminId);
+          // Verify this user is still an active admin (not demoted)
+          const verified = await resolveActiveAdmin(invitedByAdminId);
+          if (verified) {
+            console.log(`✅ PRIMARY: leader ${leaderId} → invitedByAdminId = ${invitedByAdminId}`);
+            linkedAdminIds.add(verified);
+          } else {
+            // The stored admin was demoted — find the church's real admin
+            console.log(`⚠️ PRIMARY: invitedByAdminId ${invitedByAdminId} is no longer admin, looking up church admin`);
+            const churchAdmin = await findChurchAdmin();
+            if (churchAdmin) linkedAdminIds.add(churchAdmin);
+          }
         }
       }
     } catch (primaryErr) {
@@ -458,20 +493,29 @@ const getAdminsLinkedToLeader = async (leaderId: string): Promise<string[]> => {
           where('churchId', '==', currentChurchId)
         );
         const querySnapshot = await getDocs(invitesQuery);
-        querySnapshot.docs.forEach((doc) => {
-          const inviteData = doc.data();
-          console.log(`📋 FALLBACK invite: ${doc.id}`, {
-            createdBy: inviteData.createdBy,
-            invitedUserId: inviteData.invitedUserId,
-            status: inviteData.status,
-          });
+        for (const d of querySnapshot.docs) {
+          const inviteData = d.data();
           if (inviteData.createdBy) {
-            linkedAdminIds.add(inviteData.createdBy);
+            // Verify the createdBy user is still an active admin
+            const verified = await resolveActiveAdmin(inviteData.createdBy);
+            if (verified) {
+              linkedAdminIds.add(verified);
+            } else {
+              // Demoted — route to the church's real admin instead
+              const churchAdmin = await findChurchAdmin();
+              if (churchAdmin) linkedAdminIds.add(churchAdmin);
+            }
           }
-        });
+        }
       } catch (fallbackErr) {
         console.warn('Fallback admin lookup (adminInvites) failed:', fallbackErr);
       }
+    }
+
+    // Last-resort: if still nothing, route to the church's current admin
+    if (linkedAdminIds.size === 0) {
+      const churchAdmin = await findChurchAdmin();
+      if (churchAdmin) linkedAdminIds.add(churchAdmin);
     }
 
     const uniqueAdminIds = [...linkedAdminIds];

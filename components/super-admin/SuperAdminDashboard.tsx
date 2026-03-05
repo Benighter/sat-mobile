@@ -1027,6 +1027,27 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
             await batch.commit();
             console.log(`✅ Updated ${invitesSnap.size} adminInvite(s) and ${leadersSnap.size} leader(s) → new admin ${newAdminUid}`);
           }
+
+          // Re-route existing notifications: change adminId from old admin → new admin
+          // so the demoted admin stops seeing notifications in their bell going forward.
+          try {
+            const notifPath = `churches/${churchId}/notifications`;
+            const notifSnap = await getDocs(
+              query(collection(db, notifPath), where('adminId', '==', oldAdminUid))
+            );
+            if (!notifSnap.empty) {
+              const chunkSize = 400;
+              for (let i = 0; i < notifSnap.docs.length; i += chunkSize) {
+                const chunk = notifSnap.docs.slice(i, i + chunkSize);
+                const notifBatch = writeBatch(db);
+                chunk.forEach(d => notifBatch.update(d.ref, { adminId: newAdminUid, lastUpdated: Timestamp.now() }));
+                await notifBatch.commit();
+              }
+              console.log(`✅ Re-routed ${notifSnap.size} notification(s) from old admin ${oldAdminUid} → new admin ${newAdminUid}`);
+            }
+          } catch (notifErr) {
+            console.warn('Failed to re-route notifications after promotion', notifErr);
+          }
         } catch (inviteUpdateErr) {
           console.warn('Failed to update adminInvites/leaders after promotion', inviteUpdateErr);
         }

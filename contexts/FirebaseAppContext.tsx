@@ -347,6 +347,9 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
   const refreshUserProfileRef = useRef<(() => Promise<void>) | null>(null);
   // Track the last known role to detect promotions/demotions at runtime
   const lastKnownRoleRef = useRef<string | null>(null);
+  // Dedicated ref for user doc watcher cleanup — kept separate from data listeners so
+  // setupDataListeners tear-down doesn't accidentally kill the role-change detector.
+  const userDocWatcherCleanupRef = useRef<(() => void) | null>(null);
 
   const optimisticTimeoutsRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
   // Keep separate references for base (default church) members and native ministry members
@@ -568,15 +571,22 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
                 }
               } catch (e) { console.warn('Auto signout watcher error', e); }
             });
-            // Attach to cleanup
-            const prevCleanup = listenersCleanupRef.current;
-            listenersCleanupRef.current = () => { try { unsubUserDoc(); } catch { }; prevCleanup?.(); };
+            // Store cleanup in dedicated ref so setupDataListeners won't kill it
+            if (userDocWatcherCleanupRef.current) {
+              try { userDocWatcherCleanupRef.current(); } catch { }
+            }
+            userDocWatcherCleanupRef.current = () => { try { unsubUserDoc(); } catch { } };
           } catch (e) { console.warn('Failed to attach auto signout watcher', e); }
 
         });
 
         return () => {
           unsubscribeAuth();
+          // Also clean up user doc watcher on full auth teardown
+          if (userDocWatcherCleanupRef.current) {
+            try { userDocWatcherCleanupRef.current(); } catch { }
+            userDocWatcherCleanupRef.current = null;
+          }
         };
       } catch (error: any) {
         setError(error.message);
@@ -863,14 +873,20 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
         });
         unsubscribers.push(unsubTransport);
 
-        // Persist cleanup
-        listenersCleanupRef.current = () => {
-          unsubscribers.forEach((u) => {
-            try { u(); } catch { }
-          });
-          console.log('[Listeners] Cleaned up listeners for church', firebaseUtils.getCurrentChurchId());
-        };
+        // Meeting records listener (previously missing — caused dashboard to show 0 for fresh logins)
+        const unsubscribeMeetings = meetingRecordsFirebaseService.onSnapshot((records) => {
+          setMeetingRecords(records);
+        });
+        unsubscribers.push(unsubscribeMeetings);
       }
+
+      // Persist cleanup for BOTH ministry and normal mode branches
+      listenersCleanupRef.current = () => {
+        unsubscribers.forEach((u) => {
+          try { u(); } catch { }
+        });
+        console.log('[Listeners] Cleaned up listeners for church', firebaseUtils.getCurrentChurchId());
+      };
     } catch (error: any) {
       setError(error.message);
     }
@@ -3665,16 +3681,20 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
         }
         setUserProfile(profile);
 
-        // After refreshing profile, check if we now have church context and can set up data listeners
-        if (firebaseUtils.isReady() && members.length === 0 && bacentas.length === 0) {
-          console.log('✅ Church context now available, setting up data listeners...');
+        // After refreshing profile, ensure data listeners are (re)set up.
+        // Previously this was gated on members/bacentas being empty, which meant
+        // role changes (e.g. leader→admin promotion) while data was already loaded
+        // would NOT force a listener refresh — causing the promoted user's view to
+        // go stale or lose updates they made.
+        if (firebaseUtils.isReady()) {
+          console.log('✅ Refreshing data listeners after profile update...');
           setupDataListeners();
         }
       }
     } catch (error: any) {
       console.error('Failed to refresh user profile:', error);
     }
-  }, [user, members.length, bacentas.length]);
+  }, [user]);
 
   // Keep the ref in sync so the closed-over onSnapshot watcher always has the latest refreshUserProfile
   useEffect(() => {
