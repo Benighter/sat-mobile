@@ -150,8 +150,11 @@ export const getHierarchyExportPreview = (data: HierarchyExcelData): HierarchyEx
     ? Math.ceil((new Date(lastDate).getTime() - new Date(firstDate).getTime()) / (1000 * 60 * 60 * 24)) + 1
     : 0;
 
+  const tonguesCount = activeMembers.filter(m => m.speaksInTongues === true).length;
+  const baptisedCount = activeMembers.filter(m => m.baptized === true).length;
+
   return {
-    totalTabs: 1,
+    totalTabs: 3,
     bacentaCount: uniqueBacentas.size,
     memberCount: activeMembers.length,
     servicesCount: dates.length,
@@ -159,8 +162,9 @@ export const getHierarchyExportPreview = (data: HierarchyExcelData): HierarchyEx
     firstDate,
     lastDate,
     features: [
-      `Single worksheet with sections for ${sectionNames || 'all hierarchy levels'}`,
-      'Headings: Fullname, Contacts, Bacenta, then attendance across all dates',
+      `Tab 1 — Hierarchy: sections for ${sectionNames || 'all hierarchy levels'} with attendance`,
+      `Tab 2 — Speaks in Tongues: ${tonguesCount} member${tonguesCount !== 1 ? 's' : ''}`,
+      `Tab 3 — Water Baptised: ${baptisedCount} member${baptisedCount !== 1 ? 's' : ''}`,
       'Color-coded rows by role',
       'Attendance history for the selected date range (or full history)'
     ]
@@ -321,6 +325,82 @@ export const exportHierarchyExcel = async (
 
     // Freeze panes below header rows
     worksheet.views = [{ state: 'frozen', xSplit: 0, ySplit: 3 }];
+
+    // ── Helper: simple member-list worksheet ────────────────────────────
+    const createSimpleMemberSheet = (sheetName: string, sheetMembers: Member[]) => {
+      const ws = workbook.addWorksheet(sheetName);
+      const cols = 4; // #, Fullname, Contacts, Bacenta
+
+      // Title
+      const titleCell = ws.getCell(1, 1);
+      titleCell.value = `${reportName} — ${sheetName}`;
+      titleCell.font = { bold: true, size: 16 };
+      titleCell.alignment = { horizontal: 'center' };
+      ws.mergeCells(1, 1, 1, cols);
+
+      // Count subtitle
+      const countCell = ws.getCell(2, 1);
+      countCell.value = `Total: ${sheetMembers.length}`;
+      countCell.alignment = { horizontal: 'center' };
+      ws.mergeCells(2, 1, 2, cols);
+
+      // Header row
+      const headerRow = ws.getRow(4);
+      ['#', 'Fullname', 'Contacts', 'Bacenta'].forEach((h, idx) => {
+        const cell = headerRow.getCell(idx + 1);
+        cell.value = h;
+        cell.font = { bold: true };
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD9EAD3' } };
+      });
+
+      // Data rows
+      sheetMembers.forEach((member, index) => {
+        const row = ws.getRow(5 + index);
+        row.getCell(1).value = index + 1;
+        row.getCell(2).value = getFullName(member);
+        row.getCell(3).value = member.phoneNumber;
+        row.getCell(4).value = getBacentaName(bacentas, member.bacentaId);
+        row.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: index % 2 === 0 ? 'FFF2F2F2' : 'FFFFFFFF' }
+        };
+      });
+
+      // Borders
+      const thinB = {
+        top: { style: 'thin' as const },
+        left: { style: 'thin' as const },
+        bottom: { style: 'thin' as const },
+        right: { style: 'thin' as const }
+      };
+      for (let r = 4; r <= 4 + sheetMembers.length; r++) {
+        const row = ws.getRow(r);
+        for (let c = 1; c <= cols; c++) {
+          row.getCell(c).border = thinB;
+        }
+      }
+
+      // Auto-width
+      ws.columns.forEach(column => {
+        let maxLength = 10;
+        column.eachCell({ includeEmpty: true }, cell => {
+          const v = cell.value ? cell.value.toString() : '';
+          maxLength = Math.max(maxLength, v.length + 2);
+        });
+        column.width = Math.min(maxLength, 40);
+      });
+
+      ws.views = [{ state: 'frozen', xSplit: 0, ySplit: 3 }];
+    };
+
+    // Speaks in Tongues tab
+    const tonguesMembers = activeMembers.filter(m => m.speaksInTongues === true);
+    createSimpleMemberSheet('Speaks in Tongues', tonguesMembers);
+
+    // Water Baptised tab
+    const baptisedMembers = activeMembers.filter(m => m.baptized === true);
+    createSimpleMemberSheet('Water Baptised', baptisedMembers);
 
     const timestamp = new Date().toISOString().split('T')[0];
     const filename = `${CHURCH_INFO.name.replace(/\s+/g, '-')}-Hierarchy-Attendance-${timestamp}.xlsx`;
