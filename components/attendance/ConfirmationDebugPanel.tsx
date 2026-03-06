@@ -195,6 +195,7 @@ const ConfirmationDebugPanel: React.FC = () => {
         </Button>
       </div>
     </div>
+    </div>
   );
 };
 

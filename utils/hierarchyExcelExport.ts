@@ -153,10 +153,11 @@ export const getHierarchyExportPreview = (data: HierarchyExcelData): HierarchyEx
   const tonguesCount = activeMembers.filter(m => m.speaksInTongues === true).length;
   const baptisedCount = activeMembers.filter(m => m.baptized === true).length;
   const firstTimersCount = activeMembers.filter(m => m.isFirstTimer === true).length;
+  const newBelieversCount = activeMembers.filter(m => m.isNewBeliever === true).length;
   const ministriesCount = new Set(activeMembers.filter(m => m.ministry).map(m => m.ministry!.trim().toLowerCase())).size;
 
   return {
-    totalTabs: 5,
+    totalTabs: 6,
     bacentaCount: uniqueBacentas.size,
     memberCount: activeMembers.length,
     servicesCount: dates.length,
@@ -169,6 +170,7 @@ export const getHierarchyExportPreview = (data: HierarchyExcelData): HierarchyEx
       `Tab 3 — Basontas: ${ministriesCount} ministr${ministriesCount !== 1 ? 'ies' : 'y'} categorised`,
       `Tab 4 — Speaks in Tongues: ${tonguesCount} member${tonguesCount !== 1 ? 's' : ''}`,
       `Tab 5 — Water Baptised: ${baptisedCount} member${baptisedCount !== 1 ? 's' : ''}`,
+      `Tab 6 — New Believers: ${newBelieversCount} member${newBelieversCount !== 1 ? 's' : ''} (grouped by leader)`,
       'Color-coded rows by role',
       'Attendance history for the selected date range (or full history)'
     ]
@@ -617,6 +619,109 @@ export const exportHierarchyExcel = async (
     // Water Baptised tab
     const baptisedMembers = activeMembers.filter(m => m.baptized === true);
     createSimpleMemberSheet('Water Baptised', baptisedMembers);
+
+    // New Believers tab (grouped by Bacenta Leader / Fellowship Leader)
+    (() => {
+      const newBelievers = activeMembers.filter(m => m.isNewBeliever === true);
+      if (!newBelievers.length) return;
+
+      const ws = workbook.addWorksheet('New Believers');
+      let currentRow = 1;
+
+      const BL_COLOR = 'FFD9EAD3';
+      const FL_COLOR = 'FFF4CCCC';
+      const UNASSIGNED_COLOR = 'FFF2F2F2';
+      const thinB = {
+        top: { style: 'thin' as const },
+        left: { style: 'thin' as const },
+        bottom: { style: 'thin' as const },
+        right: { style: 'thin' as const }
+      };
+
+      ws.mergeCells(currentRow, 1, currentRow, 4);
+      const nbTitleCell = ws.getCell(currentRow, 1);
+      nbTitleCell.value = `${reportName} — New Believers`;
+      nbTitleCell.font = { bold: true, size: 16 };
+      nbTitleCell.alignment = { horizontal: 'center' };
+      currentRow++;
+
+      ws.mergeCells(currentRow, 1, currentRow, 4);
+      const nbCountCell = ws.getCell(currentRow, 1);
+      nbCountCell.value = `Total New Believers: ${newBelievers.length}`;
+      nbCountCell.alignment = { horizontal: 'center' };
+      currentRow += 2;
+
+      const writeSection = (headerText: string, sectionMembers: Member[], color: string) => {
+        if (!sectionMembers.length) return;
+        ws.mergeCells(currentRow, 1, currentRow, 4);
+        const hCell = ws.getCell(currentRow, 1);
+        hCell.value = headerText;
+        hCell.font = { bold: true, size: 12 };
+        hCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: color } };
+        currentRow++;
+        ['#', 'Fullname', 'Contacts', 'Bacenta'].forEach((h, i) => {
+          const cell = ws.getCell(currentRow, i + 1);
+          cell.value = h;
+          cell.font = { bold: true };
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: color } };
+          cell.border = thinB;
+        });
+        currentRow++;
+        sectionMembers.forEach((m, idx) => {
+          ws.getCell(currentRow, 1).value = idx + 1;
+          ws.getCell(currentRow, 2).value = getFullName(m);
+          ws.getCell(currentRow, 3).value = m.phoneNumber;
+          ws.getCell(currentRow, 4).value = getBacentaName(bacentas, m.bacentaId);
+          for (let col = 1; col <= 4; col++) ws.getCell(currentRow, col).border = thinB;
+          currentRow++;
+        });
+        currentRow++;
+      };
+
+      const placedIds = new Set<string>();
+      const allBacentaLeaders = members.filter(m => m.role === 'Bacenta Leader' && m.isActive !== false);
+      const allFellowshipLeaders = members.filter(m => m.role === 'Fellowship Leader' && m.isActive !== false);
+
+      allBacentaLeaders
+        .sort((a, b) => getBacentaName(bacentas, a.bacentaId).localeCompare(getBacentaName(bacentas, b.bacentaId)))
+        .forEach(bl => {
+          const blBacentaName = getBacentaName(bacentas, bl.bacentaId);
+          const flsUnderBl = allFellowshipLeaders.filter(fl => fl.bacentaLeaderId === bl.id);
+          const blDirectBelievers = newBelievers.filter(m =>
+            m.bacentaId === bl.bacentaId && m.role !== 'Fellowship Leader' && !placedIds.has(m.id)
+          );
+          const flHasBelievers = flsUnderBl.some(fl =>
+            newBelievers.some(m => m.bacentaId === fl.bacentaId && !placedIds.has(m.id))
+          );
+          if (!blDirectBelievers.length && !flHasBelievers) return;
+
+          writeSection(`💚 Bacenta Leader: ${getFullName(bl)} (${blBacentaName})`, blDirectBelievers, BL_COLOR);
+          blDirectBelievers.forEach(m => placedIds.add(m.id));
+
+          flsUnderBl
+            .sort((a, b) => getBacentaName(bacentas, a.bacentaId).localeCompare(getBacentaName(bacentas, b.bacentaId)))
+            .forEach(fl => {
+              const flBelievers = newBelievers.filter(m => m.bacentaId === fl.bacentaId && !placedIds.has(m.id));
+              if (!flBelievers.length) return;
+              const flBacentaName = getBacentaName(bacentas, fl.bacentaId);
+              writeSection(`  ❤️ Fellowship Leader: ${getFullName(fl)} (${flBacentaName})`, flBelievers, FL_COLOR);
+              flBelievers.forEach(m => placedIds.add(m.id));
+            });
+        });
+
+      const unassigned = newBelievers.filter(m => !placedIds.has(m.id));
+      if (unassigned.length) writeSection('Unassigned', unassigned, UNASSIGNED_COLOR);
+
+      ws.columns.forEach(column => {
+        let maxLength = 10;
+        column.eachCell({ includeEmpty: true }, cell => {
+          const v = cell.value ? cell.value.toString() : '';
+          maxLength = Math.max(maxLength, v.length + 2);
+        });
+        column.width = Math.min(maxLength, 40);
+      });
+      ws.views = [{ state: 'frozen', xSplit: 0, ySplit: 3 }];
+    })();
 
     const timestamp = new Date().toISOString().split('T')[0];
     const filename = `${CHURCH_INFO.name.replace(/\s+/g, '-')}-Hierarchy-Attendance-${timestamp}.xlsx`;

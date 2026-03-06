@@ -75,6 +75,7 @@ const WeeklyAttendanceView: React.FC = () => {
   const [selectedSunday, setSelectedSunday] = useState<string>(getCurrentOrMostRecentSunday());
   const [selectedMinistry, setSelectedMinistry] = useState<string>(''); // '' means all ministries
   const [togglingFirstTimer, setTogglingFirstTimer] = useState<Set<string>>(new Set());
+  const [togglingNewBeliever, setTogglingNewBeliever] = useState<Set<string>>(new Set());
 
   const toggleFirstTimer = async (member: Member) => {
     if (togglingFirstTimer.has(member.id)) return;
@@ -84,11 +85,19 @@ const WeeklyAttendanceView: React.FC = () => {
     } catch {
       showToast('error', 'Update Failed', 'Could not update first timer status.');
     } finally {
-      setTogglingFirstTimer(prev => {
-        const next = new Set(prev);
-        next.delete(member.id);
-        return next;
-      });
+      setTogglingFirstTimer(prev => { const next = new Set(prev); next.delete(member.id); return next; });
+    }
+  };
+
+  const toggleNewBeliever = async (member: Member) => {
+    if (togglingNewBeliever.has(member.id)) return;
+    setTogglingNewBeliever(prev => new Set(prev).add(member.id));
+    try {
+      await membersFirebaseService.update(member.id, { isNewBeliever: !member.isNewBeliever });
+    } catch {
+      showToast('error', 'Update Failed', 'Could not update new believer status.');
+    } finally {
+      setTogglingNewBeliever(prev => { const next = new Set(prev); next.delete(member.id); return next; });
     }
   };
 
@@ -399,6 +408,58 @@ const WeeklyAttendanceView: React.FC = () => {
 
   const canGoNext = selectedSunday < getTodayYYYYMMDD();
 
+  // Mobile-friendly member row: icon-only circular tag buttons + active tag chips below name
+  const renderMemberRow = (m: Member, idx: number) => (
+    <div key={m.id} className="flex items-center gap-2.5 py-2 px-2 rounded-xl transition-colors active:bg-gray-50/80">
+      <span className="text-[11px] text-gray-400 w-5 text-right shrink-0 tabular-nums">{idx + 1}</span>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium text-gray-800 truncate leading-snug">
+          {m.firstName} {m.lastName || ''}
+        </p>
+        {(m.isNewBeliever || m.isFirstTimer) && (
+          <div className="flex flex-wrap gap-1 mt-0.5">
+            {m.isNewBeliever && (
+              <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600 border border-blue-200 leading-tight">
+                ✝ New Believer
+              </span>
+            )}
+            {m.isFirstTimer && (
+              <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-orange-50 text-orange-600 border border-orange-200 leading-tight">
+                ★ First Timer
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+      <div className="flex items-center gap-1 shrink-0">
+        <button
+          onClick={() => toggleNewBeliever(m)}
+          disabled={togglingNewBeliever.has(m.id)}
+          aria-label={m.isNewBeliever ? 'Remove new believer tag' : 'Mark as new believer'}
+          className={`w-8 h-8 flex items-center justify-center rounded-full border-2 text-sm font-bold transition-all duration-150 disabled:opacity-40 active:scale-90 touch-manipulation ${
+            m.isNewBeliever
+              ? 'bg-blue-500 border-blue-400 text-white shadow-sm shadow-blue-200'
+              : 'bg-white border-gray-200 text-gray-300 hover:border-blue-300 hover:text-blue-400'
+          }`}
+        >
+          {togglingNewBeliever.has(m.id) ? '·' : '✝'}
+        </button>
+        <button
+          onClick={() => toggleFirstTimer(m)}
+          disabled={togglingFirstTimer.has(m.id)}
+          aria-label={m.isFirstTimer ? 'Remove first timer tag' : 'Mark as first timer'}
+          className={`w-8 h-8 flex items-center justify-center rounded-full border-2 text-sm font-bold transition-all duration-150 disabled:opacity-40 active:scale-90 touch-manipulation ${
+            m.isFirstTimer
+              ? 'bg-orange-500 border-orange-400 text-white shadow-sm shadow-orange-200'
+              : 'bg-white border-gray-200 text-gray-300 hover:border-orange-300 hover:text-orange-400'
+          }`}
+        >
+          {togglingFirstTimer.has(m.id) ? '·' : '★'}
+        </button>
+      </div>
+    </div>
+  );
+
   return (
     <div className="min-h-screen bg-gray-50 p-4 sm:p-6 lg:p-8">
       <div className="max-w-4xl mx-auto">
@@ -604,20 +665,7 @@ const WeeklyAttendanceView: React.FC = () => {
                             Bacenta leader: {group.bacentaLeader.firstName} {group.bacentaLeader.lastName || ''} ({group.bacenta.name})
                           </h3>
                           <div className="mt-2 space-y-0.5">
-                            {group.mainMembers.map((m, idx) => (
-                              <div key={m.id} className="flex items-center gap-2 text-gray-800 py-0.5">
-                                <span className="text-gray-400 text-sm min-w-[1.5rem] shrink-0">{idx + 1}.</span>
-                                <span className="flex-1 text-sm">{m.firstName} {m.lastName || ''}</span>
-                                <button
-                                  onClick={() => toggleFirstTimer(m)}
-                                  disabled={togglingFirstTimer.has(m.id)}
-                                  className={`shrink-0 text-xs px-2 py-0.5 rounded-full font-medium border transition-colors disabled:opacity-50 ${m.isFirstTimer ? 'bg-orange-100 text-orange-700 border-orange-300 hover:bg-orange-200' : 'bg-transparent text-gray-300 border-gray-200 hover:bg-orange-50 hover:text-orange-500 hover:border-orange-200'}`}
-                                  title={m.isFirstTimer ? 'Remove first timer tag' : 'Mark as first timer'}
-                                >
-                                  {togglingFirstTimer.has(m.id) ? '…' : m.isFirstTimer ? '🏷️ First Timer' : '+ First Timer'}
-                                </button>
-                              </div>
-                            ))}
+                            {group.mainMembers.map((m, idx) => renderMemberRow(m, idx))}
                           </div>
                         </div>
                       {/* Linked Bacentas under Bacenta Leader */}
@@ -628,20 +676,7 @@ const WeeklyAttendanceView: React.FC = () => {
                             {lg.bacenta.name}
                           </h4>
                           <div className="mt-2 space-y-0.5">
-                            {lg.members.map((m, idx) => (
-                              <div key={m.id} className="flex items-center gap-2 text-gray-800 py-0.5">
-                                <span className="text-gray-400 text-sm min-w-[1.5rem] shrink-0">{idx + 1}.</span>
-                                <span className="flex-1 text-sm">{m.firstName} {m.lastName || ''}</span>
-                                <button
-                                  onClick={() => toggleFirstTimer(m)}
-                                  disabled={togglingFirstTimer.has(m.id)}
-                                  className={`shrink-0 text-xs px-2 py-0.5 rounded-full font-medium border transition-colors disabled:opacity-50 ${m.isFirstTimer ? 'bg-orange-100 text-orange-700 border-orange-300 hover:bg-orange-200' : 'bg-transparent text-gray-300 border-gray-200 hover:bg-orange-50 hover:text-orange-500 hover:border-orange-200'}`}
-                                  title={m.isFirstTimer ? 'Remove first timer tag' : 'Mark as first timer'}
-                                >
-                                  {togglingFirstTimer.has(m.id) ? '…' : m.isFirstTimer ? '🏷️ First Timer' : '+ First Timer'}
-                                </button>
-                              </div>
-                            ))}
+                            {lg.members.map((m, idx) => renderMemberRow(m, idx))}
                           </div>
                         </div>
                       ))}
@@ -653,20 +688,7 @@ const WeeklyAttendanceView: React.FC = () => {
                             Red Bacenta: {fg.fellowshipLeader.firstName} {fg.fellowshipLeader.lastName || ''} ({fg.bacenta.name})
                           </h4>
                           <div className="mt-2 space-y-0.5">
-                            {fg.members.map((m, idx) => (
-                              <div key={m.id} className="flex items-center gap-2 text-gray-800 py-0.5">
-                                <span className="text-gray-400 text-sm min-w-[1.5rem] shrink-0">{idx + 1}.</span>
-                                <span className="flex-1 text-sm">{m.firstName} {m.lastName || ''}</span>
-                                <button
-                                  onClick={() => toggleFirstTimer(m)}
-                                  disabled={togglingFirstTimer.has(m.id)}
-                                  className={`shrink-0 text-xs px-2 py-0.5 rounded-full font-medium border transition-colors disabled:opacity-50 ${m.isFirstTimer ? 'bg-orange-100 text-orange-700 border-orange-300 hover:bg-orange-200' : 'bg-transparent text-gray-300 border-gray-200 hover:bg-orange-50 hover:text-orange-500 hover:border-orange-200'}`}
-                                  title={m.isFirstTimer ? 'Remove first timer tag' : 'Mark as first timer'}
-                                >
-                                  {togglingFirstTimer.has(m.id) ? '…' : m.isFirstTimer ? '🏷️ First Timer' : '+ First Timer'}
-                                </button>
-                              </div>
-                            ))}
+                            {fg.members.map((m, idx) => renderMemberRow(m, idx))}
                           </div>
                           {/* Linked bacentas under Red Bacenta */}
                           {fg.linkedBacentaGroups && fg.linkedBacentaGroups.map(lg => (
@@ -676,20 +698,7 @@ const WeeklyAttendanceView: React.FC = () => {
                                 {lg.bacenta.name}
                               </h5>
                               <div className="mt-1 space-y-0.5">
-                                {lg.members.map((m, idx) => (
-                                  <div key={m.id} className="flex items-center gap-2 text-gray-800 py-0.5">
-                                    <span className="text-gray-400 text-sm min-w-[1.5rem] shrink-0">{idx + 1}.</span>
-                                    <span className="flex-1 text-sm">{m.firstName} {m.lastName || ''}</span>
-                                    <button
-                                      onClick={() => toggleFirstTimer(m)}
-                                      disabled={togglingFirstTimer.has(m.id)}
-                                      className={`shrink-0 text-xs px-2 py-0.5 rounded-full font-medium border transition-colors disabled:opacity-50 ${m.isFirstTimer ? 'bg-orange-100 text-orange-700 border-orange-300 hover:bg-orange-200' : 'bg-transparent text-gray-300 border-gray-200 hover:bg-orange-50 hover:text-orange-500 hover:border-orange-200'}`}
-                                      title={m.isFirstTimer ? 'Remove first timer tag' : 'Mark as first timer'}
-                                    >
-                                      {togglingFirstTimer.has(m.id) ? '…' : m.isFirstTimer ? '🏷️ First Timer' : '+ First Timer'}
-                                    </button>
-                                  </div>
-                                ))}
+                                {lg.members.map((m, idx) => renderMemberRow(m, idx))}
                               </div>
                             </div>
                           ))}
@@ -713,20 +722,7 @@ const WeeklyAttendanceView: React.FC = () => {
                       <div className="border border-gray-200 rounded-xl p-4 shadow-sm">
                         <h3 className="text-lg font-semibold text-gray-900 mb-2">Unassigned / No Leader</h3>
                         <div className="space-y-0.5">
-                          {groupedAttendance.leftoverGroup.members.map((m, idx) => (
-                            <div key={m.id} className="flex items-center gap-2 text-gray-800 py-0.5">
-                              <span className="text-gray-400 text-sm min-w-[1.5rem] shrink-0">{idx + 1}.</span>
-                              <span className="flex-1 text-sm">{m.firstName} {m.lastName || ''}</span>
-                              <button
-                                onClick={() => toggleFirstTimer(m)}
-                                disabled={togglingFirstTimer.has(m.id)}
-                                className={`shrink-0 text-xs px-2 py-0.5 rounded-full font-medium border transition-colors disabled:opacity-50 ${m.isFirstTimer ? 'bg-orange-100 text-orange-700 border-orange-300 hover:bg-orange-200' : 'bg-transparent text-gray-300 border-gray-200 hover:bg-orange-50 hover:text-orange-500 hover:border-orange-200'}`}
-                                title={m.isFirstTimer ? 'Remove first timer tag' : 'Mark as first timer'}
-                              >
-                                {togglingFirstTimer.has(m.id) ? '…' : m.isFirstTimer ? '🏷️ First Timer' : '+ First Timer'}
-                              </button>
-                            </div>
-                          ))}
+                          {groupedAttendance.leftoverGroup.members.map((m, idx) => renderMemberRow(m, idx))}
                         </div>
                         <div className="mt-4 text-sm font-semibold text-gray-700">Total: {groupedAttendance.leftoverGroup.members.length}</div>
                       </div>

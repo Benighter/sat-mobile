@@ -18,6 +18,8 @@ export interface Member {
   baptized?: boolean;
   /** If true, member has been tagged as a first timer (persistent until removed) */
   isFirstTimer?: boolean;
+  /** If true, member has been tagged as a new believer (persistent until removed) */
+  isNewBeliever?: boolean;
   /** Optional ministry assignment for the member */
   ministry?: string;
   /** Optional ministry-specific position/title (e.g., Ushers: Usher at the door) */
