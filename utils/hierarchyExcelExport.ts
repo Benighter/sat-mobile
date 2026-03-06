@@ -2,7 +2,7 @@ import ExcelJS from 'exceljs';
 import { Member, Bacenta, AttendanceRecord } from '../types';
 import { DirectoryHandle, saveFileToDirectory } from './fileSystemUtils';
 import { formatDateDayMonthYear } from './dateUtils';
-import { DEFAULT_CHURCH } from '../constants';
+import { DEFAULT_CHURCH, MINISTRY_OPTIONS } from '../constants';
 import { isMemberWentHome } from './memberStatus';
 import { buildHierarchyGrouping, HierarchySectionKind } from './hierarchyGrouping';
 
@@ -152,9 +152,11 @@ export const getHierarchyExportPreview = (data: HierarchyExcelData): HierarchyEx
 
   const tonguesCount = activeMembers.filter(m => m.speaksInTongues === true).length;
   const baptisedCount = activeMembers.filter(m => m.baptized === true).length;
+  const firstTimersCount = activeMembers.filter(m => m.isFirstTimer === true).length;
+  const ministriesCount = new Set(activeMembers.filter(m => m.ministry).map(m => m.ministry!.trim().toLowerCase())).size;
 
   return {
-    totalTabs: 3,
+    totalTabs: 5,
     bacentaCount: uniqueBacentas.size,
     memberCount: activeMembers.length,
     servicesCount: dates.length,
@@ -163,8 +165,10 @@ export const getHierarchyExportPreview = (data: HierarchyExcelData): HierarchyEx
     lastDate,
     features: [
       `Tab 1 — Hierarchy: sections for ${sectionNames || 'all hierarchy levels'} with attendance`,
-      `Tab 2 — Speaks in Tongues: ${tonguesCount} member${tonguesCount !== 1 ? 's' : ''}`,
-      `Tab 3 — Water Baptised: ${baptisedCount} member${baptisedCount !== 1 ? 's' : ''}`,
+      `Tab 2 — First Timers: ${firstTimersCount} member${firstTimersCount !== 1 ? 's' : ''} (grouped by leader)`,
+      `Tab 3 — Basontas: ${ministriesCount} ministr${ministriesCount !== 1 ? 'ies' : 'y'} categorised`,
+      `Tab 4 — Speaks in Tongues: ${tonguesCount} member${tonguesCount !== 1 ? 's' : ''}`,
+      `Tab 5 — Water Baptised: ${baptisedCount} member${baptisedCount !== 1 ? 's' : ''}`,
       'Color-coded rows by role',
       'Attendance history for the selected date range (or full history)'
     ]
@@ -393,6 +397,218 @@ export const exportHierarchyExcel = async (
 
       ws.views = [{ state: 'frozen', xSplit: 0, ySplit: 3 }];
     };
+
+    // First Timers tab (grouped by Bacenta Leader / Fellowship Leader)
+    (() => {
+      const firstTimers = activeMembers.filter(m => m.isFirstTimer === true);
+      if (!firstTimers.length) return;
+
+      const ws = workbook.addWorksheet('First Timers');
+      let currentRow = 1;
+
+      const BL_COLOR = 'FFD9EAD3';
+      const FL_COLOR = 'FFF4CCCC';
+      const UNASSIGNED_COLOR = 'FFF2F2F2';
+      const thinB = {
+        top: { style: 'thin' as const },
+        left: { style: 'thin' as const },
+        bottom: { style: 'thin' as const },
+        right: { style: 'thin' as const }
+      };
+
+      ws.mergeCells(currentRow, 1, currentRow, 4);
+      const ftTitleCell = ws.getCell(currentRow, 1);
+      ftTitleCell.value = `${reportName} — First Timers`;
+      ftTitleCell.font = { bold: true, size: 16 };
+      ftTitleCell.alignment = { horizontal: 'center' };
+      currentRow++;
+
+      ws.mergeCells(currentRow, 1, currentRow, 4);
+      const ftCountCell = ws.getCell(currentRow, 1);
+      ftCountCell.value = `Total First Timers: ${firstTimers.length}`;
+      ftCountCell.alignment = { horizontal: 'center' };
+      currentRow += 2;
+
+      const writeSection = (headerText: string, sectionMembers: Member[], color: string) => {
+        if (!sectionMembers.length) return;
+        ws.mergeCells(currentRow, 1, currentRow, 4);
+        const hCell = ws.getCell(currentRow, 1);
+        hCell.value = headerText;
+        hCell.font = { bold: true, size: 12 };
+        hCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: color } };
+        currentRow++;
+        ['#', 'Fullname', 'Contacts', 'Bacenta'].forEach((h, i) => {
+          const cell = ws.getCell(currentRow, i + 1);
+          cell.value = h;
+          cell.font = { bold: true };
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: color } };
+          cell.border = thinB;
+        });
+        currentRow++;
+        sectionMembers.forEach((m, idx) => {
+          ws.getCell(currentRow, 1).value = idx + 1;
+          ws.getCell(currentRow, 2).value = getFullName(m);
+          ws.getCell(currentRow, 3).value = m.phoneNumber;
+          ws.getCell(currentRow, 4).value = getBacentaName(bacentas, m.bacentaId);
+          for (let col = 1; col <= 4; col++) ws.getCell(currentRow, col).border = thinB;
+          currentRow++;
+        });
+        currentRow++; // blank row between sections
+      };
+
+      const placedIds = new Set<string>();
+      const allBacentaLeaders = members.filter(m => m.role === 'Bacenta Leader' && m.isActive !== false);
+      const allFellowshipLeaders = members.filter(m => m.role === 'Fellowship Leader' && m.isActive !== false);
+
+      allBacentaLeaders
+        .sort((a, b) => getBacentaName(bacentas, a.bacentaId).localeCompare(getBacentaName(bacentas, b.bacentaId)))
+        .forEach(bl => {
+          const blBacentaName = getBacentaName(bacentas, bl.bacentaId);
+          const flsUnderBl = allFellowshipLeaders.filter(fl => fl.bacentaLeaderId === bl.id);
+          const blDirectFirstTimers = firstTimers.filter(m =>
+            m.bacentaId === bl.bacentaId && m.role !== 'Fellowship Leader' && !placedIds.has(m.id)
+          );
+          const flHasTimers = flsUnderBl.some(fl =>
+            firstTimers.some(m => m.bacentaId === fl.bacentaId && !placedIds.has(m.id))
+          );
+          if (!blDirectFirstTimers.length && !flHasTimers) return;
+
+          writeSection(`💚 Bacenta Leader: ${getFullName(bl)} (${blBacentaName})`, blDirectFirstTimers, BL_COLOR);
+          blDirectFirstTimers.forEach(m => placedIds.add(m.id));
+
+          flsUnderBl
+            .sort((a, b) => getBacentaName(bacentas, a.bacentaId).localeCompare(getBacentaName(bacentas, b.bacentaId)))
+            .forEach(fl => {
+              const flFirstTimers = firstTimers.filter(m => m.bacentaId === fl.bacentaId && !placedIds.has(m.id));
+              if (!flFirstTimers.length) return;
+              const flBacentaName = getBacentaName(bacentas, fl.bacentaId);
+              writeSection(`  ❤️ Fellowship Leader: ${getFullName(fl)} (${flBacentaName})`, flFirstTimers, FL_COLOR);
+              flFirstTimers.forEach(m => placedIds.add(m.id));
+            });
+        });
+
+      const unassigned = firstTimers.filter(m => !placedIds.has(m.id));
+      if (unassigned.length) writeSection('Unassigned', unassigned, UNASSIGNED_COLOR);
+
+      ws.columns.forEach(column => {
+        let maxLength = 10;
+        column.eachCell({ includeEmpty: true }, cell => {
+          const v = cell.value ? cell.value.toString() : '';
+          maxLength = Math.max(maxLength, v.length + 2);
+        });
+        column.width = Math.min(maxLength, 40);
+      });
+      ws.views = [{ state: 'frozen', xSplit: 0, ySplit: 3 }];
+    })();
+
+    // Basontas tab (all ministries, categorised)
+    (() => {
+      const ws = workbook.addWorksheet('Basontas');
+      const COLS = 4;
+      let currentRow = 1;
+
+      const thinB = {
+        top: { style: 'thin' as const },
+        left: { style: 'thin' as const },
+        bottom: { style: 'thin' as const },
+        right: { style: 'thin' as const }
+      };
+
+      // Collect all distinct ministries: known ones first, then any extra found in members
+      const membersWithMinistry = activeMembers.filter(m => m.ministry && m.ministry.trim());
+      const knownMinistries = MINISTRY_OPTIONS.filter(min =>
+        membersWithMinistry.some(m => m.ministry!.toLowerCase() === min.toLowerCase())
+      );
+      const extraMinistries = Array.from(
+        new Set(membersWithMinistry.map(m => m.ministry!.trim()))
+      ).filter(min => !MINISTRY_OPTIONS.some(k => k.toLowerCase() === min.toLowerCase())).sort();
+      const allMinistries = [...knownMinistries, ...extraMinistries];
+
+      // Title
+      ws.mergeCells(currentRow, 1, currentRow, COLS);
+      const titleCell = ws.getCell(currentRow, 1);
+      titleCell.value = `${reportName} — Basontas (Ministries)`;
+      titleCell.font = { bold: true, size: 16 };
+      titleCell.alignment = { horizontal: 'center' };
+      currentRow++;
+
+      ws.mergeCells(currentRow, 1, currentRow, COLS);
+      const subtitleCell = ws.getCell(currentRow, 1);
+      subtitleCell.value = `${allMinistries.length} ministr${allMinistries.length !== 1 ? 'ies' : 'y'} • ${membersWithMinistry.length} member${membersWithMinistry.length !== 1 ? 's' : ''} assigned`;
+      subtitleCell.alignment = { horizontal: 'center' };
+      currentRow += 2; // blank line
+
+      // Palette of distinct ministry header colours
+      const PALETTE = [
+        'FFD9EAD3', // green
+        'FFF4CCCC', // red
+        'FFC9DAF8', // blue
+        'FFFFF2CC', // yellow
+        'FFD9D2E9', // purple
+        'FFFFE0B2', // orange
+        'FFB2EBF2', // teal
+        'FFF8BBD0', // pink
+      ];
+
+      allMinistries.forEach((ministry, mIdx) => {
+        const ministryMembers = membersWithMinistry
+          .filter(m => m.ministry!.toLowerCase() === ministry.toLowerCase())
+          .sort((a, b) => (a.lastName || '').localeCompare(b.lastName || '') || a.firstName.localeCompare(b.firstName));
+
+        if (!ministryMembers.length) return;
+
+        const color = PALETTE[mIdx % PALETTE.length];
+
+        // Ministry header row
+        ws.mergeCells(currentRow, 1, currentRow, COLS);
+        const headerCell = ws.getCell(currentRow, 1);
+        headerCell.value = `${ministry.toUpperCase()}  (${ministryMembers.length})`;
+        headerCell.font = { bold: true, size: 13 };
+        headerCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: color } };
+        headerCell.alignment = { horizontal: 'left', indent: 1 };
+        headerCell.border = thinB;
+        currentRow++;
+
+        // Column labels
+        ['#', 'Fullname', 'Contacts', 'Bacenta'].forEach((h, i) => {
+          const cell = ws.getCell(currentRow, i + 1);
+          cell.value = h;
+          cell.font = { bold: true, size: 11 };
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: color } };
+          cell.border = thinB;
+        });
+        currentRow++;
+
+        // Member rows
+        ministryMembers.forEach((m, idx) => {
+          ws.getCell(currentRow, 1).value = idx + 1;
+          ws.getCell(currentRow, 2).value = getFullName(m);
+          ws.getCell(currentRow, 3).value = m.phoneNumber;
+          ws.getCell(currentRow, 4).value = getBacentaName(bacentas, m.bacentaId);
+          const rowBg = idx % 2 === 0 ? 'FFF9F9F9' : 'FFFFFFFF';
+          for (let col = 1; col <= COLS; col++) {
+            const cell = ws.getCell(currentRow, col);
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: rowBg } };
+            cell.border = thinB;
+          }
+          currentRow++;
+        });
+
+        currentRow++; // blank row between ministries
+      });
+
+      // Auto-width
+      ws.columns.forEach(column => {
+        let maxLength = 10;
+        column.eachCell({ includeEmpty: true }, cell => {
+          const v = cell.value ? cell.value.toString() : '';
+          maxLength = Math.max(maxLength, v.length + 2);
+        });
+        column.width = Math.min(maxLength, 42);
+      });
+
+      ws.views = [{ state: 'frozen', xSplit: 0, ySplit: 3 }];
+    })();
 
     // Speaks in Tongues tab
     const tonguesMembers = activeMembers.filter(m => m.speaksInTongues === true);

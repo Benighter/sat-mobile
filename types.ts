@@ -16,6 +16,8 @@ export interface Member {
   speaksInTongues?: boolean;
   /** If true, member has been water baptized */
   baptized?: boolean;
+  /** If true, member has been tagged as a first timer (persistent until removed) */
+  isFirstTimer?: boolean;
   /** Optional ministry assignment for the member */
   ministry?: string;
   /** Optional ministry-specific position/title (e.g., Ushers: Usher at the door) */
