@@ -33,6 +33,7 @@ import {
 } from 'firebase/auth';
 import { db, auth } from '../firebase.config';
 import { Member, Bacenta, AttendanceRecord, NewBeliever, SundayConfirmation, Guest, MemberDeletionRequest, DeletionRequestStatus, OutreachBacenta, OutreachMember, PrayerRecord, PrayerSchedule, MeetingRecord, TitheRecord, BussingRecord, TransportRecord, SonOfGod, CustomPrayer, CustomPrayerRecord } from '../types';
+import { applyLeadershipFirstTimerRule, withLeadershipFirstTimerRule } from '../utils/memberStatus';
 // Lightweight inline type to avoid circular heavy imports for new feature (kept local to service)
 export interface HeadCountRecord {
   id: string; // `${date}_${section}`
@@ -1050,13 +1051,13 @@ export const membersFirebaseService = {
     try {
       const membersRef = collection(db, getChurchCollectionPath('members'));
       const nowIso = new Date().toISOString();
-      const payload = {
+      const payload = withLeadershipFirstTimerRule({
         ...member,
         isActive: true,
         memberStatus: member.memberStatus || 'active',
         createdDate: nowIso,
         lastUpdated: nowIso
-      } as any;
+      }) as any;
       if (payload.memberStatus === 'went_home') {
         payload.frozen = true;
         payload.wentHomeDate = payload.wentHomeDate || nowIso;
@@ -1084,8 +1085,15 @@ export const membersFirebaseService = {
   update: async (memberId: string, updates: Partial<Member>): Promise<void> => {
     try {
       const memberRef = doc(db, getChurchCollectionPath('members'), memberId);
+      let existingMember: Partial<Member> | null = null;
+      try {
+        const existingSnap = await getDoc(memberRef);
+        if (existingSnap.exists()) {
+          existingMember = { id: existingSnap.id, ...(existingSnap.data() as any) } as Member;
+        }
+      } catch {}
       // Remove undefined values to avoid Firestore updateDoc errors
-      const sanitized: any = { ...updates };
+      const sanitized: any = { ...applyLeadershipFirstTimerRule(existingMember, updates) };
       Object.keys(sanitized).forEach((k) => {
         if (sanitized[k] === undefined) delete sanitized[k];
       });

@@ -17,6 +17,7 @@ import {
 } from '../icons';
 import { Member, NewBeliever, Bacenta } from '../../types';
 import { hasAdminPrivileges } from '../../utils/permissionUtils';
+import { isLeadershipPosition } from '../../utils/memberStatus';
 import { MINISTRY_OPTIONS } from '../../constants';
 import { membersFirebaseService } from '../../services/firebaseService';
 
@@ -76,8 +77,55 @@ const WeeklyAttendanceView: React.FC = () => {
   const [selectedMinistry, setSelectedMinistry] = useState<string>(''); // '' means all ministries
   const [togglingFirstTimer, setTogglingFirstTimer] = useState<Set<string>>(new Set());
   const [togglingNewBeliever, setTogglingNewBeliever] = useState<Set<string>>(new Set());
+  const normalizedSelectedMinistry = selectedMinistry.trim().toLowerCase();
+
+  const presentMemberIds = useMemo(() => new Set(
+    attendanceRecords
+      .filter(r => r.date === selectedSunday && r.status === 'Present' && r.memberId)
+      .map(r => r.memberId as string)
+  ), [attendanceRecords, selectedSunday]);
+
+  const presentNewBelieverIds = useMemo(() => new Set(
+    attendanceRecords
+      .filter(r => r.date === selectedSunday && r.status === 'Present' && r.newBelieverId)
+      .map(r => r.newBelieverId as string)
+  ), [attendanceRecords, selectedSunday]);
+
+  const presentMembersForSelectedSunday = useMemo(() => {
+    const filteredMembers = members.filter(member => {
+      if (member.frozen || !presentMemberIds.has(member.id)) return false;
+      if (!normalizedSelectedMinistry) return true;
+      return (member.ministry || '').trim().toLowerCase() === normalizedSelectedMinistry;
+    });
+
+    return filteredMembers.sort((a, b) =>
+      (a.lastName || '').localeCompare(b.lastName || '') || a.firstName.localeCompare(b.firstName)
+    );
+  }, [members, normalizedSelectedMinistry, presentMemberIds]);
+
+  const presentFirstTimerMembers = useMemo(() => (
+    presentMembersForSelectedSunday.filter(member => member.isFirstTimer)
+  ), [presentMembersForSelectedSunday]);
+
+  const presentFirstTimeNewBelievers = useMemo(() => {
+    const filteredNewBelievers = newBelievers.filter(newBeliever => {
+      if (!presentNewBelieverIds.has(newBeliever.id) || !newBeliever.isFirstTime) return false;
+      if (!normalizedSelectedMinistry) return true;
+      return (newBeliever.ministry || '').trim().toLowerCase() === normalizedSelectedMinistry;
+    });
+
+    return filteredNewBelievers.sort((a, b) =>
+      `${a.name} ${a.surname || ''}`.localeCompare(`${b.name} ${b.surname || ''}`)
+    );
+  }, [newBelievers, normalizedSelectedMinistry, presentNewBelieverIds]);
+
+  const totalPresentFirstTimers = presentFirstTimerMembers.length + presentFirstTimeNewBelievers.length;
 
   const toggleFirstTimer = async (member: Member) => {
+    if (isLeadershipPosition(member) && !member.isFirstTimer) {
+      showToast('warning', 'Unavailable', 'Leadership roles cannot be marked as first timers.');
+      return;
+    }
     if (togglingFirstTimer.has(member.id)) return;
     setTogglingFirstTimer(prev => new Set(prev).add(member.id));
     try {
@@ -340,6 +388,49 @@ const WeeklyAttendanceView: React.FC = () => {
     }
   };
 
+  const copyFirstTimersText = async () => {
+    try {
+      const heading = selectedMinistry
+        ? `${selectedMinistry} First Timers - ${formatFullDate(selectedSunday)}`
+        : `First Timers - ${formatFullDate(selectedSunday)}`;
+
+      let text = `${heading}\n\n`;
+
+      if (!presentFirstTimerMembers.length && !presentFirstTimeNewBelievers.length) {
+        text += 'No first timers were recorded for this Sunday.';
+      } else {
+        if (presentFirstTimerMembers.length > 0) {
+          text += 'Members\n';
+          presentFirstTimerMembers.forEach((member, index) => {
+            const phoneNumber = (member.phoneNumber || '').trim() || 'No contact';
+            text += `${index + 1}. ${member.firstName} ${member.lastName || ''} - ${phoneNumber}\n`;
+          });
+          text += `Total: ${presentFirstTimerMembers.length}\n`;
+        }
+
+        if (presentFirstTimeNewBelievers.length > 0) {
+          if (presentFirstTimerMembers.length > 0) {
+            text += '\n';
+          }
+          text += 'New Believers\n';
+          presentFirstTimeNewBelievers.forEach((newBeliever, index) => {
+            const contact = (newBeliever.contact || '').trim() || 'No contact';
+            text += `${index + 1}. ${newBeliever.name} ${newBeliever.surname || ''} - ${contact}\n`;
+          });
+          text += `Total: ${presentFirstTimeNewBelievers.length}\n`;
+        }
+
+        text += `\nGrand Total: ${totalPresentFirstTimers}`;
+      }
+
+      await navigator.clipboard.writeText(text);
+      showToast('success', 'Copied!', 'First timers with contacts copied to clipboard');
+    } catch (error) {
+      console.error('Failed to copy first timers:', error);
+      showToast('error', 'Copy Failed', 'Unable to copy first timers');
+    }
+  };
+
   // Copy COs report (Admins only)
   const copyCOsReportText = async () => {
     try {
@@ -447,11 +538,22 @@ const WeeklyAttendanceView: React.FC = () => {
         <button
           onClick={() => toggleFirstTimer(m)}
           disabled={togglingFirstTimer.has(m.id)}
-          aria-label={m.isFirstTimer ? 'Remove first timer tag' : 'Mark as first timer'}
+          aria-label={
+            isLeadershipPosition(m) && !m.isFirstTimer
+              ? 'Leadership roles cannot be marked as first timers'
+              : m.isFirstTimer ? 'Remove first timer tag' : 'Mark as first timer'
+          }
+          title={
+            isLeadershipPosition(m) && !m.isFirstTimer
+              ? 'Leadership roles cannot be marked as first timers'
+              : m.isFirstTimer ? 'Remove first timer tag' : 'Mark as first timer'
+          }
           className={`w-8 h-8 flex items-center justify-center rounded-full border-2 text-sm font-bold transition-all duration-150 disabled:opacity-40 active:scale-90 touch-manipulation ${
             m.isFirstTimer
               ? 'bg-orange-500 border-orange-400 text-white shadow-sm shadow-orange-200'
-              : 'bg-white border-gray-200 text-gray-300 hover:border-orange-300 hover:text-orange-400'
+              : isLeadershipPosition(m)
+                ? 'bg-gray-100 border-gray-200 text-gray-300'
+                : 'bg-white border-gray-200 text-gray-300 hover:border-orange-300 hover:text-orange-400'
           }`}
         >
           {togglingFirstTimer.has(m.id) ? '·' : '★'}
@@ -543,6 +645,19 @@ const WeeklyAttendanceView: React.FC = () => {
               >
                 <ClipboardIcon className="w-4 h-4" />
                 <span>{selectedMinistry ? `Copy ${selectedMinistry}` : 'Copy Attendance'}</span>
+              </button>
+              <button
+                onClick={copyFirstTimersText}
+                disabled={totalPresentFirstTimers === 0}
+                className={`inline-flex items-center space-x-2 px-4 py-2 rounded-lg transition-all duration-200 text-sm font-medium shadow-sm ${
+                  totalPresentFirstTimers > 0
+                    ? 'bg-orange-600 hover:bg-orange-700 text-white'
+                    : 'bg-gray-200 text-gray-500 cursor-not-allowed shadow-none'
+                }`}
+                title={totalPresentFirstTimers > 0 ? 'Copy first timers with contacts' : 'No first timers to copy'}
+              >
+                <ClipboardIcon className="w-4 h-4" />
+                <span>Copy First Timers</span>
               </button>
               {isAdmin && !selectedMinistry && (
                 <button

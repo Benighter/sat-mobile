@@ -29,6 +29,7 @@ import {
 } from '../services/firebaseService';
 import { crossTenantService } from '../services/crossTenantService';
 import { dataMigrationService } from '../utils/dataMigration';
+import { withLeadershipFirstTimerRule } from '../utils/memberStatus';
 import { userService } from '../services/userService';
 import { setNotificationContext } from '../services/notificationService';
 import {
@@ -1117,13 +1118,13 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
       }
 
       // Prepare payload: in ministry mode, auto-tag ministry and allow empty bacenta
-      const payload: Omit<Member, 'id' | 'createdDate' | 'lastUpdated'> = isMinistryContext
+      const payload: Omit<Member, 'id' | 'createdDate' | 'lastUpdated'> = withLeadershipFirstTimerRule(isMinistryContext
         ? {
           ...memberData,
           ministry: trimmedMinistry, // enforce exact ministry tag
           bacentaId: memberData.bacentaId || ''
         }
-        : memberData;
+        : memberData);
 
       // Ensure writes occur in the ministry church when in ministry mode
       const originalCtx = firebaseUtils.getCurrentChurchId();
@@ -1250,16 +1251,17 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     try {
       setIsLoading(true);
       const original = members.find(m => m.id === memberData.id);
+      const sanitizedMemberData = withLeadershipFirstTimerRule(memberData);
 
       // If a Green Bacenta (Bacenta Leader) is being demoted (role changed), auto de-link their Red Bacentas
       const isDemotedFromGreenBacenta =
-        original?.role === 'Bacenta Leader' && memberData.role !== 'Bacenta Leader';
+        original?.role === 'Bacenta Leader' && sanitizedMemberData.role !== 'Bacenta Leader';
       if (isDemotedFromGreenBacenta) {
         const linkedFellowshipLeaders = members.filter(
-          m => m.role === 'Fellowship Leader' && m.bacentaLeaderId === memberData.id
+          m => m.role === 'Fellowship Leader' && m.bacentaLeaderId === sanitizedMemberData.id
         );
         if (linkedFellowshipLeaders.length > 0) {
-          console.log(`🔗 De-linking ${linkedFellowshipLeaders.length} Red Bacenta(s) — Green Bacenta ${memberData.id} demoted to '${memberData.role}'`);
+          console.log(`🔗 De-linking ${linkedFellowshipLeaders.length} Red Bacenta(s) — Green Bacenta ${sanitizedMemberData.id} demoted to '${sanitizedMemberData.role}'`);
           // Fire-and-forget: update Firestore in background
           (async () => {
             const { writeBatch: wbFn, doc: docFn } = await import('firebase/firestore');
@@ -1284,7 +1286,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
           })();
           // Optimistic UI: clear bacentaLeaderId for linked fellowship leaders
           setMembers(prev => prev.map(m =>
-            m.role === 'Fellowship Leader' && m.bacentaLeaderId === memberData.id
+            m.role === 'Fellowship Leader' && m.bacentaLeaderId === sanitizedMemberData.id
               ? { ...m, bacentaLeaderId: '' }
               : m
           ));
@@ -1295,25 +1297,25 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
       if (isMinistryContext) {
         // Calculate the updates (difference between original and new)
         const updates: Partial<Member> = {};
-        Object.keys(memberData).forEach(key => {
+        Object.keys(sanitizedMemberData).forEach(key => {
           const typedKey = key as keyof Member;
-          if (original && memberData[typedKey] !== original[typedKey]) {
-            (updates as any)[typedKey] = memberData[typedKey];
+          if (original && sanitizedMemberData[typedKey] !== original[typedKey]) {
+            (updates as any)[typedKey] = sanitizedMemberData[typedKey];
           }
         });
 
-        await ministryMembersService.update(memberData.id, updates, userProfile, original as Member);
+        await ministryMembersService.update(sanitizedMemberData.id, updates, userProfile, original as Member);
         showToast('success', 'Member updated successfully (synced to source church)');
         // Optimistic UI update so changes show immediately in ministry mode
         setMembers(prev => prev.map(m => {
-          if (m.id !== memberData.id) return m;
+          if (m.id !== sanitizedMemberData.id) return m;
           return { ...m, ...(updates as Partial<Member>) } as Member;
         }));
       } else {
-        await memberOperationsWithNotifications.update(memberData.id, memberData, original || undefined);
+        await memberOperationsWithNotifications.update(sanitizedMemberData.id, sanitizedMemberData, original || undefined);
         showToast('success', 'Member updated successfully');
         // Optimistic UI update in normal mode
-        setMembers(prev => prev.map(m => m.id === memberData.id ? ({ ...m, ...memberData } as Member) : m));
+        setMembers(prev => prev.map(m => m.id === sanitizedMemberData.id ? ({ ...m, ...sanitizedMemberData } as Member) : m));
       }
     } catch (error: any) {
       setError(error.message);
