@@ -311,16 +311,17 @@ const InteractiveLineChart: React.FC<{
   showGrid?: boolean;
   animated?: boolean;
 }> = ({ data, maxValue, height = "h-80", showGrid = true, animated = true }) => {
-  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+  const [activeIndex, setActiveIndex] = useState<number | null>(null);
   const [animationComplete, setAnimationComplete] = useState(false);
 
-  // Calculate proper scaling - use 0 as baseline for better visual comparison
-  const max = maxValue || Math.max(...data.map(d => d.value));
-  const chartMax = max; // Use actual max
-  const chartMin = 0; // Always start from 0 for attendance data
+  const max = maxValue || Math.max(...data.map(d => d.value), 0);
+  const chartMax = max <= 0 ? 1 : max;
+  const chartMin = 0;
   const chartRange = chartMax - chartMin;
+  const averageValue = data.length ? Math.round(data.reduce((sum, item) => sum + item.value, 0) / data.length) : 0;
+  const peakValue = data.length ? Math.max(...data.map(item => item.value)) : 0;
+  const latestValue = data.length ? data[data.length - 1].value : 0;
 
-  // Generate grid lines
   const gridLines = showGrid ? Array.from({ length: 6 }, (_, i) => {
     const value = chartMin + (chartRange * i) / 5;
     return Math.round(value);
@@ -337,123 +338,213 @@ const InteractiveLineChart: React.FC<{
 
   const getPointY = (value: number) => {
     if (chartRange === 0) return 50;
-    return 90 - ((value - chartMin) / chartRange) * 80; // 90% to 10% of container
+    return 80 - ((value - chartMin) / chartRange) * 58;
   };
 
-  // Spread points across full width for perfect alignment with labels (add slight side padding)
   const getPointX = (index: number) => {
     const count = Math.max(data.length - 1, 1);
-    return 5 + (index / count) * 90; // 5% to 95%
+    return 6 + (index / count) * 88;
   };
 
-  // Generate SVG path for the line
-  const linePath = data.map((item, index) => {
-    const x = getPointX(index);
-    const y = getPointY(item.value);
-    return `${index === 0 ? 'M' : 'L'} ${x} ${y}`;
-  }).join(' ');
+  const points = data.map((item, index) => ({
+    x: getPointX(index),
+    y: getPointY(item.value),
+    ...item
+  }));
 
-  // Generate area path for gradient fill
-  const areaPath = data.length > 0 ?
-    `${linePath} L ${getPointX(data.length - 1)} 90 L ${getPointX(0)} 90 Z` : '';
+  React.useEffect(() => {
+    setActiveIndex(points.length ? points.length - 1 : null);
+  }, [points.length]);
 
-  // Point color helpers removed (single color scheme now for consistency with bar chart)
+  const createSmoothPath = (chartPoints: typeof points) => {
+    if (!chartPoints.length) return '';
+    if (chartPoints.length === 1) return `M ${chartPoints[0].x} ${chartPoints[0].y}`;
+
+    return chartPoints.reduce((path, point, index, arr) => {
+      if (index === 0) return `M ${point.x} ${point.y}`;
+      const prev = arr[index - 1];
+      const midX = (prev.x + point.x) / 2;
+      return `${path} C ${midX} ${prev.y}, ${midX} ${point.y}, ${point.x} ${point.y}`;
+    }, '');
+  };
+
+  const linePath = createSmoothPath(points);
+
+  const areaPath = points.length > 0
+    ? `${linePath} L ${points[points.length - 1].x} 84 L ${points[0].x} 84 Z`
+    : '';
+
+  const highlightedPoint = activeIndex !== null ? points[activeIndex] : points[points.length - 1] || null;
 
   return (
-    <div className={`${height} relative`}>
-      {/* Grid Lines */}
-      {showGrid && (
-        <div className="absolute inset-0 flex flex-col justify-between py-4 pr-4 pl-12">
-          {gridLines.map((value, index) => (
-            <div key={index} className="flex items-center">
-              <span className="text-xs text-gray-400 w-8 text-right mr-2">{value}</span>
-              <div className="flex-1 h-px bg-gray-200"></div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* SVG Chart */}
-      <div className="absolute inset-0 p-4 pl-12">
-        <svg className="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
-          {/* Area gradient */}
-          <defs>
-            <linearGradient id="areaGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-              <stop offset="0%" stopColor="rgb(59, 130, 246)" stopOpacity="0.3" />
-              <stop offset="100%" stopColor="rgb(59, 130, 246)" stopOpacity="0.05" />
-            </linearGradient>
-          </defs>
-
-          {/* Area fill */}
-          {animationComplete && areaPath && (
-            <path
-              d={areaPath}
-              fill="url(#areaGradient)"
-              className="transition-all duration-1000 ease-out"
-            />
-          )}
-
-          {/* Line */}
-          {animationComplete && linePath && (
-            <path
-              d={linePath}
-              fill="none"
-              stroke="rgb(59, 130, 246)"
-              strokeWidth="1"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="transition-all duration-1000 ease-out"
-              style={{
-                strokeDasharray: animated ? '200' : 'none',
-                strokeDashoffset: animated ? '0' : 'none',
-                animation: animated ? 'drawLine 1.2s ease-out' : 'none'
-              }}
-            />
-          )}
-
-          {/* Points */}
-          {animationComplete && data.map((item, index) => (
-            <circle
-              key={index}
-              cx={getPointX(index)}
-              cy={getPointY(item.value)}
-              r={hoveredIndex === index ? 1.8 : 1.3}
-              fill="rgb(59,130,246)"
-              stroke="#ffffff"
-              strokeWidth={0.6}
-              onMouseEnter={() => setHoveredIndex(index)}
-              onMouseLeave={() => setHoveredIndex(null)}
-              style={{ transition: 'all 200ms ease' }}
-            />
-          ))}
-        </svg>
-      </div>
-
-      {/* Tooltip (single, follows hovered point) */}
-      {hoveredIndex !== null && data[hoveredIndex] && (
-        <div className="absolute text-xs px-2 py-1 rounded shadow-lg bg-gray-800 text-white pointer-events-none" style={{
-          left: `calc(${getPointX(hoveredIndex)}% + 3rem)`,
-          top: `${getPointY(data[hoveredIndex].value)}%`,
-          transform: 'translate(-50%, -120%)'
-        }}>
-          <div className="font-bold">{data[hoveredIndex].value}</div>
-          <div className="text-gray-300">{data[hoveredIndex].label}</div>
-        </div>
-      )}
-
-      {/* X-axis labels - absolute positioned to match point X exactly */}
-  <div className="absolute bottom-0 left-12 right-4 pb-3 pointer-events-none">
-        {data.map((item, index) => (
+    <div className={`${height} grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,128px)_minmax(0,1fr)] lg:gap-5`}>
+      <div className="grid grid-cols-3 gap-2 lg:grid-cols-1 lg:grid-rows-3">
+        {[
+          { label: 'Latest', value: latestValue, tone: 'from-slate-900 to-slate-700 text-white border-slate-800' },
+          { label: 'Average', value: averageValue, tone: 'from-blue-50 to-cyan-50 text-slate-900 border-blue-100' },
+          { label: 'Peak', value: peakValue, tone: 'from-violet-50 to-fuchsia-50 text-slate-900 border-violet-100' },
+        ].map((metric) => (
           <div
-            key={index}
-            className={`absolute transform -translate-x-1/2 text-xs text-gray-600 text-center font-medium transition-all duration-200 px-1 ${
-              hoveredIndex === index ? 'text-gray-800 font-bold scale-105' : ''
-            }`}
-    style={{ left: `${getPointX(index)}%` }}
+            key={metric.label}
+            className={`rounded-3xl border bg-gradient-to-br px-3 py-3 shadow-sm sm:px-4 ${metric.tone}`}
           >
-            {formatDateLabel(item.label)}
+            <div className="text-[10px] font-semibold uppercase tracking-[0.22em] opacity-70">{metric.label}</div>
+            <div className="mt-2 text-xl font-bold sm:text-2xl">{metric.value}</div>
           </div>
         ))}
+      </div>
+
+      <div className="relative flex min-h-0 flex-col rounded-[1.75rem] border border-slate-200 bg-[radial-gradient(circle_at_top,_rgba(59,130,246,0.10),_transparent_42%),linear-gradient(180deg,_#ffffff_0%,_#f8fafc_100%)] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] sm:p-5">
+        <div className="mb-4 flex flex-wrap gap-2">
+          {points.map((point, index) => (
+            <button
+              key={index}
+              type="button"
+              onMouseEnter={() => setActiveIndex(index)}
+              onMouseLeave={() => setActiveIndex(null)}
+              onClick={() => setActiveIndex(index)}
+              className={`rounded-full border px-3 py-1.5 text-[11px] font-semibold transition-all sm:text-xs ${
+                activeIndex === index
+                  ? 'border-slate-900 bg-slate-900 text-white shadow-md'
+                  : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:text-slate-700'
+              }`}
+            >
+              {formatDateLabel(point.label)} <span className="ml-1 opacity-80">{point.value}</span>
+            </button>
+          ))}
+        </div>
+
+        <div className="relative flex-1 overflow-hidden rounded-[1.4rem] border border-white/80 bg-white/70 px-2 pb-12 pt-4 sm:px-4 sm:pb-14">
+          {showGrid && (
+            <div className="pointer-events-none absolute inset-0 flex flex-col justify-between px-2 pb-12 pt-4 sm:px-4 sm:pb-14">
+              {gridLines.map((value, index) => (
+                <div key={index} className="flex items-center gap-2">
+                  <span className="w-6 shrink-0 text-[10px] font-medium text-slate-400 sm:w-8 sm:text-xs">{value}</span>
+                  <div className="h-px flex-1 bg-slate-200/80" />
+                </div>
+              ))}
+            </div>
+          )}
+
+          <svg className="relative z-10 h-full w-full overflow-visible" viewBox="0 0 100 100" preserveAspectRatio="none">
+            <defs>
+              <linearGradient id="attendanceAreaGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stopColor="#2563eb" stopOpacity="0.22" />
+                <stop offset="75%" stopColor="#38bdf8" stopOpacity="0.08" />
+                <stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
+              </linearGradient>
+              <linearGradient id="attendanceStrokeGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stopColor="#1d4ed8" />
+                <stop offset="50%" stopColor="#0f766e" />
+                <stop offset="100%" stopColor="#7c3aed" />
+              </linearGradient>
+            </defs>
+
+            {animationComplete && areaPath && (
+              <path d={areaPath} fill="url(#attendanceAreaGradient)" className="transition-all duration-700 ease-out" />
+            )}
+
+            {animationComplete && linePath && (
+              <path
+                d={linePath}
+                fill="none"
+                stroke="url(#attendanceStrokeGradient)"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="transition-all duration-700 ease-out"
+                style={{
+                  strokeDasharray: animated ? '240' : 'none',
+                  strokeDashoffset: animated ? '0' : 'none',
+                  animation: animated ? 'drawLine 1s ease-out' : 'none'
+                }}
+              />
+            )}
+
+            {highlightedPoint && (
+              <line
+                x1={highlightedPoint.x}
+                x2={highlightedPoint.x}
+                y1={12}
+                y2={84}
+                stroke="#94a3b8"
+                strokeDasharray="3 4"
+                strokeWidth="0.65"
+                opacity="0.8"
+              />
+            )}
+
+            {animationComplete && points.map((point, index) => {
+              const isActive = activeIndex === index || (activeIndex === null && index === points.length - 1);
+              return (
+                <g key={index}>
+                  {isActive && (
+                    <circle
+                      cx={point.x}
+                      cy={point.y}
+                      r={4.8}
+                      fill="#3b82f6"
+                      opacity="0.12"
+                    />
+                  )}
+                  <circle
+                    cx={point.x}
+                    cy={point.y}
+                    r={isActive ? 2.6 : 1.8}
+                    fill="#ffffff"
+                    stroke={isActive ? '#1d4ed8' : '#6366f1'}
+                    strokeWidth={isActive ? 1.4 : 1}
+                    style={{ transition: 'all 160ms ease' }}
+                  />
+                  <circle
+                    cx={point.x}
+                    cy={point.y}
+                    r={6.5}
+                    fill="transparent"
+                    onMouseEnter={() => setActiveIndex(index)}
+                    onMouseLeave={() => setActiveIndex(null)}
+                    onClick={() => setActiveIndex(index)}
+                    className="cursor-pointer"
+                  />
+                </g>
+              );
+            })}
+          </svg>
+
+          {highlightedPoint && (
+            <div
+              className="pointer-events-none absolute z-20 min-w-[112px] rounded-2xl border border-slate-200 bg-white/95 px-3 py-2 text-slate-900 shadow-lg backdrop-blur-sm"
+              style={{
+                left: `calc(${highlightedPoint.x}% + 6px)`,
+                top: `${Math.max(highlightedPoint.y - 6, 8)}%`,
+                transform: highlightedPoint.x > 72 ? 'translate(-100%, -100%)' : 'translate(0, -100%)'
+              }}
+            >
+              <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">Attendance</div>
+              <div className="mt-1 text-lg font-bold leading-none">{highlightedPoint.value}</div>
+              <div className="mt-1 text-xs font-medium text-slate-500">{formatDateLabel(highlightedPoint.label)}</div>
+            </div>
+          )}
+
+          <div className="absolute bottom-3 left-10 right-3 flex justify-between gap-2 sm:left-12 sm:right-5">
+            {points.map((point, index) => (
+              <button
+                key={index}
+                type="button"
+                onClick={() => setActiveIndex(index)}
+                className="min-w-0 flex-1 text-center"
+              >
+                <div className={`mx-auto max-w-[72px] truncate rounded-full px-1.5 py-1 text-[10px] font-semibold transition-colors sm:text-xs ${
+                  activeIndex === index || (activeIndex === null && index === points.length - 1)
+                    ? 'bg-slate-900 text-white'
+                    : 'text-slate-500'
+                }`}>
+                  {formatDateLabel(point.label)}
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -829,8 +920,8 @@ const AttendanceAnalyticsView: React.FC = () => {
       </div>
 
       {/* View Controls */}
-      <div className="glass p-6 shadow-lg rounded-2xl">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-4 sm:space-y-0">
+      <div className="rounded-[1.75rem] border border-slate-200/80 bg-white/90 p-3 shadow-[0_20px_60px_-36px_rgba(15,23,42,0.4)] backdrop-blur-sm sm:p-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-wrap gap-2">
             {[
               { key: 'overview', label: 'Overview', icon: '📊' },
@@ -840,10 +931,10 @@ const AttendanceAnalyticsView: React.FC = () => {
               <button
                 key={view.key}
                 onClick={() => setCurrentView(view.key as ViewType)}
-                className={`px-4 py-2 rounded-xl font-medium transition-all duration-200 flex items-center space-x-2 ${
+                className={`flex min-h-[42px] items-center space-x-2 rounded-2xl px-3 py-2 text-sm font-semibold transition-all duration-200 sm:px-4 ${
                   currentView === view.key
-                    ? 'bg-blue-500 text-white shadow-lg'
-                    : 'bg-white/50 text-gray-600 hover:bg-white/80'
+                    ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-200'
+                    : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
                 }`}
               >
                 <span>{view.icon}</span>
@@ -853,7 +944,7 @@ const AttendanceAnalyticsView: React.FC = () => {
           </div>
 
           {currentView === 'overview' && (
-            <div className="flex gap-2">
+            <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto">
               {[
                 { key: 'bar', label: 'Bar', icon: '📊' },
                 { key: 'line', label: 'Line', icon: '📈' },
@@ -861,10 +952,10 @@ const AttendanceAnalyticsView: React.FC = () => {
                 <button
                   key={chart.key}
                   onClick={() => setChartType(chart.key as ChartType)}
-                  className={`px-3 py-2 rounded-lg font-medium transition-all duration-200 flex items-center space-x-1 ${
+                  className={`flex min-h-[42px] items-center justify-center space-x-2 rounded-2xl px-3 py-2 text-sm font-semibold transition-all duration-200 ${
                     chartType === chart.key
-                      ? 'bg-gray-600 text-white'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      ? 'bg-slate-900 text-white shadow-lg shadow-slate-300'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                   }`}
                 >
                   <span className="text-sm">{chart.icon}</span>
@@ -878,33 +969,53 @@ const AttendanceAnalyticsView: React.FC = () => {
 
       {/* Chart Display */}
       {currentView === 'overview' && (
-        <div className="glass p-10 shadow-lg rounded-2xl chart-container">
-          <h3 className="text-2xl font-bold gradient-text mb-10 flex items-center justify-center">
-            <ChartBarIcon className="w-8 h-8 mr-3 text-gray-600" />
-            Weekly Attendance Overview
-          </h3>
-          <div className="px-4 py-2">
-            {chartType === 'bar' ? (
-              <InteractiveBarChart
-                data={analyticsData.weeklyData.map(d => ({
-                  label: d.label,
-                  value: d.attendance
-                }))}
-                height="h-[28rem]"
-                showGrid={true}
-                animated={true}
-              />
-            ) : (
-              <InteractiveLineChart
-                data={analyticsData.weeklyData.map(d => ({
-                  label: d.label,
-                  value: d.attendance
-                }))}
-                height="h-[28rem]"
-                showGrid={true}
-                animated={true}
-              />
-            )}
+        <div className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-[0_24px_70px_-40px_rgba(15,23,42,0.45)]">
+          <div className="border-b border-slate-100 bg-gradient-to-r from-slate-50 via-white to-blue-50/60 px-4 py-4 sm:px-6 sm:py-5">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">Attendance Analytics</div>
+                <h3 className="mt-1 flex items-center text-lg font-bold text-slate-900 sm:text-2xl">
+                  <ChartBarIcon className="mr-2 h-6 w-6 text-slate-600 sm:mr-3 sm:h-8 sm:w-8" />
+                  Weekly Attendance Overview
+                </h3>
+                <p className="mt-1 text-sm text-slate-500">Clean weekly trend for {monthName} {year}, tuned for small screens.</p>
+              </div>
+              <div className="flex gap-2 text-xs sm:text-sm">
+                <div className="rounded-2xl bg-slate-100 px-3 py-2 text-slate-600">
+                  Avg <span className="ml-1 font-bold text-slate-900">{analyticsData.weeklyData.length ? Math.round(analyticsData.weeklyData.reduce((sum, item) => sum + item.attendance, 0) / analyticsData.weeklyData.length) : 0}</span>
+                </div>
+                <div className="rounded-2xl bg-blue-50 px-3 py-2 text-blue-700">
+                  Peak <span className="ml-1 font-bold">{analyticsData.weeklyData.length ? Math.max(...analyticsData.weeklyData.map(item => item.attendance)) : 0}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="px-3 py-4 sm:px-5 sm:py-5">
+            <div className="rounded-[1.5rem] border border-slate-100 bg-gradient-to-b from-white to-slate-50/80 p-3 sm:p-4">
+              <div className="px-1 py-1 sm:px-2 sm:py-2">
+                {chartType === 'bar' ? (
+                  <InteractiveBarChart
+                    data={analyticsData.weeklyData.map(d => ({
+                      label: d.label,
+                      value: d.attendance
+                    }))}
+                    height="h-[22rem] sm:h-[24rem] lg:h-[26rem]"
+                    showGrid={true}
+                    animated={true}
+                  />
+                ) : (
+                  <InteractiveLineChart
+                    data={analyticsData.weeklyData.map(d => ({
+                      label: d.label,
+                      value: d.attendance
+                    }))}
+                    height="h-[22rem] sm:h-[24rem] lg:h-[26rem]"
+                    showGrid={true}
+                    animated={true}
+                  />
+                )}
+              </div>
+            </div>
           </div>
         </div>
       )}

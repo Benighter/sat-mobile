@@ -78,18 +78,20 @@ const AdminChurchPreview: React.FC<AdminChurchPreviewProps> = ({ admin, onClose 
   const displayedDate = new Date();
   const sundays = getSundaysOfMonth(displayedDate.getFullYear(), displayedDate.getMonth());
   const totalMembers = members.filter(m => !m.frozen).length;
+  const mostRecentSunday = getCurrentOrMostRecentSunday();
+  const elapsedSundays = sundays.filter((sunday) => sunday <= mostRecentSunday);
 
-  let attendanceRate = 0;
-  if (sundays.length && totalMembers) {
-    const totalPossible = totalMembers * sundays.length;
-    let presents = 0;
-    sundays.forEach(s => {
-      members.filter(m => !m.frozen).forEach(m => {
-        const rec = attendance.find(ar => ar.memberId === m.id && ar.date === s && ar.status === 'Present');
-        if (rec) presents++;
-      });
+  let attendanceAverage = 0;
+  if (elapsedSundays.length) {
+    const sundayTotals = elapsedSundays.map((sunday) => {
+      const sundayRecords = attendance.filter((record) => record.date === sunday && record.status === 'Present');
+      const presentMemberIds = new Set(sundayRecords.filter((record) => record.memberId).map((record) => record.memberId));
+      const presentNewBelieverIds = new Set(sundayRecords.filter((record) => record.newBelieverId).map((record) => record.newBelieverId));
+      const presentMembers = members.filter((member) => !member.frozen && presentMemberIds.has(member.id));
+      const presentNewBelievers = newBelievers.filter((newBeliever) => presentNewBelieverIds.has(newBeliever.id));
+      return presentMembers.length + presentNewBelievers.length;
     });
-    attendanceRate = totalPossible ? Math.round((presents / totalPossible) * 100) : 0;
+    attendanceAverage = Number((sundayTotals.reduce((sum, total) => sum + total, 0) / elapsedSundays.length).toFixed(1));
   }
 
   const currentSunday = getCurrentOrMostRecentSunday();
@@ -131,7 +133,7 @@ const AdminChurchPreview: React.FC<AdminChurchPreviewProps> = ({ admin, onClose 
             members: totalMembers,
             confirmationsUpcoming: confirmedCount,
             confirmationsTotal: totalConfirmationsOverall,
-            attendanceRate,
+            attendanceAverage,
             weeklyAttendance,
             outreach: outreachTotal,
             bacentas: bacentas.length,
@@ -191,7 +193,7 @@ const PreviewGrid: React.FC<{
     members: number;
     confirmationsUpcoming: number;
     confirmationsTotal: number;
-    attendanceRate: number;
+    attendanceAverage: number;
     weeklyAttendance: number;
     outreach: number;
     bacentas: number;
@@ -207,7 +209,7 @@ const PreviewGrid: React.FC<{
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
       <PreviewStat title="Total Members" value={loading ? '…' : stats.members} description="Active members" accent="blue" onClick={() => onSelect('members')} />
       <PreviewStat title="Sunday Confirmations" value={loading ? '…' : stats.confirmationsUpcoming} description={`of ${confirmationTarget} • Next Sunday (All: ${stats.confirmationsTotal})`} accent="rose" onClick={() => onSelect('confirmations')} />
-      <PreviewStat title="Attendance Rate" value={loading ? '…' : `${stats.attendanceRate}%`} description={`For ${monthName}`} accent="emerald" onClick={() => onSelect('attendance')} />
+      <PreviewStat title="Attendance Average" value={loading ? '…' : stats.attendanceAverage} description={`Avg per Sunday in ${monthName}`} accent="emerald" onClick={() => onSelect('attendance')} />
       <PreviewStat title="Weekly Attendance" value={loading ? '…' : stats.weeklyAttendance} description={currentSundayLabel} accent="amber" onClick={() => onSelect('attendance')} />
       <PreviewStat title="Outreach" value={loading ? '…' : stats.outreach} description="Outreach members" accent="indigo" onClick={() => onSelect('outreach')} />
       <PreviewStat title="Bacentas" value={loading ? '…' : stats.bacentas} description="Cell groups" accent="purple" onClick={() => onSelect('bacentas')} />

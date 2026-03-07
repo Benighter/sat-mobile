@@ -86,14 +86,6 @@ const StatCard: React.FC<StatCardProps> = memo(({ title, value, icon, descriptio
       <div className="flex-1 flex flex-col justify-center min-h-0">
         <div className="flex items-center space-x-3 mb-1 sm:mb-4">
           <p className="text-2xl sm:text-3xl md:text-4xl desktop:text-3xl desktop-lg:text-4xl font-bold text-gray-900 dark:text-dark-100 truncate flex-shrink-0">{value}</p>
-          {title === "Attendance Rate" && (
-            <div className="flex-1 max-w-12 sm:max-w-16 desktop:max-w-14 desktop-lg:max-w-16 h-2 bg-gray-200 dark:bg-dark-600 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-emerald-500 dark:bg-emerald-400 rounded-full transition-all duration-500"
-                style={{ width: `${typeof value === 'string' ? parseInt(value) : 0}%` }}
-              ></div>
-            </div>
-          )}
         </div>
       </div>
 
@@ -210,23 +202,57 @@ const DashboardView: React.FC = memo(() => {
     }
   }, [user, activeMembers, currentChurchId]); // Depend on activeMembers for consistency
 
-  const currentMonthAttendancePercentage = () => {
-    if (!displayedSundays.length || !members.length) return 0;
+  const currentMonthAttendanceAverage = useMemo(() => {
+    if (!displayedSundays.length) return 0;
 
-    let totalPossibleAttendances = members.length * displayedSundays.length;
-    let actualPresents = 0;
+    const today = new Date();
+    const currentMonthIndex = today.getMonth();
+    const currentYearValue = today.getFullYear();
+    const selectedMonthIndex = displayedDate.getMonth();
+    const selectedYearValue = displayedDate.getFullYear();
+    const mostRecentSunday = getCurrentOrMostRecentSunday();
 
-    displayedSundays.forEach(sunday => {
-      members.forEach(member => {
-        const record = attendanceRecords.find(ar => ar.memberId === member.id && ar.date === sunday);
-        if (record && record.status === 'Present') {
-          actualPresents++;
-        }
-      });
+    const effectiveSundays = displayedSundays.filter((sunday) => {
+      if (selectedYearValue < currentYearValue) return true;
+      if (selectedYearValue > currentYearValue) return false;
+      if (selectedMonthIndex < currentMonthIndex) return true;
+      if (selectedMonthIndex > currentMonthIndex) return false;
+      return sunday <= mostRecentSunday;
     });
 
-    return totalPossibleAttendances > 0 ? Math.round((actualPresents / totalPossibleAttendances) * 100) : 0;
-  };
+    if (!effectiveSundays.length) return 0;
+
+    const sundayTotals = effectiveSundays.map((sunday) => {
+      const sundayRecords = attendanceRecords.filter(
+        (record) => record.date === sunday && record.status === 'Present'
+      );
+
+      const presentMemberIds = new Set(
+        sundayRecords
+          .filter((record) => record.memberId)
+          .map((record) => record.memberId as string)
+      );
+      const presentNewBelieverIds = new Set(
+        sundayRecords
+          .filter((record) => record.newBelieverId)
+          .map((record) => record.newBelieverId as string)
+      );
+
+      const presentMembers = members.filter((member) => presentMemberIds.has(member.id));
+      const presentNewBelievers = newBelievers.filter((newBeliever) => presentNewBelieverIds.has(newBeliever.id));
+
+      return presentMembers.length + presentNewBelievers.length;
+    });
+
+    const average = sundayTotals.reduce((sum, total) => sum + total, 0) / effectiveSundays.length;
+    return Number(average.toFixed(1));
+  }, [attendanceRecords, displayedDate, displayedSundays, members, newBelievers]);
+
+  const currentMonthAttendanceAverageDisplay = useMemo(() => (
+    Number.isInteger(currentMonthAttendanceAverage)
+      ? String(currentMonthAttendanceAverage)
+      : currentMonthAttendanceAverage.toFixed(1)
+  ), [currentMonthAttendanceAverage]);
 
   // Calculate current week's attendance
   const getCurrentWeekAttendance = () => {
@@ -578,11 +604,11 @@ const DashboardView: React.FC = memo(() => {
         return (
           <StatCard
             key={id}
-            title="Attendance Rate"
-            value={`${currentMonthAttendancePercentage()}%`}
+            title="Attendance Average"
+            value={currentMonthAttendanceAverageDisplay}
             icon={<AttendanceIcon className="w-full h-full" />}
             accentColor="emerald"
-            description={`For ${monthName}`}
+            description={`Avg per Sunday in ${monthName}`}
             onClick={() => !rearrangeMode && switchTab({ id: 'attendance_analytics', name: 'Attendance Analytics' })}
           />
         );
