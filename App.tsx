@@ -39,8 +39,6 @@ import NotificationBadge from './components/notifications/NotificationBadge';
 import DeletionRequestNotificationBadge from './components/notifications/DeletionRequestNotificationBadge';
 
 import { DeleteMemberModal, DeleteBacentaModal, DeleteNewBelieverModal, ClearAllDataModal, ClearSelectedDataModal, CreateDeletionRequestModal, ClearAllNewBelieversModal } from './components/modals/confirmations/ConfirmationModal';
-import WhatsNewModal from './components/modals/general/WhatsNewModal';
-import { useWhatsNew } from './hooks/useWhatsNew';
 import ErrorBoundary from './components/common/ErrorBoundary';
 
 const AppContent: React.FC = memo(() => {
@@ -87,9 +85,6 @@ const AppContent: React.FC = memo(() => {
   const [isDataManagementOpen, setIsDataManagementOpen] = useState(false);
   const [isBulkMemberModalOpen, setIsBulkMemberModalOpen] = useState(false);
   const [loadingStuckHint, setLoadingStuckHint] = useState<string | null>(null);
-
-  // What's New modal state
-  const { isOpen: isWhatsNewOpen, closeModal: closeWhatsNew } = useWhatsNew();
 
   // Check if current tab is a bacenta tab
   const isBacentaTab = bacentas.some(b => b.id === currentTab.id);
@@ -797,12 +792,6 @@ const AppContent: React.FC = memo(() => {
 
       {/* Pending Invite Notification */}
       <PendingInviteNotification />
-
-      {/* What's New Modal */}
-      <WhatsNewModal
-        isOpen={isWhatsNewOpen}
-        onClose={closeWhatsNew}
-      />
 
       {/* Toast Notifications - Centered at Top */}
     {toasts.map((toast) => (
