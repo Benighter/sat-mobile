@@ -1,9 +1,9 @@
 import ExcelJS from 'exceljs';
 import { Member, Bacenta, AttendanceRecord } from '../types';
 import { DirectoryHandle, saveFileToDirectory } from './fileSystemUtils';
-import { formatDateDayMonthYear } from './dateUtils';
+import { formatDateDayMonthYear, getCurrentOrMostRecentSunday } from './dateUtils';
 import { DEFAULT_CHURCH, MINISTRY_OPTIONS } from '../constants';
-import { isMemberWentHome } from './memberStatus';
+import { isMemberCurrentlyFirstTimer, isMemberWentHome } from './memberStatus';
 import { buildHierarchyGrouping, HierarchySectionKind } from './hierarchyGrouping';
 
 export interface HierarchyExcelExportOptions {
@@ -149,10 +149,11 @@ export const getHierarchyExportPreview = (data: HierarchyExcelData): HierarchyEx
   const dateRangeDays = firstDate && lastDate
     ? Math.ceil((new Date(lastDate).getTime() - new Date(firstDate).getTime()) / (1000 * 60 * 60 * 24)) + 1
     : 0;
+  const currentSunday = getCurrentOrMostRecentSunday();
 
   const tonguesCount = activeMembers.filter(m => m.speaksInTongues === true).length;
   const baptisedCount = activeMembers.filter(m => m.baptized === true).length;
-  const firstTimersCount = activeMembers.filter(m => m.isFirstTimer === true).length;
+  const firstTimersCount = activeMembers.filter(m => isMemberCurrentlyFirstTimer(m, currentSunday)).length;
   const newBelieversCount = activeMembers.filter(m => m.isNewBeliever === true).length;
   const ministriesCount = new Set(activeMembers.filter(m => m.ministry).map(m => m.ministry!.trim().toLowerCase())).size;
 
@@ -624,7 +625,8 @@ export const exportHierarchyExcel = async (
 
     // First Timers tab (grouped by Bacenta Leader / Fellowship Leader)
     (() => {
-      const firstTimers = activeMembers.filter(m => m.isFirstTimer === true);
+      const currentSunday = getCurrentOrMostRecentSunday();
+      const firstTimers = activeMembers.filter(m => isMemberCurrentlyFirstTimer(m, currentSunday));
       if (!firstTimers.length) return;
 
       const ws = workbook.addWorksheet('First Timers');

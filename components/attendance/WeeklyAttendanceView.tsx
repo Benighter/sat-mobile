@@ -17,7 +17,7 @@ import {
 } from '../icons';
 import { Member, NewBeliever, Bacenta } from '../../types';
 import { hasAdminPrivileges } from '../../utils/permissionUtils';
-import { isLeadershipPosition } from '../../utils/memberStatus';
+import { isLeadershipPosition, isMemberFirstTimerOnSunday } from '../../utils/memberStatus';
 import { MINISTRY_OPTIONS } from '../../constants';
 import { membersFirebaseService } from '../../services/firebaseService';
 
@@ -104,8 +104,8 @@ const WeeklyAttendanceView: React.FC = () => {
   }, [members, normalizedSelectedMinistry, presentMemberIds]);
 
   const presentFirstTimerMembers = useMemo(() => (
-    presentMembersForSelectedSunday.filter(member => member.isFirstTimer)
-  ), [presentMembersForSelectedSunday]);
+    presentMembersForSelectedSunday.filter(member => isMemberFirstTimerOnSunday(member, selectedSunday))
+  ), [presentMembersForSelectedSunday, selectedSunday]);
 
   const presentFirstTimeNewBelievers = useMemo(() => {
     const filteredNewBelievers = newBelievers.filter(newBeliever => {
@@ -122,14 +122,21 @@ const WeeklyAttendanceView: React.FC = () => {
   const totalPresentFirstTimers = presentFirstTimerMembers.length + presentFirstTimeNewBelievers.length;
 
   const toggleFirstTimer = async (member: Member) => {
-    if (isLeadershipPosition(member) && !member.isFirstTimer) {
+    const isFirstTimerForSelectedSunday = isMemberFirstTimerOnSunday(member, selectedSunday);
+
+    if (isLeadershipPosition(member) && !isFirstTimerForSelectedSunday) {
       showToast('warning', 'Unavailable', 'Leadership roles cannot be marked as first timers.');
       return;
     }
     if (togglingFirstTimer.has(member.id)) return;
     setTogglingFirstTimer(prev => new Set(prev).add(member.id));
     try {
-      await membersFirebaseService.update(member.id, { isFirstTimer: !member.isFirstTimer });
+      await membersFirebaseService.update(
+        member.id,
+        isFirstTimerForSelectedSunday
+          ? { isFirstTimer: false, firstTimerWeekDate: '' }
+          : { isFirstTimer: true, firstTimerWeekDate: selectedSunday }
+      );
     } catch {
       showToast('error', 'Update Failed', 'Could not update first timer status.');
     } finally {
@@ -455,7 +462,8 @@ const WeeklyAttendanceView: React.FC = () => {
           .filter(r => r.date === selectedSunday && r.status === 'Present' && r.newBelieverId)
           .map(r => r.newBelieverId as string)
       );
-      const todaysFirstTimers = newBelievers.filter(nb => presentNewBelieverIds.has(nb.id) && nb.isFirstTime).length;
+      const todaysFirstTimers = presentFirstTimerMembers.length
+        + newBelievers.filter(nb => presentNewBelieverIds.has(nb.id) && nb.isFirstTime).length;
 
       // Today's new believers (joined today)
       const todaysNewBelievers = newBelievers.filter(nb => nb.joinedDate === selectedSunday).length || 0;
@@ -500,67 +508,71 @@ const WeeklyAttendanceView: React.FC = () => {
   const canGoNext = selectedSunday < getTodayYYYYMMDD();
 
   // Mobile-friendly member row: icon-only circular tag buttons + active tag chips below name
-  const renderMemberRow = (m: Member, idx: number) => (
-    <div key={m.id} className="flex items-center gap-2.5 py-2 px-2 rounded-xl transition-colors active:bg-gray-50/80">
-      <span className="text-[11px] text-gray-400 w-5 text-right shrink-0 tabular-nums">{idx + 1}</span>
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-gray-800 truncate leading-snug">
-          {m.firstName} {m.lastName || ''}
-        </p>
-        {(m.isNewBeliever || m.isFirstTimer) && (
-          <div className="flex flex-wrap gap-1 mt-0.5">
-            {m.isNewBeliever && (
-              <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600 border border-blue-200 leading-tight">
-                ✝ New Believer
-              </span>
-            )}
-            {m.isFirstTimer && (
-              <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-orange-50 text-orange-600 border border-orange-200 leading-tight">
-                ★ First Timer
-              </span>
-            )}
-          </div>
-        )}
+  const renderMemberRow = (m: Member, idx: number) => {
+    const isFirstTimerForSelectedSunday = isMemberFirstTimerOnSunday(m, selectedSunday);
+
+    return (
+      <div key={m.id} className="flex items-center gap-2.5 py-2 px-2 rounded-xl transition-colors active:bg-gray-50/80">
+        <span className="text-[11px] text-gray-400 w-5 text-right shrink-0 tabular-nums">{idx + 1}</span>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium text-gray-800 truncate leading-snug">
+            {m.firstName} {m.lastName || ''}
+          </p>
+          {(m.isNewBeliever || isFirstTimerForSelectedSunday) && (
+            <div className="flex flex-wrap gap-1 mt-0.5">
+              {m.isNewBeliever && (
+                <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600 border border-blue-200 leading-tight">
+                  ✝ New Believer
+                </span>
+              )}
+              {isFirstTimerForSelectedSunday && (
+                <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-orange-50 text-orange-600 border border-orange-200 leading-tight">
+                  ★ First Timer
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+        <div className="flex items-center gap-1 shrink-0">
+          <button
+            onClick={() => toggleNewBeliever(m)}
+            disabled={togglingNewBeliever.has(m.id)}
+            aria-label={m.isNewBeliever ? 'Remove new believer tag' : 'Mark as new believer'}
+            className={`w-8 h-8 flex items-center justify-center rounded-full border-2 text-sm font-bold transition-all duration-150 disabled:opacity-40 active:scale-90 touch-manipulation ${
+              m.isNewBeliever
+                ? 'bg-blue-500 border-blue-400 text-white shadow-sm shadow-blue-200'
+                : 'bg-white border-gray-200 text-gray-300 hover:border-blue-300 hover:text-blue-400'
+            }`}
+          >
+            {togglingNewBeliever.has(m.id) ? '·' : '✝'}
+          </button>
+          <button
+            onClick={() => toggleFirstTimer(m)}
+            disabled={togglingFirstTimer.has(m.id)}
+            aria-label={
+              isLeadershipPosition(m) && !isFirstTimerForSelectedSunday
+                ? 'Leadership roles cannot be marked as first timers'
+                : isFirstTimerForSelectedSunday ? 'Remove first timer tag' : 'Mark as first timer'
+            }
+            title={
+              isLeadershipPosition(m) && !isFirstTimerForSelectedSunday
+                ? 'Leadership roles cannot be marked as first timers'
+                : isFirstTimerForSelectedSunday ? 'Remove first timer tag' : 'Mark as first timer'
+            }
+            className={`w-8 h-8 flex items-center justify-center rounded-full border-2 text-sm font-bold transition-all duration-150 disabled:opacity-40 active:scale-90 touch-manipulation ${
+              isFirstTimerForSelectedSunday
+                ? 'bg-orange-500 border-orange-400 text-white shadow-sm shadow-orange-200'
+                : isLeadershipPosition(m)
+                  ? 'bg-gray-100 border-gray-200 text-gray-300'
+                  : 'bg-white border-gray-200 text-gray-300 hover:border-orange-300 hover:text-orange-400'
+            }`}
+          >
+            {togglingFirstTimer.has(m.id) ? '·' : '★'}
+          </button>
+        </div>
       </div>
-      <div className="flex items-center gap-1 shrink-0">
-        <button
-          onClick={() => toggleNewBeliever(m)}
-          disabled={togglingNewBeliever.has(m.id)}
-          aria-label={m.isNewBeliever ? 'Remove new believer tag' : 'Mark as new believer'}
-          className={`w-8 h-8 flex items-center justify-center rounded-full border-2 text-sm font-bold transition-all duration-150 disabled:opacity-40 active:scale-90 touch-manipulation ${
-            m.isNewBeliever
-              ? 'bg-blue-500 border-blue-400 text-white shadow-sm shadow-blue-200'
-              : 'bg-white border-gray-200 text-gray-300 hover:border-blue-300 hover:text-blue-400'
-          }`}
-        >
-          {togglingNewBeliever.has(m.id) ? '·' : '✝'}
-        </button>
-        <button
-          onClick={() => toggleFirstTimer(m)}
-          disabled={togglingFirstTimer.has(m.id)}
-          aria-label={
-            isLeadershipPosition(m) && !m.isFirstTimer
-              ? 'Leadership roles cannot be marked as first timers'
-              : m.isFirstTimer ? 'Remove first timer tag' : 'Mark as first timer'
-          }
-          title={
-            isLeadershipPosition(m) && !m.isFirstTimer
-              ? 'Leadership roles cannot be marked as first timers'
-              : m.isFirstTimer ? 'Remove first timer tag' : 'Mark as first timer'
-          }
-          className={`w-8 h-8 flex items-center justify-center rounded-full border-2 text-sm font-bold transition-all duration-150 disabled:opacity-40 active:scale-90 touch-manipulation ${
-            m.isFirstTimer
-              ? 'bg-orange-500 border-orange-400 text-white shadow-sm shadow-orange-200'
-              : isLeadershipPosition(m)
-                ? 'bg-gray-100 border-gray-200 text-gray-300'
-                : 'bg-white border-gray-200 text-gray-300 hover:border-orange-300 hover:text-orange-400'
-          }`}
-        >
-          {togglingFirstTimer.has(m.id) ? '·' : '★'}
-        </button>
-      </div>
-    </div>
-  );
+    );
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 p-4 sm:p-6 lg:p-8">

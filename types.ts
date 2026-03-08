@@ -16,8 +16,10 @@ export interface Member {
   speaksInTongues?: boolean;
   /** If true, member has been water baptized */
   baptized?: boolean;
-  /** If true, member has been tagged as a first timer (persistent until removed) */
+  /** If true, member has been tagged as a first timer for a specific Sunday/week */
   isFirstTimer?: boolean;
+  /** Sunday date (YYYY-MM-DD) for the week this member should count as a first timer */
+  firstTimerWeekDate?: string;
   /** If true, member has been tagged as a new believer (persistent until removed) */
   isNewBeliever?: boolean;
   /** Optional ministry assignment for the member */
