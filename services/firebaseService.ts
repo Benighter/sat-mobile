@@ -34,6 +34,7 @@ import {
 import { db, auth } from '../firebase.config';
 import { Member, Bacenta, AttendanceRecord, NewBeliever, SundayConfirmation, Guest, MemberDeletionRequest, DeletionRequestStatus, OutreachBacenta, OutreachMember, PrayerRecord, PrayerSchedule, MeetingRecord, TitheRecord, BussingRecord, TransportRecord, SonOfGod, CustomPrayer, CustomPrayerRecord } from '../types';
 import { applyLeadershipFirstTimerRule, withLeadershipFirstTimerRule } from '../utils/memberStatus';
+import { cleanupStoredImage, persistImageValue } from './imageStorageService';
 // Lightweight inline type to avoid circular heavy imports for new feature (kept local to service)
 export interface HeadCountRecord {
   id: string; // `${date}_${section}`
@@ -1050,9 +1051,15 @@ export const membersFirebaseService = {
   add: async (member: Omit<Member, 'id' | 'createdDate' | 'lastUpdated'>): Promise<string> => {
     try {
       const membersRef = collection(db, getChurchCollectionPath('members'));
+      const memberRef = doc(membersRef);
       const nowIso = new Date().toISOString();
+      const profilePicture = await persistImageValue({
+        imageValue: member.profilePicture,
+        path: `churches/${currentChurchId}/member-profile-images/${memberRef.id}`
+      });
       const payload = withLeadershipFirstTimerRule({
         ...member,
+        profilePicture,
         isActive: true,
         memberStatus: member.memberStatus || 'active',
         createdDate: nowIso,
@@ -1064,7 +1071,7 @@ export const membersFirebaseService = {
       } else {
         delete payload.wentHomeDate;
       }
-      const docRef = await addDoc(membersRef, payload);
+      await setDoc(memberRef, payload);
 
       // REMOVED: Sync simulation disabled for ministry independence
       // try {
@@ -1075,7 +1082,7 @@ export const membersFirebaseService = {
       //   // non-fatal
       // }
 
-      return docRef.id;
+      return memberRef.id;
     } catch (error: any) {
       throw new Error(`Failed to add member: ${error.message}`);
     }
@@ -1097,11 +1104,20 @@ export const membersFirebaseService = {
       Object.keys(sanitized).forEach((k) => {
         if (sanitized[k] === undefined) delete sanitized[k];
       });
+      if (Object.prototype.hasOwnProperty.call(sanitized, 'profilePicture')) {
+        sanitized.profilePicture = await persistImageValue({
+          imageValue: sanitized.profilePicture,
+          path: `churches/${currentChurchId}/member-profile-images/${memberId}`
+        });
+      }
       const payload = {
         ...sanitized,
         lastUpdated: new Date().toISOString()
       } as any;
       await updateDoc(memberRef, payload);
+      if (Object.prototype.hasOwnProperty.call(sanitized, 'profilePicture') && existingMember?.profilePicture && existingMember.profilePicture !== payload.profilePicture) {
+        await cleanupStoredImage(existingMember.profilePicture);
+      }
 
       // Reload after update so simulation receives the latest 'after' state
       let afterDoc: Member | null = null;
@@ -1137,6 +1153,7 @@ export const membersFirebaseService = {
       } catch {}
 
       await deleteDoc(memberRef);
+      await cleanupStoredImage(beforeDoc?.profilePicture);
 
       // REMOVED: Sync simulation disabled for ministry independence
       // try {
@@ -2712,12 +2729,22 @@ export const meetingRecordsFirebaseService = {
     try {
       const meetingsRef = collection(db, getChurchCollectionPath('meetings'));
       const docRef = doc(meetingsRef, record.id);
+      const existingSnap = await getDoc(docRef);
+      const existingRecord = existingSnap.exists() ? ({ id: existingSnap.id, ...(existingSnap.data() as any) } as MeetingRecord) : null;
+      const meetingImage = await persistImageValue({
+        imageValue: record.meetingImage,
+        path: `churches/${currentChurchId}/meeting-images/${record.id}`
+      });
 
       await setDoc(docRef, {
         ...record,
+        meetingImage,
         updatedAt: new Date().toISOString(),
         recordedBy: currentUser?.uid || 'unknown'
       }, { merge: true });
+      if (existingRecord?.meetingImage && existingRecord.meetingImage !== meetingImage) {
+        await cleanupStoredImage(existingRecord.meetingImage);
+      }
     } catch (error: any) {
       throw new Error(`Failed to save meeting record: ${error.message}`);
     }
@@ -2727,7 +2754,12 @@ export const meetingRecordsFirebaseService = {
   delete: async (id: string): Promise<void> => {
     try {
       const meetingRef = doc(db, getChurchCollectionPath('meetings'), id);
+      const existingSnap = await getDoc(meetingRef);
       await deleteDoc(meetingRef);
+      if (existingSnap.exists()) {
+        const existingRecord = { id: existingSnap.id, ...(existingSnap.data() as any) } as MeetingRecord;
+        await cleanupStoredImage(existingRecord.meetingImage);
+      }
     } catch (error: any) {
       throw new Error(`Failed to delete meeting record: ${error.message}`);
     }

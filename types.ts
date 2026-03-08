@@ -10,7 +10,7 @@ export interface Member {
   phoneNumber: string;
   buildingAddress: string;
   roomNumber?: string; // Room number for members
-  profilePicture?: string; // Base64 encoded image string
+  profilePicture?: string; // Firebase Storage URL or legacy base64 image string
   bornAgainStatus: boolean;
   /** If true, member prays/speaks in tongues */
   speaksInTongues?: boolean;
@@ -298,7 +298,7 @@ export interface MeetingRecord {
   id: string; // bacentaId_date (YYYY-MM-DD)
   bacentaId: string;
   date: string; // Meeting date as YYYY-MM-DD
-  meetingImage?: string; // Base64 image string
+  meetingImage?: string; // Firebase Storage URL or legacy base64 image string
   bacentaLeaderName: string;
   messagePreached: string;
   discussionLedBy: string;

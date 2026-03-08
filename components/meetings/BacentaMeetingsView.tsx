@@ -1,9 +1,10 @@
-import React, { useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useAppContext } from '../../contexts/FirebaseAppContext';
 import { getLatestMeetingDay, formatDateToYYYYMMDD, getWednesdayOfWeek, getMeetingWeekDates } from '../../utils/dateUtils';
 import { CalendarIcon, ChevronLeftIcon, ChevronRightIcon, ClockIcon, BuildingOfficeIcon, CheckCircleIcon, ClipboardIcon } from '../icons';
 import { getActiveMembersByBacenta, getActiveMemberCount } from '../../utils/memberUtils';
 import BacentaAttendanceForm from './BacentaAttendanceForm';
+import { APP_BACK_INTERCEPT_EVENT } from '../../utils/mobileBack';
 
 // Meeting date picker that cycles through Wed -> Thu -> Next Wed -> Next Thu
 const MeetingDatePicker: React.FC<{
@@ -81,7 +82,7 @@ const MeetingDatePicker: React.FC<{
 };
 
 const BacentaMeetingsView: React.FC = () => {
-  const { bacentas, members, meetingRecords, currentTab, showToast, userProfile } = useAppContext();
+  const { bacentas, members, meetingRecords, showToast, userProfile } = useAppContext();
   const isAdmin = (userProfile?.role === 'admin');
 
   // Initialize with the latest meeting day (Wed/Thu). If it's Fri–Tue, we want last Thursday.
@@ -93,22 +94,20 @@ const BacentaMeetingsView: React.FC = () => {
   const [selectedBacentaId, setSelectedBacentaId] = useState<string | null>(null);
   const [selectedMeetingRecord, setSelectedMeetingRecord] = useState<any>(null);
 
-  // Ensure browser back returns from detail to this list instead of jumping tabs
-  React.useEffect(() => {
-    const handlePop = (e: PopStateEvent) => {
-      const state = (e.state as any) || {};
-      // Only handle our view states; leave others to global nav
-      if (state.view === 'bacenta-meeting-detail' || state.view === 'bacenta-meeting-list') {
-        if (state.view === 'bacenta-meeting-list') {
-          setSelectedBacentaId(null);
-          setSelectedMeetingRecord(null);
-        }
-        // do not preventDefault/pop propagation here; just sync local UI
-      }
+  useEffect(() => {
+    if (!selectedBacentaId) {
+      return;
+    }
+
+    const handleBackIntercept = (event: Event) => {
+      setSelectedBacentaId(null);
+      setSelectedMeetingRecord(null);
+      event.preventDefault();
     };
-    window.addEventListener('popstate', handlePop);
-    return () => window.removeEventListener('popstate', handlePop);
-  }, []);
+
+    document.addEventListener(APP_BACK_INTERCEPT_EVENT, handleBackIntercept);
+    return () => document.removeEventListener(APP_BACK_INTERCEPT_EVENT, handleBackIntercept);
+  }, [selectedBacentaId]);
 
   // Get current day name
   const currentDayName = new Date(currentDate + 'T00:00:00').getDay() === 3 ? 'Wednesday' : 'Thursday';
@@ -419,14 +418,6 @@ const BacentaMeetingsView: React.FC = () => {
         meetingDate={currentDate}
         existingRecord={selectedMeetingRecord}
         onBack={() => {
-          // Manage locally to avoid global nav jumping tabs
-          try {
-            window.history.pushState(
-              { tab: currentTab, view: 'bacenta-meeting-list', date: currentDate },
-              '',
-              window.location.href
-            );
-          } catch {}
           setSelectedBacentaId(null);
           setSelectedMeetingRecord(null);
         }}
@@ -543,16 +534,6 @@ const BacentaMeetingsView: React.FC = () => {
                 <button
                   key={bacenta.id}
                   onClick={() => {
-                    try {
-                      const state = (window.history.state as any) || {};
-                      const detailState = { tab: currentTab, view: 'bacenta-meeting-detail', bacentaId: bacenta.id, date: currentDate };
-                      // If we're already in the meetings view, replace the state to avoid growing the stack
-                      if (state.view === 'bacenta-meeting-detail' || state.view === 'bacenta-meeting-list') {
-                        window.history.replaceState(detailState, '', window.location.href);
-                      } else {
-                        window.history.pushState(detailState, '', window.location.href);
-                      }
-                    } catch {}
                     setSelectedBacentaId(bacenta.id);
                     setSelectedMeetingRecord(existingMeetingRecord);
                   }}

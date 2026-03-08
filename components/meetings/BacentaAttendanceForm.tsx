@@ -120,15 +120,9 @@ const BacentaAttendanceForm: React.FC<BacentaAttendanceFormProps> = ({
   // Image processing functions
   const validateImageFile = (file: File): boolean => {
     const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
-    const maxSize = 5 * 1024 * 1024; // 5MB
 
     if (!validTypes.includes(file.type)) {
   try { showToast('error', 'Invalid image', 'Please upload a valid image file (JPG, PNG, or WEBP).'); } catch {}
-      return false;
-    }
-
-    if (file.size > maxSize) {
-  try { showToast('error', 'Image too large', 'Image size must be less than 5MB.'); } catch {}
       return false;
     }
 
@@ -574,7 +568,7 @@ const BacentaAttendanceForm: React.FC<BacentaAttendanceFormProps> = ({
                       📸 Click to select or drag and drop your photo
                     </p>
                     <div className="inline-flex items-center space-x-2 px-4 py-2 bg-blue-100 rounded-lg text-sm text-blue-700 font-medium">
-                      <span>✨ Supports JPG, PNG, WEBP (max 5MB)</span>
+                      <span>✨ Supports JPG, PNG, WEBP</span>
                     </div>
                   </div>
                 </label>

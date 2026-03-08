@@ -4,6 +4,9 @@ const config: CapacitorConfig = {
   appId: 'com.example.app',
   appName: 'sat-mobile',
   webDir: 'dist',
+  android: {
+    adjustMarginsForEdgeToEdge: 'force'
+  },
   plugins: {
     Filesystem: {
       iosScheme: 'file',

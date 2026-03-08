@@ -1,4 +1,4 @@
-import React, { useEffect, useState, memo } from 'react';
+import React, { useCallback, useEffect, useState, memo } from 'react';
 import { PerformanceMonitor } from './utils/performance';
 import { FirebaseAppProvider, useAppContext } from './contexts/FirebaseAppContext';
 import { ThemeProvider } from './contexts/ThemeContext';
@@ -37,6 +37,8 @@ import OfflineIndicator from './components/common/OfflineIndicator';
 import PendingInviteNotification from './components/notifications/PendingInviteNotification';
 import NotificationBadge from './components/notifications/NotificationBadge';
 import DeletionRequestNotificationBadge from './components/notifications/DeletionRequestNotificationBadge';
+import ConfirmationModal from './components/modals/confirmations/ConfirmationModal';
+import { addNativeBackButtonListener, dispatchBackIntercept, exitNativeApp } from './utils/mobileBack';
 
 import { DeleteMemberModal, DeleteBacentaModal, DeleteNewBelieverModal, ClearAllDataModal, ClearSelectedDataModal, CreateDeletionRequestModal, ClearAllNewBelieversModal } from './components/modals/confirmations/ConfirmationModal';
 import ErrorBoundary from './components/common/ErrorBoundary';
@@ -79,12 +81,15 @@ const AppContent: React.FC = memo(() => {
   currentChurchId,
     switchTab,
     removeToast,
+    navigateBack,
+    applyHistoryNavigation,
 
   } = useAppContext();
 
   const [isDataManagementOpen, setIsDataManagementOpen] = useState(false);
   const [isBulkMemberModalOpen, setIsBulkMemberModalOpen] = useState(false);
   const [loadingStuckHint, setLoadingStuckHint] = useState<string | null>(null);
+  const [isExitAppModalOpen, setIsExitAppModalOpen] = useState(false);
 
   // Check if current tab is a bacenta tab
   const isBacentaTab = bacentas.some(b => b.id === currentTab.id);
@@ -93,6 +98,86 @@ const AppContent: React.FC = memo(() => {
   const closeConfirmationModal = () => {
     closeConfirmation();
   };
+
+  const handleAppBack = useCallback(() => {
+    if (isExitAppModalOpen) {
+      setIsExitAppModalOpen(false);
+      return true;
+    }
+
+    if (dispatchBackIntercept('hardware')) {
+      return true;
+    }
+
+    if (confirmationModal.isOpen) {
+      closeConfirmation();
+      return true;
+    }
+
+    if (isDataManagementOpen) {
+      setIsDataManagementOpen(false);
+      return true;
+    }
+
+    if (isBulkMemberModalOpen) {
+      setIsBulkMemberModalOpen(false);
+      return true;
+    }
+
+    if (isBacentaDrawerOpen) {
+      closeBacentaDrawer();
+      return true;
+    }
+
+    if (isHierarchyModalOpen) {
+      closeHierarchyModal();
+      return true;
+    }
+
+    if (isNewBelieverFormOpen) {
+      closeNewBelieverForm();
+      return true;
+    }
+
+    if (isBacentaFormOpen) {
+      closeBacentaForm();
+      return true;
+    }
+
+    if (isMemberFormOpen) {
+      closeMemberForm();
+      return true;
+    }
+
+    if (navigateBack()) {
+      return true;
+    }
+
+    if (currentTab.id === TabKeys.DASHBOARD) {
+      setIsExitAppModalOpen(true);
+      return true;
+    }
+
+    return false;
+  }, [
+    closeBacentaDrawer,
+    closeBacentaForm,
+    closeConfirmation,
+    closeHierarchyModal,
+    closeMemberForm,
+    closeNewBelieverForm,
+    confirmationModal.isOpen,
+    currentTab.id,
+    isBacentaDrawerOpen,
+    isBacentaFormOpen,
+    isBulkMemberModalOpen,
+    isDataManagementOpen,
+    isExitAppModalOpen,
+    isHierarchyModalOpen,
+    isMemberFormOpen,
+    isNewBelieverFormOpen,
+    navigateBack,
+  ]);
 
   useEffect(() => {
     PerformanceMonitor.start('app-initialization');
@@ -124,6 +209,65 @@ const AppContent: React.FC = memo(() => {
     handleHash();
     return () => window.removeEventListener('hashchange', handleHash);
   }, [switchTab]);
+
+  useEffect(() => {
+    const handlePopState = (event: PopStateEvent) => {
+      const state = (event.state as any) || {};
+      const target = state.tab as any;
+
+      if (target && target.id) {
+        applyHistoryNavigation(target);
+        return;
+      }
+
+      handleAppBack();
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' || event.keyCode === 4) {
+        event.preventDefault();
+        event.stopPropagation();
+        handleAppBack();
+      }
+    };
+
+    const handleDocumentBack = (event: Event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      handleAppBack();
+    };
+
+    let nativeBackListener: { remove: () => Promise<void> } | null = null;
+
+    window.addEventListener('popstate', handlePopState);
+    document.addEventListener('keydown', handleKeyDown, true);
+    document.addEventListener('backbutton', handleDocumentBack, false);
+
+    addNativeBackButtonListener(() => {
+      handleAppBack();
+    }).then(listener => {
+      nativeBackListener = listener;
+    });
+
+    if (!window.history.state || !window.history.state.tab) {
+      try {
+        window.history.replaceState({ tab: currentTab }, '', window.location.href);
+      } catch {}
+    }
+
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+      document.removeEventListener('keydown', handleKeyDown, true);
+      document.removeEventListener('backbutton', handleDocumentBack, false);
+      void nativeBackListener?.remove();
+    };
+  }, [applyHistoryNavigation, currentTab, handleAppBack]);
+
+  useEffect(() => {
+    if (currentTab.id !== TabKeys.DASHBOARD && isExitAppModalOpen) {
+      setIsExitAppModalOpen(false);
+    }
+  }, [currentTab.id, isExitAppModalOpen]);
 
 
   // Ensure main content clears the fixed header (and impersonation banner) height
@@ -496,7 +640,7 @@ const AppContent: React.FC = memo(() => {
               {/* Hamburger Menu (shown in all contexts; drawer adapts to context) */}
               <button
                 onClick={openBacentaDrawer}
-                className="group flex items-center space-x-1 xs:space-x-2 px-1 xs:px-2 sm:px-3 desktop:px-4 py-1.5 xs:py-2 desktop:py-3 text-gray-600 dark:text-dark-300 hover:text-gray-900 dark:hover:text-dark-100 transition-all duration-300 rounded-lg desktop:rounded-xl hover:bg-white/50 dark:hover:bg-dark-700/50 desktop:hover:bg-white/70"
+                className="group flex items-center space-x-1 xs:space-x-2 min-h-11 min-w-11 px-2 xs:px-2.5 sm:px-3 desktop:px-4 py-2 desktop:py-3 text-gray-600 dark:text-dark-300 hover:text-gray-900 dark:hover:text-dark-100 transition-all duration-300 rounded-lg desktop:rounded-xl hover:bg-white/50 dark:hover:bg-dark-700/50 desktop:hover:bg-white/70 touch-manipulation"
                 title="Open Navigation Menu"
                 aria-label="Open Navigation Menu"
               >
@@ -789,6 +933,22 @@ const AppContent: React.FC = memo(() => {
           totalNewBelievers={confirmationModal.data?.totalNewBelievers || 0}
         />
       )}
+
+      <ConfirmationModal
+        isOpen={isExitAppModalOpen}
+        onClose={() => setIsExitAppModalOpen(false)}
+        onConfirm={async () => {
+          const exited = await exitNativeApp();
+          if (!exited) {
+            showToast('warning', 'Exit unavailable', 'Android did not allow the app to close automatically.');
+          }
+        }}
+        title="Quit App"
+        message="Do you want to close SAT Mobile?"
+        confirmText="Quit"
+        cancelText="Stay"
+        type="warning"
+      />
 
       {/* Pending Invite Notification */}
       <PendingInviteNotification />

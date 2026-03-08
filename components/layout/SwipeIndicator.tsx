@@ -42,7 +42,7 @@ const SwipeIndicator: React.FC = () => {
               <ArrowLeftIcon className="w-5 h-5 text-gray-600" />
             </motion.div>
             <span className="text-sm font-medium text-gray-600">
-              Swipe right to go back
+              Swipe from the left edge to go back
             </span>
           </div>
         </motion.div>

@@ -22,6 +22,7 @@ import {
   updateScrollIndicators,
   debounce
 } from '../../utils/viewportUtils';
+import { APP_BACK_INTERCEPT_EVENT } from '../../utils/mobileBack';
 
 interface EnhancedProfileDropdownProps {
   user: FirebaseUser | null;
@@ -179,6 +180,28 @@ const EnhancedProfileDropdown: React.FC<EnhancedProfileDropdownProps> = ({
     }
   }, [isBacentaDrawerOpen, isOpen]);
 
+  useEffect(() => {
+    if (!isOpen && !isAboutModalOpen) {
+      return;
+    }
+
+    const handleBackIntercept = (event: Event) => {
+      if (isAboutModalOpen) {
+        setIsAboutModalOpen(false);
+        event.preventDefault();
+        return;
+      }
+
+      if (isOpen) {
+        setIsOpen(false);
+        event.preventDefault();
+      }
+    };
+
+    document.addEventListener(APP_BACK_INTERCEPT_EVENT, handleBackIntercept);
+    return () => document.removeEventListener(APP_BACK_INTERCEPT_EVENT, handleBackIntercept);
+  }, [isOpen, isAboutModalOpen]);
+
   const handleLogout = async () => {
     try {
       setIsLoading(true);
@@ -278,7 +301,7 @@ const EnhancedProfileDropdown: React.FC<EnhancedProfileDropdownProps> = ({
           }
           setIsOpen(next);
         }}
-        className="flex items-center space-x-1 xs:space-x-2 px-1.5 xs:px-2 sm:px-3 py-1.5 xs:py-2 rounded-lg xs:rounded-xl bg-white/95 border border-gray-200 hover:bg-white hover:shadow-lg transition-all duration-300 group shadow-md touch-manipulation min-w-[40px]"
+        className="flex items-center space-x-1 xs:space-x-2 min-h-11 min-w-11 px-2 xs:px-2.5 sm:px-3 py-2 rounded-lg xs:rounded-xl bg-white/95 border border-gray-200 hover:bg-white hover:shadow-lg transition-all duration-300 group shadow-md touch-manipulation"
         aria-label="Open profile menu"
       >
         <ProfileAvatar size="sm" />

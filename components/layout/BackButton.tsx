@@ -9,7 +9,7 @@ interface BackButtonProps {
 }
 
 const BackButton: React.FC<BackButtonProps> = ({ className = '', showLabel = false }) => {
-  const { navigateBack, canNavigateBack } = useNavigation();
+  const { requestBack, canNavigateBack } = useNavigation();
 
   if (!canNavigateBack()) {
     return null;
@@ -17,8 +17,8 @@ const BackButton: React.FC<BackButtonProps> = ({ className = '', showLabel = fal
 
   return (
     <motion.button
-      onClick={navigateBack}
-      className={`flex items-center space-x-2 p-2 rounded-xl glass hover:glass-dark transition-all duration-300 group ${className}`}
+      onClick={requestBack}
+      className={`flex items-center space-x-2 min-h-11 min-w-11 px-3 py-2.5 rounded-xl glass hover:glass-dark transition-all duration-300 group touch-manipulation ${className}`}
       whileHover={{ scale: 1.05 }}
       whileTap={{ scale: 0.95 }}
       initial={{ opacity: 0, x: -20 }}

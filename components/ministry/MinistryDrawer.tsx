@@ -58,7 +58,7 @@ const MinistryDrawer: React.FC<MinistryDrawerProps> = ({ isOpen, onClose }) => {
             </h2>
             <button
               onClick={onClose}
-              className="p-1.5 sm:p-2 hover:bg-gray-100 dark:hover:bg-dark-700 rounded-lg transition-colors duration-200 flex-shrink-0"
+              className="min-h-11 min-w-11 p-2 hover:bg-gray-100 dark:hover:bg-dark-700 rounded-lg transition-colors duration-200 flex-shrink-0 touch-manipulation"
               aria-label="Close drawer"
             >
               <XMarkIcon className="w-4 h-4 sm:w-5 sm:h-5 text-gray-500 dark:text-dark-400" />

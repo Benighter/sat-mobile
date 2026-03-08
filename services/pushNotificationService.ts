@@ -43,6 +43,7 @@ class PushNotificationService {
   private currentUser: User | null = null;
   private currentChurchId: string | null = null;
   private isInitialized = false;
+  private nativePushConfigured = false;
   private vapidKey = (() => {
     const env: any = (typeof import.meta !== 'undefined' ? (import.meta as any).env : {}) || {};
     const sat = env.VITE_FIREBASE_VAPID_KEY || process.env.REACT_APP_FIREBASE_VAPID_KEY || '';
@@ -51,7 +52,17 @@ class PushNotificationService {
   })();
 
   constructor() {
+    this.nativePushConfigured = this.detectNativePushConfiguration();
     this.initialize();
+  }
+
+  private detectNativePushConfiguration(): boolean {
+    const env: any = (typeof import.meta !== 'undefined' ? (import.meta as any).env : {}) || {};
+    if (env.VITE_ENABLE_NATIVE_PUSH === 'true') {
+      return true;
+    }
+
+    return false;
   }
 
   // Initialize push notification service
@@ -82,8 +93,10 @@ class PushNotificationService {
       }
 
       // Initialize Capacitor Push Notifications for mobile
-      if (Capacitor.isNativePlatform()) {
+      if (Capacitor.isNativePlatform() && this.nativePushConfigured) {
         await this.initializeCapacitorPushNotifications();
+      } else if (Capacitor.isNativePlatform()) {
+        console.warn('Native push notifications are disabled because Firebase Android native config is not enabled.');
       }
 
       this.isInitialized = true;
@@ -135,7 +148,7 @@ class PushNotificationService {
     this.currentChurchId = churchId;
 
     // Initialize token registration if user is available
-    if (user && churchId) {
+    if (user && churchId && (!Capacitor.isNativePlatform() || this.nativePushConfigured)) {
       this.registerDeviceToken();
     } else {
       this.unregisterDeviceToken();
@@ -153,6 +166,10 @@ class PushNotificationService {
       let token: string | null = null;
 
       if (Capacitor.isNativePlatform()) {
+        if (!this.nativePushConfigured) {
+          console.warn('Skipping native device token registration because native push is disabled.');
+          return null;
+        }
         // Mobile platform - token will be received via listener
         await PushNotifications.register();
       } else {
@@ -448,7 +465,7 @@ class PushNotificationService {
   isSupported(): boolean {
     // Native (Capacitor) – rely on plugin availability
     if (Capacitor.isNativePlatform()) {
-      return true; // If the app is running natively we assume push can work; plugin guards runtime calls
+      return this.nativePushConfigured && Capacitor.isPluginAvailable('PushNotifications');
     }
 
     // Web environment feature detection
@@ -477,6 +494,7 @@ class PushNotificationService {
     const ua = (typeof navigator !== 'undefined' ? navigator.userAgent : '');
     return {
       native: Capacitor.isNativePlatform(),
+      nativePushConfigured: this.nativePushConfigured,
       pluginAvailable: Capacitor.isNativePlatform() ? Capacitor.isPluginAvailable('PushNotifications') : false,
       hasNotification: typeof window !== 'undefined' && 'Notification' in window,
       hasServiceWorker: typeof navigator !== 'undefined' && 'serviceWorker' in navigator,
@@ -489,10 +507,12 @@ class PushNotificationService {
   // Get current notification permission status
   async getPermissionStatus(): Promise<'granted' | 'denied' | 'default'> {
     if (Capacitor.isNativePlatform()) {
-  const status = await PushNotifications.checkPermissions();
-  // Some environments may return 'prompt' – treat as default
-  const mapped = (status.receive === 'prompt' ? 'default' : status.receive) as 'granted' | 'denied' | 'default';
-  return mapped;
+      if (!this.nativePushConfigured) {
+        return 'default';
+      }
+      const status = await PushNotifications.checkPermissions();
+      const mapped = (status.receive === 'prompt' ? 'default' : status.receive) as 'granted' | 'denied' | 'default';
+      return mapped;
     } else {
       return Notification.permission;
     }
@@ -502,6 +522,10 @@ class PushNotificationService {
   async requestPermissions(): Promise<boolean> {
     try {
       if (Capacitor.isNativePlatform()) {
+        if (!this.nativePushConfigured) {
+          console.warn('Native push permission request skipped because native push is disabled.');
+          return false;
+        }
         const result = await PushNotifications.requestPermissions();
         return result.receive === 'granted';
       } else {

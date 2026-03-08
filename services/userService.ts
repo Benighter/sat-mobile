@@ -13,6 +13,7 @@ import {
 const isDevelopment = process.env.NODE_ENV === 'development' || window.location.hostname === 'localhost';
 import { db } from '../firebase.config';
 import { User, Church } from '../types';
+import { cleanupStoredImage, persistImageValue } from './imageStorageService';
 
 // User Service for managing user profiles and church data
 export const userService = {
@@ -32,8 +33,26 @@ export const userService = {
   // Update user profile
   updateUserProfile: async (uid: string, updates: Partial<User>): Promise<void> => {
     try {
+      const payload = { ...updates };
+      if (Object.prototype.hasOwnProperty.call(payload, 'profilePicture')) {
+        const existingUserDoc = await getDoc(doc(db, 'users', uid));
+        const existingProfilePicture = existingUserDoc.exists() ? (existingUserDoc.data().profilePicture as string | undefined) : undefined;
+        payload.profilePicture = await persistImageValue({
+          imageValue: payload.profilePicture,
+          path: `users/${uid}/profile-picture`
+        });
+        await updateDoc(doc(db, 'users', uid), {
+          ...payload,
+          lastUpdated: new Date().toISOString()
+        });
+        if (existingProfilePicture && existingProfilePicture !== payload.profilePicture) {
+          await cleanupStoredImage(existingProfilePicture);
+        }
+        return;
+      }
+
       await updateDoc(doc(db, 'users', uid), {
-        ...updates,
+        ...payload,
         lastUpdated: new Date().toISOString()
       });
     } catch (error: any) {
