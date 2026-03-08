@@ -54,12 +54,69 @@ interface AuthScreenProps {
   showToast: (type: 'success' | 'error' | 'warning' | 'info', title: string, message?: string) => void;
 }
 
+interface RememberedLoginDetails {
+  email: string;
+  password: string;
+  ministryMode: boolean;
+}
+
+const REMEMBERED_LOGIN_KEY = 'sat_mobile_remembered_login';
+
+const getRememberedLoginDetails = (): RememberedLoginDetails | null => {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  try {
+    const raw = localStorage.getItem(REMEMBERED_LOGIN_KEY);
+    if (!raw) {
+      return null;
+    }
+
+    const parsed = JSON.parse(raw) as Partial<RememberedLoginDetails>;
+    if (typeof parsed.email !== 'string' || typeof parsed.password !== 'string') {
+      localStorage.removeItem(REMEMBERED_LOGIN_KEY);
+      return null;
+    }
+
+    return {
+      email: parsed.email,
+      password: parsed.password,
+      ministryMode: parsed.ministryMode === true,
+    };
+  } catch {
+    try { localStorage.removeItem(REMEMBERED_LOGIN_KEY); } catch {}
+    return null;
+  }
+};
+
+const saveRememberedLoginDetails = (details: RememberedLoginDetails): void => {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  try {
+    localStorage.setItem(REMEMBERED_LOGIN_KEY, JSON.stringify(details));
+  } catch {}
+};
+
+const clearRememberedLoginDetails = (): void => {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  try {
+    localStorage.removeItem(REMEMBERED_LOGIN_KEY);
+  } catch {}
+};
+
 export const AuthScreen: React.FC<AuthScreenProps> = ({ children, showToast }) => {
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   const [ministryMode, setMinistryMode] = useState<boolean>(false);
+  const [rememberedLogin, setRememberedLogin] = useState<RememberedLoginDetails | null>(null);
   // Super Admin prototype state (bypasses firebase auth when using hardcoded credentials)
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   // Must come before any conditional return (Rules of Hooks)
@@ -104,6 +161,20 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ children, showToast }) =
   }, [loading, showToast]);
 
   useEffect(() => {
+    const storedLogin = getRememberedLoginDetails();
+    if (!storedLogin) {
+      return;
+    }
+
+    setRememberedLogin(storedLogin);
+    setMinistryMode(storedLogin.ministryMode);
+
+    try {
+      localStorage.setItem('last_known_email', storedLogin.email);
+    } catch {}
+  }, []);
+
+  useEffect(() => {
     // Restore Super Admin prototype session (if previously set)
     try {
       const persisted = localStorage.getItem('superadmin_session');
@@ -131,15 +202,24 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ children, showToast }) =
     return () => unsubscribe();
   }, [ministryMode]);
 
-  const handleSignIn = async (email: string, password: string) => {
+  const handleSignIn = async (email: string, password: string, rememberLoginDetails: boolean) => {
     try {
       setError(null);
       setLoading(true);
+      const normalizedEmail = email.trim().toLowerCase();
       // Hardcoded Super Admin credentials - now properly authenticate with Firebase
       if (email.trim().toLowerCase() === 'admin@gmail.com' && password === 'Admin@123') {
         try {
           // Try to sign in with Firebase Auth first
           const user = await authService.signIn(email, password);
+          if (rememberLoginDetails) {
+            const details = { email: normalizedEmail, password, ministryMode };
+            saveRememberedLoginDetails(details);
+            setRememberedLogin(details);
+          } else {
+            clearRememberedLoginDetails();
+            setRememberedLogin(null);
+          }
           setUser(user);
           setIsSuperAdmin(true);
           try { localStorage.setItem('superadmin_session', 'true'); } catch {}
@@ -189,6 +269,15 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ children, showToast }) =
       if (ministryMode) {
         console.log('🔄 [Ministry Mode] Switching to cross-church data aggregation (SuperAdmin style)');
         // The FirebaseAppContext will automatically handle cross-church data fetching
+      }
+
+      if (rememberLoginDetails) {
+        const details = { email: normalizedEmail, password, ministryMode };
+        saveRememberedLoginDetails(details);
+        setRememberedLogin(details);
+      } else {
+        clearRememberedLoginDetails();
+        setRememberedLogin(null);
       }
 
       setUser(user);
@@ -393,6 +482,9 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ children, showToast }) =
                 loading={loading}
                 showToast={showToast}
                 ministryMode={ministryMode}
+                initialEmail={rememberedLogin?.email || ''}
+                initialPassword={rememberedLogin?.password || ''}
+                initialRememberLogin={rememberedLogin !== null}
                 onEmailChange={(em) => {
                   try { localStorage.setItem('last_known_email', em); } catch {}
                 }}

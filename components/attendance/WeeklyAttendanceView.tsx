@@ -637,36 +637,36 @@ const WeeklyAttendanceView: React.FC = () => {
             </div>
 
             {/* Copy Buttons */}
-            <div className="flex items-center justify-center gap-3">
+            <div className="grid w-full max-w-sm mx-auto gap-3 sm:flex sm:max-w-none sm:items-center sm:justify-center">
               <button
                 onClick={copyAttendanceText}
-                className="inline-flex items-center space-x-2 px-4 py-2 bg-slate-600 hover:bg-slate-700 text-white rounded-lg transition-all duration-200 text-sm font-medium shadow-sm"
+                className="inline-flex min-h-[52px] w-full items-center justify-center gap-2 rounded-xl bg-slate-600 px-4 py-3 text-center text-sm font-medium text-white shadow-sm transition-all duration-200 hover:bg-slate-700 sm:min-h-[48px] sm:w-auto sm:px-4 sm:py-2"
                 title={selectedMinistry ? `Copy ${selectedMinistry} attendance as text` : "Copy attendance as text"}
               >
                 <ClipboardIcon className="w-4 h-4" />
-                <span>{selectedMinistry ? `Copy ${selectedMinistry}` : 'Copy Attendance'}</span>
+                <span className="leading-tight">{selectedMinistry ? `Copy ${selectedMinistry}` : 'Copy Attendance'}</span>
               </button>
               <button
                 onClick={copyFirstTimersText}
                 disabled={totalPresentFirstTimers === 0}
-                className={`inline-flex items-center space-x-2 px-4 py-2 rounded-lg transition-all duration-200 text-sm font-medium shadow-sm ${
+                className={`inline-flex min-h-[52px] w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-center text-sm font-medium transition-all duration-200 sm:min-h-[48px] sm:w-auto sm:px-4 sm:py-2 ${
                   totalPresentFirstTimers > 0
-                    ? 'bg-orange-600 hover:bg-orange-700 text-white'
-                    : 'bg-gray-200 text-gray-500 cursor-not-allowed shadow-none'
+                    ? 'bg-orange-600 text-white shadow-sm hover:bg-orange-700'
+                    : 'cursor-not-allowed bg-gray-200 text-gray-500 shadow-none'
                 }`}
                 title={totalPresentFirstTimers > 0 ? 'Copy first timers with contacts' : 'No first timers to copy'}
               >
                 <ClipboardIcon className="w-4 h-4" />
-                <span>Copy First Timers</span>
+                <span className="leading-tight">Copy First Timers</span>
               </button>
               {isAdmin && !selectedMinistry && (
                 <button
                   onClick={copyCOsReportText}
-                  className="inline-flex items-center space-x-2 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg transition-all duration-200 text-sm font-medium shadow-sm"
+                  className="inline-flex min-h-[52px] w-full items-center justify-center gap-2 rounded-xl bg-amber-600 px-4 py-3 text-center text-sm font-medium text-white shadow-sm transition-all duration-200 hover:bg-amber-700 sm:min-h-[48px] sm:w-auto sm:px-4 sm:py-2"
                   title="Copy COs report (Admins only)"
                 >
                   <ClipboardIcon className="w-4 h-4" />
-                  <span>Copy COs report</span>
+                  <span className="leading-tight">Copy COs report</span>
                 </button>
               )}
             </div>

@@ -1,14 +1,17 @@
 // Clean Modern Login Form Component
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
 import ForgotPasswordModal from './ForgotPasswordModal';
 
 interface LoginFormProps {
-  onSignIn: (email: string, password: string) => Promise<void>;
+  onSignIn: (email: string, password: string, rememberLogin: boolean) => Promise<void>;
   error: string | null;
   loading: boolean;
   showToast: (type: 'success' | 'error' | 'warning' | 'info', title: string, message?: string) => void;
   ministryMode?: boolean;
+  initialEmail?: string;
+  initialPassword?: string;
+  initialRememberLogin?: boolean;
   onEmailChange?: (email: string) => void; // bubble up for contextual support
   onContactSupport?: () => void; // opens Contact with context
 }
@@ -50,12 +53,42 @@ const getErrorMessage = (error: string): string => {
   return raw;
 };
 
-export const LoginForm: React.FC<LoginFormProps> = ({ onSignIn, error, loading, showToast, ministryMode = false, onEmailChange, onContactSupport }) => {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+export const LoginForm: React.FC<LoginFormProps> = ({
+  onSignIn,
+  error,
+  loading,
+  showToast,
+  ministryMode = false,
+  initialEmail = '',
+  initialPassword = '',
+  initialRememberLogin = false,
+  onEmailChange,
+  onContactSupport,
+}) => {
+  const [email, setEmail] = useState(initialEmail);
+  const [password, setPassword] = useState(initialPassword);
   const [showPassword, setShowPassword] = useState(false);
+  const [rememberLogin, setRememberLogin] = useState(initialRememberLogin);
   const [validationErrors, setValidationErrors] = useState<{email?: string; password?: string}>({});
   const [isForgotPasswordOpen, setIsForgotPasswordOpen] = useState(false);
+
+  useEffect(() => {
+    setEmail(initialEmail);
+  }, [initialEmail]);
+
+  useEffect(() => {
+    setPassword(initialPassword);
+  }, [initialPassword]);
+
+  useEffect(() => {
+    setRememberLogin(initialRememberLogin);
+  }, [initialRememberLogin]);
+
+  useEffect(() => {
+    if (initialEmail && onEmailChange) {
+      onEmailChange(initialEmail);
+    }
+  }, [initialEmail, onEmailChange]);
 
   const validateEmail = (emailValue: string): string => {
     const trimmedEmail = emailValue.trim();
@@ -201,7 +234,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSignIn, error, loading, 
       return;
     }
 
-    await onSignIn(email, password);
+    await onSignIn(email, password, rememberLogin);
   };
 
   return (
@@ -296,6 +329,17 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSignIn, error, loading, 
               <p className="text-red-500 text-xs mt-1">{validationErrors.password}</p>
             )}
           </div>
+
+          <label className="flex items-center gap-3 rounded-xl border border-gray-200 bg-gray-50/70 px-4 py-3 text-sm text-gray-700 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={rememberLogin}
+              onChange={(e) => setRememberLogin(e.target.checked)}
+              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              disabled={loading}
+            />
+            <span className="leading-tight">Remember login details on this device</span>
+          </label>
 
           <button
             type="submit"
