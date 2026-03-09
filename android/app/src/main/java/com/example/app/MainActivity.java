@@ -11,6 +11,7 @@ public class MainActivity extends BridgeActivity {
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
 		registerPlugin(AppShellPlugin.class);
+		registerPlugin(DownloadsSaverPlugin.class);
 		super.onCreate(savedInstanceState);
 
 		getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {

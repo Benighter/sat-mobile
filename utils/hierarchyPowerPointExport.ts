@@ -1,6 +1,6 @@
 import PptxGenJS from 'pptxgenjs';
 import { Member, Bacenta, AttendanceRecord } from '../types';
-import { DirectoryHandle, saveFileToDirectory } from './fileSystemUtils';
+import { DirectoryHandle, FileSaveProgress, saveFileToDirectory } from './fileSystemUtils';
 
 import { DEFAULT_CHURCH } from '../constants';
 import { isMemberWentHome } from './memberStatus';
@@ -8,6 +8,7 @@ import { buildHierarchyGrouping, HierarchySectionKind } from './hierarchyGroupin
 
 export interface HierarchyPowerPointExportOptions {
   directory?: DirectoryHandle | null;
+  onSaveProgress?: (progress: FileSaveProgress) => void;
   startDate?: string;
   endDate?: string;
   constituencyName?: string;
@@ -415,7 +416,8 @@ export const exportHierarchyPowerPoint = async (
       options.directory || null,
       filename,
       buffer,
-      'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      options.onSaveProgress
     );
 
     return result;

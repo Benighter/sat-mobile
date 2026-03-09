@@ -5,7 +5,8 @@ import {
   selectDirectory,
   canSelectDirectory,
   getDirectoryDescription,
-  DirectoryHandle
+  DirectoryHandle,
+  FileSaveProgress
 } from '../../../utils/fileSystemUtils';
 import Modal from '../../ui/Modal';
 import Button from '../../ui/Button';
@@ -34,6 +35,7 @@ const PowerPointExportModal: React.FC<PowerPointExportModalProps> = ({ isOpen, o
 
   const [selectedDirectory, setSelectedDirectory] = useState<DirectoryHandle | null>(null);
   const [isSelectingDirectory, setIsSelectingDirectory] = useState(false);
+  const [saveProgress, setSaveProgress] = useState<FileSaveProgress | null>(null);
 
   const handleSelectDirectory = async () => {
     setIsSelectingDirectory(true);
@@ -58,6 +60,11 @@ const PowerPointExportModal: React.FC<PowerPointExportModalProps> = ({ isOpen, o
 
   const handleExport = async () => {
     setIsExporting(true);
+    setSaveProgress({
+      percent: 5,
+      stage: 'preparing',
+      message: 'Preparing PowerPoint export...'
+    });
     try {
       const constituencyName = getConstituencyName();
       const result = await exportHierarchyPowerPoint({
@@ -66,6 +73,7 @@ const PowerPointExportModal: React.FC<PowerPointExportModalProps> = ({ isOpen, o
         attendanceRecords,
         options: {
           directory: selectedDirectory,
+          onSaveProgress: setSaveProgress,
           constituencyName,
           isMinistryContext,
           ministryName: activeMinistryName || undefined
@@ -73,14 +81,21 @@ const PowerPointExportModal: React.FC<PowerPointExportModalProps> = ({ isOpen, o
       });
 
       if (result.success) {
+        setSaveProgress({
+          percent: 100,
+          stage: 'completed',
+          message: 'PowerPoint report saved to Downloads.'
+        });
         const locationText = result.path ? ` to ${result.path}` : '';
         showToast('success', 'Export Successful', `Hierarchy PowerPoint report has been saved${locationText}!`);
         onClose();
       } else {
+        setSaveProgress(null);
         showToast('error', 'Export Failed', result.error || 'Failed to generate PowerPoint report. Please try again.');
       }
     } catch (error: any) {
       console.error('Export failed:', error);
+      setSaveProgress(null);
       showToast('error', 'Export Failed', error.message || 'Failed to generate PowerPoint report. Please try again.');
     } finally {
       setIsExporting(false);
@@ -136,6 +151,22 @@ const PowerPointExportModal: React.FC<PowerPointExportModalProps> = ({ isOpen, o
           )}
         </div>
 
+        {isExporting && saveProgress && (
+          <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 space-y-3">
+            <div className="flex items-center justify-between text-sm">
+              <span className="font-medium text-emerald-800">Saving to Downloads</span>
+              <span className="text-emerald-700">{saveProgress.percent}%</span>
+            </div>
+            <div className="h-2 bg-emerald-100 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-emerald-500 transition-all duration-300"
+                style={{ width: `${saveProgress.percent}%` }}
+              />
+            </div>
+            <p className="text-xs text-emerald-700">{saveProgress.message}</p>
+          </div>
+        )}
+
 
         {/* Save Location */}
         {canSelectDirectory() && (
@@ -171,7 +202,7 @@ const PowerPointExportModal: React.FC<PowerPointExportModalProps> = ({ isOpen, o
               <p className="text-xs text-gray-500">
                 {selectedDirectory
                   ? 'Files will be saved to your selected folder.'
-                  : 'Files will be saved to your default downloads folder.'}
+                  : 'Files will be saved to your Downloads folder on mobile by default.'}
               </p>
             </div>
           </div>
@@ -195,7 +226,7 @@ const PowerPointExportModal: React.FC<PowerPointExportModalProps> = ({ isOpen, o
               {isExporting ? (
                 <>
                   <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                  <span>Exporting...</span>
+                  <span>{saveProgress ? `Saving ${saveProgress.percent}%` : 'Exporting...'}</span>
                 </>
               ) : (
                 <>

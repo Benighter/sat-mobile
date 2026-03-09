@@ -1,6 +1,6 @@
 import ExcelJS from 'exceljs';
 import { Member, Bacenta, AttendanceRecord } from '../types';
-import { DirectoryHandle, saveFileToDirectory } from './fileSystemUtils';
+import { DirectoryHandle, FileSaveProgress, saveFileToDirectory } from './fileSystemUtils';
 import { formatDateDayMonthYear, getCurrentOrMostRecentSunday } from './dateUtils';
 import { DEFAULT_CHURCH, MINISTRY_OPTIONS } from '../constants';
 import { isMemberCurrentlyFirstTimer, isMemberWentHome } from './memberStatus';
@@ -8,6 +8,7 @@ import { buildHierarchyGrouping, HierarchySectionKind } from './hierarchyGroupin
 
 export interface HierarchyExcelExportOptions {
   directory?: DirectoryHandle | null;
+  onSaveProgress?: (progress: FileSaveProgress) => void;
   /**
    * Optional ISO date strings (YYYY-MM-DD) to limit the attendance range.
    * If omitted, the full available history is used.
@@ -738,7 +739,8 @@ export const exportHierarchyExcel = async (
       options.directory || null,
       filename,
       buffer,
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      options.onSaveProgress
     );
 
     return result;

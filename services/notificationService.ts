@@ -2,7 +2,6 @@
 // 
 // ⚠️ IMPORTANT: This service currently uses in-memory sorting to avoid Firebase index requirements.
 // For optimal performance, create the required composite index in Firebase Console.
-// See docs/FIREBASE_INDEXES_SETUP.md for detailed instructions.
 //
 import {
   collection,

@@ -1,7 +1,7 @@
 import * as XLSX from 'xlsx';
 import { Member, Bacenta, AttendanceRecord } from '../types';
 import { formatDateToYYYYMMDD } from './dateUtils';
-import { DirectoryHandle, saveFileToDirectory } from './fileSystemUtils';
+import { DirectoryHandle, FileSaveProgress, saveFileToDirectory } from './fileSystemUtils';
 
 export interface ExcelExportOptions {
   includeCharts: boolean;
@@ -12,6 +12,7 @@ export interface ExcelExportOptions {
   selectedBacentas: string[]; // Empty array means all bacentas
   includePersonalInfo: boolean;
   directory?: DirectoryHandle | null;
+  onSaveProgress?: (progress: FileSaveProgress) => void;
 }
 
 export interface ExcelData {
@@ -461,7 +462,8 @@ export const exportToExcel = async (data: ExcelData): Promise<{ success: boolean
       options.directory || null,
       filename,
       buffer,
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      options.onSaveProgress
     );
 
     return result;

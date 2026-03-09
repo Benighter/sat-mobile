@@ -1,7 +1,7 @@
 import ExcelJS from 'exceljs';
 import { Member, Bacenta, AttendanceRecord } from '../types';
 import { formatDateToYYYYMMDD } from './dateUtils';
-import { DirectoryHandle, saveFileToDirectory } from './fileSystemUtils';
+import { DirectoryHandle, FileSaveProgress, saveFileToDirectory } from './fileSystemUtils';
 
 export interface AdvancedExcelExportOptions {
   includeCharts: boolean;
@@ -13,6 +13,7 @@ export interface AdvancedExcelExportOptions {
   includePersonalInfo: boolean;
   theme: 'professional' | 'colorful' | 'minimal';
   directory?: DirectoryHandle | null;
+  onSaveProgress?: (progress: FileSaveProgress) => void;
 }
 
 export interface AdvancedExcelData {
@@ -1210,7 +1211,8 @@ export const exportToAdvancedExcel = async (data: AdvancedExcelData): Promise<{ 
       options.directory || null,
       filename,
       buffer,
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      options.onSaveProgress
     );
 
     return result;

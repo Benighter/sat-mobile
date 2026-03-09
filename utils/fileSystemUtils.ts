@@ -1,5 +1,34 @@
-import { Capacitor } from '@capacitor/core';
+import { Capacitor, registerPlugin } from '@capacitor/core';
 import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
+
+const BASE64_CHUNK_SIZE = 0x8000;
+
+type DownloadsSaverProgressEvent = {
+  filename?: string;
+  percent?: number;
+  bytesWritten?: number;
+  totalBytes?: number;
+  stage?: string;
+};
+
+type DownloadsSaverResult = {
+  uri?: string;
+  path?: string;
+};
+
+type DownloadsSaverPlugin = {
+  saveToDownloads(options: {
+    filename: string;
+    base64Data: string;
+    mimeType: string;
+  }): Promise<DownloadsSaverResult>;
+  addListener(
+    eventName: 'downloadProgress',
+    listenerFunc: (event: DownloadsSaverProgressEvent) => void
+  ): Promise<{ remove: () => Promise<void> }>;
+};
+
+const DownloadsSaver = registerPlugin<DownloadsSaverPlugin>('DownloadsSaver');
 
 // Types for directory handles and file operations
 export interface DirectoryHandle {
@@ -15,13 +44,19 @@ export interface FileSystemCapabilities {
   platform: string;
 }
 
+export interface FileSaveProgress {
+  percent: number;
+  stage: 'preparing' | 'saving' | 'completed';
+  message: string;
+}
+
 // Detect platform and capabilities
 export const getFileSystemCapabilities = (): FileSystemCapabilities => {
   const isMobile = Capacitor.isNativePlatform();
   const supportsFileSystemAccess = 'showDirectoryPicker' in window && 'showSaveFilePicker' in window;
   
   return {
-    supportsDirectorySelection: isMobile || supportsFileSystemAccess,
+    supportsDirectorySelection: supportsFileSystemAccess,
     supportsFileSystemAccess,
     isMobile,
     platform: Capacitor.getPlatform()
@@ -68,17 +103,21 @@ export const saveFileToDirectory = async (
   directory: DirectoryHandle | null,
   filename: string,
   data: ArrayBuffer | Uint8Array | string,
-  mimeType: string
+  mimeType: string,
+  onProgress?: (progress: FileSaveProgress) => void
 ): Promise<{ success: boolean; path?: string; error?: string }> => {
   try {
     if (!directory) {
-      // Fallback to blob download
+      if (Capacitor.isNativePlatform()) {
+        return await saveFileCapacitor(filename, data, mimeType, onProgress);
+      }
+
       return downloadFileBlob(filename, data, mimeType);
     }
 
     if (directory.type === 'mobile') {
       // Use Capacitor Filesystem for mobile
-      return await saveFileCapacitor(filename, data, mimeType);
+      return await saveFileCapacitor(filename, data, mimeType, onProgress);
     } else if (directory.type === 'web' && directory.handle) {
       // Use File System Access API for web
       return await saveFileWebAPI(directory.handle, filename, data, mimeType);
@@ -99,30 +138,61 @@ export const saveFileToDirectory = async (
 const saveFileCapacitor = async (
   filename: string,
   data: ArrayBuffer | Uint8Array | string,
-  mimeType: string
+  mimeType: string,
+  onProgress?: (progress: FileSaveProgress) => void
 ): Promise<{ success: boolean; path?: string; error?: string }> => {
   try {
-    let base64Data: string;
-    
-    if (typeof data === 'string') {
-      base64Data = btoa(data);
-    } else {
-      // Convert ArrayBuffer/Uint8Array to base64
-      const uint8Array = data instanceof ArrayBuffer ? new Uint8Array(data) : data;
-      const binaryString = Array.from(uint8Array, byte => String.fromCharCode(byte)).join('');
-      base64Data = btoa(binaryString);
+    onProgress?.({
+      percent: 15,
+      stage: 'preparing',
+      message: 'Preparing file save...'
+    });
+
+    if (Capacitor.getPlatform() === 'android' && Capacitor.isPluginAvailable('DownloadsSaver')) {
+      return await saveFileAndroidDownloads(filename, data, mimeType, onProgress);
     }
 
-    const result = await Filesystem.writeFile({
-      path: filename,
-      data: base64Data,
-      directory: Directory.Documents, // Use Documents directory for better accessibility
-      encoding: Encoding.UTF8
+    if (Capacitor.getPlatform() === 'android') {
+      const permissionStatus = await Filesystem.checkPermissions();
+
+      if (permissionStatus.publicStorage !== 'granted') {
+        const requestedStatus = await Filesystem.requestPermissions();
+
+        if (requestedStatus.publicStorage !== 'granted') {
+          return {
+            success: false,
+            error: 'Storage permission is required to save exported files on Android.'
+          };
+        }
+      }
+    }
+
+    const writeOptions = typeof data === 'string' && isTextMimeType(mimeType)
+      ? {
+          path: filename,
+          data,
+          directory: Directory.Documents,
+          encoding: Encoding.UTF8,
+          recursive: true
+        }
+      : {
+          path: filename,
+          data: toBase64(data),
+          directory: Directory.Documents,
+          recursive: true
+        };
+
+    const result = await Filesystem.writeFile(writeOptions);
+
+    onProgress?.({
+      percent: 100,
+      stage: 'completed',
+      message: 'File saved successfully.'
     });
 
     return {
       success: true,
-      path: result.uri
+      path: result.uri || `Documents/${filename}`
     };
   } catch (error: any) {
     console.error('Capacitor file save failed:', error);
@@ -131,6 +201,77 @@ const saveFileCapacitor = async (
       error: error.message || 'Failed to save file to device'
     };
   }
+};
+
+const saveFileAndroidDownloads = async (
+  filename: string,
+  data: ArrayBuffer | Uint8Array | string,
+  mimeType: string,
+  onProgress?: (progress: FileSaveProgress) => void
+): Promise<{ success: boolean; path?: string; error?: string }> => {
+  const base64Data = typeof data === 'string' && isTextMimeType(mimeType)
+    ? toBase64(new TextEncoder().encode(data))
+    : toBase64(data);
+
+  const listener = await DownloadsSaver.addListener('downloadProgress', event => {
+    if (event.filename !== filename) {
+      return;
+    }
+
+    const percent = Math.max(20, Math.min(99, Math.round(event.percent || 0)));
+    onProgress?.({
+      percent,
+      stage: 'saving',
+      message: percent >= 99 ? 'Finalizing download...' : `Saving to Downloads... ${percent}%`
+    });
+  });
+
+  try {
+    const result = await DownloadsSaver.saveToDownloads({
+      filename,
+      base64Data,
+      mimeType
+    });
+
+    onProgress?.({
+      percent: 100,
+      stage: 'completed',
+      message: 'Saved to Downloads.'
+    });
+
+    return {
+      success: true,
+      path: result.path || `Downloads/${filename}`
+    };
+  } catch (error: any) {
+    console.error('Android Downloads save failed:', error);
+    return {
+      success: false,
+      error: error.message || 'Failed to save file to Downloads'
+    };
+  } finally {
+    await listener.remove();
+  }
+};
+
+const isTextMimeType = (mimeType: string): boolean => {
+  return mimeType.startsWith('text/') || mimeType === 'application/json';
+};
+
+const toBase64 = (data: ArrayBuffer | Uint8Array | string): string => {
+  if (typeof data === 'string') {
+    return btoa(data);
+  }
+
+  const bytes = data instanceof ArrayBuffer ? new Uint8Array(data) : data;
+  let binary = '';
+
+  for (let offset = 0; offset < bytes.length; offset += BASE64_CHUNK_SIZE) {
+    const chunk = bytes.subarray(offset, offset + BASE64_CHUNK_SIZE);
+    binary += String.fromCharCode(...chunk);
+  }
+
+  return btoa(binary);
 };
 
 // Save file using File System Access API (modern web browsers)
@@ -205,12 +346,16 @@ const downloadFileBlob = (
 // Utility function to get user-friendly directory description
 export const getDirectoryDescription = (directory: DirectoryHandle | null): string => {
   if (!directory) {
-    return 'Browser default downloads folder';
+    return Capacitor.getPlatform() === 'android'
+      ? 'Device Downloads folder'
+      : Capacitor.isNativePlatform()
+        ? 'Device Documents folder'
+        : 'Browser default downloads folder';
   }
   
   switch (directory.type) {
     case 'mobile':
-      return 'Device Documents folder';
+      return Capacitor.getPlatform() === 'android' ? 'Device Downloads folder' : 'Device Documents folder';
     case 'web':
       return directory.handle?.name || 'Selected folder';
     case 'fallback':

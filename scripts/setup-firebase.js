@@ -107,10 +107,10 @@ ${geminiApiKey ? `GEMINI_API_KEY=${geminiApiKey}` : '# GEMINI_API_KEY=your-gemin
     console.log('   - Go to https://console.firebase.google.com/');
     console.log('   - Enable Firestore Database');
     console.log('   - Enable Authentication (Email/Password)');
-    console.log('   - Apply security rules from FIREBASE_MIGRATION_GUIDE.md');
+    console.log('   - Review and deploy the Firestore rules in firestore.rules');
     
     console.log('\n2. Create initial user and church documents:');
-    console.log('   - See FIREBASE_MIGRATION_GUIDE.md for detailed instructions');
+    console.log('   - Create your admin user and initial church data in Firebase Console');
     
     console.log('\n3. Test the setup:');
     console.log('   - Run: npm run test:firebase');
@@ -120,8 +120,6 @@ ${geminiApiKey ? `GEMINI_API_KEY=${geminiApiKey}` : '# GEMINI_API_KEY=your-gemin
     console.log('   - If you have existing data, the app will show a migration modal');
     console.log('   - Backup your data before migrating');
     console.log('   - Follow the migration wizard');
-    
-    console.log('\n📖 For detailed instructions, see FIREBASE_MIGRATION_GUIDE.md');
 
   } catch (error) {
     console.error('❌ Setup failed:', error.message);

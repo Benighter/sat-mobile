@@ -116,21 +116,6 @@ if (fs.existsSync('types.ts')) {
   console.log('❌ types.ts file missing');
 }
 
-// Check documentation
-console.log('\n📚 Checking documentation...');
-const docFiles = [
-  'FIREBASE_MIGRATION_GUIDE.md',
-  'docs/firestore-data-structure.md'
-];
-
-docFiles.forEach(file => {
-  if (fs.existsSync(file)) {
-    console.log(`✅ ${file}`);
-  } else {
-    console.log(`❌ ${file} - MISSING`);
-  }
-});
-
 // Summary
 console.log('\n📊 Test Summary');
 console.log('================');
@@ -157,5 +142,3 @@ if (allFilesExist) {
   console.log('❌ Firebase integration setup is incomplete');
   console.log('\n🔧 Please run the migration setup again');
 }
-
-console.log('\n📖 For detailed instructions, see FIREBASE_MIGRATION_GUIDE.md');
