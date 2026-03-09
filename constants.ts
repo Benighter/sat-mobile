@@ -121,18 +121,9 @@ export const getPrimaryEmailApiUrl = (): string | undefined => {
   return undefined;
 };
 
-// Optional API key for the external Email API, read from globals or localStorage.
+// Client-side storage is not a safe place for API secrets.
+// Keep external email delivery on server-side callables unless a future
+// secure proxy mechanism is introduced.
 export const getPrimaryEmailApiKey = (): string | undefined => {
-  try {
-    const g: any = (globalThis as any) || {};
-    const fromGlobal = g.__PRIMARY_EMAIL_API_KEY__ || g.__EMAIL_API_KEY__;
-    if (typeof fromGlobal === 'string' && fromGlobal.trim()) return fromGlobal.trim();
-    if (typeof window !== 'undefined') {
-      const fromLs =
-        window.localStorage.getItem('PRIMARY_EMAIL_API_KEY') ||
-        window.localStorage.getItem('EMAIL_API_KEY');
-      if (fromLs && fromLs.trim()) return fromLs.trim();
-    }
-  } catch {}
   return undefined;
 };

@@ -1,6 +1,9 @@
 package com.example.app;
 
+import android.content.pm.ApplicationInfo;
 import android.os.Bundle;
+import android.view.WindowManager;
+import android.webkit.WebView;
 
 import androidx.activity.OnBackPressedCallback;
 
@@ -13,6 +16,13 @@ public class MainActivity extends BridgeActivity {
 		registerPlugin(AppShellPlugin.class);
 		registerPlugin(DownloadsSaverPlugin.class);
 		super.onCreate(savedInstanceState);
+
+		getWindow().setFlags(
+			WindowManager.LayoutParams.FLAG_SECURE,
+			WindowManager.LayoutParams.FLAG_SECURE
+		);
+		boolean isDebuggable = (getApplicationInfo().flags & ApplicationInfo.FLAG_DEBUGGABLE) != 0;
+		WebView.setWebContentsDebuggingEnabled(isDebuggable);
 
 		getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
 			@Override

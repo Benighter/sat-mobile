@@ -1,5 +1,5 @@
 import { EmailNotificationService } from './emailNotificationService';
-import { getPrimaryEmailApiUrl, getPrimaryEmailApiKey } from '../constants';
+import { getPrimaryEmailApiUrl } from '../constants';
 import { Member, NotificationRecipient, Bacenta } from '../types';
 
 /**
@@ -14,12 +14,10 @@ export const emailServiceClient = {
     const apiUrl = getPrimaryEmailApiUrl();
     if (apiUrl) {
       try {
-        const apiKey = getPrimaryEmailApiKey();
         const response = await fetch(apiUrl, {
           method: 'POST',
           headers: {
-            'Content-Type': 'application/json',
-            ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {})
+            'Content-Type': 'application/json'
           },
           body: JSON.stringify({ to, subject, html, text })
         });

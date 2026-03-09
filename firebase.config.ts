@@ -28,16 +28,6 @@ const SAT_FB = {
 // Firebase configuration object
 const firebaseConfig = SAT_FB;
 
-// Debug: Log the configuration being used (remove in production)
-console.log('🔥 Firebase Config:', {
-  apiKey: firebaseConfig.apiKey.substring(0, 10) + '...',
-  authDomain: firebaseConfig.authDomain,
-  projectId: firebaseConfig.projectId,
-  storageBucket: firebaseConfig.storageBucket,
-  messagingSenderId: firebaseConfig.messagingSenderId,
-  appId: firebaseConfig.appId.substring(0, 20) + '...'
-});
-
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 
