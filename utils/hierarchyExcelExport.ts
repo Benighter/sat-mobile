@@ -1,9 +1,9 @@
 import ExcelJS from 'exceljs';
 import { Member, Bacenta, AttendanceRecord } from '../types';
 import { DirectoryHandle, FileSaveProgress, saveFileToDirectory } from './fileSystemUtils';
-import { formatDateDayMonthYear, getCurrentOrMostRecentSunday } from './dateUtils';
+import { formatDateDayMonthYear } from './dateUtils';
 import { DEFAULT_CHURCH, MINISTRY_OPTIONS } from '../constants';
-import { isMemberCurrentlyFirstTimer, isMemberWentHome } from './memberStatus';
+import { getMemberFirstTimerWeekDate, isMemberWentHome } from './memberStatus';
 import { buildHierarchyGrouping, HierarchySectionKind } from './hierarchyGrouping';
 
 export interface HierarchyExcelExportOptions {
@@ -132,6 +132,39 @@ const buildAttendanceMap = (
   return map;
 };
 
+const getEffectiveFirstTimerRange = (
+  dates: string[],
+  startDate?: string,
+  endDate?: string
+): { rangeStart?: string; rangeEnd?: string } => {
+  const rangeStart = startDate || dates[0];
+  const rangeEnd = endDate || dates[dates.length - 1];
+
+  return { rangeStart, rangeEnd };
+};
+
+const isMemberFirstTimerInRange = (
+  member: Member,
+  rangeStart?: string,
+  rangeEnd?: string
+): boolean => {
+  const firstTimerWeekDate = getMemberFirstTimerWeekDate(member);
+
+  if (!firstTimerWeekDate) {
+    return false;
+  }
+
+  if (rangeStart && firstTimerWeekDate < rangeStart) {
+    return false;
+  }
+
+  if (rangeEnd && firstTimerWeekDate > rangeEnd) {
+    return false;
+  }
+
+  return true;
+};
+
 
 export const getHierarchyExportPreview = (data: HierarchyExcelData): HierarchyExportPreview => {
   const activeMembers = getActiveMembers(data.members);
@@ -150,11 +183,11 @@ export const getHierarchyExportPreview = (data: HierarchyExcelData): HierarchyEx
   const dateRangeDays = firstDate && lastDate
     ? Math.ceil((new Date(lastDate).getTime() - new Date(firstDate).getTime()) / (1000 * 60 * 60 * 24)) + 1
     : 0;
-  const currentSunday = getCurrentOrMostRecentSunday();
+  const { rangeStart, rangeEnd } = getEffectiveFirstTimerRange(dates, startDate, endDate);
 
   const tonguesCount = activeMembers.filter(m => m.speaksInTongues === true).length;
   const baptisedCount = activeMembers.filter(m => m.baptized === true).length;
-  const firstTimersCount = activeMembers.filter(m => isMemberCurrentlyFirstTimer(m, currentSunday)).length;
+  const firstTimersCount = activeMembers.filter(m => isMemberFirstTimerInRange(m, rangeStart, rangeEnd)).length;
   const newBelieversCount = activeMembers.filter(m => m.isNewBeliever === true).length;
   const ministriesCount = new Set(activeMembers.filter(m => m.ministry).map(m => m.ministry!.trim().toLowerCase())).size;
 
@@ -190,6 +223,7 @@ export const exportHierarchyExcel = async (
     const { startDate, endDate } = options || {};
     const dates = getUniqueAttendanceDates(attendanceRecords, memberIds, startDate, endDate);
     const attendanceMap = buildAttendanceMap(attendanceRecords, memberIds, startDate, endDate);
+    const { rangeStart, rangeEnd } = getEffectiveFirstTimerRange(dates, startDate, endDate);
     const grouping = buildHierarchyGrouping(activeMembers, {
       isMinistryMode: Boolean(options?.isMinistryContext),
       ministryName: options?.ministryName
@@ -626,8 +660,7 @@ export const exportHierarchyExcel = async (
 
     // First Timers tab (grouped by Bacenta Leader / Fellowship Leader)
     (() => {
-      const currentSunday = getCurrentOrMostRecentSunday();
-      const firstTimers = activeMembers.filter(m => isMemberCurrentlyFirstTimer(m, currentSunday));
+      const firstTimers = activeMembers.filter(m => isMemberFirstTimerInRange(m, rangeStart, rangeEnd));
       if (!firstTimers.length) return;
 
       const ws = workbook.addWorksheet('First Timers');
@@ -677,7 +710,7 @@ export const exportHierarchyExcel = async (
           ws.getCell(currentRow, 2).value = getFullName(m);
           ws.getCell(currentRow, 3).value = m.phoneNumber;
           ws.getCell(currentRow, 4).value = getBacentaName(bacentas, m.bacentaId);
-          const firstAttended = dates.find(d => attendanceMap.get(`${m.id}|${d}`) === 'Present');
+          const firstAttended = dates.find(d => attendanceMap.get(`${m.id}|${d}`) === 'Present') || getMemberFirstTimerWeekDate(m);
           ws.getCell(currentRow, 5).value = firstAttended ? formatDateDayMonthYear(firstAttended) : '—';
           for (let col = 1; col <= 5; col++) ws.getCell(currentRow, col).border = thinB;
           currentRow++;
