@@ -1,7 +1,7 @@
 apply plugin: 'com.android.application'
 
 android {
-    namespace "com.example.app"
+    namespace "com.benighter.satmobile"
     compileSdk rootProject.ext.compileSdkVersion
 
     compileOptions {
@@ -10,7 +10,7 @@ android {
     }
 
     defaultConfig {
-        applicationId "com.example.app"
+        applicationId "com.benighter.satmobile"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1

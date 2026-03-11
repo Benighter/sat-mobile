@@ -39,16 +39,20 @@ interface PushNotificationPayload {
 }
 
 class PushNotificationService {
+  private static readonly ANDROID_CHANNEL_ID = 'sat_mobile_notifications';
   private messaging: any = null;
   private currentUser: User | null = null;
   private currentChurchId: string | null = null;
   private isInitialized = false;
   private nativePushConfigured = false;
+  private nativeListenersRegistered = false;
+  private pendingNativeRegistration: Promise<string | null> | null = null;
+  private resolvePendingNativeRegistration: ((token: string | null) => void) | null = null;
+  private rejectPendingNativeRegistration: ((error: unknown) => void) | null = null;
+  private lastRegistrationError: string | null = null;
   private vapidKey = (() => {
     const env: any = (typeof import.meta !== 'undefined' ? (import.meta as any).env : {}) || {};
-    const sat = env.VITE_FIREBASE_VAPID_KEY || process.env.REACT_APP_FIREBASE_VAPID_KEY || '';
-    const fallback = sat || 'BKxf8KJjJZv_RrXd7JYF6v8cS_8oLh7hQtYhTzZ1x2lQ3mB0GqJ5vX8mD2nF5sK9';
-    return sat || fallback;
+    return (env.VITE_FIREBASE_VAPID_KEY || process.env.REACT_APP_FIREBASE_VAPID_KEY || '').trim();
   })();
 
   constructor() {
@@ -65,11 +69,149 @@ class PushNotificationService {
     return false;
   }
 
-  // Initialize push notification service
-  async initialize(): Promise<void> {
-    if (this.isInitialized) return;
+  private isValidVapidKey(key?: string | null): boolean {
+    return typeof key === 'string' && /^[A-Za-z0-9_-]{80,200}$/.test(key.trim());
+  }
+
+  private getConfigurationIssue(): string | null {
+    if (Capacitor.isNativePlatform() && !this.nativePushConfigured) {
+      return 'Native push requires android/app/google-services.json plus VITE_ENABLE_NATIVE_PUSH=true.';
+    }
+
+    if (!Capacitor.isNativePlatform() && !this.isValidVapidKey(this.vapidKey)) {
+      return 'Web push requires a valid VITE_FIREBASE_VAPID_KEY (Firebase Cloud Messaging Web Push certificate key).';
+    }
+
+    return null;
+  }
+
+  private toErrorMessage(error: unknown): string {
+    if (error instanceof Error && error.message) return error.message;
+    if (typeof error === 'string') return error;
+    try {
+      return JSON.stringify(error);
+    } catch {
+      return 'Unknown push notification error';
+    }
+  }
+
+  private isRetryableNativeRegistrationError(message: string): boolean {
+    return /SERVICE_NOT_AVAILABLE|INTERNAL_SERVER_ERROR|FIS_AUTH_ERROR|TOO_MANY_REGISTRATIONS/i.test(message);
+  }
+
+  private clearPendingNativeRegistration(): void {
+    this.pendingNativeRegistration = null;
+    this.resolvePendingNativeRegistration = null;
+    this.rejectPendingNativeRegistration = null;
+  }
+
+  private async ensureNativePushListeners(): Promise<void> {
+    if (this.nativeListenersRegistered) {
+      return;
+    }
+
+    PushNotifications.addListener('registration', async (token) => {
+      console.log('Push registration success, token: ' + token.value);
+      this.lastRegistrationError = null;
+
+      if (this.currentUser && this.currentChurchId) {
+        await this.saveDeviceToken(token.value, this.getPlatform());
+      }
+
+      this.resolvePendingNativeRegistration?.(token.value);
+      this.clearPendingNativeRegistration();
+    });
+
+    PushNotifications.addListener('registrationError', (error) => {
+      const message = this.toErrorMessage(error);
+      this.lastRegistrationError = message;
+      console.error('Error during registration: ', JSON.stringify(error));
+      this.rejectPendingNativeRegistration?.(new Error(message));
+      this.clearPendingNativeRegistration();
+    });
+
+    PushNotifications.addListener('pushNotificationReceived', (notification) => {
+      console.log('Push notification received: ', notification);
+      this.handleForegroundNotification(notification);
+    });
+
+    PushNotifications.addListener('pushNotificationActionPerformed', (notification) => {
+      console.log('Push notification action performed: ', notification);
+      this.handleNotificationClick(notification);
+    });
+
+    this.nativeListenersRegistered = true;
+  }
+
+  private async waitForNativeRegistration(timeoutMs = 15000): Promise<string | null> {
+    if (this.pendingNativeRegistration) {
+      return this.pendingNativeRegistration;
+    }
+
+    this.pendingNativeRegistration = new Promise<string | null>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        reject(new Error('Timed out waiting for native push registration.'));
+        this.clearPendingNativeRegistration();
+      }, timeoutMs);
+
+      this.resolvePendingNativeRegistration = (token) => {
+        clearTimeout(timeout);
+        resolve(token);
+      };
+
+      this.rejectPendingNativeRegistration = (error) => {
+        clearTimeout(timeout);
+        reject(error);
+      };
+    });
 
     try {
+      await PushNotifications.register();
+      return await this.pendingNativeRegistration;
+    } catch (error) {
+      this.clearPendingNativeRegistration();
+      throw error;
+    }
+  }
+
+  private async registerNativeTokenWithRetry(maxAttempts = 3): Promise<string | null> {
+    await this.ensureNativePushListeners();
+
+    let lastError: unknown = null;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      try {
+        return await this.waitForNativeRegistration();
+      } catch (error) {
+        lastError = error;
+        const message = this.toErrorMessage(error);
+        this.lastRegistrationError = message;
+
+        if (attempt === maxAttempts || !this.isRetryableNativeRegistrationError(message)) {
+          throw error;
+        }
+
+        const delayMs = 1500 * attempt;
+        console.warn(`Native push registration failed (attempt ${attempt}/${maxAttempts}): ${message}. Retrying in ${delayMs}ms.`);
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+      }
+    }
+
+    throw lastError ?? new Error('Native push registration failed.');
+  }
+
+  // Initialize push notification service
+  async initialize(): Promise<boolean> {
+    if (this.isInitialized) {
+      if (this.currentUser && this.currentChurchId) {
+        await this.registerDeviceToken();
+      }
+      return true;
+    }
+
+    try {
+      this.lastRegistrationError = null;
+
       // Initialize Firebase Messaging for web
   if (!Capacitor.isNativePlatform()) {
         // Ensure service worker is registered early (idempotent)
@@ -100,9 +242,17 @@ class PushNotificationService {
       }
 
       this.isInitialized = true;
+
+      if (this.currentUser && this.currentChurchId) {
+        await this.registerDeviceToken();
+      }
+
       console.log('✅ Push notification service initialized');
+      return true;
     } catch (error) {
+      this.lastRegistrationError = this.toErrorMessage(error);
       console.error('❌ Failed to initialize push notification service:', error);
+      return false;
     }
   }
 
@@ -112,33 +262,31 @@ class PushNotificationService {
     const permResult = await PushNotifications.requestPermissions();
     
     if (permResult.receive === 'granted') {
-      // Register with Apple / Google to receive push via APNS/FCM
-      await PushNotifications.register();
+      await this.ensureAndroidNotificationChannel();
+      await this.ensureNativePushListeners();
+      await this.registerNativeTokenWithRetry();
+    } else {
+      this.lastRegistrationError = 'Notification permission was not granted on the device.';
+    }
+  }
 
-      // Handle registration
-      PushNotifications.addListener('registration', async (token) => {
-        console.log('Push registration success, token: ' + token.value);
-        if (this.currentUser && this.currentChurchId) {
-          await this.saveDeviceToken(token.value, this.getPlatform());
-        }
-      });
+  private async ensureAndroidNotificationChannel(): Promise<void> {
+    if (Capacitor.getPlatform() !== 'android') {
+      return;
+    }
 
-      // Handle registration errors
-      PushNotifications.addListener('registrationError', (error) => {
-        console.error('Error during registration: ', JSON.stringify(error));
+    try {
+      await PushNotifications.createChannel({
+        id: PushNotificationService.ANDROID_CHANNEL_ID,
+        name: 'SAT Mobile Notifications',
+        description: 'General alerts and activity updates',
+        importance: 5,
+        visibility: 1,
+        vibration: true,
+        lights: true,
       });
-
-      // Handle incoming push notifications when app is open
-      PushNotifications.addListener('pushNotificationReceived', (notification) => {
-        console.log('Push notification received: ', notification);
-        this.handleForegroundNotification(notification);
-      });
-
-      // Handle notification click/tap when app is in background
-      PushNotifications.addListener('pushNotificationActionPerformed', (notification) => {
-        console.log('Push notification action performed: ', notification);
-        this.handleNotificationClick(notification);
-      });
+    } catch (error) {
+      console.warn('Failed to ensure Android notification channel:', error);
     }
   }
 
@@ -162,6 +310,13 @@ class PushNotificationService {
       return null;
     }
 
+    const configurationIssue = this.getConfigurationIssue();
+    if (configurationIssue) {
+      this.lastRegistrationError = configurationIssue;
+      console.warn(configurationIssue);
+      return null;
+    }
+
     try {
       let token: string | null = null;
 
@@ -170,8 +325,7 @@ class PushNotificationService {
           console.warn('Skipping native device token registration because native push is disabled.');
           return null;
         }
-        // Mobile platform - token will be received via listener
-        await PushNotifications.register();
+        token = await this.registerNativeTokenWithRetry();
       } else {
         // Web platform - use Firebase Messaging
         if (this.messaging) {
@@ -191,20 +345,30 @@ class PushNotificationService {
 
             if (permission === 'granted') {
               try {
-                token = await getToken(this.messaging, { vapidKey: this.vapidKey });
+                const serviceWorkerRegistration = 'serviceWorker' in navigator
+                  ? await navigator.serviceWorker.ready.catch(() => undefined)
+                  : undefined;
+                token = await getToken(this.messaging, {
+                  vapidKey: this.vapidKey,
+                  ...(serviceWorkerRegistration ? { serviceWorkerRegistration } : {})
+                });
                 if (token) {
                   await this.saveDeviceToken(token, 'web');
+                  this.lastRegistrationError = null;
                   console.log('✅ Web FCM token registered:', token.substring(0, 20) + '...');
                 } else {
                   console.warn('⚠️ getToken returned null/empty');
                 }
               } catch (gtErr) {
+                this.lastRegistrationError = this.toErrorMessage(gtErr);
                 console.error('Failed to obtain FCM token:', gtErr);
               }
             } else if (permission === 'denied') {
+              this.lastRegistrationError = 'Notification permission is blocked in the browser/device settings.';
               console.warn('❌ Notifications are blocked by the user/browser settings');
               console.warn('ℹ️ In most browsers you must manually re-enable them in site settings.');
             } else {
+              this.lastRegistrationError = 'Notification permission has not been granted yet.';
               console.log('Notification permission unresolved (default) – user has not decided yet.');
             }
         }
@@ -220,6 +384,7 @@ class PushNotificationService {
 
       return token;
     } catch (error) {
+      this.lastRegistrationError = this.toErrorMessage(error);
       console.error('Failed to register device token:', error);
       return null;
     }
@@ -495,6 +660,11 @@ class PushNotificationService {
     return {
       native: Capacitor.isNativePlatform(),
       nativePushConfigured: this.nativePushConfigured,
+      nativeListenersRegistered: this.nativeListenersRegistered,
+      vapidConfigured: this.vapidKey.length > 0,
+      vapidValid: this.isValidVapidKey(this.vapidKey),
+      configurationIssue: this.getConfigurationIssue(),
+      lastRegistrationError: this.lastRegistrationError,
       pluginAvailable: Capacitor.isNativePlatform() ? Capacitor.isPluginAvailable('PushNotifications') : false,
       hasNotification: typeof window !== 'undefined' && 'Notification' in window,
       hasServiceWorker: typeof navigator !== 'undefined' && 'serviceWorker' in navigator,

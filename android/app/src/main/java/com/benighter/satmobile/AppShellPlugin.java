@@ -1,4 +1,4 @@
-package com.example.app;
+package com.benighter.satmobile;
 
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;

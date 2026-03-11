@@ -1,12 +1,17 @@
-// Lightweight notification sound using Web Audio API (no external assets)
-// Plays up to ~3 seconds or until manually stopped (e.g., when opening the bell)
+import { Capacitor } from '@capacitor/core';
+
+// Lightweight fallback notification sound for the browser.
+// Native mobile platforms should use the OS notification sound instead.
 
 let audioCtx: AudioContext | null = null;
-let oscillator: OscillatorNode | null = null;
+let oscillators: OscillatorNode[] = [];
 let gainNode: GainNode | null = null;
 let stopTimeout: number | null = null;
-let pulseInterval: number | null = null;
 let isPlaying = false;
+
+function shouldUseNativeNotificationSound(): boolean {
+  return Capacitor.isNativePlatform();
+}
 
 function ensureContext(): AudioContext | null {
   try {
@@ -26,41 +31,33 @@ function ensureContext(): AudioContext | null {
 
 export function startNotificationSound(maxDurationMs: number = 3000) {
   if (isPlaying) return; // prevent overlapping
+  if (shouldUseNativeNotificationSound()) return;
 
   const ctx = ensureContext();
   if (!ctx) return; // Audio not supported or blocked
 
-  oscillator = ctx.createOscillator();
   gainNode = ctx.createGain();
 
-  // Gentle tone (triangle) at 880Hz; not too loud
-  oscillator.type = 'triangle';
-  oscillator.frequency.value = 880; // A5
-
-  // Envelope and initial volume
   const now = ctx.currentTime;
   gainNode.gain.setValueAtTime(0.0001, now);
-  gainNode.gain.exponentialRampToValueAtTime(0.06, now + 0.05); // quick attack
-
-  oscillator.connect(gainNode);
   gainNode.connect(ctx.destination);
 
-  oscillator.start();
+  const playTone = (frequency: number, startAt: number, duration: number, volume: number) => {
+    const oscillator = ctx.createOscillator();
+    oscillator.type = 'sine';
+    oscillator.frequency.setValueAtTime(frequency, startAt);
+    oscillator.connect(gainNode!);
+    gainNode!.gain.setValueAtTime(0.0001, startAt);
+    gainNode!.gain.exponentialRampToValueAtTime(volume, startAt + 0.03);
+    gainNode!.gain.exponentialRampToValueAtTime(0.0001, startAt + duration);
+    oscillator.start(startAt);
+    oscillator.stop(startAt + duration + 0.03);
+    oscillators.push(oscillator);
+  };
 
-  // Create a subtle pulsing effect to be more "notification-like"
-  let on = true;
-  pulseInterval = window.setInterval(() => {
-    if (!ctx || !gainNode) return;
-    const t = ctx.currentTime + 0.01;
-    if (on) {
-      gainNode.gain.cancelScheduledValues(t);
-      gainNode.gain.setTargetAtTime(0.01, t, 0.03);
-    } else {
-      gainNode.gain.cancelScheduledValues(t);
-      gainNode.gain.setTargetAtTime(0.06, t, 0.03);
-    }
-    on = !on;
-  }, 220);
+  // Two short soft tones read more like a clean notification chime than a pulse.
+  playTone(740, now, 0.18, 0.03);
+  playTone(988, now + 0.15, 0.24, 0.035);
 
   // Auto stop after maxDurationMs
   stopTimeout = window.setTimeout(() => stopNotificationSound(), maxDurationMs) as unknown as number;
@@ -74,10 +71,6 @@ export function stopNotificationSound() {
     window.clearTimeout(stopTimeout);
     stopTimeout = null;
   }
-  if (pulseInterval) {
-    window.clearInterval(pulseInterval);
-    pulseInterval = null;
-  }
 
   try {
     const ctx = audioCtx;
@@ -87,16 +80,15 @@ export function stopNotificationSound() {
       gainNode.gain.cancelScheduledValues(now);
       gainNode.gain.setTargetAtTime(0.0001, now, 0.03);
     }
-    if (oscillator) {
-      // Stop a bit later to allow release
-      setTimeout(() => {
-        try { oscillator?.stop(); } catch { /* ignore */ }
-        try { oscillator?.disconnect(); } catch { /* ignore */ }
-        try { gainNode?.disconnect(); } catch { /* ignore */ }
-        oscillator = null;
-        gainNode = null;
-      }, 80);
-    }
+    setTimeout(() => {
+      oscillators.forEach(node => {
+        try { node.stop(); } catch { /* ignore */ }
+        try { node.disconnect(); } catch { /* ignore */ }
+      });
+      try { gainNode?.disconnect(); } catch { /* ignore */ }
+      oscillators = [];
+      gainNode = null;
+    }, 80);
   } finally {
     isPlaying = false;
   }

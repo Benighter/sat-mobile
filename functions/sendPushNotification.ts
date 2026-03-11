@@ -54,7 +54,7 @@ export const sendPushNotification = onCall<SendPushData>(async (request: any) =>
         priority: 'high',
         notification: {
           sound: payload.sound || 'default',
-          channelId: 'default',
+          channelId: 'sat_mobile_notifications',
         },
       },
       apns: {

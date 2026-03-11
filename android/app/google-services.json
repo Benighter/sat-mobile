@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "1076014285349",
+    "project_id": "sat-mobile-de6f1",
+    "storage_bucket": "sat-mobile-de6f1.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1076014285349:android:ef65e28bbe79837f76b5cc",
+        "android_client_info": {
+          "package_name": "com.benighter.satmobile"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1076014285349-bomdjpe05qr48m7iatmf9892i11o0gke.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDVa8DZKxg_1HzG-UfsAI9EK8d4wXnlzCc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1076014285349-bomdjpe05qr48m7iatmf9892i11o0gke.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

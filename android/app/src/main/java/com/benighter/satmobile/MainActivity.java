@@ -1,4 +1,4 @@
-package com.example.app;
+package com.benighter.satmobile;
 
 import android.content.pm.ApplicationInfo;
 import android.os.Bundle;

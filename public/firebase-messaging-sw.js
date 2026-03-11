@@ -10,7 +10,7 @@ const firebaseConfig = {
   apiKey: "AIzaSyDkyjDhyz_LCbUpRgftD2qo31e5SteAiKg",
   authDomain: "sat-mobile-de6f1.firebaseapp.com",
   projectId: "sat-mobile-de6f1",
-  storageBucket: "sat-mobile-de6f1.firebasestorage.app",
+  storageBucket: "sat-mobile-de6f1.appspot.com",
   messagingSenderId: "1076014285349",
   appId: "1:1076014285349:web:d72d460aefe5ca8d76b5cc"
 };
