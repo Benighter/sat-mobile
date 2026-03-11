@@ -31,6 +31,7 @@ import { crossTenantService } from '../services/crossTenantService';
 import { dataMigrationService } from '../utils/dataMigration';
 import { withLeadershipFirstTimerRule } from '../utils/memberStatus';
 import { userService } from '../services/userService';
+import { isImageDataUrl } from '../services/imageStorageService';
 import { setNotificationContext } from '../services/notificationService';
 import {
   memberOperationsWithNotifications,
@@ -1252,6 +1253,14 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
       setIsLoading(true);
       const original = members.find(m => m.id === memberData.id);
       const sanitizedMemberData = withLeadershipFirstTimerRule(memberData);
+      const updates: Partial<Member> = original
+        ? (Object.keys(sanitizedMemberData) as Array<keyof Member>).reduce((acc, key) => {
+            if (sanitizedMemberData[key] !== original[key]) {
+              (acc as any)[key] = sanitizedMemberData[key];
+            }
+            return acc;
+          }, {} as Partial<Member>)
+        : sanitizedMemberData;
 
       // If a Green Bacenta (Bacenta Leader) is being demoted (role changed), auto de-link their Red Bacentas
       const isDemotedFromGreenBacenta =
@@ -1295,27 +1304,29 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
 
       // Use ministry service for bidirectional sync in ministry mode
       if (isMinistryContext) {
-        // Calculate the updates (difference between original and new)
-        const updates: Partial<Member> = {};
-        Object.keys(sanitizedMemberData).forEach(key => {
-          const typedKey = key as keyof Member;
-          if (original && sanitizedMemberData[typedKey] !== original[typedKey]) {
-            (updates as any)[typedKey] = sanitizedMemberData[typedKey];
-          }
-        });
-
         await ministryMembersService.update(sanitizedMemberData.id, updates, userProfile, original as Member);
         showToast('success', 'Member updated successfully (synced to source church)');
         // Optimistic UI update so changes show immediately in ministry mode
         setMembers(prev => prev.map(m => {
           if (m.id !== sanitizedMemberData.id) return m;
-          return { ...m, ...(updates as Partial<Member>) } as Member;
+          const optimisticUpdates = { ...updates } as Partial<Member>;
+          if (isImageDataUrl(optimisticUpdates.profilePicture)) {
+            delete optimisticUpdates.profilePicture;
+          }
+          return { ...m, ...optimisticUpdates } as Member;
         }));
       } else {
-        await memberOperationsWithNotifications.update(sanitizedMemberData.id, sanitizedMemberData, original || undefined);
+        await memberOperationsWithNotifications.update(sanitizedMemberData.id, updates, original || undefined);
         showToast('success', 'Member updated successfully');
         // Optimistic UI update in normal mode
-        setMembers(prev => prev.map(m => m.id === sanitizedMemberData.id ? ({ ...m, ...sanitizedMemberData } as Member) : m));
+        setMembers(prev => prev.map(m => {
+          if (m.id !== sanitizedMemberData.id) return m;
+          const optimisticUpdates = { ...updates } as Partial<Member>;
+          if (isImageDataUrl(optimisticUpdates.profilePicture)) {
+            delete optimisticUpdates.profilePicture;
+          }
+          return { ...m, ...optimisticUpdates } as Member;
+        }));
       }
     } catch (error: any) {
       setError(error.message);
