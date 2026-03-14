@@ -2,7 +2,7 @@
 import React, { createContext, useState, useEffect, useCallback, ReactNode, useMemo, useRef } from 'react';
 import { collection, doc, getDocs, onSnapshot, query as fsQuery, where as fsWhere, setDoc } from 'firebase/firestore';
 import { db } from '../firebase.config';
-import { Member, AttendanceRecord, Bacenta, TabOption, AttendanceStatus, NewBeliever, SundayConfirmation, ConfirmationStatus, Guest, MemberDeletionRequest, OutreachBacenta, OutreachMember, PrayerRecord, PrayerSchedule, PrayerStatus, MeetingRecord, TitheRecord, TransportRecord, CrossTenantAccessLink, CrossTenantPermission, SonOfGod, CustomPrayer, CustomPrayerRecord } from '../types';
+import { Member, AttendanceRecord, Bacenta, TabOption, AttendanceStatus, NewBeliever, SundayConfirmation, ConfirmationStatus, Guest, MemberDeletionRequest, OutreachBacenta, OutreachMember, PrayerRecord, PrayerSchedule, PrayerStatus, MeetingRecord, TitheRecord, TransportRecord, CrossTenantAccessLink, CrossTenantPermission, SonOfGod, CustomPrayer, CustomPrayerRecord, SundayOfferingRecord } from '../types';
 import { FIXED_TABS, DEFAULT_TAB_ID } from '../constants';
 import { sessionStateStorage } from '../utils/localStorage';
 import { getSundaysOfMonth } from '../utils/dateUtils';
@@ -23,6 +23,7 @@ import {
   customPrayerFirebaseService,
   customPrayerRecordFirebaseService,
   meetingRecordsFirebaseService,
+  sundayOfferingFirebaseService,
   titheFirebaseService,
   transportFirebaseService,
   FirebaseUser
@@ -62,6 +63,7 @@ interface AppContextType {
   guests: Guest[];
   memberDeletionRequests: MemberDeletionRequest[];
   meetingRecords: MeetingRecord[];
+  sundayOfferingRecords: SundayOfferingRecord[];
   titheRecords: TitheRecord[];
   transportRecords: TransportRecord[];
 
@@ -176,6 +178,7 @@ interface AppContextType {
   updateMeetingRecordHandler: (record: MeetingRecord) => Promise<void>;
   deleteMeetingRecordHandler: (id: string) => Promise<void>;
   getMeetingRecordHandler: (bacentaId: string, date: string) => Promise<MeetingRecord | null>;
+  saveSundayOfferingHandler: (record: SundayOfferingRecord) => Promise<void>;
 
   // Tithe Operations
   markTitheHandler: (memberId: string, paid: boolean, amount: number) => Promise<void>;
@@ -279,6 +282,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
   const [guests, setGuests] = useState<Guest[]>([]);
   const [memberDeletionRequests, setMemberDeletionRequests] = useState<MemberDeletionRequest[]>([]);
   const [meetingRecords, setMeetingRecords] = useState<MeetingRecord[]>([]);
+  const [sundayOfferingRecords, setSundayOfferingRecords] = useState<SundayOfferingRecord[]>([]);
   const [titheRecords, setTitheRecords] = useState<TitheRecord[]>([]);
   const [transportRecords, setTransportRecords] = useState<TransportRecord[]>([]);
 
@@ -880,6 +884,11 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
           setMeetingRecords(records);
         });
         unsubscribers.push(unsubscribeMeetings);
+
+        const unsubscribeSundayOfferings = sundayOfferingFirebaseService.onSnapshot((records) => {
+          setSundayOfferingRecords(records);
+        });
+        unsubscribers.push(unsubscribeSundayOfferings);
       }
 
       // Persist cleanup for BOTH ministry and normal mode branches
@@ -1021,7 +1030,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
         }
       } else {
         // Normal mode - fetch from current church only
-        const [membersData, bacentasData, attendanceData, newBelieversData, confirmationsData, prayerData, prayerSchedulesData, meetingData] = await Promise.all([
+        const [membersData, bacentasData, attendanceData, newBelieversData, confirmationsData, prayerData, prayerSchedulesData, meetingData, sundayOfferingData] = await Promise.all([
           membersFirebaseService.getAll(),
           bacentasFirebaseService.getAll(),
           attendanceFirebaseService.getAll(),
@@ -1029,7 +1038,8 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
           confirmationFirebaseService.getAll(),
           prayerFirebaseService.getAll(),
           prayerScheduleFirebaseService.getAll(),
-          meetingRecordsFirebaseService.getAll()
+          meetingRecordsFirebaseService.getAll(),
+          sundayOfferingFirebaseService.getAll()
         ]);
 
         // If profile has a ministry church, merge in native ministry members
@@ -1042,6 +1052,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
         setPrayerRecords(prayerData);
         setPrayerSchedules(prayerSchedulesData);
         setMeetingRecords(meetingData);
+        setSundayOfferingRecords(sundayOfferingData);
       }
 
       // Restore original context after reads
@@ -2484,6 +2495,33 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
       return null;
     }
   }, []);
+
+  const saveSundayOfferingHandler = useCallback(async (record: SundayOfferingRecord) => {
+    if (!ensureCanWrite()) throw new Error('Read-only access');
+    if (userProfile?.role !== 'admin') throw new Error('Only admins can manage Sunday offerings');
+    try {
+      setIsLoading(true);
+      await sundayOfferingFirebaseService.addOrUpdate(record);
+
+      setSundayOfferingRecords(prev => {
+        const existingIndex = prev.findIndex(r => r.id === record.id);
+        if (existingIndex >= 0) {
+          const updated = [...prev];
+          updated[existingIndex] = record;
+          return updated;
+        }
+        return [record, ...prev];
+      });
+
+      showToast('success', 'Sunday offering saved successfully');
+    } catch (error: any) {
+      setError(error.message);
+      showToast('error', 'Failed to save Sunday offering', error.message);
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [showToast, userProfile]);
 
   // Tithe handlers
   const markTitheHandler = useCallback(async (memberId: string, paid: boolean, amount: number) => {
@@ -4047,6 +4085,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     guests,
     memberDeletionRequests,
     meetingRecords,
+    sundayOfferingRecords,
     titheRecords,
     transportRecords,
 
@@ -4135,6 +4174,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     updateMeetingRecordHandler,
     deleteMeetingRecordHandler,
     getMeetingRecordHandler,
+    saveSundayOfferingHandler,
 
     // Tithe Operations
     markTitheHandler,

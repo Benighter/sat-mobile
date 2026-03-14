@@ -17,3 +17,4 @@ export const crossMinistrySyncHttp = legacy.crossMinistrySyncHttp;
 export const searchAdminUserByEmail = legacy.searchAdminUserByEmail;
 export const sendBirthdayEmail = legacy.sendBirthdayEmail;
 export const sendBirthdayEmailHttp = legacy.sendBirthdayEmailHttp;
+export const relayPersistImage = legacy.relayPersistImage;

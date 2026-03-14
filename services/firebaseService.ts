@@ -32,9 +32,9 @@ import {
   fetchSignInMethodsForEmail
 } from 'firebase/auth';
 import { db, auth } from '../firebase.config';
-import { Member, Bacenta, AttendanceRecord, NewBeliever, SundayConfirmation, Guest, MemberDeletionRequest, DeletionRequestStatus, OutreachBacenta, OutreachMember, PrayerRecord, PrayerSchedule, MeetingRecord, TitheRecord, BussingRecord, TransportRecord, SonOfGod, CustomPrayer, CustomPrayerRecord } from '../types';
+import { Member, Bacenta, AttendanceRecord, NewBeliever, SundayConfirmation, Guest, MemberDeletionRequest, DeletionRequestStatus, OutreachBacenta, OutreachMember, PrayerRecord, PrayerSchedule, MeetingRecord, TitheRecord, BussingRecord, TransportRecord, SonOfGod, CustomPrayer, CustomPrayerRecord, SundayOfferingRecord } from '../types';
 import { applyLeadershipFirstTimerRule, withLeadershipFirstTimerRule } from '../utils/memberStatus';
-import { cleanupStoredImage, persistImageValue } from './imageStorageService';
+import { cleanupStoredImage, isImageDataUrl, persistImageValue } from './imageStorageService';
 // Lightweight inline type to avoid circular heavy imports for new feature (kept local to service)
 export interface HeadCountRecord {
   id: string; // `${date}_${section}`
@@ -71,6 +71,21 @@ export interface FirebaseError {
 // Current user and church context
 let currentUser: FirebaseUser | null = null;
 let currentChurchId: string | null = null;
+const MAX_INLINE_MEETING_IMAGE_LENGTH = 700000;
+
+const resolveMeetingImageValue = (meetingImage?: string | null): string => {
+  const normalizedValue = typeof meetingImage === 'string' ? meetingImage.trim() : '';
+  if (!normalizedValue) {
+    return '';
+  }
+  if (!isImageDataUrl(normalizedValue)) {
+    return normalizedValue;
+  }
+  if (normalizedValue.length > MAX_INLINE_MEETING_IMAGE_LENGTH) {
+    throw new Error('Meeting image is too large to save right now. Please crop it smaller and try again.');
+  }
+  return normalizedValue;
+};
 
 // Helper: map a real email to a ministry-only Auth email alias (same inbox for providers that support plus-addressing)
 const toMinistryAuthEmail = (email: string): string => {
@@ -2731,10 +2746,12 @@ export const meetingRecordsFirebaseService = {
       const docRef = doc(meetingsRef, record.id);
       const existingSnap = await getDoc(docRef);
       const existingRecord = existingSnap.exists() ? ({ id: existingSnap.id, ...(existingSnap.data() as any) } as MeetingRecord) : null;
-      const meetingImage = await persistImageValue({
-        imageValue: record.meetingImage,
-        path: `churches/${currentChurchId}/meeting-images/${record.id}`
-      });
+      const meetingImage = isImageDataUrl(record.meetingImage)
+        ? resolveMeetingImageValue(record.meetingImage)
+        : await persistImageValue({
+          imageValue: record.meetingImage,
+          path: `churches/${currentChurchId}/meeting-images/${record.id}`
+        });
 
       await setDoc(docRef, {
         ...record,
@@ -2785,6 +2802,62 @@ export const meetingRecordsFirebaseService = {
         ...doc.data(),
         id: doc.id
       })) as MeetingRecord[];
+      callback(records);
+    });
+  }
+};
+
+export const sundayOfferingFirebaseService = {
+  getAll: async (): Promise<SundayOfferingRecord[]> => {
+    try {
+      const offeringsRef = collection(db, getChurchCollectionPath('sundayOfferings'));
+      const querySnapshot = await getDocs(query(offeringsRef, orderBy('date', 'desc')));
+
+      return querySnapshot.docs.map(doc => ({
+        ...doc.data(),
+        id: doc.id
+      })) as SundayOfferingRecord[];
+    } catch (error: any) {
+      throw new Error(`Failed to fetch Sunday offerings: ${error.message}`);
+    }
+  },
+
+  getByDate: async (date: string): Promise<SundayOfferingRecord | null> => {
+    try {
+      const offeringId = `sunday_${date}`;
+      const offeringRef = doc(db, getChurchCollectionPath('sundayOfferings'), offeringId);
+      const snap = await getDoc(offeringRef);
+      if (!snap.exists()) return null;
+      return ({ id: snap.id, ...snap.data() } as SundayOfferingRecord);
+    } catch (error: any) {
+      throw new Error(`Failed to fetch Sunday offering for ${date}: ${error.message}`);
+    }
+  },
+
+  addOrUpdate: async (record: SundayOfferingRecord): Promise<void> => {
+    try {
+      const offeringsRef = collection(db, getChurchCollectionPath('sundayOfferings'));
+      const docRef = doc(offeringsRef, record.id);
+      await setDoc(docRef, {
+        ...record,
+        recordedAt: record.recordedAt || Timestamp.now().toDate().toISOString(),
+        recordedBy: currentUser?.uid || 'unknown',
+        lastUpdated: new Date().toISOString()
+      }, { merge: true });
+    } catch (error: any) {
+      throw new Error(`Failed to save Sunday offering: ${error.message}`);
+    }
+  },
+
+  onSnapshot: (callback: (records: SundayOfferingRecord[]) => void): Unsubscribe => {
+    const offeringsRef = collection(db, getChurchCollectionPath('sundayOfferings'));
+    const q = query(offeringsRef, orderBy('date', 'desc'));
+
+    return onSnapshot(q, (querySnapshot) => {
+      const records = querySnapshot.docs.map(doc => ({
+        ...doc.data(),
+        id: doc.id
+      })) as SundayOfferingRecord[];
       callback(records);
     });
   }

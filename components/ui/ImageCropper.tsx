@@ -227,6 +227,7 @@ const ImageCropper: React.FC<ImageCropperProps> = ({
           </div>
           <div className="flex items-center space-x-2">
             <button
+              type="button"
               onClick={() => handleZoom('out')}
               className="p-3 hover:bg-white/10 rounded-xl transition-all duration-200 text-gray-300 hover:text-white"
               title="Zoom Out"
@@ -234,6 +235,7 @@ const ImageCropper: React.FC<ImageCropperProps> = ({
               <ZoomOut className="w-5 h-5" />
             </button>
             <button
+              type="button"
               onClick={() => handleZoom('in')}
               className="p-3 hover:bg-white/10 rounded-xl transition-all duration-200 text-gray-300 hover:text-white"
               title="Zoom In"
@@ -241,6 +243,7 @@ const ImageCropper: React.FC<ImageCropperProps> = ({
               <ZoomIn className="w-5 h-5" />
             </button>
             <button
+              type="button"
               onClick={onCancel}
               className="p-3 hover:bg-white/10 rounded-xl transition-all duration-200 text-gray-300 hover:text-white"
               title="Close"
@@ -324,12 +327,14 @@ const ImageCropper: React.FC<ImageCropperProps> = ({
         <div className="p-6">
           <div className="flex flex-col sm:flex-row gap-3 max-w-3xl mx-auto">
             <button
+              type="button"
               onClick={onCancel}
               className="flex-1 sm:flex-none px-6 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl transition-all duration-200 font-medium border border-white/20 hover:border-white/30"
             >
               Cancel
             </button>
             <button
+              type="button"
               onClick={useFullImage}
               className="flex-1 sm:flex-none px-6 py-3 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white rounded-xl transition-all duration-200 font-medium shadow-lg hover:shadow-xl transform hover:scale-105 flex items-center justify-center space-x-2"
             >
@@ -337,6 +342,7 @@ const ImageCropper: React.FC<ImageCropperProps> = ({
               <span>Use Full Image</span>
             </button>
             <button
+              type="button"
               onClick={cropImage}
               className="flex-1 sm:flex-none px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white rounded-xl transition-all duration-200 font-medium shadow-lg hover:shadow-xl transform hover:scale-105 flex items-center justify-center space-x-2"
             >

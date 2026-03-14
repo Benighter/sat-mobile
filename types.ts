@@ -90,6 +90,18 @@ export interface AttendanceRecord {
   status: AttendanceStatus;
 }
 
+export interface SundayOfferingRecord {
+  id: string; // sunday_YYYY-MM-DD
+  date: string; // Sunday date as YYYY-MM-DD
+  cashOffering: number;
+  onlineOffering: number;
+  totalOffering: number;
+  notes?: string;
+  recordedAt?: string;
+  recordedBy?: string;
+  lastUpdated?: string;
+}
+
 // Tithe tracking types
 export interface TitheRecord {
   id: string; // memberId_YYYY-MM

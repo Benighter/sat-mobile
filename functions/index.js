@@ -6,6 +6,7 @@ const admin = require('firebase-admin');
 const sgMail = require('@sendgrid/mail');
 const { defineSecret } = require('firebase-functions/params');
 const { Resend } = require('resend');
+const { randomUUID } = require('crypto');
 
 // Secret for SendGrid API Key (configure via: firebase functions:secrets:set SENDGRID_API_KEY)
 const SENDGRID_API_KEY = defineSecret('SENDGRID_API_KEY');
@@ -180,6 +181,104 @@ exports.relayUploadChatImage = functions.https.onCall(async (data, context) => {
     return { url: signedUrl };
   } catch (e) {
     console.error('relayUploadChatImage failed', e);
+    if (e instanceof functions.https.HttpsError) throw e;
+    throw new functions.https.HttpsError('internal', e?.message || 'Upload failed');
+  }
+});
+
+const IMAGE_DATA_URL_RE = /^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/i;
+
+async function getAllowedChurchIds(uid, user) {
+  const ownedChurchIds = [
+    user?.churchId,
+    user?.contexts?.defaultChurchId,
+    user?.contexts?.ministryChurchId,
+  ].filter(Boolean);
+
+  let delegatedChurchIds = [];
+  try {
+    const linksSnap = await admin
+      .firestore()
+      .collection('crossTenantAccessLinks')
+      .where('viewerUid', '==', uid)
+      .get();
+
+    delegatedChurchIds = linksSnap.docs
+      .map((doc) => doc.data() || {})
+      .filter((link) => !link.revoked && link.permission === 'read-write' && typeof link.ownerChurchId === 'string' && link.ownerChurchId.trim())
+      .map((link) => link.ownerChurchId);
+  } catch (error) {
+    console.warn('Failed to resolve delegated church access for image relay', uid, error);
+  }
+
+  return [...new Set([...ownedChurchIds, ...delegatedChurchIds])];
+}
+
+function isAllowedImagePath(path, uid, churchIds) {
+  if (!path || typeof path !== 'string') return false;
+  const normalizedPath = path.replace(/^\/+|\/+$/g, '');
+  if (!normalizedPath || normalizedPath.includes('..')) return false;
+  if (normalizedPath.startsWith(`users/${uid}/`)) return true;
+  return churchIds.some((churchId) => normalizedPath.startsWith(`churches/${churchId}/`));
+}
+
+function buildFirebaseDownloadUrl(bucketName, storagePath, token) {
+  return `https://firebasestorage.googleapis.com/v0/b/${encodeURIComponent(bucketName)}/o/${encodeURIComponent(storagePath)}?alt=media&token=${token}`;
+}
+
+// Callable: relayPersistImage
+// data: { path, dataUrl, cacheControl? }
+exports.relayPersistImage = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'Auth required');
+  }
+
+  const { path, dataUrl, cacheControl } = data || {};
+  if (!path || !dataUrl) {
+    throw new functions.https.HttpsError('invalid-argument', 'path and dataUrl are required');
+  }
+
+  const normalizedPath = String(path).replace(/^\/+|\/+$/g, '');
+  const match = String(dataUrl).match(IMAGE_DATA_URL_RE);
+  if (!match) {
+    throw new functions.https.HttpsError('invalid-argument', 'A valid image data URL is required');
+  }
+
+  const mimeType = match[1].toLowerCase();
+  const base64Payload = match[2];
+  const uid = context.auth.uid;
+
+  try {
+    const userSnap = await admin.firestore().doc(`users/${uid}`).get();
+    const user = userSnap.exists ? userSnap.data() || {} : {};
+    const allowedChurchIds = await getAllowedChurchIds(uid, user);
+
+    if (!isAllowedImagePath(normalizedPath, uid, allowedChurchIds)) {
+      throw new functions.https.HttpsError('permission-denied', 'Upload path is outside the caller scope');
+    }
+
+    const extension = (mimeType.split('/').pop() || 'jpg').toLowerCase();
+    const storagePath = `${normalizedPath}/${Date.now()}.${extension}`;
+    const bucket = admin.storage().bucket();
+    const file = bucket.file(storagePath);
+    const downloadToken = randomUUID();
+
+    await file.save(Buffer.from(base64Payload, 'base64'), {
+      resumable: false,
+      metadata: {
+        contentType: mimeType,
+        cacheControl: typeof cacheControl === 'string' && cacheControl.trim()
+          ? cacheControl.trim()
+          : 'public,max-age=31536000,immutable',
+        metadata: {
+          firebaseStorageDownloadTokens: downloadToken,
+        },
+      },
+    });
+
+    return { url: buildFirebaseDownloadUrl(bucket.name, storagePath, downloadToken) };
+  } catch (e) {
+    console.error('relayPersistImage failed', e);
     if (e instanceof functions.https.HttpsError) throw e;
     throw new functions.https.HttpsError('internal', e?.message || 'Upload failed');
   }

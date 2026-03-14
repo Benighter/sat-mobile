@@ -13,9 +13,10 @@ import {
   ChevronRightIcon,
   CalendarIcon,
   UsersIcon,
-  ClipboardIcon
+  ClipboardIcon,
+  TrendingUpIcon
 } from '../icons';
-import { Member, NewBeliever, Bacenta } from '../../types';
+import { Member, NewBeliever, Bacenta, SundayOfferingRecord } from '../../types';
 import { hasAdminPrivileges } from '../../utils/permissionUtils';
 import { isLeadershipPosition, isMemberFirstTimerOnSunday } from '../../utils/memberStatus';
 import { MINISTRY_OPTIONS } from '../../constants';
@@ -52,10 +53,12 @@ const WeeklyAttendanceView: React.FC = () => {
     newBelievers,
     bacentas,
     attendanceRecords,
+    sundayOfferingRecords,
     showToast,
     userProfile,
     isMinistryContext,
-    activeMinistryName
+    activeMinistryName,
+    saveSundayOfferingHandler
   } = useAppContext();
 
   const isAdmin = hasAdminPrivileges(userProfile);
@@ -77,7 +80,14 @@ const WeeklyAttendanceView: React.FC = () => {
   const [selectedMinistry, setSelectedMinistry] = useState<string>(''); // '' means all ministries
   const [togglingFirstTimer, setTogglingFirstTimer] = useState<Set<string>>(new Set());
   const [togglingNewBeliever, setTogglingNewBeliever] = useState<Set<string>>(new Set());
+  const [cashOfferingInput, setCashOfferingInput] = useState<string>('0');
+  const [onlineOfferingInput, setOnlineOfferingInput] = useState<string>('0');
+  const [editingOfferingField, setEditingOfferingField] = useState<'cash' | 'online' | null>(null);
   const normalizedSelectedMinistry = selectedMinistry.trim().toLowerCase();
+
+  const selectedSundayOffering = useMemo(() => (
+    sundayOfferingRecords.find(record => record.date === selectedSunday) || null
+  ), [selectedSunday, sundayOfferingRecords]);
 
   const presentMemberIds = useMemo(() => new Set(
     attendanceRecords
@@ -120,6 +130,14 @@ const WeeklyAttendanceView: React.FC = () => {
   }, [newBelievers, normalizedSelectedMinistry, presentNewBelieverIds]);
 
   const totalPresentFirstTimers = presentFirstTimerMembers.length + presentFirstTimeNewBelievers.length;
+  const parsedCashOffering = Math.max(0, Number(cashOfferingInput || 0));
+  const parsedOnlineOffering = Math.max(0, Number(onlineOfferingInput || 0));
+  const totalSundayOffering = parsedCashOffering + parsedOnlineOffering;
+
+  useEffect(() => {
+    setCashOfferingInput(String(selectedSundayOffering?.cashOffering ?? 0));
+    setOnlineOfferingInput(String(selectedSundayOffering?.onlineOffering ?? 0));
+  }, [selectedSundayOffering]);
 
   const toggleFirstTimer = async (member: Member) => {
     const isFirstTimerForSelectedSunday = isMemberFirstTimerOnSunday(member, selectedSunday);
@@ -471,6 +489,7 @@ const WeeklyAttendanceView: React.FC = () => {
       // Previous week's new believers (from last Sunday up to day before selected Sunday)
       const prevSunday = getPreviousSunday(selectedSunday);
       const prevWeeksNewBelievers = newBelievers.filter(nb => nb.joinedDate >= prevSunday && nb.joinedDate < selectedSunday).length || 0;
+      const sundayOfferingAmount = selectedSundayOffering?.totalOffering ?? 0;
 
       // Compose text
   let text = `*${constituencyName}* COs Sunday Report\n\n`;
@@ -485,6 +504,7 @@ const WeeklyAttendanceView: React.FC = () => {
         });
       }
       text += `\n*Total: ${totalAttendance}*\n\n`;
+      text += `*Sunday Offering: R${sundayOfferingAmount.toFixed(2)}*\n\n`;
       text += `*No of Today's First Timers: ${todaysFirstTimers}*\n\n`;
       text += `*No of Todays New believers: ${todaysNewBelievers}*\n\n`;
       text += `*Number of Previous weeks new believers: ${prevWeeksNewBelievers}*`;
@@ -506,6 +526,67 @@ const WeeklyAttendanceView: React.FC = () => {
   };
 
   const canGoNext = selectedSunday < getTodayYYYYMMDD();
+
+  const persistSundayOffering = async (cashValue: string, onlineValue: string) => {
+    if (!isAdmin) {
+      return;
+    }
+
+    const cashAmount = Math.max(0, Number(cashValue || 0));
+    const onlineAmount = Math.max(0, Number(onlineValue || 0));
+
+    if (Number.isNaN(cashAmount) || Number.isNaN(onlineAmount)) {
+      showToast('warning', 'Invalid amount', 'Please enter a valid amount.');
+      return;
+    }
+
+    const record: SundayOfferingRecord = {
+      id: `sunday_${selectedSunday}`,
+      date: selectedSunday,
+      cashOffering: cashAmount,
+      onlineOffering: onlineAmount,
+      totalOffering: cashAmount + onlineAmount,
+      notes: selectedSundayOffering?.notes || ''
+    };
+
+    try {
+      await saveSundayOfferingHandler(record);
+    } catch {
+    }
+  };
+
+  const handleOfferingCardClick = (field: 'cash' | 'online') => {
+    if (!isAdmin) return;
+    setEditingOfferingField(field);
+  };
+
+  const handleOfferingFieldBlur = async () => {
+    const normalizedCash = String(Math.max(0, Number(cashOfferingInput || 0)));
+    const normalizedOnline = String(Math.max(0, Number(onlineOfferingInput || 0)));
+
+    if (normalizedCash !== cashOfferingInput) {
+      setCashOfferingInput(normalizedCash);
+    }
+    if (normalizedOnline !== onlineOfferingInput) {
+      setOnlineOfferingInput(normalizedOnline);
+    }
+
+    setEditingOfferingField(null);
+    await persistSundayOffering(normalizedCash, normalizedOnline);
+  };
+
+  const handleOfferingFieldKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'Enter') {
+      event.currentTarget.blur();
+      return;
+    }
+
+    if (event.key === 'Escape') {
+      setCashOfferingInput(String(selectedSundayOffering?.cashOffering ?? 0));
+      setOnlineOfferingInput(String(selectedSundayOffering?.onlineOffering ?? 0));
+      setEditingOfferingField(null);
+    }
+  };
 
   // Mobile-friendly member row: icon-only circular tag buttons + active tag chips below name
   const renderMemberRow = (m: Member, idx: number) => {
@@ -682,6 +763,88 @@ const WeeklyAttendanceView: React.FC = () => {
                 </button>
               )}
             </div>
+
+            {isAdmin && !selectedMinistry && (
+              <div className="mt-5 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+                <div className="bg-gray-50/80 px-3.5 py-3.5 sm:px-4 sm:py-4">
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+                    <div className="min-w-0 lg:max-w-xl">
+                      <div className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-emerald-700">
+                        <TrendingUpIcon className="h-3 w-3" />
+                        Sunday Income
+                      </div>
+                      <h3 className="mt-2 text-sm font-semibold text-gray-900 sm:text-base">
+                        Record this Sunday&apos;s offering
+                      </h3>
+                      <p className="mt-1 text-xs sm:text-sm text-gray-600">
+                        Tap `Cash` or `Online` to edit. `Total` updates automatically for {formatCompactDate(selectedSunday)}.
+                      </p>
+                    </div>
+
+                    <div className="grid w-full grid-cols-1 gap-2.5 sm:grid-cols-3 lg:max-w-[500px]">
+                      <button
+                        type="button"
+                        onClick={() => handleOfferingCardClick('cash')}
+                        className={`rounded-lg border px-3 py-2.5 text-left transition-all duration-200 ${
+                          editingOfferingField === 'cash'
+                            ? 'border-emerald-400 bg-emerald-50 shadow-sm'
+                            : 'border-gray-200 bg-white hover:border-emerald-300 hover:bg-emerald-50/60'
+                        }`}
+                      >
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">Cash</p>
+                        {editingOfferingField === 'cash' ? (
+                          <input
+                            type="number"
+                            min={0}
+                            step="0.01"
+                            value={cashOfferingInput}
+                            onChange={(e) => setCashOfferingInput(e.target.value)}
+                            onBlur={handleOfferingFieldBlur}
+                            onKeyDown={handleOfferingFieldKeyDown}
+                            autoFocus
+                            className="mt-1.5 w-full border-0 bg-transparent p-0 text-xl font-bold text-gray-900 outline-none"
+                          />
+                        ) : (
+                          <p className="mt-1.5 text-xl font-bold text-gray-900">R{parsedCashOffering.toFixed(2)}</p>
+                        )}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleOfferingCardClick('online')}
+                        className={`rounded-lg border px-3 py-2.5 text-left transition-all duration-200 ${
+                          editingOfferingField === 'online'
+                            ? 'border-emerald-400 bg-emerald-50 shadow-sm'
+                            : 'border-gray-200 bg-white hover:border-emerald-300 hover:bg-emerald-50/60'
+                        }`}
+                      >
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">Online</p>
+                        {editingOfferingField === 'online' ? (
+                          <input
+                            type="number"
+                            min={0}
+                            step="0.01"
+                            value={onlineOfferingInput}
+                            onChange={(e) => setOnlineOfferingInput(e.target.value)}
+                            onBlur={handleOfferingFieldBlur}
+                            onKeyDown={handleOfferingFieldKeyDown}
+                            autoFocus
+                            className="mt-1.5 w-full border-0 bg-transparent p-0 text-xl font-bold text-gray-900 outline-none"
+                          />
+                        ) : (
+                          <p className="mt-1.5 text-xl font-bold text-gray-900">R{parsedOnlineOffering.toFixed(2)}</p>
+                        )}
+                      </button>
+
+                      <div className="rounded-lg border border-emerald-200 bg-emerald-600 px-3 py-2.5 text-left">
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-100">Total</p>
+                        <p className="mt-1.5 text-xl font-bold text-white">R{totalSundayOffering.toFixed(2)}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Professional Attendance Content */}
@@ -901,6 +1064,22 @@ const WeeklyAttendanceView: React.FC = () => {
                         <h3 className="text-lg font-semibold text-gray-900">Grand Total</h3>
                         <span className="text-2xl font-bold text-slate-600">{groupedAttendance.grandTotal}</span>
                       </div>
+                      {isAdmin && (
+                        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                          <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-center">
+                            <p className="text-xs font-medium uppercase tracking-wide text-emerald-700">Sunday Cash</p>
+                            <p className="mt-1 text-xl font-bold text-emerald-900">R{(selectedSundayOffering?.cashOffering ?? 0).toFixed(2)}</p>
+                          </div>
+                          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-center">
+                            <p className="text-xs font-medium uppercase tracking-wide text-amber-700">Sunday Online</p>
+                            <p className="mt-1 text-xl font-bold text-amber-900">R{(selectedSundayOffering?.onlineOffering ?? 0).toFixed(2)}</p>
+                          </div>
+                          <div className="rounded-xl border border-slate-200 bg-slate-900 p-4 text-center">
+                            <p className="text-xs font-medium uppercase tracking-wide text-slate-300">Sunday Offering</p>
+                            <p className="mt-1 text-xl font-bold text-white">R{(selectedSundayOffering?.totalOffering ?? 0).toFixed(2)}</p>
+                          </div>
+                        </div>
+                      )}
                       <p className="text-sm text-gray-500 mt-1">
                         Total attendance across all bacentas for {formatFullDate(selectedSunday)}
                       </p>
