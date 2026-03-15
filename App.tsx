@@ -496,6 +496,26 @@ const AppContent: React.FC = memo(() => {
               <p className="text-red-600 text-sm">{error}</p>
             </div>
           </div>
+          <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+            <button
+              onClick={() => {
+                try { showToast('info', 'Retrying', 'Refreshing app data...'); } catch {}
+                fetchInitialData();
+              }}
+              className="px-4 py-2 rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-800 text-sm font-semibold shadow"
+            >
+              Try again
+            </button>
+            <button
+              onClick={() => {
+                try { showToast('info', 'Reloading', 'Refreshing the app...'); } catch {}
+                window.location.reload();
+              }}
+              className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-semibold shadow"
+            >
+              Click to Refresh
+            </button>
+          </div>
         </div>
       );
     }

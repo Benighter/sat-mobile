@@ -60,13 +60,13 @@ export default class ErrorBoundary extends React.Component<Props, State> {
               </div>
               <h3 className="font-semibold text-red-800">Something went wrong</h3>
             </div>
-            <p className="text-sm text-gray-700 mb-4">The app hit an unexpected error. You can try reloading the app. If the problem persists, please contact support.</p>
-            <div className="flex gap-2">
-              <button onClick={this.handleRetry} className="px-4 py-2 rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-800 text-sm font-semibold shadow">
+            <p className="text-sm text-gray-700 mb-4">The app hit an unexpected error. Tap retry first, or tap the refresh button to reload the app without closing it.</p>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <button onClick={this.handleRetry} className="px-4 py-3 rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-800 text-sm font-semibold shadow">
                 Try again
               </button>
-              <button onClick={this.handleReload} className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-semibold shadow">
-                Reload App
+              <button onClick={this.handleReload} className="px-4 py-3 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-semibold shadow">
+                Click to Refresh
               </button>
             </div>
           </div>

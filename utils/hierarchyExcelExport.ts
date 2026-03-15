@@ -1,5 +1,5 @@
 import ExcelJS from 'exceljs';
-import { Member, Bacenta, AttendanceRecord } from '../types';
+import { Member, Bacenta, AttendanceRecord, SundayOfferingRecord } from '../types';
 import { DirectoryHandle, FileSaveProgress, saveFileToDirectory } from './fileSystemUtils';
 import { formatDateDayMonthYear } from './dateUtils';
 import { DEFAULT_CHURCH, MINISTRY_OPTIONS } from '../constants';
@@ -20,6 +20,7 @@ export interface HierarchyExcelExportOptions {
    * Falls back to the default church name if not provided.
    */
   constituencyName?: string;
+  isCampusShepherd?: boolean;
   isMinistryContext?: boolean;
   ministryName?: string;
 }
@@ -28,6 +29,7 @@ export interface HierarchyExcelData {
   members: Member[];
   bacentas: Bacenta[];
   attendanceRecords: AttendanceRecord[];
+  sundayOfferingRecords?: SundayOfferingRecord[];
   options: HierarchyExcelExportOptions;
 }
 
@@ -165,6 +167,22 @@ const isMemberFirstTimerInRange = (
   return true;
 };
 
+const getCurrencyNumberFormat = (): string => '"R"#,##0.00';
+
+const getSundayOfferingRecordsInRange = (
+  sundayOfferingRecords: SundayOfferingRecord[],
+  startDate?: string,
+  endDate?: string
+): SundayOfferingRecord[] => {
+  return sundayOfferingRecords
+    .filter(record => {
+      if (startDate && record.date < startDate) return false;
+      if (endDate && record.date > endDate) return false;
+      return true;
+    })
+    .sort((a, b) => a.date.localeCompare(b.date));
+};
+
 
 export const getHierarchyExportPreview = (data: HierarchyExcelData): HierarchyExportPreview => {
   const activeMembers = getActiveMembers(data.members);
@@ -190,9 +208,10 @@ export const getHierarchyExportPreview = (data: HierarchyExcelData): HierarchyEx
   const firstTimersCount = activeMembers.filter(m => isMemberFirstTimerInRange(m, rangeStart, rangeEnd)).length;
   const newBelieversCount = activeMembers.filter(m => m.isNewBeliever === true).length;
   const ministriesCount = new Set(activeMembers.filter(m => m.ministry).map(m => m.ministry!.trim().toLowerCase())).size;
+  const shouldIncludeIncomeSheet = Boolean(data.options?.isCampusShepherd) && !Boolean(data.options?.isMinistryContext);
 
   return {
-    totalTabs: 6,
+    totalTabs: shouldIncludeIncomeSheet ? 7 : 6,
     bacentaCount: uniqueBacentas.size,
     memberCount: activeMembers.length,
     servicesCount: dates.length,
@@ -206,6 +225,7 @@ export const getHierarchyExportPreview = (data: HierarchyExcelData): HierarchyEx
       `Tab 4 — Water Baptised: ${baptisedCount} member${baptisedCount !== 1 ? 's' : ''}`,
       `Tab 5 — New Believers: ${newBelieversCount} member${newBelieversCount !== 1 ? 's' : ''} (grouped by leader)`,
       `Tab 6 — First Timers: ${firstTimersCount} member${firstTimersCount !== 1 ? 's' : ''} (grouped by leader)`,
+      ...(shouldIncludeIncomeSheet ? ['Tab 7 — Income & Tithe: Sunday offering, tithe, channel totals, and weekly summary'] : []),
       'Color-coded rows by role',
       'Attendance history for the selected date range (or full history)'
     ]
@@ -367,6 +387,156 @@ export const exportHierarchyExcel = async (
 
     // Freeze panes below header rows
     worksheet.views = [{ state: 'frozen', xSplit: 0, ySplit: 3 }];
+
+    // Income & Tithe tab (campus shepherd only)
+    if (options?.isCampusShepherd && !options?.isMinistryContext) {
+      const incomeRecords = getSundayOfferingRecordsInRange(data.sundayOfferingRecords || [], startDate, endDate);
+      const ws = workbook.addWorksheet('Income & Tithe');
+      const currencyFormat = getCurrencyNumberFormat();
+      let currentRow = 1;
+      const thinB = {
+        top: { style: 'thin' as const },
+        left: { style: 'thin' as const },
+        bottom: { style: 'thin' as const },
+        right: { style: 'thin' as const }
+      };
+
+      const totalOffering = incomeRecords.reduce((sum, record) => sum + (record.totalOffering || 0), 0);
+      const totalTithe = incomeRecords.reduce((sum, record) => sum + (record.totalTithe ?? ((record.cashTithe ?? 0) + (record.onlineTithe ?? 0))), 0);
+      const totalCash = incomeRecords.reduce((sum, record) => sum + (record.cashOffering || 0) + (record.cashTithe ?? 0), 0);
+      const totalOnline = incomeRecords.reduce((sum, record) => sum + (record.onlineOffering || 0) + (record.onlineTithe ?? 0), 0);
+      const totalIncome = totalOffering + totalTithe;
+
+      ws.mergeCells(currentRow, 1, currentRow, 9);
+      const titleCell = ws.getCell(currentRow, 1);
+      titleCell.value = `${reportName} — Sunday Income & Tithe`;
+      titleCell.font = { bold: true, size: 16 };
+      titleCell.alignment = { horizontal: 'center' };
+      currentRow++;
+
+      ws.mergeCells(currentRow, 1, currentRow, 9);
+      const subtitleCell = ws.getCell(currentRow, 1);
+      subtitleCell.value = incomeRecords.length
+        ? `Clean summary of Sunday cash, online, offering, tithe, and total income from ${formatDateDayMonthYear(incomeRecords[0].date)} to ${formatDateDayMonthYear(incomeRecords[incomeRecords.length - 1].date)}`
+        : 'No Sunday income records were found for the selected date range.';
+      subtitleCell.alignment = { horizontal: 'center' };
+      currentRow += 2;
+
+      const summaryBlocks = [
+        { label: 'Total Income', value: totalIncome, color: 'FF1F2937', textColor: 'FFFFFFFF' },
+        { label: 'Total Offering', value: totalOffering, color: 'FFD1FAE5', textColor: 'FF065F46' },
+        { label: 'Total Tithe', value: totalTithe, color: 'FFDBEAFE', textColor: 'FF1E3A8A' },
+        { label: 'Cash Total', value: totalCash, color: 'FFFEF3C7', textColor: 'FF92400E' },
+        { label: 'Online Total', value: totalOnline, color: 'FFFCE7F3', textColor: 'FF9D174D' }
+      ];
+
+      summaryBlocks.forEach((block, index) => {
+        const startColumn = 1 + (index * 2);
+        const endColumn = Math.min(startColumn + 1, 9);
+        ws.mergeCells(currentRow, startColumn, currentRow, endColumn);
+        const labelCell = ws.getCell(currentRow, startColumn);
+        labelCell.value = block.label;
+        labelCell.font = { bold: true, size: 11, color: { argb: block.textColor } };
+        labelCell.alignment = { horizontal: 'center' };
+        labelCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: block.color } };
+        labelCell.border = thinB;
+
+        ws.mergeCells(currentRow + 1, startColumn, currentRow + 1, endColumn);
+        const valueCell = ws.getCell(currentRow + 1, startColumn);
+        valueCell.value = block.value;
+        valueCell.numFmt = currencyFormat;
+        valueCell.font = { bold: true, size: 13, color: { argb: block.textColor } };
+        valueCell.alignment = { horizontal: 'center' };
+        valueCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: block.color } };
+        valueCell.border = thinB;
+      });
+
+      currentRow += 4;
+
+      const headerLabels = ['Sunday', 'Cash Offering', 'Online Offering', 'Total Offering', 'Cash Tithe', 'Online Tithe', 'Total Tithe', 'Cash Total', 'Online Total', 'Grand Total'];
+      headerLabels.forEach((label, index) => {
+        const cell = ws.getCell(currentRow, index + 1);
+        cell.value = label;
+        cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+        cell.alignment = { horizontal: 'center' };
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF111827' } };
+        cell.border = thinB;
+      });
+      currentRow++;
+
+      if (incomeRecords.length === 0) {
+        ws.mergeCells(currentRow, 1, currentRow, 10);
+        const emptyCell = ws.getCell(currentRow, 1);
+        emptyCell.value = 'No income or tithe entries exist in this date range yet.';
+        emptyCell.alignment = { horizontal: 'center' };
+        emptyCell.font = { italic: true, color: { argb: 'FF6B7280' } };
+        emptyCell.border = thinB;
+      } else {
+        incomeRecords.forEach((record, index) => {
+          const cashOffering = record.cashOffering || 0;
+          const onlineOffering = record.onlineOffering || 0;
+          const totalOfferingValue = record.totalOffering || (cashOffering + onlineOffering);
+          const cashTithe = record.cashTithe ?? 0;
+          const onlineTithe = record.onlineTithe ?? 0;
+          const totalTitheValue = record.totalTithe ?? (cashTithe + onlineTithe);
+          const cashTotal = cashOffering + cashTithe;
+          const onlineTotal = onlineOffering + onlineTithe;
+          const grandTotal = totalOfferingValue + totalTitheValue;
+          const row = ws.getRow(currentRow++);
+
+          row.getCell(1).value = formatDateDayMonthYear(record.date);
+          [cashOffering, onlineOffering, totalOfferingValue, cashTithe, onlineTithe, totalTitheValue, cashTotal, onlineTotal, grandTotal].forEach((value, valueIndex) => {
+            const cell = row.getCell(valueIndex + 2);
+            cell.value = value;
+            cell.numFmt = currencyFormat;
+          });
+
+          const rowColor = index % 2 === 0 ? 'FFF8FAFC' : 'FFFFFFFF';
+          row.eachCell(cell => {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: rowColor } };
+            cell.border = thinB;
+          });
+        });
+
+        const totalRow = ws.getRow(currentRow);
+        totalRow.getCell(1).value = 'Totals';
+        totalRow.getCell(2).value = incomeRecords.reduce((sum, record) => sum + (record.cashOffering || 0), 0);
+        totalRow.getCell(3).value = incomeRecords.reduce((sum, record) => sum + (record.onlineOffering || 0), 0);
+        totalRow.getCell(4).value = totalOffering;
+        totalRow.getCell(5).value = incomeRecords.reduce((sum, record) => sum + (record.cashTithe ?? 0), 0);
+        totalRow.getCell(6).value = incomeRecords.reduce((sum, record) => sum + (record.onlineTithe ?? 0), 0);
+        totalRow.getCell(7).value = totalTithe;
+        totalRow.getCell(8).value = totalCash;
+        totalRow.getCell(9).value = totalOnline;
+        totalRow.getCell(10).value = totalIncome;
+        totalRow.eachCell((cell, columnNumber) => {
+          cell.font = { bold: true, color: { argb: columnNumber === 1 ? 'FFFFFFFF' : 'FF111827' } };
+          cell.fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: columnNumber === 1 ? 'FF111827' : 'FFE5E7EB' }
+          };
+          if (columnNumber > 1) {
+            cell.numFmt = currencyFormat;
+          }
+          cell.border = thinB;
+        });
+      }
+
+      ws.columns = [
+        { width: 18 },
+        { width: 15 },
+        { width: 15 },
+        { width: 15 },
+        { width: 14 },
+        { width: 14 },
+        { width: 14 },
+        { width: 14 },
+        { width: 14 },
+        { width: 15 }
+      ];
+      ws.views = [{ state: 'frozen', xSplit: 0, ySplit: 6 }];
+    }
 
     // ── Helper: simple member-list worksheet ────────────────────────────
     const createSimpleMemberSheet = (sheetName: string, sheetMembers: Member[]) => {

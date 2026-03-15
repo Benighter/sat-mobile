@@ -11,6 +11,8 @@ const DATA_URL_PREFIX = 'data:image/';
 const DEFAULT_CACHE_CONTROL = 'public,max-age=31536000,immutable';
 export const MAX_INLINE_SAVED_IMAGE_LENGTH = 700000;
 export const DEFAULT_INLINE_IMAGE_TARGET_LENGTH = 680000;
+export const DEFAULT_INLINE_IMAGE_COLLECTION_LENGTH = 780000;
+export const MAX_INLINE_IMAGE_COLLECTION_LENGTH = 850000;
 
 type RelayPersistImagePayload = {
   path: string;
@@ -48,30 +50,19 @@ type CompressInlineImageOptions = {
   oversizeErrorMessage?: string;
 };
 
-export const compressImageForInlineSave = async (
-  imageValue: string,
+const compressLoadedImageForInlineSave = async (
+  image: HTMLImageElement,
   options?: CompressInlineImageOptions
 ): Promise<string> => {
-  const normalizedValue = typeof imageValue === 'string' ? imageValue.trim() : '';
   const maxLength = options?.maxLength ?? DEFAULT_INLINE_IMAGE_TARGET_LENGTH;
   const processingErrorMessage = options?.processingErrorMessage || 'Failed to process image.';
   const oversizeErrorMessage = options?.oversizeErrorMessage || 'Image is still too large after auto-compression. Please crop a smaller area and try again.';
 
-  if (!isImageDataUrl(normalizedValue) || normalizedValue.length <= maxLength) {
-    return normalizedValue;
-  }
-
-  const image = await new Promise<HTMLImageElement>((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => resolve(img);
-    img.onerror = () => reject(new Error(processingErrorMessage));
-    img.src = normalizedValue;
-  });
-
-  let width = image.naturalWidth;
-  let height = image.naturalHeight;
-  let quality = 0.88;
-  let output = normalizedValue;
+  let width = image.naturalWidth || image.width;
+  let height = image.naturalHeight || image.height;
+  let quality = 0.82;
+  let output = '';
+  let smallestOutput = '';
 
   const render = () => {
     const canvas = document.createElement('canvas');
@@ -85,29 +76,77 @@ export const compressImageForInlineSave = async (
     return canvas.toDataURL('image/jpeg', quality);
   };
 
-  for (let attempt = 0; attempt < 12; attempt++) {
+  for (let attempt = 0; attempt < 24; attempt += 1) {
     output = render();
+
+    if (!smallestOutput || output.length < smallestOutput.length) {
+      smallestOutput = output;
+    }
+
     if (output.length <= maxLength) {
       return output;
     }
 
-    if (quality > 0.46) {
-      quality = Math.max(0.46, quality - 0.12);
+    const longestSide = Math.max(width, height);
+    if (quality > 0.2) {
+      quality = Math.max(0.2, quality - (longestSide > 1800 ? 0.12 : 0.08));
       continue;
     }
 
-    const longestSide = Math.max(width, height);
-    if (longestSide <= 320) {
+    if (longestSide <= 96) {
       break;
     }
 
-    const scale = longestSide > 1600 ? 0.7 : longestSide > 1000 ? 0.8 : 0.85;
+    const scale = longestSide > 2400 ? 0.5 : longestSide > 1600 ? 0.6 : longestSide > 1000 ? 0.72 : 0.82;
     width = Math.max(1, Math.round(width * scale));
     height = Math.max(1, Math.round(height * scale));
-    quality = Math.max(0.4, quality - 0.04);
+    quality = Math.max(0.18, quality - 0.02);
+  }
+
+  if (smallestOutput && smallestOutput.length <= MAX_INLINE_SAVED_IMAGE_LENGTH) {
+    return smallestOutput;
   }
 
   throw new Error(oversizeErrorMessage);
+};
+
+const loadImageElement = (src: string, processingErrorMessage: string): Promise<HTMLImageElement> => new Promise((resolve, reject) => {
+  const image = new Image();
+  image.onload = () => resolve(image);
+  image.onerror = () => reject(new Error(processingErrorMessage));
+  image.src = src;
+});
+
+export const compressImageForInlineSave = async (
+  imageValue: string,
+  options?: CompressInlineImageOptions
+): Promise<string> => {
+  const normalizedValue = typeof imageValue === 'string' ? imageValue.trim() : '';
+  const processingErrorMessage = options?.processingErrorMessage || 'Failed to process image.';
+  const maxLength = options?.maxLength ?? DEFAULT_INLINE_IMAGE_TARGET_LENGTH;
+
+  if (!isImageDataUrl(normalizedValue) || normalizedValue.length <= maxLength) {
+    return normalizedValue;
+  }
+
+  const image = await loadImageElement(normalizedValue, processingErrorMessage);
+
+  return compressLoadedImageForInlineSave(image, options);
+};
+
+export const compressImageFileForInlineSave = async (
+  file: File,
+  options?: CompressInlineImageOptions
+): Promise<string> => {
+  const processingErrorMessage = options?.processingErrorMessage || 'Failed to process image.';
+  const objectUrl = URL.createObjectURL(file);
+
+  try {
+    const image = await loadImageElement(objectUrl, processingErrorMessage);
+    return compressLoadedImageForInlineSave(image, options);
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
 };
 
 const isFirebaseStorageUrl = (value?: string | null): value is string =>

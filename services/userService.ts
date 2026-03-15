@@ -13,7 +13,30 @@ import {
 const isDevelopment = process.env.NODE_ENV === 'development' || window.location.hostname === 'localhost';
 import { db } from '../firebase.config';
 import { User, Church } from '../types';
-import { cleanupStoredImage, persistImageValue } from './imageStorageService';
+import {
+  cleanupStoredImage,
+  compressImageForInlineSave,
+  DEFAULT_INLINE_IMAGE_TARGET_LENGTH,
+  resolveInlineImageValue
+} from './imageStorageService';
+
+const sanitizeFirestoreValue = <T>(value: T): T => {
+  if (Array.isArray(value)) {
+    return value
+      .map(item => sanitizeFirestoreValue(item))
+      .filter(item => item !== undefined) as T;
+  }
+
+  if (value && typeof value === 'object' && Object.getPrototypeOf(value) === Object.prototype) {
+    const sanitizedEntries = Object.entries(value)
+      .map(([key, nestedValue]) => [key, sanitizeFirestoreValue(nestedValue)] as const)
+      .filter(([, nestedValue]) => nestedValue !== undefined);
+
+    return Object.fromEntries(sanitizedEntries) as T;
+  }
+
+  return value;
+};
 
 // User Service for managing user profiles and church data
 export const userService = {
@@ -33,14 +56,27 @@ export const userService = {
   // Update user profile
   updateUserProfile: async (uid: string, updates: Partial<User>): Promise<void> => {
     try {
-      const payload = { ...updates };
+      const payload = sanitizeFirestoreValue({ ...updates });
       if (Object.prototype.hasOwnProperty.call(payload, 'profilePicture')) {
         const existingUserDoc = await getDoc(doc(db, 'users', uid));
         const existingProfilePicture = existingUserDoc.exists() ? (existingUserDoc.data().profilePicture as string | undefined) : undefined;
-        payload.profilePicture = await persistImageValue({
-          imageValue: payload.profilePicture,
-          path: `users/${uid}/profile-picture`
-        });
+
+        if (existingProfilePicture === payload.profilePicture) {
+          await updateDoc(doc(db, 'users', uid), {
+            ...payload,
+            lastUpdated: new Date().toISOString()
+          });
+          return;
+        }
+
+        payload.profilePicture = resolveInlineImageValue(
+          await compressImageForInlineSave(payload.profilePicture, {
+            maxLength: DEFAULT_INLINE_IMAGE_TARGET_LENGTH,
+            processingErrorMessage: 'Failed to process profile picture.',
+            oversizeErrorMessage: 'Profile picture is still too large after compression. Please crop a smaller area and try again.'
+          }),
+          'Profile picture is too large to save right now. Please crop it smaller and try again.'
+        );
         await updateDoc(doc(db, 'users', uid), {
           ...payload,
           lastUpdated: new Date().toISOString()
@@ -221,7 +257,7 @@ export const userService = {
       }
       
       const currentPreferences = userDoc.data().preferences || {};
-      const updatedPreferences = { ...currentPreferences, ...preferences };
+      const updatedPreferences = sanitizeFirestoreValue({ ...currentPreferences, ...preferences });
       
       await updateDoc(doc(db, 'users', uid), {
         preferences: updatedPreferences,

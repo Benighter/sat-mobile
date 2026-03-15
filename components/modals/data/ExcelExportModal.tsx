@@ -11,6 +11,7 @@ import {
 import Modal from '../../ui/Modal';
 import Button from '../../ui/Button';
 import { formatDateDayMonthYear } from '../../../utils/dateUtils';
+import { isCampusShepherd } from '../../../utils/permissionUtils';
 import {
   DocumentArrowDownIcon,
   CheckIcon,
@@ -28,6 +29,7 @@ const ExcelExportModal: React.FC<ExcelExportModalProps> = ({ isOpen, onClose }) 
     members,
     bacentas,
     attendanceRecords,
+    sundayOfferingRecords,
     showToast,
     userProfile,
     isMinistryContext,
@@ -65,6 +67,8 @@ const ExcelExportModal: React.FC<ExcelExportModalProps> = ({ isOpen, onClose }) 
     return churchName;
   };
 
+  const canIncludeIncomeSheet = isCampusShepherd(userProfile) && !isMinistryContext;
+
   const handleExport = async () => {
     setIsExporting(true);
     setSaveProgress({
@@ -79,12 +83,14 @@ const ExcelExportModal: React.FC<ExcelExportModalProps> = ({ isOpen, onClose }) 
         members,
         bacentas,
         attendanceRecords,
+        sundayOfferingRecords,
         options: {
           directory: selectedDirectory,
           onSaveProgress: setSaveProgress,
           startDate: dateRange.startDate || undefined,
           endDate: dateRange.endDate || undefined,
           constituencyName,
+          isCampusShepherd: canIncludeIncomeSheet,
           isMinistryContext,
           ministryName: activeMinistryName || undefined
         }
@@ -118,11 +124,13 @@ const ExcelExportModal: React.FC<ExcelExportModalProps> = ({ isOpen, onClose }) 
       members,
       bacentas,
       attendanceRecords,
+      sundayOfferingRecords,
       options: {
         directory: selectedDirectory,
         startDate: dateRange.startDate || undefined,
         endDate: dateRange.endDate || undefined,
         constituencyName,
+        isCampusShepherd: canIncludeIncomeSheet,
         isMinistryContext,
         ministryName: activeMinistryName || undefined
       }

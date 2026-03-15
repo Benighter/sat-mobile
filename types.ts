@@ -96,6 +96,9 @@ export interface SundayOfferingRecord {
   cashOffering: number;
   onlineOffering: number;
   totalOffering: number;
+  cashTithe?: number;
+  onlineTithe?: number;
+  totalTithe?: number;
   reportImages?: string[];
   notes?: string;
   recordedAt?: string;

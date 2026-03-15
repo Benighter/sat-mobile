@@ -34,7 +34,7 @@ import {
 import { db, auth } from '../firebase.config';
 import { Member, Bacenta, AttendanceRecord, NewBeliever, SundayConfirmation, Guest, MemberDeletionRequest, DeletionRequestStatus, OutreachBacenta, OutreachMember, PrayerRecord, PrayerSchedule, MeetingRecord, TitheRecord, BussingRecord, TransportRecord, SonOfGod, CustomPrayer, CustomPrayerRecord, SundayOfferingRecord } from '../types';
 import { applyLeadershipFirstTimerRule, withLeadershipFirstTimerRule } from '../utils/memberStatus';
-import { cleanupStoredImage, isImageDataUrl, persistImageValue, resolveInlineImageValue } from './imageStorageService';
+import { cleanupStoredImage, isImageDataUrl, MAX_INLINE_IMAGE_COLLECTION_LENGTH, persistImageValue, resolveInlineImageValue } from './imageStorageService';
 // Lightweight inline type to avoid circular heavy imports for new feature (kept local to service)
 export interface HeadCountRecord {
   id: string; // `${date}_${section}`
@@ -71,7 +71,6 @@ export interface FirebaseError {
 // Current user and church context
 let currentUser: FirebaseUser | null = null;
 let currentChurchId: string | null = null;
-const MAX_INLINE_SUNDAY_REPORT_IMAGES_TOTAL_LENGTH = 850000;
 
 const normalizeSundayReportImages = (images?: string[] | null): string[] => {
   if (!Array.isArray(images)) {
@@ -2844,12 +2843,15 @@ export const sundayOfferingFirebaseService = {
         0
       );
 
-      if (totalInlineImageLength > MAX_INLINE_SUNDAY_REPORT_IMAGES_TOTAL_LENGTH) {
+      if (totalInlineImageLength > MAX_INLINE_IMAGE_COLLECTION_LENGTH) {
         throw new Error('The selected report pictures are too large to save together. Remove some pictures or choose smaller ones and try again.');
       }
 
       const sanitizedRecord: SundayOfferingRecord = {
         ...record,
+        cashTithe: Number(record.cashTithe || 0),
+        onlineTithe: Number(record.onlineTithe || 0),
+        totalTithe: Number(record.totalTithe ?? ((record.cashTithe || 0) + (record.onlineTithe || 0))),
         reportImages: persistedImages,
         recordedAt: record.recordedAt || Timestamp.now().toDate().toISOString(),
         recordedBy: currentUser?.uid || 'unknown',

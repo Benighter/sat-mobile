@@ -19,14 +19,15 @@ import {
   CalendarIcon,
   UsersIcon,
   ClipboardIcon,
-  TrendingUpIcon
+  TrendingUpIcon,
+  XMarkIcon
 } from '../icons';
 import { Member, NewBeliever, Bacenta, SundayOfferingRecord } from '../../types';
 import { hasAdminPrivileges, isCampusShepherd } from '../../utils/permissionUtils';
 import { isLeadershipPosition, isMemberFirstTimerOnSunday } from '../../utils/memberStatus';
 import { MINISTRY_OPTIONS } from '../../constants';
 import { membersFirebaseService } from '../../services/firebaseService';
-import { compressImageForInlineSave } from '../../services/imageStorageService';
+import { compressImageFileForInlineSave, compressImageForInlineSave, DEFAULT_INLINE_IMAGE_COLLECTION_LENGTH, MAX_INLINE_IMAGE_COLLECTION_LENGTH } from '../../services/imageStorageService';
 
 // New grouped structure types
 interface LinkedBacentaGroup {
@@ -68,7 +69,6 @@ const WeeklyAttendanceView: React.FC = () => {
     saveSundayOfferingHandler
   } = useAppContext();
 
-  const isAdmin = hasAdminPrivileges(userProfile);
   const canManageSundayIncome = isCampusShepherd(userProfile);
 
   // Keep constituency name in sync with App Preferences (and react immediately to updates)
@@ -90,14 +90,19 @@ const WeeklyAttendanceView: React.FC = () => {
   const [togglingNewBeliever, setTogglingNewBeliever] = useState<Set<string>>(new Set());
   const [cashOfferingInput, setCashOfferingInput] = useState<string>('0');
   const [onlineOfferingInput, setOnlineOfferingInput] = useState<string>('0');
-  const [editingOfferingField, setEditingOfferingField] = useState<'cash' | 'online' | null>(null);
+  const [cashTitheInput, setCashTitheInput] = useState<string>('0');
+  const [onlineTitheInput, setOnlineTitheInput] = useState<string>('0');
+  const [editingOfferingField, setEditingOfferingField] = useState<'cash-offering' | 'cash-tithe' | 'online-offering' | 'online-tithe' | null>(null);
   const [reportImages, setReportImages] = useState<string[]>([]);
   const [selectedReportImage, setSelectedReportImage] = useState<string | null>(null);
   const [isCampusReportModalOpen, setIsCampusReportModalOpen] = useState(false);
+  const [isCampusReportImagePickerOpen, setIsCampusReportImagePickerOpen] = useState(false);
+  const [campusReportImageIndex, setCampusReportImageIndex] = useState(0);
   const [isSavingReportImages, setIsSavingReportImages] = useState(false);
   const [isSharingCampusReport, setIsSharingCampusReport] = useState(false);
   const [previewImageIndex, setPreviewImageIndex] = useState<number | null>(null);
   const reportImageInputRef = useRef<HTMLInputElement | null>(null);
+  const lastCampusReportImageTapRef = useRef<{ index: number; time: number }>({ index: -1, time: 0 });
   const normalizedSelectedMinistry = selectedMinistry.trim().toLowerCase();
 
   const selectedSundayOffering = useMemo(() => (
@@ -147,11 +152,17 @@ const WeeklyAttendanceView: React.FC = () => {
   const totalPresentFirstTimers = presentFirstTimerMembers.length + presentFirstTimeNewBelievers.length;
   const parsedCashOffering = Math.max(0, Number(cashOfferingInput || 0));
   const parsedOnlineOffering = Math.max(0, Number(onlineOfferingInput || 0));
+  const parsedCashTithe = Math.max(0, Number(cashTitheInput || 0));
+  const parsedOnlineTithe = Math.max(0, Number(onlineTitheInput || 0));
   const totalSundayOffering = parsedCashOffering + parsedOnlineOffering;
+  const totalSundayTithe = parsedCashTithe + parsedOnlineTithe;
+  const totalSundayIncome = totalSundayOffering + totalSundayTithe;
 
   useEffect(() => {
     setCashOfferingInput(String(selectedSundayOffering?.cashOffering ?? 0));
     setOnlineOfferingInput(String(selectedSundayOffering?.onlineOffering ?? 0));
+    setCashTitheInput(String(selectedSundayOffering?.cashTithe ?? 0));
+    setOnlineTitheInput(String(selectedSundayOffering?.onlineTithe ?? 0));
   }, [selectedSundayOffering]);
 
   useEffect(() => {
@@ -504,10 +515,9 @@ const WeeklyAttendanceView: React.FC = () => {
         .filter(record => record.date === selectedSunday && record.status === 'Present' && record.newBelieverId)
         .map(record => record.newBelieverId as string)
     );
+    const presentMemberNewConverts = presentMembersForSelectedSunday.filter(member => member.isNewBeliever).length;
     const todaysFirstTimers = totalPresentFirstTimers;
-    const todaysNewConverts = newBelievers.filter(
-      newBeliever => presentNewBelieverIds.has(newBeliever.id) && newBeliever.joinedDate === selectedSunday
-    ).length;
+    const todaysNewConverts = presentMemberNewConverts + presentNewBelieverIds.size;
 
     let text = '*Gathering Service attendance*\n\n';
     text += `*Campus Name : ${campusName}*\n\n`;
@@ -515,12 +525,12 @@ const WeeklyAttendanceView: React.FC = () => {
     text += `Date of service: ${formatSlashDate(selectedSunday)}\n\n`;
     text += `*Gathering service total attendance : ${formatCount(totalAttendance)}*\n\n`;
     text += `*TOTAL Income (week) : ${formatReportCurrency(weeklyIncomeSummary.totalWeekIncome)}*\n\n`;
-    text += `*Gathering service Income Cash: ${formatCompactReportCurrency(weeklyIncomeSummary.sundayCash)}*\n`;
-    text += `*Offering: ${formatReportCurrency(weeklyIncomeSummary.sundayCash)}*\n`;
-    text += `*Tithe: ${untrackedCurrencySplit}*\n\n`;
-    text += `*Total EFT transfers* (electronic only): ${formatReportCurrency(weeklyIncomeSummary.sundayOnline)}\n`;
-    text += `*EFT tithes : ${untrackedCurrencySplit}:*\n`;
-    text += `*EFT offering : ${formatReportCurrency(weeklyIncomeSummary.sundayOnline)}*\n\n`;
+    text += `*Gathering service Income Cash: ${formatCompactReportCurrency(weeklyIncomeSummary.sundayCashTotal)}*\n`;
+    text += `*Offering: ${formatReportCurrency(weeklyIncomeSummary.sundayCashOffering)}*\n`;
+    text += `*Tithe: ${formatReportCurrency(weeklyIncomeSummary.sundayCashTithe)}*\n\n`;
+    text += `*Total EFT transfers* (electronic only): ${formatReportCurrency(weeklyIncomeSummary.sundayOnlineTotal)}\n`;
+    text += `*EFT tithes : ${formatReportCurrency(weeklyIncomeSummary.sundayOnlineTithe)}:*\n`;
+    text += `*EFT offering : ${formatReportCurrency(weeklyIncomeSummary.sundayOnlineOffering)}*\n\n`;
     text += 'Breakdown Per Bacenta Leader\n';
 
     if (leaderTotals.length > 0) {
@@ -553,45 +563,6 @@ const WeeklyAttendanceView: React.FC = () => {
     reader.onerror = () => reject(new Error('Failed to convert image for clipboard'));
     reader.readAsDataURL(blob);
   });
-
-  const blobToPngBlob = async (blob: Blob): Promise<Blob> => {
-    if (blob.type === 'image/png') {
-      return blob;
-    }
-
-    const objectUrl = URL.createObjectURL(blob);
-
-    try {
-      const image = await new Promise<HTMLImageElement>((resolve, reject) => {
-        const nextImage = new Image();
-        nextImage.onload = () => resolve(nextImage);
-        nextImage.onerror = () => reject(new Error('Failed to prepare the selected picture'));
-        nextImage.src = objectUrl;
-      });
-
-      const canvas = document.createElement('canvas');
-      canvas.width = image.naturalWidth || image.width;
-      canvas.height = image.naturalHeight || image.height;
-      const context = canvas.getContext('2d');
-      if (!context) {
-        throw new Error('Failed to prepare the selected picture');
-      }
-
-      context.drawImage(image, 0, 0);
-
-      return await new Promise<Blob>((resolve, reject) => {
-        canvas.toBlob(result => {
-          if (result) {
-            resolve(result);
-            return;
-          }
-          reject(new Error('Failed to prepare the selected picture'));
-        }, 'image/png');
-      });
-    } finally {
-      URL.revokeObjectURL(objectUrl);
-    }
-  };
 
   const escapeHtml = (value: string) => value
     .replace(/&/g, '&amp;')
@@ -634,11 +605,6 @@ const WeeklyAttendanceView: React.FC = () => {
     return response.blob();
   };
 
-  const getClipboardImageBlob = async (imageValue: string): Promise<Blob> => {
-    const sourceBlob = await getImageBlob(imageValue);
-    return blobToPngBlob(sourceBlob);
-  };
-
   const buildNativeShareFile = async (imageValue: string): Promise<string> => {
     const sourceBlob = await getImageBlob(imageValue);
     const imageDataUrl = await blobToDataUrl(sourceBlob);
@@ -657,6 +623,8 @@ const WeeklyAttendanceView: React.FC = () => {
   const saveReportImages = async (nextImages: string[], nextSelectedImage?: string | null) => {
     const normalizedCash = String(Math.max(0, Number(cashOfferingInput || 0)));
     const normalizedOnline = String(Math.max(0, Number(onlineOfferingInput || 0)));
+    const normalizedCashTithe = String(Math.max(0, Number(cashTitheInput || 0)));
+    const normalizedOnlineTithe = String(Math.max(0, Number(onlineTitheInput || 0)));
     const previousImages = reportImages;
     const previousSelectedImage = selectedReportImage;
 
@@ -665,7 +633,7 @@ const WeeklyAttendanceView: React.FC = () => {
     setIsSavingReportImages(true);
 
     try {
-      await persistSundayOffering(normalizedCash, normalizedOnline, nextImages);
+      await persistSundayOffering(normalizedCash, normalizedOnline, normalizedCashTithe, normalizedOnlineTithe, nextImages);
     } catch (error) {
       setReportImages(previousImages);
       setSelectedReportImage(previousSelectedImage);
@@ -673,6 +641,43 @@ const WeeklyAttendanceView: React.FC = () => {
     } finally {
       setIsSavingReportImages(false);
     }
+  };
+
+  const getInlineReportImageTotalLength = (imageValues: string[]) => imageValues.reduce(
+    (sum, imageValue) => sum + (imageValue.startsWith('data:image/') ? imageValue.length : 0),
+    0
+  );
+
+  const rebalanceReportImagesForSave = async (imageValues: string[]) => {
+    if (!imageValues.length) {
+      return imageValues;
+    }
+
+    const processingErrorMessage = 'Failed to process report picture.';
+    const oversizeErrorMessage = 'The selected report pictures are too large to save together. Remove some pictures or choose smaller ones and try again.';
+    let perImageTarget = Math.max(70000, Math.floor(DEFAULT_INLINE_IMAGE_COLLECTION_LENGTH / Math.max(1, imageValues.length)));
+    let balancedImages = await Promise.all(imageValues.map(imageValue => compressImageForInlineSave(imageValue, {
+      maxLength: perImageTarget,
+      processingErrorMessage,
+      oversizeErrorMessage
+    })));
+    let totalInlineLength = getInlineReportImageTotalLength(balancedImages);
+
+    for (let attempt = 0; totalInlineLength > MAX_INLINE_IMAGE_COLLECTION_LENGTH && attempt < 6; attempt += 1) {
+      perImageTarget = Math.max(50000, Math.floor(perImageTarget * 0.82));
+      balancedImages = await Promise.all(balancedImages.map(imageValue => compressImageForInlineSave(imageValue, {
+        maxLength: perImageTarget,
+        processingErrorMessage,
+        oversizeErrorMessage
+      })));
+      totalInlineLength = getInlineReportImageTotalLength(balancedImages);
+    }
+
+    if (totalInlineLength > MAX_INLINE_IMAGE_COLLECTION_LENGTH) {
+      throw new Error(oversizeErrorMessage);
+    }
+
+    return balancedImages;
   };
 
   const handleReportImageFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -690,15 +695,20 @@ const WeeklyAttendanceView: React.FC = () => {
     }
 
     try {
-      const addedImages = await Promise.all(files.map(async file => {
-        const imageDataUrl = await readFileAsDataUrl(file);
-        return compressImageForInlineSave(imageDataUrl, {
-          maxLength: 680000,
+      const totalImageCount = Math.max(1, reportImages.length + files.length);
+      const perImageTarget = Math.max(70000, Math.floor(DEFAULT_INLINE_IMAGE_COLLECTION_LENGTH / totalImageCount));
+      const addedImages: string[] = [];
+
+      for (const file of files) {
+        const compressedImage = await compressImageFileForInlineSave(file, {
+          maxLength: perImageTarget,
           processingErrorMessage: 'Failed to process report picture.',
-          oversizeErrorMessage: 'Report picture is still too large after auto-compression. Please choose a smaller picture and try again.'
+          oversizeErrorMessage: 'Report picture is too large even after auto-compression. Please choose another picture.'
         });
-      }));
-      const nextImages = [...reportImages, ...addedImages];
+        addedImages.push(compressedImage);
+      }
+
+      const nextImages = await rebalanceReportImagesForSave([...reportImages, ...addedImages]);
       await saveReportImages(nextImages, selectedReportImage || addedImages[0] || nextImages[0] || null);
       showToast('success', 'Pictures added', `${addedImages.length} picture${addedImages.length === 1 ? '' : 's'} added to this report.`);
     } catch (error: any) {
@@ -734,57 +744,70 @@ const WeeklyAttendanceView: React.FC = () => {
     });
   };
 
+  const openCampusReportModal = () => {
+    const selectedIndex = selectedReportImage ? reportImages.indexOf(selectedReportImage) : 0;
+    setCampusReportImageIndex(selectedIndex >= 0 ? selectedIndex : 0);
+    setIsCampusReportImagePickerOpen(false);
+    setIsCampusReportModalOpen(true);
+  };
+
+  const closeCampusReportModal = () => {
+    setIsCampusReportImagePickerOpen(false);
+    setIsCampusReportModalOpen(false);
+  };
+
+  const openCampusReportImagePicker = () => {
+    if (!reportImages.length) {
+      return;
+    }
+
+    const selectedIndex = selectedReportImage ? reportImages.indexOf(selectedReportImage) : 0;
+    setCampusReportImageIndex(selectedIndex >= 0 ? selectedIndex : 0);
+    setIsCampusReportImagePickerOpen(true);
+  };
+
+  const showPreviousCampusReportImage = () => {
+    setCampusReportImageIndex(currentIndex => {
+      if (reportImages.length === 0) return currentIndex;
+      return (currentIndex - 1 + reportImages.length) % reportImages.length;
+    });
+  };
+
+  const showNextCampusReportImage = () => {
+    setCampusReportImageIndex(currentIndex => {
+      if (reportImages.length === 0) return currentIndex;
+      return (currentIndex + 1) % reportImages.length;
+    });
+  };
+
+  const handleSelectCampusReportImage = () => {
+    setSelectedReportImage(reportImages[campusReportImageIndex] || null);
+    setIsCampusReportImagePickerOpen(false);
+  };
+
+  const handleCampusReportImageInteract = (imageIndex: number) => {
+    const now = Date.now();
+    const previousTap = lastCampusReportImageTapRef.current;
+
+    if (previousTap.index === imageIndex && now - previousTap.time < 350) {
+      setCampusReportImageIndex(imageIndex);
+      setSelectedReportImage(reportImages[imageIndex] || null);
+      setIsCampusReportImagePickerOpen(false);
+      lastCampusReportImageTapRef.current = { index: -1, time: 0 };
+      return;
+    }
+
+    lastCampusReportImageTapRef.current = { index: imageIndex, time: now };
+  };
+
   const copyCampusReportTextOnly = async () => {
     try {
       await navigator.clipboard.writeText(buildCampusReportText());
-      setIsCampusReportModalOpen(false);
+      closeCampusReportModal();
       showToast('success', 'Copied!', 'Campus shepherd report copied to clipboard.');
     } catch (error) {
       console.error('Failed to copy campus shepherd report text:', error);
       showToast('error', 'Copy Failed', 'Unable to copy the campus shepherd report.');
-    }
-  };
-
-  const copyCampusReportWithImage = async () => {
-    if (!selectedReportImage) {
-      await copyCampusReportTextOnly();
-      return;
-    }
-
-    setIsSharingCampusReport(true);
-    try {
-      const text = buildCampusReportText();
-      const ClipboardItemCtor = (globalThis as any).ClipboardItem;
-
-      if (!navigator.clipboard?.write || !ClipboardItemCtor) {
-        await navigator.clipboard.writeText(text);
-        setIsCampusReportModalOpen(false);
-        showToast('warning', 'Text copied', 'Your browser cannot copy picture + text together. Use Share to WhatsApp for the full report.');
-        return;
-      }
-
-      const imageBlob = await getClipboardImageBlob(selectedReportImage);
-      const imageDataUrl = await blobToDataUrl(imageBlob);
-      const html = `<div><img src="${imageDataUrl}" alt="Report image" style="max-width:100%;height:auto;display:block;margin-bottom:12px;" /><div style="white-space:pre-wrap;">${escapeHtml(text).replace(/\n/g, '<br>')}</div></div>`;
-      const clipboardPayload: Record<string, Blob> = {
-        'text/plain': new Blob([text], { type: 'text/plain' }),
-        'text/html': new Blob([html], { type: 'text/html' }),
-        'image/png': imageBlob
-      };
-
-      await navigator.clipboard.write([new ClipboardItemCtor(clipboardPayload)]);
-      setIsCampusReportModalOpen(false);
-      showToast('success', 'Copied!', 'Report copied with the selected picture. If WhatsApp does not paste both together, use Share to WhatsApp.');
-    } catch (error: any) {
-      console.error('Failed to copy campus shepherd report with image:', error);
-      if (String(error?.message || '').toLowerCase().includes('not supported')) {
-        await copyCampusReportTextOnly();
-        showToast('warning', 'Picture copy not supported', 'This device can copy the report text, but not an image to the clipboard. Use Share to WhatsApp for the picture version.');
-      } else {
-        showToast('error', 'Copy Failed', 'Unable to copy the report with the selected picture.');
-      }
-    } finally {
-      setIsSharingCampusReport(false);
     }
   };
 
@@ -801,16 +824,13 @@ const WeeklyAttendanceView: React.FC = () => {
           files,
           dialogTitle: 'Share to WhatsApp'
         });
-        setIsCampusReportModalOpen(false);
+        closeCampusReportModal();
         return;
       }
 
       if (!navigator.share) {
-        if (selectedReportImage) {
-          await copyCampusReportWithImage();
-        } else {
-          await copyCampusReportTextOnly();
-        }
+        await copyCampusReportTextOnly();
+        showToast('warning', 'Share unavailable', 'Sharing with a picture is not available here. The report text has been copied instead.');
         return;
       }
 
@@ -825,7 +845,7 @@ const WeeklyAttendanceView: React.FC = () => {
             text,
             files: [reportFile]
           });
-          setIsCampusReportModalOpen(false);
+          closeCampusReportModal();
           return;
         }
       }
@@ -834,7 +854,7 @@ const WeeklyAttendanceView: React.FC = () => {
         title: 'Gathering Service attendance',
         text
       });
-      setIsCampusReportModalOpen(false);
+      closeCampusReportModal();
     } catch (error: any) {
       if (error?.name !== 'AbortError') {
         console.error('Failed to share campus shepherd report:', error);
@@ -875,8 +895,6 @@ const WeeklyAttendanceView: React.FC = () => {
   const formatReportCurrency = (amount: number) => `${formatZarAmount(amount)} (${formatUsdAmount(amount)})`;
   const formatCompactReportCurrency = (amount: number) => `${formatZarAmount(amount)}(${formatUsdAmount(amount)})`;
   const formatCount = (count: number) => String(Math.max(0, count)).padStart(2, '0');
-  const untrackedCurrencySplit = 'R__ ($__)';
-
   const weeklyIncomeSummary = useMemo(() => {
     const selectedDate = new Date(selectedSunday + 'T00:00:00');
     const dayOfWeek = selectedDate.getDay();
@@ -892,27 +910,48 @@ const WeeklyAttendanceView: React.FC = () => {
       (sum, record) => sum + (record.totalOffering ?? ((record.cashOffering || 0) + (record.onlineOffering || 0))),
       0
     );
-    const sundayCash = selectedSundayOffering?.cashOffering ?? 0;
-    const sundayOnline = selectedSundayOffering?.onlineOffering ?? 0;
-    const sundayTotal = selectedSundayOffering?.totalOffering ?? (sundayCash + sundayOnline);
+    const sundayCashOffering = selectedSundayOffering?.cashOffering ?? 0;
+    const sundayOnlineOffering = selectedSundayOffering?.onlineOffering ?? 0;
+    const sundayCashTithe = selectedSundayOffering?.cashTithe ?? 0;
+    const sundayOnlineTithe = selectedSundayOffering?.onlineTithe ?? 0;
+    const sundayOfferingTotal = selectedSundayOffering?.totalOffering ?? (sundayCashOffering + sundayOnlineOffering);
+    const sundayTitheTotal = selectedSundayOffering?.totalTithe ?? (sundayCashTithe + sundayOnlineTithe);
+    const sundayCashTotal = sundayCashOffering + sundayCashTithe;
+    const sundayOnlineTotal = sundayOnlineOffering + sundayOnlineTithe;
+    const sundayTotalIncome = sundayOfferingTotal + sundayTitheTotal;
 
     return {
       bacentaWeekOffering,
-      sundayCash,
-      sundayOnline,
-      totalWeekIncome: bacentaWeekOffering + sundayTotal
+      sundayCashOffering,
+      sundayOnlineOffering,
+      sundayCashTithe,
+      sundayOnlineTithe,
+      sundayOfferingTotal,
+      sundayTitheTotal,
+      sundayCashTotal,
+      sundayOnlineTotal,
+      sundayTotalIncome,
+      totalWeekIncome: bacentaWeekOffering + sundayTotalIncome
     };
   }, [meetingRecords, selectedSunday, selectedSundayOffering]);
 
-  const persistSundayOffering = async (cashValue: string, onlineValue: string, reportImagesOverride?: string[]) => {
+  const persistSundayOffering = async (
+    cashValue: string,
+    onlineValue: string,
+    cashTitheValue: string,
+    onlineTitheValue: string,
+    reportImagesOverride?: string[]
+  ) => {
     if (!canManageSundayIncome) {
       return;
     }
 
     const cashAmount = Math.max(0, Number(cashValue || 0));
     const onlineAmount = Math.max(0, Number(onlineValue || 0));
+    const cashTitheAmount = Math.max(0, Number(cashTitheValue || 0));
+    const onlineTitheAmount = Math.max(0, Number(onlineTitheValue || 0));
 
-    if (Number.isNaN(cashAmount) || Number.isNaN(onlineAmount)) {
+    if (Number.isNaN(cashAmount) || Number.isNaN(onlineAmount) || Number.isNaN(cashTitheAmount) || Number.isNaN(onlineTitheAmount)) {
       showToast('warning', 'Invalid amount', 'Please enter a valid amount.');
       return;
     }
@@ -923,6 +962,9 @@ const WeeklyAttendanceView: React.FC = () => {
       cashOffering: cashAmount,
       onlineOffering: onlineAmount,
       totalOffering: cashAmount + onlineAmount,
+      cashTithe: cashTitheAmount,
+      onlineTithe: onlineTitheAmount,
+      totalTithe: cashTitheAmount + onlineTitheAmount,
       reportImages: reportImagesOverride ?? reportImages,
       notes: selectedSundayOffering?.notes || ''
     };
@@ -934,7 +976,7 @@ const WeeklyAttendanceView: React.FC = () => {
     }
   };
 
-  const handleOfferingCardClick = (field: 'cash' | 'online') => {
+  const handleOfferingCardClick = (field: 'cash-offering' | 'cash-tithe' | 'online-offering' | 'online-tithe') => {
     if (!canManageSundayIncome) return;
     setEditingOfferingField(field);
   };
@@ -942,6 +984,8 @@ const WeeklyAttendanceView: React.FC = () => {
   const handleOfferingFieldBlur = async () => {
     const normalizedCash = String(Math.max(0, Number(cashOfferingInput || 0)));
     const normalizedOnline = String(Math.max(0, Number(onlineOfferingInput || 0)));
+    const normalizedCashTithe = String(Math.max(0, Number(cashTitheInput || 0)));
+    const normalizedOnlineTithe = String(Math.max(0, Number(onlineTitheInput || 0)));
 
     if (normalizedCash !== cashOfferingInput) {
       setCashOfferingInput(normalizedCash);
@@ -949,9 +993,15 @@ const WeeklyAttendanceView: React.FC = () => {
     if (normalizedOnline !== onlineOfferingInput) {
       setOnlineOfferingInput(normalizedOnline);
     }
+    if (normalizedCashTithe !== cashTitheInput) {
+      setCashTitheInput(normalizedCashTithe);
+    }
+    if (normalizedOnlineTithe !== onlineTitheInput) {
+      setOnlineTitheInput(normalizedOnlineTithe);
+    }
 
     setEditingOfferingField(null);
-    await persistSundayOffering(normalizedCash, normalizedOnline);
+    await persistSundayOffering(normalizedCash, normalizedOnline, normalizedCashTithe, normalizedOnlineTithe);
   };
 
   const handleOfferingFieldKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
@@ -963,8 +1013,52 @@ const WeeklyAttendanceView: React.FC = () => {
     if (event.key === 'Escape') {
       setCashOfferingInput(String(selectedSundayOffering?.cashOffering ?? 0));
       setOnlineOfferingInput(String(selectedSundayOffering?.onlineOffering ?? 0));
+      setCashTitheInput(String(selectedSundayOffering?.cashTithe ?? 0));
+      setOnlineTitheInput(String(selectedSundayOffering?.onlineTithe ?? 0));
       setEditingOfferingField(null);
     }
+  };
+
+  const renderIncomeAmountCard = (
+    field: 'cash-offering' | 'cash-tithe' | 'online-offering' | 'online-tithe',
+    label: string,
+    value: number,
+    inputValue: string,
+    onChange: (value: string) => void,
+    tone: 'emerald' | 'blue'
+  ) => {
+    const isEditing = editingOfferingField === field;
+    const activeClasses = tone === 'emerald'
+      ? 'border-emerald-400 bg-emerald-50 shadow-sm'
+      : 'border-blue-400 bg-blue-50 shadow-sm';
+    const idleClasses = tone === 'emerald'
+      ? 'border-gray-200 bg-white hover:border-emerald-300 hover:bg-emerald-50/60'
+      : 'border-gray-200 bg-white hover:border-blue-300 hover:bg-blue-50/60';
+
+    return (
+      <button
+        type="button"
+        onClick={() => handleOfferingCardClick(field)}
+        className={`rounded-lg border px-3 py-2.5 text-left transition-all duration-200 ${isEditing ? activeClasses : idleClasses}`}
+      >
+        <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">{label}</p>
+        {isEditing ? (
+          <input
+            type="number"
+            min={0}
+            step="0.01"
+            value={inputValue}
+            onChange={(e) => onChange(e.target.value)}
+            onBlur={handleOfferingFieldBlur}
+            onKeyDown={handleOfferingFieldKeyDown}
+            autoFocus
+            className="mt-1.5 w-full border-0 bg-transparent p-0 text-xl font-bold text-gray-900 outline-none"
+          />
+        ) : (
+          <p className="mt-1.5 text-xl font-bold text-gray-900">R{value.toFixed(2)}</p>
+        )}
+      </button>
+    );
   };
 
   // Mobile-friendly member row: icon-only circular tag buttons + active tag chips below name
@@ -1131,9 +1225,9 @@ const WeeklyAttendanceView: React.FC = () => {
                 <ClipboardIcon className="w-4 h-4" />
                 <span className="leading-tight">Copy First Timers</span>
               </button>
-              {isAdmin && !selectedMinistry && (
+              {canManageSundayIncome && !selectedMinistry && (
                 <button
-                  onClick={() => setIsCampusReportModalOpen(true)}
+                  onClick={openCampusReportModal}
                   className="inline-flex min-h-[52px] w-full items-center justify-center gap-2 rounded-xl bg-amber-600 px-4 py-3 text-center text-sm font-medium text-white shadow-sm transition-all duration-200 hover:bg-amber-700 sm:min-h-[48px] sm:w-auto sm:px-4 sm:py-2"
                   title="Choose how to copy or share the campus shepherd report"
                 >
@@ -1146,79 +1240,70 @@ const WeeklyAttendanceView: React.FC = () => {
             {canManageSundayIncome && !selectedMinistry && (
               <div className="mt-5 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
                 <div className="bg-gray-50/80 px-3.5 py-3.5 sm:px-4 sm:py-4">
-                  <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-                    <div className="min-w-0 lg:max-w-xl">
-                      <div className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-emerald-700">
-                        <TrendingUpIcon className="h-3 w-3" />
-                        Sunday Income
+                  <div className="space-y-3 lg:space-y-4">
+                    <div className="flex flex-col gap-3 lg:grid lg:grid-cols-[minmax(0,1.25fr)_minmax(260px,0.75fr)] lg:items-stretch">
+                      <div className="min-w-0 rounded-xl border border-white/80 bg-white/70 p-4">
+                        <div className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-emerald-700">
+                          <TrendingUpIcon className="h-3 w-3" />
+                          Sunday Income
+                        </div>
+                        <h3 className="mt-2 text-sm font-semibold text-gray-900 sm:text-base">
+                          Record this Sunday&apos;s offering and tithe
+                        </h3>
+                        <p className="mt-1 text-xs sm:text-sm text-gray-600">
+                          Offering and tithe are grouped separately. Tap any amount card to edit for {formatCompactDate(selectedSunday)}.
+                        </p>
                       </div>
-                      <h3 className="mt-2 text-sm font-semibold text-gray-900 sm:text-base">
-                        Record this Sunday&apos;s offering
-                      </h3>
-                      <p className="mt-1 text-xs sm:text-sm text-gray-600">
-                        Tap `Cash` or `Online` to edit. `Total` updates automatically for {formatCompactDate(selectedSunday)}.
-                      </p>
+
+                      <div className="rounded-xl border border-slate-200 bg-slate-900 px-3 py-3.5 text-left lg:px-4 lg:py-4">
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-300">Grand Total</p>
+                        <p className="mt-1 text-xl font-bold text-white lg:text-2xl">R{totalSundayIncome.toFixed(2)}</p>
+                        <p className="mt-1 text-xs text-slate-300">
+                          Offering R{totalSundayOffering.toFixed(2)} + Tithe R{totalSundayTithe.toFixed(2)}
+                        </p>
+                      </div>
                     </div>
 
-                    <div className="grid w-full grid-cols-1 gap-2.5 sm:grid-cols-3 lg:max-w-[500px]">
-                      <button
-                        type="button"
-                        onClick={() => handleOfferingCardClick('cash')}
-                        className={`rounded-lg border px-3 py-2.5 text-left transition-all duration-200 ${
-                          editingOfferingField === 'cash'
-                            ? 'border-emerald-400 bg-emerald-50 shadow-sm'
-                            : 'border-gray-200 bg-white hover:border-emerald-300 hover:bg-emerald-50/60'
-                        }`}
-                      >
-                        <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">Cash</p>
-                        {editingOfferingField === 'cash' ? (
-                          <input
-                            type="number"
-                            min={0}
-                            step="0.01"
-                            value={cashOfferingInput}
-                            onChange={(e) => setCashOfferingInput(e.target.value)}
-                            onBlur={handleOfferingFieldBlur}
-                            onKeyDown={handleOfferingFieldKeyDown}
-                            autoFocus
-                            className="mt-1.5 w-full border-0 bg-transparent p-0 text-xl font-bold text-gray-900 outline-none"
-                          />
-                        ) : (
-                          <p className="mt-1.5 text-xl font-bold text-gray-900">R{parsedCashOffering.toFixed(2)}</p>
-                        )}
-                      </button>
+                    <div className="grid grid-cols-1 gap-3 lg:grid-cols-2 lg:gap-4">
+                      <section className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-3 lg:p-4">
+                          <div className="mb-3 flex items-start justify-between gap-3">
+                            <div>
+                              <p className="inline-flex rounded-full bg-emerald-100 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-emerald-700">
+                                Offering
+                              </p>
+                              <p className="mt-1 text-xs text-emerald-800/80">Cash and online offering</p>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-700">Subtotal</p>
+                              <p className="text-lg font-bold text-emerald-900">R{totalSundayOffering.toFixed(2)}</p>
+                            </div>
+                          </div>
 
-                      <button
-                        type="button"
-                        onClick={() => handleOfferingCardClick('online')}
-                        className={`rounded-lg border px-3 py-2.5 text-left transition-all duration-200 ${
-                          editingOfferingField === 'online'
-                            ? 'border-emerald-400 bg-emerald-50 shadow-sm'
-                            : 'border-gray-200 bg-white hover:border-emerald-300 hover:bg-emerald-50/60'
-                        }`}
-                      >
-                        <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">Online</p>
-                        {editingOfferingField === 'online' ? (
-                          <input
-                            type="number"
-                            min={0}
-                            step="0.01"
-                            value={onlineOfferingInput}
-                            onChange={(e) => setOnlineOfferingInput(e.target.value)}
-                            onBlur={handleOfferingFieldBlur}
-                            onKeyDown={handleOfferingFieldKeyDown}
-                            autoFocus
-                            className="mt-1.5 w-full border-0 bg-transparent p-0 text-xl font-bold text-gray-900 outline-none"
-                          />
-                        ) : (
-                          <p className="mt-1.5 text-xl font-bold text-gray-900">R{parsedOnlineOffering.toFixed(2)}</p>
-                        )}
-                      </button>
+                          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+                            {renderIncomeAmountCard('cash-offering', 'Cash', parsedCashOffering, cashOfferingInput, setCashOfferingInput, 'emerald')}
+                            {renderIncomeAmountCard('online-offering', 'Online', parsedOnlineOffering, onlineOfferingInput, setOnlineOfferingInput, 'emerald')}
+                          </div>
+                      </section>
 
-                      <div className="rounded-lg border border-emerald-200 bg-emerald-600 px-3 py-2.5 text-left">
-                        <p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-100">Total</p>
-                        <p className="mt-1.5 text-xl font-bold text-white">R{totalSundayOffering.toFixed(2)}</p>
-                      </div>
+                      <section className="rounded-xl border border-blue-200 bg-blue-50/70 p-3 lg:p-4">
+                          <div className="mb-3 flex items-start justify-between gap-3">
+                            <div>
+                              <p className="inline-flex rounded-full bg-blue-100 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-blue-700">
+                                Tithe
+                              </p>
+                              <p className="mt-1 text-xs text-blue-800/80">Cash and online tithe</p>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-[10px] font-semibold uppercase tracking-wide text-blue-700">Subtotal</p>
+                              <p className="text-lg font-bold text-blue-900">R{totalSundayTithe.toFixed(2)}</p>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+                            {renderIncomeAmountCard('cash-tithe', 'Cash', parsedCashTithe, cashTitheInput, setCashTitheInput, 'blue')}
+                            {renderIncomeAmountCard('online-tithe', 'Online', parsedOnlineTithe, onlineTitheInput, setOnlineTitheInput, 'blue')}
+                          </div>
+                      </section>
                     </div>
                   </div>
                 </div>
@@ -1237,7 +1322,7 @@ const WeeklyAttendanceView: React.FC = () => {
                         Attach pictures for this Sunday report
                       </h3>
                       <p className="mt-1 text-xs sm:text-sm text-gray-600">
-                        Upload as many pictures as you need. When you copy the report, you can choose one picture or continue with no picture.
+                        Upload as many pictures as you need. Pick one picture, then share the report to WhatsApp with that selected picture.
                       </p>
                     </div>
 
@@ -1531,15 +1616,15 @@ const WeeklyAttendanceView: React.FC = () => {
                         <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
                           <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-center">
                             <p className="text-xs font-medium uppercase tracking-wide text-emerald-700">Sunday Cash</p>
-                            <p className="mt-1 text-xl font-bold text-emerald-900">R{(selectedSundayOffering?.cashOffering ?? 0).toFixed(2)}</p>
+                            <p className="mt-1 text-xl font-bold text-emerald-900">R{weeklyIncomeSummary.sundayCashTotal.toFixed(2)}</p>
                           </div>
                           <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-center">
                             <p className="text-xs font-medium uppercase tracking-wide text-amber-700">Sunday Online</p>
-                            <p className="mt-1 text-xl font-bold text-amber-900">R{(selectedSundayOffering?.onlineOffering ?? 0).toFixed(2)}</p>
+                            <p className="mt-1 text-xl font-bold text-amber-900">R{weeklyIncomeSummary.sundayOnlineTotal.toFixed(2)}</p>
                           </div>
                           <div className="rounded-xl border border-slate-200 bg-slate-900 p-4 text-center">
-                            <p className="text-xs font-medium uppercase tracking-wide text-slate-300">Sunday Offering</p>
-                            <p className="mt-1 text-xl font-bold text-white">R{(selectedSundayOffering?.totalOffering ?? 0).toFixed(2)}</p>
+                            <p className="text-xs font-medium uppercase tracking-wide text-slate-300">Sunday Total</p>
+                            <p className="mt-1 text-xl font-bold text-white">R{totalSundayIncome.toFixed(2)}</p>
                           </div>
                         </div>
                       )}
@@ -1604,56 +1689,118 @@ const WeeklyAttendanceView: React.FC = () => {
         )}
 
         {isCampusReportModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-            <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white shadow-2xl">
-              <div className="border-b border-gray-200 px-5 py-4">
-                <h3 className="text-lg font-semibold text-gray-900">Campus Shepherd Report</h3>
-                <p className="mt-1 text-sm text-gray-600">
-                  Choose whether to copy the report with no picture, or select one picture for the report. Use Share to WhatsApp for the most reliable picture + data result on mobile.
-                </p>
-              </div>
-
-              <div className="px-5 py-4">
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="fixed inset-0 z-[80] flex items-start justify-center overflow-y-auto bg-black/50 px-4 pb-6 pt-24 sm:pt-28">
+            <div className="flex max-h-[calc(100vh-7rem)] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl sm:max-h-[calc(100vh-8rem)]">
+              <div className="shrink-0 border-b border-gray-200 px-5 py-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900">Campus Shepherd Report</h3>
+                    <p className="mt-1 text-sm text-gray-600">
+                      {isCampusReportImagePickerOpen
+                        ? 'View one picture at a time. Double tap the picture you want to use, then you will return to the action screen.'
+                        : 'Copy the report text with no picture, or share it to WhatsApp with the selected picture.'}
+                    </p>
+                  </div>
                   <button
                     type="button"
-                    onClick={() => setSelectedReportImage(null)}
-                    className={`rounded-xl border-2 px-4 py-5 text-left transition-all ${selectedReportImage === null ? 'border-slate-500 bg-slate-50 ring-2 ring-slate-200' : 'border-gray-200 bg-white hover:border-slate-300'}`}
+                    onClick={closeCampusReportModal}
+                    aria-label="Close campus shepherd report modal"
+                    title="Close"
+                    className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-700"
                   >
-                    <div className="text-sm font-semibold text-gray-900">No picture</div>
-                    <div className="mt-1 text-xs text-gray-500">Copy or share the report text only.</div>
+                    <XMarkIcon className="h-5 w-5" />
                   </button>
-
-                  {reportImages.map((image, index) => {
-                    const isSelected = selectedReportImage === image;
-                    return (
-                      <button
-                        key={`${image}_modal_${index}`}
-                        type="button"
-                        onClick={() => setSelectedReportImage(image)}
-                        className={`overflow-hidden rounded-xl border-2 text-left transition-all ${isSelected ? 'border-amber-500 ring-2 ring-amber-200' : 'border-gray-200 hover:border-amber-300'}`}
-                      >
-                        <img src={image} alt={`Selected report option ${index + 1}`} className="h-32 w-full object-cover" />
-                        <div className="px-3 py-2">
-                          <div className="text-sm font-semibold text-gray-900">Picture {index + 1}</div>
-                          <div className="mt-1 text-xs text-gray-500">{isSelected ? 'Selected for the report' : 'Tap to use this picture'}</div>
-                        </div>
-                      </button>
-                    );
-                  })}
                 </div>
+              </div>
 
-                {reportImages.length === 0 && (
-                  <div className="mt-4 rounded-xl border border-dashed border-gray-300 bg-gray-50 px-4 py-5 text-sm text-gray-500">
-                    No pictures uploaded yet. Upload pictures in the Report Pictures section if you want the report to go out with an image.
+              <div className="flex-1 overflow-y-auto px-5 py-4">
+                {isCampusReportImagePickerOpen ? (
+                  reportImages.length > 0 ? (
+                    <div className="space-y-4">
+                      <div className="relative overflow-hidden rounded-2xl border-2 border-amber-400 bg-white shadow-sm">
+                        <img
+                          src={reportImages[campusReportImageIndex]}
+                          alt={`Report option ${campusReportImageIndex + 1}`}
+                          className="h-64 w-full object-cover sm:h-72"
+                          onDoubleClick={() => handleSelectCampusReportImage()}
+                          onClick={() => handleCampusReportImageInteract(campusReportImageIndex)}
+                        />
+                        {reportImages.length > 1 && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={showPreviousCampusReportImage}
+                              className="absolute left-3 top-1/2 inline-flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-black/60 text-white transition-colors hover:bg-black/75"
+                              title="Previous picture"
+                            >
+                              <ChevronLeftIcon className="h-5 w-5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={showNextCampusReportImage}
+                              className="absolute right-3 top-1/2 inline-flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-black/60 text-white transition-colors hover:bg-black/75"
+                              title="Next picture"
+                            >
+                              <ChevronRightIcon className="h-5 w-5" />
+                            </button>
+                          </>
+                        )}
+                      </div>
+
+                      <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-center">
+                        <div className="text-sm font-semibold text-gray-900">Picture {campusReportImageIndex + 1}</div>
+                        <div className="mt-1 text-xs text-gray-500">
+                          {selectedReportImage === reportImages[campusReportImageIndex]
+                            ? 'Currently selected for WhatsApp sharing'
+                            : `Picture ${campusReportImageIndex + 1} of ${reportImages.length}. Double tap to select.`}
+                        </div>
+                      </div>
+                    </div>
+                  ) : null
+                ) : (
+                  <div className="space-y-4">
+                    {reportImages.length > 0 ? (
+                      <>
+                        <div className="overflow-hidden rounded-2xl border-2 border-amber-300 bg-white shadow-sm">
+                          <img
+                            src={selectedReportImage || reportImages[0]}
+                            alt="Selected report picture"
+                            className="h-64 w-full object-cover sm:h-72"
+                          />
+                          <div className="border-t border-gray-200 px-4 py-3">
+                            <div className="text-sm font-semibold text-gray-900">
+                              {selectedReportImage ? `Picture ${reportImages.indexOf(selectedReportImage) + 1}` : 'Picture preview'}
+                            </div>
+                            <div className="mt-1 text-xs text-gray-500">
+                              {selectedReportImage
+                                ? 'Selected for WhatsApp sharing'
+                                : 'No picture selected yet. Use View More Pictures to choose one.'}
+                            </div>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={openCampusReportImagePicker}
+                          className="inline-flex min-h-[44px] w-full items-center justify-center rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-800 transition-colors hover:bg-amber-100"
+                        >
+                          {reportImages.length > 1 ? 'View More Pictures' : 'View Picture'}
+                        </button>
+                      </>
+                    ) : (
+                      <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 px-4 py-5 text-sm text-gray-500">
+                        No pictures uploaded yet. Upload pictures in the Report Pictures section if you want the report to go out with an image.
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
 
-              <div className="flex flex-col gap-3 border-t border-gray-200 px-5 py-4 sm:flex-row sm:justify-end">
+              <div className="shrink-0 border-t border-gray-200 bg-white px-5 py-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
                 <button
                   type="button"
-                  onClick={() => setIsCampusReportModalOpen(false)}
+                  onClick={closeCampusReportModal}
                   className="inline-flex min-h-[44px] items-center justify-center rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
                 >
                   Cancel
@@ -1668,20 +1815,13 @@ const WeeklyAttendanceView: React.FC = () => {
                 </button>
                 <button
                   type="button"
-                  onClick={() => void copyCampusReportWithImage()}
-                  disabled={isSharingCampusReport || !selectedReportImage}
-                  className="inline-flex min-h-[44px] items-center justify-center rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {isSharingCampusReport ? 'Working...' : 'Copy With Selected Picture'}
-                </button>
-                <button
-                  type="button"
                   onClick={() => void shareCampusReport()}
                   disabled={isSharingCampusReport}
                   className="inline-flex min-h-[44px] items-center justify-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {isSharingCampusReport ? 'Working...' : 'Share to WhatsApp'}
                 </button>
+                </div>
               </div>
             </div>
           </div>
