@@ -33,6 +33,7 @@ interface AdminUserRecord {
   isDeleted?: boolean;
   preferences?: {
     ministryName?: string;
+    isCampusShepherd?: boolean;
   };
 }
 
@@ -722,6 +723,27 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
     }
   };
 
+  const setCampusShepherdStatus = async (admin: AdminUserRecord, value: boolean) => {
+    try {
+      setUpdating(admin.id, true);
+      await userService.updateUserPreferences(admin.id, { isCampusShepherd: value });
+      setAdmins(prev => prev.map(a => a.id === admin.id
+        ? {
+            ...a,
+            preferences: {
+              ...(a.preferences || {}),
+              isCampusShepherd: value
+            }
+          }
+        : a
+      ));
+    } catch (e: any) {
+      setError(e.message || 'Failed to update Campus Shepherd status');
+    } finally {
+      setUpdating(admin.id, false);
+    }
+  };
+
   const softDeleteAdmin = async (admin: AdminUserRecord) => {
     // Reuse the same state for hard-delete confirmation
     setPendingDeleteAdmin(admin);
@@ -1306,6 +1328,16 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
                         <span className="sa-const-card-stat">
                           Members: <strong>{a.memberCount ?? (memberCountsLoading ? '…' : '—')}</strong>
                         </span>
+                        <span className="sa-const-card-stat">
+                          Campus Shepherd:{' '}
+                          <strong>
+                            {a.preferences?.isCampusShepherd === true
+                              ? 'Yes'
+                              : a.preferences?.isCampusShepherd === false
+                                ? 'No'
+                                : 'Unanswered'}
+                          </strong>
+                        </span>
                       </div>
 
                       <div className="sa-const-card-actions">
@@ -1326,6 +1358,18 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
                           disabled={updatingIds[a.id]}
                           onClick={() => softDeleteAdmin(a)}
                         >Delete</button>
+                        <button
+                          className={`sa-btn ${a.preferences?.isCampusShepherd === true ? 'sa-btn-teal' : 'sa-btn-gold'}`}
+                          disabled={updatingIds[a.id]}
+                          onClick={() => setCampusShepherdStatus(a, a.preferences?.isCampusShepherd !== true)}
+                          title="Toggle Campus Shepherd mode"
+                        >
+                          {updatingIds[a.id]
+                            ? '…'
+                            : a.preferences?.isCampusShepherd === true
+                              ? 'Unset Shepherd'
+                              : 'Make Shepherd'}
+                        </button>
 
                         {/* Campus reassign */}
                         <select
@@ -1550,6 +1594,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
                         <th>Constituency</th>
                         <th>Campus</th>
                         <th>Members</th>
+                          <th>Campus Shepherd</th>
                         <th>Status</th>
                         <th>Actions</th>
                       </tr>
@@ -1615,6 +1660,29 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
                                 : '—'}
                             </td>
                             <td>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                                <span className={`sa-status ${a.preferences?.isCampusShepherd === true ? 'sa-status-active' : a.preferences?.isCampusShepherd === false ? 'sa-status-inactive' : ''}`} style={a.preferences?.isCampusShepherd == null ? { background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.25)', color: 'var(--sa-gold)' } : undefined}>
+                                  {a.preferences?.isCampusShepherd === true
+                                    ? 'Yes'
+                                    : a.preferences?.isCampusShepherd === false
+                                      ? 'No'
+                                      : 'Unanswered'}
+                                </span>
+                                <div style={{ display: 'flex', gap: 6 }}>
+                                  <button
+                                    className="sa-btn sa-btn-teal"
+                                    disabled={updatingIds[a.id] || a.preferences?.isCampusShepherd === true}
+                                    onClick={e => { e.stopPropagation(); setCampusShepherdStatus(a, true); }}
+                                  >Yes</button>
+                                  <button
+                                    className="sa-btn sa-btn-ghost"
+                                    disabled={updatingIds[a.id] || a.preferences?.isCampusShepherd === false}
+                                    onClick={e => { e.stopPropagation(); setCampusShepherdStatus(a, false); }}
+                                  >No</button>
+                                </div>
+                              </div>
+                            </td>
+                            <td>
                               <span className={`sa-status ${a.isActive !== false ? 'sa-status-active' : 'sa-status-inactive'}`}>
                                 {a.isActive !== false ? 'Active' : 'Inactive'}
                               </span>
@@ -1637,7 +1705,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
                         );
                       })}
                       {filteredAdmins.length === 0 && (
-                        <tr><td colSpan={7}><div className="sa-empty"><span className="sa-empty-icon">🛡</span>No admins found.</div></td></tr>
+                        <tr><td colSpan={8}><div className="sa-empty"><span className="sa-empty-icon">🛡</span>No admins found.</div></td></tr>
                       )}
                     </tbody>
                   </table>

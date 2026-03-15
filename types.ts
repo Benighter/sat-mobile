@@ -96,6 +96,7 @@ export interface SundayOfferingRecord {
   cashOffering: number;
   onlineOffering: number;
   totalOffering: number;
+  reportImages?: string[];
   notes?: string;
   recordedAt?: string;
   recordedBy?: string;

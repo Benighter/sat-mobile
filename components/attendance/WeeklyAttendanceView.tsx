@@ -1,4 +1,7 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { Capacitor } from '@capacitor/core';
+import { Directory, Filesystem } from '@capacitor/filesystem';
+import { Share } from '@capacitor/share';
 import { useAppContext } from '../../contexts/FirebaseAppContext';
 import {
   getCurrentOrMostRecentSunday,
@@ -6,7 +9,9 @@ import {
   getPreviousSunday,
   formatFullDate,
   formatCompactDate,
-  getTodayYYYYMMDD
+  getTodayYYYYMMDD,
+  formatDateToYYYYMMDD,
+  getWeeklyTotalsDates
 } from '../../utils/dateUtils';
 import {
   ChevronLeftIcon,
@@ -21,6 +26,7 @@ import { hasAdminPrivileges, isCampusShepherd } from '../../utils/permissionUtil
 import { isLeadershipPosition, isMemberFirstTimerOnSunday } from '../../utils/memberStatus';
 import { MINISTRY_OPTIONS } from '../../constants';
 import { membersFirebaseService } from '../../services/firebaseService';
+import { compressImageForInlineSave } from '../../services/imageStorageService';
 
 // New grouped structure types
 interface LinkedBacentaGroup {
@@ -53,6 +59,7 @@ const WeeklyAttendanceView: React.FC = () => {
     newBelievers,
     bacentas,
     attendanceRecords,
+    meetingRecords,
     sundayOfferingRecords,
     showToast,
     userProfile,
@@ -84,6 +91,13 @@ const WeeklyAttendanceView: React.FC = () => {
   const [cashOfferingInput, setCashOfferingInput] = useState<string>('0');
   const [onlineOfferingInput, setOnlineOfferingInput] = useState<string>('0');
   const [editingOfferingField, setEditingOfferingField] = useState<'cash' | 'online' | null>(null);
+  const [reportImages, setReportImages] = useState<string[]>([]);
+  const [selectedReportImage, setSelectedReportImage] = useState<string | null>(null);
+  const [isCampusReportModalOpen, setIsCampusReportModalOpen] = useState(false);
+  const [isSavingReportImages, setIsSavingReportImages] = useState(false);
+  const [isSharingCampusReport, setIsSharingCampusReport] = useState(false);
+  const [previewImageIndex, setPreviewImageIndex] = useState<number | null>(null);
+  const reportImageInputRef = useRef<HTMLInputElement | null>(null);
   const normalizedSelectedMinistry = selectedMinistry.trim().toLowerCase();
 
   const selectedSundayOffering = useMemo(() => (
@@ -139,6 +153,17 @@ const WeeklyAttendanceView: React.FC = () => {
     setCashOfferingInput(String(selectedSundayOffering?.cashOffering ?? 0));
     setOnlineOfferingInput(String(selectedSundayOffering?.onlineOffering ?? 0));
   }, [selectedSundayOffering]);
+
+  useEffect(() => {
+    const nextImages = selectedSundayOffering?.reportImages || [];
+    setReportImages(nextImages);
+    setSelectedReportImage(currentSelected => {
+      if (currentSelected && nextImages.includes(currentSelected)) {
+        return currentSelected;
+      }
+      return nextImages[0] || null;
+    });
+  }, [selectedSundayOffering?.reportImages]);
 
   const toggleFirstTimer = async (member: Member) => {
     const isFirstTimerForSelectedSunday = isMemberFirstTimerOnSunday(member, selectedSunday);
@@ -457,66 +482,366 @@ const WeeklyAttendanceView: React.FC = () => {
     }
   };
 
-  // Copy COs report (Admins only)
-  const copyCOsReportText = async () => {
+  const buildCampusReportText = () => {
+    const campusName = constituencyName.trim() || 'No Constituency';
+    const campusShepherdName = [userProfile?.firstName, userProfile?.lastName]
+      .filter(Boolean)
+      .join(' ')
+      .trim() || userProfile?.displayName || 'Admin';
+
+    const leaderTotals = groupedAttendance.groups.map(g => ({
+      name: `${g.bacentaLeader.firstName} ${g.bacentaLeader.lastName || ''}`.trim(),
+      count:
+        g.mainMembers.length +
+        g.fellowshipGroups.reduce((sum, fellowshipGroup) => sum + fellowshipGroup.total, 0) +
+        g.linkedBacentaGroups.reduce((sum, linkedGroup) => sum + linkedGroup.total, 0)
+    }))
+      .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+
+    const totalAttendance = groupedAttendance.grandTotal;
+    const presentNewBelieverIds = new Set(
+      attendanceRecords
+        .filter(record => record.date === selectedSunday && record.status === 'Present' && record.newBelieverId)
+        .map(record => record.newBelieverId as string)
+    );
+    const todaysFirstTimers = totalPresentFirstTimers;
+    const todaysNewConverts = newBelievers.filter(
+      newBeliever => presentNewBelieverIds.has(newBeliever.id) && newBeliever.joinedDate === selectedSunday
+    ).length;
+
+    let text = '*Gathering Service attendance*\n\n';
+    text += `*Campus Name : ${campusName}*\n\n`;
+    text += `Campus Shepherd : ${campusShepherdName}\n\n`;
+    text += `Date of service: ${formatSlashDate(selectedSunday)}\n\n`;
+    text += `*Gathering service total attendance : ${formatCount(totalAttendance)}*\n\n`;
+    text += `*TOTAL Income (week) : ${formatReportCurrency(weeklyIncomeSummary.totalWeekIncome)}*\n\n`;
+    text += `*Gathering service Income Cash: ${formatCompactReportCurrency(weeklyIncomeSummary.sundayCash)}*\n`;
+    text += `*Offering: ${formatReportCurrency(weeklyIncomeSummary.sundayCash)}*\n`;
+    text += `*Tithe: ${untrackedCurrencySplit}*\n\n`;
+    text += `*Total EFT transfers* (electronic only): ${formatReportCurrency(weeklyIncomeSummary.sundayOnline)}\n`;
+    text += `*EFT tithes : ${untrackedCurrencySplit}:*\n`;
+    text += `*EFT offering : ${formatReportCurrency(weeklyIncomeSummary.sundayOnline)}*\n\n`;
+    text += 'Breakdown Per Bacenta Leader\n';
+
+    if (leaderTotals.length > 0) {
+      text += '\n';
+      leaderTotals.forEach((leaderTotal, index) => {
+        text += `${index + 1}. ${leaderTotal.name}: ${formatCount(leaderTotal.count)}\n`;
+      });
+      text += '\n';
+    } else {
+      text += '\n';
+    }
+
+    text += `*New converts: ${formatCount(todaysNewConverts)}*\n`;
+    text += `*First Timers: ${formatCount(todaysFirstTimers)}*\n`;
+    text += `*Total attendance: ${formatCount(totalAttendance)}*`;
+
+    return text;
+  };
+
+  const readFileAsDataUrl = (file: File): Promise<string> => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(new Error(`Failed to read ${file.name}`));
+    reader.readAsDataURL(file);
+  });
+
+  const blobToDataUrl = (blob: Blob): Promise<string> => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result as string);
+    reader.onerror = () => reject(new Error('Failed to convert image for clipboard'));
+    reader.readAsDataURL(blob);
+  });
+
+  const blobToPngBlob = async (blob: Blob): Promise<Blob> => {
+    if (blob.type === 'image/png') {
+      return blob;
+    }
+
+    const objectUrl = URL.createObjectURL(blob);
+
     try {
-  // Constituency/Admin details (kept in sync with App Preferences)
-      const coFirstName = (userProfile?.firstName || '').trim() || 'CO';
+      const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const nextImage = new Image();
+        nextImage.onload = () => resolve(nextImage);
+        nextImage.onerror = () => reject(new Error('Failed to prepare the selected picture'));
+        nextImage.src = objectUrl;
+      });
 
-      // Build per-leader totals (members only; exclude new believers)
-      const leaderTotals = groupedAttendance.groups.map(g => ({
-        name: `${g.bacentaLeader.firstName}`.trim(),
-        count:
-          g.mainMembers.length +
-          g.fellowshipGroups.reduce((s, fg) => s + fg.total, 0) +
-          g.linkedBacentaGroups.reduce((s, lg) => s + lg.total, 0)
-      }))
-        .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
-
-      const totalAttendance = leaderTotals.reduce((s, x) => s + x.count, 0);
-
-      // First timers present today (new believers marked present AND isFirstTime)
-      const presentNewBelieverIds = new Set(
-        attendanceRecords
-          .filter(r => r.date === selectedSunday && r.status === 'Present' && r.newBelieverId)
-          .map(r => r.newBelieverId as string)
-      );
-      const todaysFirstTimers = presentFirstTimerMembers.length
-        + newBelievers.filter(nb => presentNewBelieverIds.has(nb.id) && nb.isFirstTime).length;
-
-      // Today's new believers (joined today)
-      const todaysNewBelievers = newBelievers.filter(nb => nb.joinedDate === selectedSunday).length || 0;
-
-      // Previous week's new believers (from last Sunday up to day before selected Sunday)
-      const prevSunday = getPreviousSunday(selectedSunday);
-      const prevWeeksNewBelievers = newBelievers.filter(nb => nb.joinedDate >= prevSunday && nb.joinedDate < selectedSunday).length || 0;
-      const sundayOfferingAmount = selectedSundayOffering?.totalOffering ?? 0;
-
-      // Compose text
-  let text = `*${constituencyName}* COs Sunday Report\n\n`;
-      text += `*(CO Name: ${coFirstName})*\n\n`;
-      text += `*Date: ${formatDayMonthYear(selectedSunday)}*\n\n`;
-      text += `*Attendance per bacenta leader: in descending order*\n\n`;
-      if (leaderTotals.length === 0) {
-        text += `No bacenta leaders with attendance.\n`;
-      } else {
-        leaderTotals.forEach((lt, idx) => {
-          text += `${idx + 1}. ${lt.name}: ${lt.count}\n`;
-        });
+      const canvas = document.createElement('canvas');
+      canvas.width = image.naturalWidth || image.width;
+      canvas.height = image.naturalHeight || image.height;
+      const context = canvas.getContext('2d');
+      if (!context) {
+        throw new Error('Failed to prepare the selected picture');
       }
-      text += `\n*Total: ${totalAttendance}*\n\n`;
-      if (canManageSundayIncome) {
-        text += `*Sunday Offering: R${sundayOfferingAmount.toFixed(2)}*\n\n`;
-      }
-      text += `*No of Today's First Timers: ${todaysFirstTimers}*\n\n`;
-      text += `*No of Todays New believers: ${todaysNewBelievers}*\n\n`;
-      text += `*Number of Previous weeks new believers: ${prevWeeksNewBelievers}*`;
 
-      await navigator.clipboard.writeText(text);
-      showToast('success', 'Copied!', 'COs report copied to clipboard');
+      context.drawImage(image, 0, 0);
+
+      return await new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob(result => {
+          if (result) {
+            resolve(result);
+            return;
+          }
+          reject(new Error('Failed to prepare the selected picture'));
+        }, 'image/png');
+      });
+    } finally {
+      URL.revokeObjectURL(objectUrl);
+    }
+  };
+
+  const escapeHtml = (value: string) => value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
+  const dataUrlToBlob = (dataUrl: string): Blob => {
+    const match = dataUrl.match(/^data:([^;,]+)?(;base64)?,(.*)$/);
+    if (!match) {
+      throw new Error('Selected picture format is invalid');
+    }
+
+    const mimeType = match[1] || 'application/octet-stream';
+    const isBase64 = Boolean(match[2]);
+    const payload = match[3] || '';
+
+    if (isBase64) {
+      const binary = atob(payload);
+      const bytes = new Uint8Array(binary.length);
+      for (let index = 0; index < binary.length; index += 1) {
+        bytes[index] = binary.charCodeAt(index);
+      }
+      return new Blob([bytes], { type: mimeType });
+    }
+
+    return new Blob([decodeURIComponent(payload)], { type: mimeType });
+  };
+
+  const getImageBlob = async (imageValue: string): Promise<Blob> => {
+    if (imageValue.startsWith('data:')) {
+      return dataUrlToBlob(imageValue);
+    }
+
+    const response = await fetch(imageValue);
+    if (!response.ok) {
+      throw new Error('Failed to load the selected picture');
+    }
+    return response.blob();
+  };
+
+  const getClipboardImageBlob = async (imageValue: string): Promise<Blob> => {
+    const sourceBlob = await getImageBlob(imageValue);
+    return blobToPngBlob(sourceBlob);
+  };
+
+  const buildNativeShareFile = async (imageValue: string): Promise<string> => {
+    const sourceBlob = await getImageBlob(imageValue);
+    const imageDataUrl = await blobToDataUrl(sourceBlob);
+    const [, base64Payload = ''] = imageDataUrl.split(',', 2);
+    const extension = sourceBlob.type.includes('png') ? 'png' : sourceBlob.type.includes('webp') ? 'webp' : 'jpg';
+    const fileName = `share/gathering-service-${selectedSunday}.${extension}`;
+    const result = await Filesystem.writeFile({
+      path: fileName,
+      data: base64Payload,
+      directory: Directory.Cache,
+      recursive: true
+    });
+    return result.uri;
+  };
+
+  const saveReportImages = async (nextImages: string[], nextSelectedImage?: string | null) => {
+    const normalizedCash = String(Math.max(0, Number(cashOfferingInput || 0)));
+    const normalizedOnline = String(Math.max(0, Number(onlineOfferingInput || 0)));
+    const previousImages = reportImages;
+    const previousSelectedImage = selectedReportImage;
+
+    setReportImages(nextImages);
+    setSelectedReportImage(nextSelectedImage === undefined ? (nextImages[0] || null) : nextSelectedImage);
+    setIsSavingReportImages(true);
+
+    try {
+      await persistSundayOffering(normalizedCash, normalizedOnline, nextImages);
     } catch (error) {
-      console.error('Failed to copy COs report:', error);
-      showToast('error', 'Copy Failed', 'Unable to copy COs report');
+      setReportImages(previousImages);
+      setSelectedReportImage(previousSelectedImage);
+      throw error;
+    } finally {
+      setIsSavingReportImages(false);
+    }
+  };
+
+  const handleReportImageFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files || []);
+    event.target.value = '';
+
+    if (!files.length) {
+      return;
+    }
+
+    const invalidFile = files.find(file => !['image/jpeg', 'image/jpg', 'image/png', 'image/webp'].includes(file.type));
+    if (invalidFile) {
+      showToast('error', 'Invalid image', 'Please upload JPG, PNG, or WEBP pictures only.');
+      return;
+    }
+
+    try {
+      const addedImages = await Promise.all(files.map(async file => {
+        const imageDataUrl = await readFileAsDataUrl(file);
+        return compressImageForInlineSave(imageDataUrl, {
+          maxLength: 680000,
+          processingErrorMessage: 'Failed to process report picture.',
+          oversizeErrorMessage: 'Report picture is still too large after auto-compression. Please choose a smaller picture and try again.'
+        });
+      }));
+      const nextImages = [...reportImages, ...addedImages];
+      await saveReportImages(nextImages, selectedReportImage || addedImages[0] || nextImages[0] || null);
+      showToast('success', 'Pictures added', `${addedImages.length} picture${addedImages.length === 1 ? '' : 's'} added to this report.`);
+    } catch (error: any) {
+      showToast('error', 'Upload Failed', error?.message || 'Could not load the selected pictures.');
+    }
+  };
+
+  const handleRemoveReportImage = async (imageToRemove: string) => {
+    const nextImages = reportImages.filter(image => image !== imageToRemove);
+    const nextSelectedImage = selectedReportImage === imageToRemove ? (nextImages[0] || null) : selectedReportImage;
+    await saveReportImages(nextImages, nextSelectedImage);
+  };
+
+  const openPreviewImage = (imageIndex: number) => {
+    setPreviewImageIndex(imageIndex);
+  };
+
+  const closePreviewImage = () => {
+    setPreviewImageIndex(null);
+  };
+
+  const showPreviousPreviewImage = () => {
+    setPreviewImageIndex(currentIndex => {
+      if (currentIndex === null || reportImages.length === 0) return currentIndex;
+      return (currentIndex - 1 + reportImages.length) % reportImages.length;
+    });
+  };
+
+  const showNextPreviewImage = () => {
+    setPreviewImageIndex(currentIndex => {
+      if (currentIndex === null || reportImages.length === 0) return currentIndex;
+      return (currentIndex + 1) % reportImages.length;
+    });
+  };
+
+  const copyCampusReportTextOnly = async () => {
+    try {
+      await navigator.clipboard.writeText(buildCampusReportText());
+      setIsCampusReportModalOpen(false);
+      showToast('success', 'Copied!', 'Campus shepherd report copied to clipboard.');
+    } catch (error) {
+      console.error('Failed to copy campus shepherd report text:', error);
+      showToast('error', 'Copy Failed', 'Unable to copy the campus shepherd report.');
+    }
+  };
+
+  const copyCampusReportWithImage = async () => {
+    if (!selectedReportImage) {
+      await copyCampusReportTextOnly();
+      return;
+    }
+
+    setIsSharingCampusReport(true);
+    try {
+      const text = buildCampusReportText();
+      const ClipboardItemCtor = (globalThis as any).ClipboardItem;
+
+      if (!navigator.clipboard?.write || !ClipboardItemCtor) {
+        await navigator.clipboard.writeText(text);
+        setIsCampusReportModalOpen(false);
+        showToast('warning', 'Text copied', 'Your browser cannot copy picture + text together. Use Share to WhatsApp for the full report.');
+        return;
+      }
+
+      const imageBlob = await getClipboardImageBlob(selectedReportImage);
+      const imageDataUrl = await blobToDataUrl(imageBlob);
+      const html = `<div><img src="${imageDataUrl}" alt="Report image" style="max-width:100%;height:auto;display:block;margin-bottom:12px;" /><div style="white-space:pre-wrap;">${escapeHtml(text).replace(/\n/g, '<br>')}</div></div>`;
+      const clipboardPayload: Record<string, Blob> = {
+        'text/plain': new Blob([text], { type: 'text/plain' }),
+        'text/html': new Blob([html], { type: 'text/html' }),
+        'image/png': imageBlob
+      };
+
+      await navigator.clipboard.write([new ClipboardItemCtor(clipboardPayload)]);
+      setIsCampusReportModalOpen(false);
+      showToast('success', 'Copied!', 'Report copied with the selected picture. If WhatsApp does not paste both together, use Share to WhatsApp.');
+    } catch (error: any) {
+      console.error('Failed to copy campus shepherd report with image:', error);
+      if (String(error?.message || '').toLowerCase().includes('not supported')) {
+        await copyCampusReportTextOnly();
+        showToast('warning', 'Picture copy not supported', 'This device can copy the report text, but not an image to the clipboard. Use Share to WhatsApp for the picture version.');
+      } else {
+        showToast('error', 'Copy Failed', 'Unable to copy the report with the selected picture.');
+      }
+    } finally {
+      setIsSharingCampusReport(false);
+    }
+  };
+
+  const shareCampusReport = async () => {
+    const text = buildCampusReportText();
+    setIsSharingCampusReport(true);
+
+    try {
+      if (Capacitor.isNativePlatform() && Capacitor.isPluginAvailable('Share')) {
+        const files = selectedReportImage ? [await buildNativeShareFile(selectedReportImage)] : undefined;
+        await Share.share({
+          title: 'Gathering Service attendance',
+          text,
+          files,
+          dialogTitle: 'Share to WhatsApp'
+        });
+        setIsCampusReportModalOpen(false);
+        return;
+      }
+
+      if (!navigator.share) {
+        if (selectedReportImage) {
+          await copyCampusReportWithImage();
+        } else {
+          await copyCampusReportTextOnly();
+        }
+        return;
+      }
+
+      if (selectedReportImage) {
+        const imageBlob = await getImageBlob(selectedReportImage);
+        const extension = imageBlob.type.includes('png') ? 'png' : imageBlob.type.includes('webp') ? 'webp' : 'jpg';
+        const reportFile = new File([imageBlob], `gathering-service-${selectedSunday}.${extension}`, { type: imageBlob.type || 'image/jpeg' });
+
+        if (!navigator.canShare || navigator.canShare({ files: [reportFile] })) {
+          await navigator.share({
+            title: 'Gathering Service attendance',
+            text,
+            files: [reportFile]
+          });
+          setIsCampusReportModalOpen(false);
+          return;
+        }
+      }
+
+      await navigator.share({
+        title: 'Gathering Service attendance',
+        text
+      });
+      setIsCampusReportModalOpen(false);
+    } catch (error: any) {
+      if (error?.name !== 'AbortError') {
+        console.error('Failed to share campus shepherd report:', error);
+        showToast('error', 'Share Failed', error?.message || 'Unable to share the report.');
+      }
+    } finally {
+      setIsSharingCampusReport(false);
     }
   };
 
@@ -530,7 +855,56 @@ const WeeklyAttendanceView: React.FC = () => {
 
   const canGoNext = selectedSunday < getTodayYYYYMMDD();
 
-  const persistSundayOffering = async (cashValue: string, onlineValue: string) => {
+  const formatSlashDate = (dateStr: string) => {
+    const date = new Date(dateStr + 'T00:00:00');
+    if (Number.isNaN(date.getTime())) return dateStr;
+    return `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear()}`;
+  };
+
+  const formatZarAmount = (amount: number) => {
+    const normalizedAmount = Number.isFinite(amount) ? amount : 0;
+    return `R${normalizedAmount.toFixed(2).replace(/\.00$/, '')}`;
+  };
+
+  const formatUsdAmount = (amount: number) => {
+    const normalizedAmount = Number.isFinite(amount) ? amount : 0;
+    const approximateZarPerUsd = 16.88;
+    return `$${(normalizedAmount / approximateZarPerUsd).toFixed(2)}`;
+  };
+
+  const formatReportCurrency = (amount: number) => `${formatZarAmount(amount)} (${formatUsdAmount(amount)})`;
+  const formatCompactReportCurrency = (amount: number) => `${formatZarAmount(amount)}(${formatUsdAmount(amount)})`;
+  const formatCount = (count: number) => String(Math.max(0, count)).padStart(2, '0');
+  const untrackedCurrencySplit = 'R__ ($__)';
+
+  const weeklyIncomeSummary = useMemo(() => {
+    const selectedDate = new Date(selectedSunday + 'T00:00:00');
+    const dayOfWeek = selectedDate.getDay();
+    const mondayDate = new Date(selectedDate);
+    mondayDate.setDate(selectedDate.getDate() + (dayOfWeek === 0 ? -6 : 1 - dayOfWeek));
+
+    const weekDates = getWeeklyTotalsDates(formatDateToYYYYMMDD(mondayDate));
+    const weekMeetingRecords = meetingRecords.filter(record =>
+      record.date === weekDates.wednesday || record.date === weekDates.thursday
+    );
+
+    const bacentaWeekOffering = weekMeetingRecords.reduce(
+      (sum, record) => sum + (record.totalOffering ?? ((record.cashOffering || 0) + (record.onlineOffering || 0))),
+      0
+    );
+    const sundayCash = selectedSundayOffering?.cashOffering ?? 0;
+    const sundayOnline = selectedSundayOffering?.onlineOffering ?? 0;
+    const sundayTotal = selectedSundayOffering?.totalOffering ?? (sundayCash + sundayOnline);
+
+    return {
+      bacentaWeekOffering,
+      sundayCash,
+      sundayOnline,
+      totalWeekIncome: bacentaWeekOffering + sundayTotal
+    };
+  }, [meetingRecords, selectedSunday, selectedSundayOffering]);
+
+  const persistSundayOffering = async (cashValue: string, onlineValue: string, reportImagesOverride?: string[]) => {
     if (!canManageSundayIncome) {
       return;
     }
@@ -549,12 +923,14 @@ const WeeklyAttendanceView: React.FC = () => {
       cashOffering: cashAmount,
       onlineOffering: onlineAmount,
       totalOffering: cashAmount + onlineAmount,
+      reportImages: reportImagesOverride ?? reportImages,
       notes: selectedSundayOffering?.notes || ''
     };
 
     try {
       await saveSundayOfferingHandler(record);
-    } catch {
+    } catch (error) {
+      throw error;
     }
   };
 
@@ -757,12 +1133,12 @@ const WeeklyAttendanceView: React.FC = () => {
               </button>
               {isAdmin && !selectedMinistry && (
                 <button
-                  onClick={copyCOsReportText}
+                  onClick={() => setIsCampusReportModalOpen(true)}
                   className="inline-flex min-h-[52px] w-full items-center justify-center gap-2 rounded-xl bg-amber-600 px-4 py-3 text-center text-sm font-medium text-white shadow-sm transition-all duration-200 hover:bg-amber-700 sm:min-h-[48px] sm:w-auto sm:px-4 sm:py-2"
-                  title="Copy COs report (Admins only)"
+                  title="Choose how to copy or share the campus shepherd report"
                 >
                   <ClipboardIcon className="w-4 h-4" />
-                  <span className="leading-tight">Copy COs report</span>
+                  <span className="leading-tight">Copy Campus Shepherd report</span>
                 </button>
               )}
             </div>
@@ -845,6 +1221,90 @@ const WeeklyAttendanceView: React.FC = () => {
                       </div>
                     </div>
                   </div>
+                </div>
+              </div>
+            )}
+
+            {canManageSundayIncome && !selectedMinistry && (
+              <div className="mt-5 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+                <div className="bg-gray-50/80 px-3.5 py-3.5 sm:px-4 sm:py-4">
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="min-w-0 lg:max-w-xl">
+                      <div className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-amber-700">
+                        Report Pictures
+                      </div>
+                      <h3 className="mt-2 text-sm font-semibold text-gray-900 sm:text-base">
+                        Attach pictures for this Sunday report
+                      </h3>
+                      <p className="mt-1 text-xs sm:text-sm text-gray-600">
+                        Upload as many pictures as you need. When you copy the report, you can choose one picture or continue with no picture.
+                      </p>
+                    </div>
+
+                    <div className="flex shrink-0 items-center gap-2">
+                      <input
+                        ref={reportImageInputRef}
+                        type="file"
+                        accept="image/jpeg,image/jpg,image/png,image/webp"
+                        multiple
+                        onChange={handleReportImageFileChange}
+                        className="hidden"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => reportImageInputRef.current?.click()}
+                        disabled={isSavingReportImages}
+                        className="inline-flex min-h-[44px] items-center justify-center rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white transition-colors duration-200 hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {isSavingReportImages ? 'Saving...' : 'Upload Pictures'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {reportImages.length > 0 ? (
+                    <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                      {reportImages.map((image, index) => {
+                        const isSelected = selectedReportImage === image;
+                        return (
+                          <div
+                            key={`${image}_${index}`}
+                            className={`relative overflow-hidden rounded-xl border-2 ${isSelected ? 'border-amber-500 ring-2 ring-amber-200' : 'border-gray-200'} bg-white`}
+                          >
+                            <button
+                              type="button"
+                              onClick={() => setSelectedReportImage(image)}
+                              className="block w-full text-left"
+                              title="Choose this picture for the report"
+                            >
+                              <img src={image} alt={`Report ${index + 1}`} className="h-32 w-full object-cover" />
+                              <div className="px-3 py-2 text-xs font-medium text-gray-700">
+                                {isSelected ? 'Selected for report' : `Picture ${index + 1}`}
+                              </div>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => openPreviewImage(index)}
+                              className="absolute bottom-2 right-2 rounded-full bg-white/90 px-2 py-1 text-[10px] font-semibold text-gray-700 shadow-sm"
+                            >
+                              Preview
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void handleRemoveReportImage(image)}
+                              disabled={isSavingReportImages}
+                              className="absolute right-2 top-2 rounded-full bg-black/70 px-2 py-1 text-[10px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="mt-4 rounded-xl border border-dashed border-gray-300 bg-white px-4 py-6 text-center text-sm text-gray-500">
+                      No report pictures uploaded for this Sunday yet.
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -1094,6 +1554,138 @@ const WeeklyAttendanceView: React.FC = () => {
             )}
           </div>
         </div>
+
+        {previewImageIndex !== null && reportImages[previewImageIndex] && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/85 p-4">
+            <div className="relative flex max-h-[92vh] w-full max-w-5xl items-center justify-center">
+              {reportImages.length > 1 && (
+                <button
+                  type="button"
+                  onClick={showPreviousPreviewImage}
+                  className="absolute left-2 z-10 inline-flex h-11 w-11 items-center justify-center rounded-full bg-white/15 text-white backdrop-blur transition-colors hover:bg-white/25"
+                  title="Previous picture"
+                >
+                  <ChevronLeftIcon className="h-5 w-5" />
+                </button>
+              )}
+
+              <div className="overflow-hidden rounded-2xl bg-white/5 p-2 backdrop-blur-sm">
+                <img
+                  src={reportImages[previewImageIndex]}
+                  alt={`Report preview ${previewImageIndex + 1}`}
+                  className="max-h-[82vh] max-w-full rounded-xl object-contain"
+                />
+              </div>
+
+              {reportImages.length > 1 && (
+                <button
+                  type="button"
+                  onClick={showNextPreviewImage}
+                  className="absolute right-2 z-10 inline-flex h-11 w-11 items-center justify-center rounded-full bg-white/15 text-white backdrop-blur transition-colors hover:bg-white/25"
+                  title="Next picture"
+                >
+                  <ChevronRightIcon className="h-5 w-5" />
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={closePreviewImage}
+                className="absolute right-2 top-2 inline-flex min-h-[40px] items-center justify-center rounded-full bg-black/60 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-black/75"
+              >
+                Close
+              </button>
+
+              <div className="absolute bottom-2 left-1/2 -translate-x-1/2 rounded-full bg-black/60 px-3 py-1 text-xs font-medium text-white">
+                {previewImageIndex + 1} / {reportImages.length}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {isCampusReportModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+            <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white shadow-2xl">
+              <div className="border-b border-gray-200 px-5 py-4">
+                <h3 className="text-lg font-semibold text-gray-900">Campus Shepherd Report</h3>
+                <p className="mt-1 text-sm text-gray-600">
+                  Choose whether to copy the report with no picture, or select one picture for the report. Use Share to WhatsApp for the most reliable picture + data result on mobile.
+                </p>
+              </div>
+
+              <div className="px-5 py-4">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedReportImage(null)}
+                    className={`rounded-xl border-2 px-4 py-5 text-left transition-all ${selectedReportImage === null ? 'border-slate-500 bg-slate-50 ring-2 ring-slate-200' : 'border-gray-200 bg-white hover:border-slate-300'}`}
+                  >
+                    <div className="text-sm font-semibold text-gray-900">No picture</div>
+                    <div className="mt-1 text-xs text-gray-500">Copy or share the report text only.</div>
+                  </button>
+
+                  {reportImages.map((image, index) => {
+                    const isSelected = selectedReportImage === image;
+                    return (
+                      <button
+                        key={`${image}_modal_${index}`}
+                        type="button"
+                        onClick={() => setSelectedReportImage(image)}
+                        className={`overflow-hidden rounded-xl border-2 text-left transition-all ${isSelected ? 'border-amber-500 ring-2 ring-amber-200' : 'border-gray-200 hover:border-amber-300'}`}
+                      >
+                        <img src={image} alt={`Selected report option ${index + 1}`} className="h-32 w-full object-cover" />
+                        <div className="px-3 py-2">
+                          <div className="text-sm font-semibold text-gray-900">Picture {index + 1}</div>
+                          <div className="mt-1 text-xs text-gray-500">{isSelected ? 'Selected for the report' : 'Tap to use this picture'}</div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {reportImages.length === 0 && (
+                  <div className="mt-4 rounded-xl border border-dashed border-gray-300 bg-gray-50 px-4 py-5 text-sm text-gray-500">
+                    No pictures uploaded yet. Upload pictures in the Report Pictures section if you want the report to go out with an image.
+                  </div>
+                )}
+              </div>
+
+              <div className="flex flex-col gap-3 border-t border-gray-200 px-5 py-4 sm:flex-row sm:justify-end">
+                <button
+                  type="button"
+                  onClick={() => setIsCampusReportModalOpen(false)}
+                  className="inline-flex min-h-[44px] items-center justify-center rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void copyCampusReportTextOnly()}
+                  disabled={isSharingCampusReport}
+                  className="inline-flex min-h-[44px] items-center justify-center rounded-lg bg-slate-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Copy No Picture
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void copyCampusReportWithImage()}
+                  disabled={isSharingCampusReport || !selectedReportImage}
+                  className="inline-flex min-h-[44px] items-center justify-center rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isSharingCampusReport ? 'Working...' : 'Copy With Selected Picture'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void shareCampusReport()}
+                  disabled={isSharingCampusReport}
+                  className="inline-flex min-h-[44px] items-center justify-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isSharingCampusReport ? 'Working...' : 'Share to WhatsApp'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

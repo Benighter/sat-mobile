@@ -9,6 +9,8 @@ type PersistImageOptions = {
 
 const DATA_URL_PREFIX = 'data:image/';
 const DEFAULT_CACHE_CONTROL = 'public,max-age=31536000,immutable';
+export const MAX_INLINE_SAVED_IMAGE_LENGTH = 700000;
+export const DEFAULT_INLINE_IMAGE_TARGET_LENGTH = 680000;
 
 type RelayPersistImagePayload = {
   path: string;
@@ -22,6 +24,91 @@ type RelayPersistImageResult = {
 
 export const isImageDataUrl = (value?: string | null): value is string =>
   typeof value === 'string' && value.startsWith(DATA_URL_PREFIX);
+
+export const resolveInlineImageValue = (
+  imageValue?: string | null,
+  oversizeMessage = 'Image is too large to save right now. Please crop it smaller and try again.'
+): string => {
+  const normalizedValue = typeof imageValue === 'string' ? imageValue.trim() : '';
+  if (!normalizedValue) {
+    return '';
+  }
+  if (!isImageDataUrl(normalizedValue)) {
+    return normalizedValue;
+  }
+  if (normalizedValue.length > MAX_INLINE_SAVED_IMAGE_LENGTH) {
+    throw new Error(oversizeMessage);
+  }
+  return normalizedValue;
+};
+
+type CompressInlineImageOptions = {
+  maxLength?: number;
+  processingErrorMessage?: string;
+  oversizeErrorMessage?: string;
+};
+
+export const compressImageForInlineSave = async (
+  imageValue: string,
+  options?: CompressInlineImageOptions
+): Promise<string> => {
+  const normalizedValue = typeof imageValue === 'string' ? imageValue.trim() : '';
+  const maxLength = options?.maxLength ?? DEFAULT_INLINE_IMAGE_TARGET_LENGTH;
+  const processingErrorMessage = options?.processingErrorMessage || 'Failed to process image.';
+  const oversizeErrorMessage = options?.oversizeErrorMessage || 'Image is still too large after auto-compression. Please crop a smaller area and try again.';
+
+  if (!isImageDataUrl(normalizedValue) || normalizedValue.length <= maxLength) {
+    return normalizedValue;
+  }
+
+  const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error(processingErrorMessage));
+    img.src = normalizedValue;
+  });
+
+  let width = image.naturalWidth;
+  let height = image.naturalHeight;
+  let quality = 0.88;
+  let output = normalizedValue;
+
+  const render = () => {
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(width));
+    canvas.height = Math.max(1, Math.round(height));
+    const context = canvas.getContext('2d');
+    if (!context) {
+      throw new Error(processingErrorMessage);
+    }
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL('image/jpeg', quality);
+  };
+
+  for (let attempt = 0; attempt < 12; attempt++) {
+    output = render();
+    if (output.length <= maxLength) {
+      return output;
+    }
+
+    if (quality > 0.46) {
+      quality = Math.max(0.46, quality - 0.12);
+      continue;
+    }
+
+    const longestSide = Math.max(width, height);
+    if (longestSide <= 320) {
+      break;
+    }
+
+    const scale = longestSide > 1600 ? 0.7 : longestSide > 1000 ? 0.8 : 0.85;
+    width = Math.max(1, Math.round(width * scale));
+    height = Math.max(1, Math.round(height * scale));
+    quality = Math.max(0.4, quality - 0.04);
+  }
+
+  throw new Error(oversizeErrorMessage);
+};
 
 const isFirebaseStorageUrl = (value?: string | null): value is string =>
   typeof value === 'string' && /(^gs:\/\/)|firebasestorage\.googleapis\.com|storage\.googleapis\.com/i.test(value);

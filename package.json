@@ -1,7 +1,7 @@
 {
   "name": "sat-mobile",
   "private": true,
-  "version": "1.0.0",
+  "version": "2.0.0",
   "type": "module",
   "description": "SAT Mobile - A mobile-first church membership management application",
   "author": "SAT Mobile Team",
@@ -31,6 +31,7 @@
     "@capacitor/core": "^7.4.1",
     "@capacitor/filesystem": "^7.1.2",
     "@capacitor/push-notifications": "^7.0.2",
+    "@capacitor/share": "^7.0.4",
     "@google/generative-ai": "^0.24.1",
     "chart.js": "^4.5.0",
     "chartjs-to-image": "^1.2.2",

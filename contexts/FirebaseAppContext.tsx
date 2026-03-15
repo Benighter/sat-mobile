@@ -2501,16 +2501,16 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     if (userProfile?.role !== 'admin') throw new Error('Only admins can manage Sunday offerings');
     try {
       setIsLoading(true);
-      await sundayOfferingFirebaseService.addOrUpdate(record);
+      const savedRecord = await sundayOfferingFirebaseService.addOrUpdate(record);
 
       setSundayOfferingRecords(prev => {
-        const existingIndex = prev.findIndex(r => r.id === record.id);
+        const existingIndex = prev.findIndex(r => r.id === savedRecord.id);
         if (existingIndex >= 0) {
           const updated = [...prev];
-          updated[existingIndex] = record;
+          updated[existingIndex] = savedRecord;
           return updated;
         }
-        return [record, ...prev];
+        return [savedRecord, ...prev];
       });
 
       showToast('success', 'Sunday offering saved successfully');

@@ -19,6 +19,9 @@ const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose }) => {
           </div>
 
           <h3 className="text-lg font-semibold text-gray-900">SAT Mobile - Church Management Made Simple</h3>
+          <div className="mt-3 inline-flex items-center rounded-full bg-indigo-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-indigo-700">
+            Version 2.0
+          </div>
           <p className="text-sm text-gray-600 mt-2 max-w-prose">
             A simple, focused church attendance tracker to help leaders manage members, track attendance, and follow-up new believers — built to be clear and practical.
           </p>

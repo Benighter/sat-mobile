@@ -6,7 +6,7 @@ import Button from '../ui/Button';
 import ImageCropper from '../ui/ImageCropper';
 import ConfirmationModal from '../modals/confirmations/ConfirmationModal';
 import { useAppContext } from '../../contexts/FirebaseAppContext';
-import { isImageDataUrl } from '../../services/imageStorageService';
+import { compressImageForInlineSave } from '../../services/imageStorageService';
 
 interface BacentaAttendanceFormProps {
   bacentaId: string;
@@ -21,7 +21,6 @@ const BacentaAttendanceForm: React.FC<BacentaAttendanceFormProps> = ({
   onBack,
   existingRecord
 }) => {
-  const MAX_INLINE_MEETING_IMAGE_LENGTH = 680000;
   const { bacentas, members, saveMeetingRecordHandler, updateMeetingRecordHandler, deleteMeetingRecordHandler, showToast } = useAppContext();
 
   // View/Edit mode state
@@ -55,60 +54,13 @@ const BacentaAttendanceForm: React.FC<BacentaAttendanceFormProps> = ({
   // Refs
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const compressMeetingImage = React.useCallback(async (imageValue: string): Promise<string> => {
-    const normalizedValue = typeof imageValue === 'string' ? imageValue.trim() : '';
-    if (!isImageDataUrl(normalizedValue) || normalizedValue.length <= MAX_INLINE_MEETING_IMAGE_LENGTH) {
-      return normalizedValue;
-    }
-
-    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => resolve(img);
-      img.onerror = () => reject(new Error('Failed to process meeting image.'));
-      img.src = normalizedValue;
-    });
-
-    let width = image.naturalWidth;
-    let height = image.naturalHeight;
-    let quality = 0.88;
-    let output = normalizedValue;
-
-    const render = () => {
-      const canvas = document.createElement('canvas');
-      canvas.width = Math.max(1, Math.round(width));
-      canvas.height = Math.max(1, Math.round(height));
-      const context = canvas.getContext('2d');
-      if (!context) {
-        throw new Error('Failed to process meeting image.');
-      }
-      context.drawImage(image, 0, 0, canvas.width, canvas.height);
-      return canvas.toDataURL('image/jpeg', quality);
-    };
-
-    for (let attempt = 0; attempt < 12; attempt++) {
-      output = render();
-      if (output.length <= MAX_INLINE_MEETING_IMAGE_LENGTH) {
-        return output;
-      }
-
-      if (quality > 0.46) {
-        quality = Math.max(0.46, quality - 0.12);
-        continue;
-      }
-
-      const longestSide = Math.max(width, height);
-      if (longestSide <= 320) {
-        break;
-      }
-
-      const scale = longestSide > 1600 ? 0.7 : longestSide > 1000 ? 0.8 : 0.85;
-      width = Math.max(1, Math.round(width * scale));
-      height = Math.max(1, Math.round(height * scale));
-      quality = Math.max(0.4, quality - 0.04);
-    }
-
-    throw new Error('Meeting image is still too large after auto-compression. Please crop a smaller area and try again.');
-  }, []);
+  const compressMeetingImage = React.useCallback(async (imageValue: string): Promise<string> => (
+    compressImageForInlineSave(imageValue, {
+      maxLength: 680000,
+      processingErrorMessage: 'Failed to process meeting image.',
+      oversizeErrorMessage: 'Meeting image is still too large after auto-compression. Please crop a smaller area and try again.'
+    })
+  ), []);
 
   // Get bacenta and leader info
   const bacenta = bacentas.find(b => b.id === bacentaId);

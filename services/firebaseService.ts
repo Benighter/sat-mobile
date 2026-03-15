@@ -34,7 +34,7 @@ import {
 import { db, auth } from '../firebase.config';
 import { Member, Bacenta, AttendanceRecord, NewBeliever, SundayConfirmation, Guest, MemberDeletionRequest, DeletionRequestStatus, OutreachBacenta, OutreachMember, PrayerRecord, PrayerSchedule, MeetingRecord, TitheRecord, BussingRecord, TransportRecord, SonOfGod, CustomPrayer, CustomPrayerRecord, SundayOfferingRecord } from '../types';
 import { applyLeadershipFirstTimerRule, withLeadershipFirstTimerRule } from '../utils/memberStatus';
-import { cleanupStoredImage, isImageDataUrl, persistImageValue } from './imageStorageService';
+import { cleanupStoredImage, isImageDataUrl, persistImageValue, resolveInlineImageValue } from './imageStorageService';
 // Lightweight inline type to avoid circular heavy imports for new feature (kept local to service)
 export interface HeadCountRecord {
   id: string; // `${date}_${section}`
@@ -71,20 +71,16 @@ export interface FirebaseError {
 // Current user and church context
 let currentUser: FirebaseUser | null = null;
 let currentChurchId: string | null = null;
-const MAX_INLINE_MEETING_IMAGE_LENGTH = 700000;
+const MAX_INLINE_SUNDAY_REPORT_IMAGES_TOTAL_LENGTH = 850000;
 
-const resolveMeetingImageValue = (meetingImage?: string | null): string => {
-  const normalizedValue = typeof meetingImage === 'string' ? meetingImage.trim() : '';
-  if (!normalizedValue) {
-    return '';
+const normalizeSundayReportImages = (images?: string[] | null): string[] => {
+  if (!Array.isArray(images)) {
+    return [];
   }
-  if (!isImageDataUrl(normalizedValue)) {
-    return normalizedValue;
-  }
-  if (normalizedValue.length > MAX_INLINE_MEETING_IMAGE_LENGTH) {
-    throw new Error('Meeting image is too large to save right now. Please crop it smaller and try again.');
-  }
-  return normalizedValue;
+
+  return images
+    .map(image => (typeof image === 'string' ? image.trim() : ''))
+    .filter(Boolean);
 };
 
 // Helper: map a real email to a ministry-only Auth email alias (same inbox for providers that support plus-addressing)
@@ -2746,12 +2742,10 @@ export const meetingRecordsFirebaseService = {
       const docRef = doc(meetingsRef, record.id);
       const existingSnap = await getDoc(docRef);
       const existingRecord = existingSnap.exists() ? ({ id: existingSnap.id, ...(existingSnap.data() as any) } as MeetingRecord) : null;
-      const meetingImage = isImageDataUrl(record.meetingImage)
-        ? resolveMeetingImageValue(record.meetingImage)
-        : await persistImageValue({
-          imageValue: record.meetingImage,
-          path: `churches/${currentChurchId}/meeting-images/${record.id}`
-        });
+      const meetingImage = resolveInlineImageValue(
+        record.meetingImage,
+        'Meeting image is too large to save right now. Please crop it smaller and try again.'
+      );
 
       await setDoc(docRef, {
         ...record,
@@ -2834,16 +2828,41 @@ export const sundayOfferingFirebaseService = {
     }
   },
 
-  addOrUpdate: async (record: SundayOfferingRecord): Promise<void> => {
+  addOrUpdate: async (record: SundayOfferingRecord): Promise<SundayOfferingRecord> => {
     try {
       const offeringsRef = collection(db, getChurchCollectionPath('sundayOfferings'));
       const docRef = doc(offeringsRef, record.id);
-      await setDoc(docRef, {
+      const existingSnap = await getDoc(docRef);
+      const existingRecord = existingSnap.exists() ? ({ id: existingSnap.id, ...existingSnap.data() } as SundayOfferingRecord) : null;
+      const normalizedImages = normalizeSundayReportImages(record.reportImages);
+      const persistedImages = normalizedImages.map(imageValue => resolveInlineImageValue(
+        imageValue,
+        'Report picture is too large to save right now. Please choose a smaller picture and try again.'
+      ));
+      const totalInlineImageLength = persistedImages.reduce(
+        (sum, imageValue) => sum + (isImageDataUrl(imageValue) ? imageValue.length : 0),
+        0
+      );
+
+      if (totalInlineImageLength > MAX_INLINE_SUNDAY_REPORT_IMAGES_TOTAL_LENGTH) {
+        throw new Error('The selected report pictures are too large to save together. Remove some pictures or choose smaller ones and try again.');
+      }
+
+      const sanitizedRecord: SundayOfferingRecord = {
         ...record,
+        reportImages: persistedImages,
         recordedAt: record.recordedAt || Timestamp.now().toDate().toISOString(),
         recordedBy: currentUser?.uid || 'unknown',
         lastUpdated: new Date().toISOString()
-      }, { merge: true });
+      };
+
+      await setDoc(docRef, sanitizedRecord, { merge: true });
+
+      const previousImages = normalizeSundayReportImages(existingRecord?.reportImages);
+      const removedImages = previousImages.filter(imageUrl => !persistedImages.includes(imageUrl));
+      await Promise.all(removedImages.map(imageUrl => cleanupStoredImage(imageUrl)));
+
+      return sanitizedRecord;
     } catch (error: any) {
       throw new Error(`Failed to save Sunday offering: ${error.message}`);
     }
