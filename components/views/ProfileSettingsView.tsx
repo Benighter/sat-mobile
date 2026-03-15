@@ -37,6 +37,7 @@ import { crossTenantService } from '../../services/crossTenantService';
 interface UserPreferences {
   // theme: 'light' | 'dark' | 'system'; // disabled
   allowEditPreviousSundays: boolean;
+  isCampusShepherd?: boolean;
 }
 
 interface ProfileFormData {
@@ -64,7 +65,8 @@ const ProfileSettingsView: React.FC = () => {
 
   const [preferences, setPreferences] = useState<UserPreferences>({
     // theme: theme,
-    allowEditPreviousSundays: true // default enabled
+    allowEditPreviousSundays: true, // default enabled
+    isCampusShepherd: userProfile?.preferences?.isCampusShepherd
   });
 
   // Constituency (church) name editor – linked to Super Admin feature
@@ -104,6 +106,7 @@ const ProfileSettingsView: React.FC = () => {
   const [isMigrationPanelOpen, setIsMigrationPanelOpen] = useState(false);
   const [isFixingAccess, setIsFixingAccess] = useState(false);
   const [isConstituencyManagerOpen, setIsConstituencyManagerOpen] = useState(false);
+  const [isSavingCampusShepherd, setIsSavingCampusShepherd] = useState(false);
   // const [isSendingTestEmail, setIsSendingTestEmail] = useState(false); // Email feature on hold
 
   // Update state when userProfile changes
@@ -111,7 +114,8 @@ const ProfileSettingsView: React.FC = () => {
     if (userProfile) {
       setPreferences({
         // theme: theme,
-        allowEditPreviousSundays: true
+        allowEditPreviousSundays: true,
+        isCampusShepherd: userProfile.preferences?.isCampusShepherd
       });
 
       setConstituencyName(userProfile.churchName || '');
@@ -155,6 +159,33 @@ const ProfileSettingsView: React.FC = () => {
   useEffect(() => {
     if (false) handleBirthdayNotificationChange('enabled', true);
   }, []);
+
+  const handleCampusShepherdPreferenceUpdate = async (value: boolean) => {
+    if (!user || preferences.isCampusShepherd === value) {
+      return;
+    }
+
+    const previousValue = preferences.isCampusShepherd;
+    setPreferences(prev => ({ ...prev, isCampusShepherd: value }));
+    setIsSavingCampusShepherd(true);
+
+    try {
+      await userService.updateUserPreferences(user.uid, { isCampusShepherd: value });
+      await refreshUserProfile();
+      showToast(
+        'success',
+        'Campus Shepherd Updated',
+        value
+          ? 'Sunday income is now visible in Weekly Attendance for this account.'
+          : 'Sunday income is now hidden in Weekly Attendance for this account.'
+      );
+    } catch (error: any) {
+      setPreferences(prev => ({ ...prev, isCampusShepherd: previousValue }));
+      showToast('error', 'Update Failed', error?.message || 'Could not update Campus Shepherd mode.');
+    } finally {
+      setIsSavingCampusShepherd(false);
+    }
+  };
 
   // const handleSendTestEmail = async () => {
   //   if (!user || !user.email) {
@@ -514,6 +545,54 @@ const ProfileSettingsView: React.FC = () => {
             </div>
 
             <div className="space-y-4">
+              <div className="bg-gradient-to-r from-sky-50 to-indigo-50 rounded-2xl p-6 border border-sky-100">
+                <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+                  <div className="flex-1">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">Campus Shepherd Mode</h3>
+                    <p className="text-gray-600">
+                      Controls whether this admin can view and manage Sunday income inside Weekly Attendance.
+                    </p>
+                    <p className="mt-3 text-sm font-medium text-gray-800">
+                      Current status:{' '}
+                      <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${
+                        preferences.isCampusShepherd === true
+                          ? 'bg-emerald-100 text-emerald-800'
+                          : preferences.isCampusShepherd === false
+                            ? 'bg-slate-200 text-slate-700'
+                            : 'bg-amber-100 text-amber-800'
+                      }`}>
+                        {preferences.isCampusShepherd === true
+                          ? 'Campus Shepherd'
+                          : preferences.isCampusShepherd === false
+                            ? 'Not Campus Shepherd'
+                            : 'Not answered yet'}
+                      </span>
+                    </p>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row gap-3 sm:min-w-[280px]">
+                    <Button
+                      type="button"
+                      variant="primary"
+                      disabled={isSavingCampusShepherd || preferences.isCampusShepherd === true}
+                      onClick={() => handleCampusShepherdPreferenceUpdate(true)}
+                      className="h-12 px-6 rounded-2xl font-medium transition-all duration-200 flex items-center justify-center min-w-[130px]"
+                    >
+                      {isSavingCampusShepherd && preferences.isCampusShepherd === true ? 'Saving...' : 'Yes'}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      disabled={isSavingCampusShepherd || preferences.isCampusShepherd === false}
+                      onClick={() => handleCampusShepherdPreferenceUpdate(false)}
+                      className="h-12 px-6 rounded-2xl font-medium transition-all duration-200 flex items-center justify-center min-w-[130px]"
+                    >
+                      {isSavingCampusShepherd && preferences.isCampusShepherd === false ? 'Saving...' : 'No'}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+
               {/* Admin Invite Management */}
               <div className="bg-gradient-to-r from-green-50 to-teal-50 rounded-2xl p-6 border border-green-100">
                 <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">

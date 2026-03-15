@@ -13,6 +13,22 @@ export const hasAdminPrivileges = (user: User | null): boolean => {
 };
 
 /**
+ * Check whether an admin has answered the Campus Shepherd question.
+ */
+export const hasCampusShepherdPreference = (user: User | null): boolean => {
+  if (!user) return false;
+  return typeof user.preferences?.isCampusShepherd === 'boolean';
+};
+
+/**
+ * Check whether the current admin is marked as a Campus Shepherd.
+ */
+export const isCampusShepherd = (user: User | null): boolean => {
+  if (!hasAdminPrivileges(user)) return false;
+  return user?.preferences?.isCampusShepherd === true;
+};
+
+/**
  * Check if a user has leader privileges (admin or leader role)
  * @param user The user object to check
  * @returns boolean indicating if the user has leader privileges

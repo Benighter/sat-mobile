@@ -17,7 +17,7 @@ import {
   TrendingUpIcon
 } from '../icons';
 import { Member, NewBeliever, Bacenta, SundayOfferingRecord } from '../../types';
-import { hasAdminPrivileges } from '../../utils/permissionUtils';
+import { hasAdminPrivileges, isCampusShepherd } from '../../utils/permissionUtils';
 import { isLeadershipPosition, isMemberFirstTimerOnSunday } from '../../utils/memberStatus';
 import { MINISTRY_OPTIONS } from '../../constants';
 import { membersFirebaseService } from '../../services/firebaseService';
@@ -62,6 +62,7 @@ const WeeklyAttendanceView: React.FC = () => {
   } = useAppContext();
 
   const isAdmin = hasAdminPrivileges(userProfile);
+  const canManageSundayIncome = isCampusShepherd(userProfile);
 
   // Keep constituency name in sync with App Preferences (and react immediately to updates)
   const [constituencyName, setConstituencyName] = useState<string>(userProfile?.churchName || '');
@@ -504,7 +505,9 @@ const WeeklyAttendanceView: React.FC = () => {
         });
       }
       text += `\n*Total: ${totalAttendance}*\n\n`;
-      text += `*Sunday Offering: R${sundayOfferingAmount.toFixed(2)}*\n\n`;
+      if (canManageSundayIncome) {
+        text += `*Sunday Offering: R${sundayOfferingAmount.toFixed(2)}*\n\n`;
+      }
       text += `*No of Today's First Timers: ${todaysFirstTimers}*\n\n`;
       text += `*No of Todays New believers: ${todaysNewBelievers}*\n\n`;
       text += `*Number of Previous weeks new believers: ${prevWeeksNewBelievers}*`;
@@ -528,7 +531,7 @@ const WeeklyAttendanceView: React.FC = () => {
   const canGoNext = selectedSunday < getTodayYYYYMMDD();
 
   const persistSundayOffering = async (cashValue: string, onlineValue: string) => {
-    if (!isAdmin) {
+    if (!canManageSundayIncome) {
       return;
     }
 
@@ -556,7 +559,7 @@ const WeeklyAttendanceView: React.FC = () => {
   };
 
   const handleOfferingCardClick = (field: 'cash' | 'online') => {
-    if (!isAdmin) return;
+    if (!canManageSundayIncome) return;
     setEditingOfferingField(field);
   };
 
@@ -764,7 +767,7 @@ const WeeklyAttendanceView: React.FC = () => {
               )}
             </div>
 
-            {isAdmin && !selectedMinistry && (
+            {canManageSundayIncome && !selectedMinistry && (
               <div className="mt-5 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
                 <div className="bg-gray-50/80 px-3.5 py-3.5 sm:px-4 sm:py-4">
                   <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
@@ -1064,7 +1067,7 @@ const WeeklyAttendanceView: React.FC = () => {
                         <h3 className="text-lg font-semibold text-gray-900">Grand Total</h3>
                         <span className="text-2xl font-bold text-slate-600">{groupedAttendance.grandTotal}</span>
                       </div>
-                      {isAdmin && (
+                      {canManageSundayIncome && (
                         <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
                           <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-center">
                             <p className="text-xs font-medium uppercase tracking-wide text-emerald-700">Sunday Cash</p>

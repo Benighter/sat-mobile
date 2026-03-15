@@ -38,10 +38,13 @@ import PendingInviteNotification from './components/notifications/PendingInviteN
 import NotificationBadge from './components/notifications/NotificationBadge';
 import DeletionRequestNotificationBadge from './components/notifications/DeletionRequestNotificationBadge';
 import ConfirmationModal from './components/modals/confirmations/ConfirmationModal';
+import Modal from './components/ui/Modal';
 import { addNativeBackButtonListener, dispatchBackIntercept, exitNativeApp } from './utils/mobileBack';
+import { userService } from './services/userService';
 
 import { DeleteMemberModal, DeleteBacentaModal, DeleteNewBelieverModal, ClearAllDataModal, ClearSelectedDataModal, CreateDeletionRequestModal, ClearAllNewBelieversModal } from './components/modals/confirmations/ConfirmationModal';
 import ErrorBoundary from './components/common/ErrorBoundary';
+import { hasCampusShepherdPreference } from './utils/permissionUtils';
 
 const AppContent: React.FC = memo(() => {
   const {
@@ -83,6 +86,7 @@ const AppContent: React.FC = memo(() => {
     removeToast,
     navigateBack,
     applyHistoryNavigation,
+    refreshUserProfile,
 
   } = useAppContext();
 
@@ -90,6 +94,8 @@ const AppContent: React.FC = memo(() => {
   const [isBulkMemberModalOpen, setIsBulkMemberModalOpen] = useState(false);
   const [loadingStuckHint, setLoadingStuckHint] = useState<string | null>(null);
   const [isExitAppModalOpen, setIsExitAppModalOpen] = useState(false);
+  const [campusShepherdPromptDismissed, setCampusShepherdPromptDismissed] = useState(false);
+  const [isSavingCampusShepherdAnswer, setIsSavingCampusShepherdAnswer] = useState(false);
 
   // Check if current tab is a bacenta tab
   const isBacentaTab = bacentas.some(b => b.id === currentTab.id);
@@ -100,6 +106,18 @@ const AppContent: React.FC = memo(() => {
   };
 
   const handleAppBack = useCallback(() => {
+    if (
+      user &&
+      userProfile &&
+      hasAdminPrivileges(userProfile) &&
+      !isImpersonating &&
+      !hasCampusShepherdPreference(userProfile) &&
+      !campusShepherdPromptDismissed
+    ) {
+      setCampusShepherdPromptDismissed(true);
+      return true;
+    }
+
     if (isExitAppModalOpen) {
       setIsExitAppModalOpen(false);
       return true;
@@ -167,7 +185,9 @@ const AppContent: React.FC = memo(() => {
     closeMemberForm,
     closeNewBelieverForm,
     confirmationModal.isOpen,
+    campusShepherdPromptDismissed,
     currentTab.id,
+    isImpersonating,
     isBacentaDrawerOpen,
     isBacentaFormOpen,
     isBulkMemberModalOpen,
@@ -177,7 +197,45 @@ const AppContent: React.FC = memo(() => {
     isMemberFormOpen,
     isNewBelieverFormOpen,
     navigateBack,
+    user,
+    userProfile,
   ]);
+
+  useEffect(() => {
+    setCampusShepherdPromptDismissed(false);
+  }, [userProfile?.uid]);
+
+  const shouldAskCampusShepherd = Boolean(
+    user &&
+    userProfile &&
+    hasAdminPrivileges(userProfile) &&
+    !isImpersonating &&
+    !hasCampusShepherdPreference(userProfile) &&
+    !campusShepherdPromptDismissed
+  );
+
+  const handleCampusShepherdAnswer = useCallback(async (value: boolean) => {
+    if (!user) {
+      return;
+    }
+
+    setIsSavingCampusShepherdAnswer(true);
+    try {
+      await userService.updateUserPreferences(user.uid, { isCampusShepherd: value });
+      await refreshUserProfile();
+      showToast(
+        'success',
+        'Campus Shepherd Saved',
+        value
+          ? 'Sunday income is now enabled in Weekly Attendance.'
+          : 'Sunday income will stay hidden in Weekly Attendance.'
+      );
+    } catch (error: any) {
+      showToast('error', 'Update Failed', error?.message || 'Could not save your Campus Shepherd answer.');
+    } finally {
+      setIsSavingCampusShepherdAnswer(false);
+    }
+  }, [refreshUserProfile, showToast, user]);
 
   useEffect(() => {
     PerformanceMonitor.start('app-initialization');
@@ -799,6 +857,44 @@ const AppContent: React.FC = memo(() => {
           </div>
         </div>
       )}
+
+      <Modal
+        isOpen={shouldAskCampusShepherd}
+        onClose={() => {
+          if (!isSavingCampusShepherdAnswer) {
+            setCampusShepherdPromptDismissed(true);
+          }
+        }}
+        title="Campus Shepherd"
+        size="md"
+      >
+        <div className="space-y-5 p-1">
+          <div className="rounded-2xl bg-sky-50 px-4 py-3 text-sm text-slate-700 border border-sky-100">
+            You are signed in as an admin. Are you the Campus Shepherd?
+          </div>
+          <p className="text-sm text-gray-600">
+            Your answer controls whether the Sunday income feature appears in Weekly Attendance. If you close this window without answering, the question will appear again the next time you open the app.
+          </p>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <button
+              type="button"
+              disabled={isSavingCampusShepherdAnswer}
+              onClick={() => handleCampusShepherdAnswer(true)}
+              className="rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isSavingCampusShepherdAnswer ? 'Saving...' : 'Yes, I am'}
+            </button>
+            <button
+              type="button"
+              disabled={isSavingCampusShepherdAnswer}
+              onClick={() => handleCampusShepherdAnswer(false)}
+              className="rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isSavingCampusShepherdAnswer ? 'Saving...' : 'No, I am not'}
+            </button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Swipe Indicator */}
       <SwipeIndicator />

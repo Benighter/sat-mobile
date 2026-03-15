@@ -381,6 +381,8 @@ export interface NavigationHistoryItem {
 export interface UserPreferences {
   theme: 'light' | 'dark' | 'system';
   allowEditPreviousSundays: boolean;
+  /** Admin-only mode that unlocks Sunday income management in Weekly Attendance */
+  isCampusShepherd?: boolean;
   /** Optional custom app display name shown in header */
   appDisplayName?: string;
   /** Optional selected ministry name; can be used as default app name */
