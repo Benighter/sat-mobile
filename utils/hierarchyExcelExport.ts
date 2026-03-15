@@ -1,5 +1,5 @@
 import ExcelJS from 'exceljs';
-import { Member, Bacenta, AttendanceRecord, SundayOfferingRecord } from '../types';
+import { Member, Bacenta, AttendanceRecord, SundayOfferingRecord, MeetingRecord } from '../types';
 import { DirectoryHandle, FileSaveProgress, saveFileToDirectory } from './fileSystemUtils';
 import { formatDateDayMonthYear } from './dateUtils';
 import { DEFAULT_CHURCH, MINISTRY_OPTIONS } from '../constants';
@@ -29,6 +29,7 @@ export interface HierarchyExcelData {
   members: Member[];
   bacentas: Bacenta[];
   attendanceRecords: AttendanceRecord[];
+  meetingRecords?: MeetingRecord[];
   sundayOfferingRecords?: SundayOfferingRecord[];
   options: HierarchyExcelExportOptions;
 }
@@ -183,6 +184,24 @@ const getSundayOfferingRecordsInRange = (
     .sort((a, b) => a.date.localeCompare(b.date));
 };
 
+const getMeetingRecordsInRange = (
+  meetingRecords: MeetingRecord[],
+  startDate?: string,
+  endDate?: string
+): MeetingRecord[] => {
+  return meetingRecords
+    .filter(record => {
+      if (startDate && record.date < startDate) return false;
+      if (endDate && record.date > endDate) return false;
+      return true;
+    })
+    .sort((a, b) => a.date.localeCompare(b.date));
+};
+
+const getBacentaStateLabel = (bacenta: Bacenta): string => bacenta.frozen ? 'Frozen' : 'Active';
+
+const formatMeetingTimeLabel = (time?: string): string => time || 'Not set';
+
 
 export const getHierarchyExportPreview = (data: HierarchyExcelData): HierarchyExportPreview => {
   const activeMembers = getActiveMembers(data.members);
@@ -211,7 +230,7 @@ export const getHierarchyExportPreview = (data: HierarchyExcelData): HierarchyEx
   const shouldIncludeIncomeSheet = Boolean(data.options?.isCampusShepherd) && !Boolean(data.options?.isMinistryContext);
 
   return {
-    totalTabs: shouldIncludeIncomeSheet ? 7 : 6,
+    totalTabs: shouldIncludeIncomeSheet ? 8 : 7,
     bacentaCount: uniqueBacentas.size,
     memberCount: activeMembers.length,
     servicesCount: dates.length,
@@ -220,12 +239,13 @@ export const getHierarchyExportPreview = (data: HierarchyExcelData): HierarchyEx
     lastDate,
     features: [
       `Tab 1 — Hierarchy: sections for ${sectionNames || 'all hierarchy levels'} with attendance`,
-      `Tab 2 — Basontas: ${ministriesCount} ministr${ministriesCount !== 1 ? 'ies' : 'y'} categorised`,
-      `Tab 3 — Speaks in Tongues: ${tonguesCount} member${tonguesCount !== 1 ? 's' : ''}`,
-      `Tab 4 — Water Baptised: ${baptisedCount} member${baptisedCount !== 1 ? 's' : ''}`,
-      `Tab 5 — New Believers: ${newBelieversCount} member${newBelieversCount !== 1 ? 's' : ''} (grouped by leader)`,
-      `Tab 6 — First Timers: ${firstTimersCount} member${firstTimersCount !== 1 ? 's' : ''} (grouped by leader)`,
-      ...(shouldIncludeIncomeSheet ? ['Tab 7 — Income & Tithe: Sunday offering, tithe, channel totals, and weekly summary'] : []),
+      `Tab 2 — Bacentas: ${uniqueBacentas.size} bacenta${uniqueBacentas.size !== 1 ? 's' : ''} with state, schedule, and income totals`,
+      `Tab 3 — Basontas: ${ministriesCount} ministr${ministriesCount !== 1 ? 'ies' : 'y'} categorised`,
+      `Tab 4 — Speaks in Tongues: ${tonguesCount} member${tonguesCount !== 1 ? 's' : ''}`,
+      `Tab 5 — Water Baptised: ${baptisedCount} member${baptisedCount !== 1 ? 's' : ''}`,
+      `Tab 6 — New Believers: ${newBelieversCount} member${newBelieversCount !== 1 ? 's' : ''} (grouped by leader)`,
+      `Tab 7 — First Timers: ${firstTimersCount} member${firstTimersCount !== 1 ? 's' : ''} (grouped by leader)`,
+      ...(shouldIncludeIncomeSheet ? ['Tab 8 — Income & Tithe: Sunday offering, tithe, channel totals, and weekly summary'] : []),
       'Color-coded rows by role',
       'Attendance history for the selected date range (or full history)'
     ]
@@ -387,6 +407,142 @@ export const exportHierarchyExcel = async (
 
     // Freeze panes below header rows
     worksheet.views = [{ state: 'frozen', xSplit: 0, ySplit: 3 }];
+
+    // Bacentas tab (all modes)
+    (() => {
+      const ws = workbook.addWorksheet('Bacentas');
+      const currencyFormat = getCurrencyNumberFormat();
+      const meetingRecordsInRange = getMeetingRecordsInRange(data.meetingRecords || [], startDate, endDate);
+      const thinB = {
+        top: { style: 'thin' as const },
+        left: { style: 'thin' as const },
+        bottom: { style: 'thin' as const },
+        right: { style: 'thin' as const }
+      };
+
+      const bacentaRows = bacentas
+        .map(bacenta => {
+          const bacentaMembers = activeMembers.filter(member => member.bacentaId === bacenta.id);
+          const frozenMembers = members.filter(member => member.bacentaId === bacenta.id && member.frozen);
+          const bacentaLeaders = members.filter(member => member.bacentaId === bacenta.id && member.role === 'Bacenta Leader' && member.isActive !== false);
+          const fellowshipLeaders = members.filter(member => member.bacentaId === bacenta.id && member.role === 'Fellowship Leader' && member.isActive !== false);
+          const records = meetingRecordsInRange.filter(record => record.bacentaId === bacenta.id);
+          const cashIncome = records.reduce((sum, record) => sum + (record.cashOffering || 0), 0);
+          const onlineIncome = records.reduce((sum, record) => sum + (record.onlineOffering || 0), 0);
+          const totalIncome = records.reduce((sum, record) => sum + (record.totalOffering || 0), 0);
+          const lastMeetingDate = records.length ? records[records.length - 1].date : '';
+
+          return {
+            bacenta,
+            activeMemberCount: bacentaMembers.length,
+            frozenMemberCount: frozenMembers.length,
+            leaderSummary: `${bacentaLeaders.length} BL / ${fellowshipLeaders.length} FL`,
+            servicesRecorded: records.length,
+            lastMeetingDate,
+            cashIncome,
+            onlineIncome,
+            totalIncome
+          };
+        })
+        .sort((a, b) => a.bacenta.name.localeCompare(b.bacenta.name));
+
+      let currentRow = 1;
+      ws.mergeCells(currentRow, 1, currentRow, 13);
+      const titleCell = ws.getCell(currentRow, 1);
+      titleCell.value = `${reportName} — Bacenta States & Income`;
+      titleCell.font = { bold: true, size: 16 };
+      titleCell.alignment = { horizontal: 'center' };
+      currentRow++;
+
+      ws.mergeCells(currentRow, 1, currentRow, 13);
+      const subtitleCell = ws.getCell(currentRow, 1);
+      subtitleCell.value = meetingRecordsInRange.length
+        ? `Each bacenta shows its current state and its meeting income totals for the selected export range.`
+        : 'No bacenta meeting records were found in the selected date range. State and membership data are still included.';
+      subtitleCell.alignment = { horizontal: 'center' };
+      currentRow += 2;
+
+      const headers = ['#', 'Bacenta', 'State', 'Meeting Day', 'Meeting Time', 'Active Members', 'Frozen Members', 'Leaders', 'Services Recorded', 'Last Meeting', 'Cash Income', 'Online Income', 'Total Income'];
+      headers.forEach((label, index) => {
+        const cell = ws.getCell(currentRow, index + 1);
+        cell.value = label;
+        cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+        cell.alignment = { horizontal: 'center' };
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF111827' } };
+        cell.border = thinB;
+      });
+      currentRow++;
+
+      bacentaRows.forEach((entry, index) => {
+        const row = ws.getRow(currentRow++);
+        const isFrozen = entry.bacenta.frozen === true;
+        const rowColor = isFrozen ? 'FFF3F4F6' : index % 2 === 0 ? 'FFF8FAFC' : 'FFFFFFFF';
+        row.getCell(1).value = index + 1;
+        row.getCell(2).value = entry.bacenta.name;
+        row.getCell(3).value = getBacentaStateLabel(entry.bacenta);
+        row.getCell(4).value = entry.bacenta.meetingDay || 'Not set';
+        row.getCell(5).value = formatMeetingTimeLabel(entry.bacenta.meetingTime);
+        row.getCell(6).value = entry.activeMemberCount;
+        row.getCell(7).value = entry.frozenMemberCount;
+        row.getCell(8).value = entry.leaderSummary;
+        row.getCell(9).value = entry.servicesRecorded;
+        row.getCell(10).value = entry.lastMeetingDate ? formatDateDayMonthYear(entry.lastMeetingDate) : '—';
+        row.getCell(11).value = entry.cashIncome;
+        row.getCell(12).value = entry.onlineIncome;
+        row.getCell(13).value = entry.totalIncome;
+
+        [11, 12, 13].forEach(columnNumber => {
+          row.getCell(columnNumber).numFmt = currencyFormat;
+        });
+
+        row.eachCell(cell => {
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: rowColor } };
+          cell.border = thinB;
+        });
+
+        if (isFrozen) {
+          row.getCell(3).font = { bold: true, color: { argb: 'FF6B7280' } };
+        }
+      });
+
+      const totalsRow = ws.getRow(currentRow);
+      totalsRow.getCell(1).value = 'Totals';
+      totalsRow.getCell(6).value = bacentaRows.reduce((sum, entry) => sum + entry.activeMemberCount, 0);
+      totalsRow.getCell(7).value = bacentaRows.reduce((sum, entry) => sum + entry.frozenMemberCount, 0);
+      totalsRow.getCell(9).value = bacentaRows.reduce((sum, entry) => sum + entry.servicesRecorded, 0);
+      totalsRow.getCell(11).value = bacentaRows.reduce((sum, entry) => sum + entry.cashIncome, 0);
+      totalsRow.getCell(12).value = bacentaRows.reduce((sum, entry) => sum + entry.onlineIncome, 0);
+      totalsRow.getCell(13).value = bacentaRows.reduce((sum, entry) => sum + entry.totalIncome, 0);
+      totalsRow.eachCell((cell, columnNumber) => {
+        cell.font = { bold: true, color: { argb: columnNumber === 1 ? 'FFFFFFFF' : 'FF111827' } };
+        cell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: columnNumber === 1 ? 'FF111827' : 'FFE5E7EB' }
+        };
+        if (columnNumber >= 11 && columnNumber <= 13) {
+          cell.numFmt = currencyFormat;
+        }
+        cell.border = thinB;
+      });
+
+      ws.columns = [
+        { width: 6 },
+        { width: 24 },
+        { width: 12 },
+        { width: 14 },
+        { width: 14 },
+        { width: 14 },
+        { width: 14 },
+        { width: 16 },
+        { width: 16 },
+        { width: 16 },
+        { width: 14 },
+        { width: 14 },
+        { width: 14 }
+      ];
+      ws.views = [{ state: 'frozen', xSplit: 0, ySplit: 4 }];
+    })();
 
     // Income & Tithe tab (campus shepherd only)
     if (options?.isCampusShepherd && !options?.isMinistryContext) {

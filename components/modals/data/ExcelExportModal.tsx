@@ -29,6 +29,7 @@ const ExcelExportModal: React.FC<ExcelExportModalProps> = ({ isOpen, onClose }) 
     members,
     bacentas,
     attendanceRecords,
+    meetingRecords,
     sundayOfferingRecords,
     showToast,
     userProfile,
@@ -83,6 +84,7 @@ const ExcelExportModal: React.FC<ExcelExportModalProps> = ({ isOpen, onClose }) 
         members,
         bacentas,
         attendanceRecords,
+        meetingRecords,
         sundayOfferingRecords,
         options: {
           directory: selectedDirectory,
@@ -124,6 +126,7 @@ const ExcelExportModal: React.FC<ExcelExportModalProps> = ({ isOpen, onClose }) 
       members,
       bacentas,
       attendanceRecords,
+      meetingRecords,
       sundayOfferingRecords,
       options: {
         directory: selectedDirectory,
