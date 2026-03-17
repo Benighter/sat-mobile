@@ -9,6 +9,7 @@ import {
   TrendingUpIcon,
   TrendingDownIcon
 } from '../icons';
+import { getUniquePresentAttendanceCount } from '../../utils/attendanceUtils';
 import { getMonthName, getSundaysOfMonth, formatDateToYYYYMMDD } from '../../utils/dateUtils';
 
 // Reduced view types after feature removals
@@ -703,26 +704,7 @@ const AttendanceAnalyticsView: React.FC = () => {
 
     // Weekly attendance data for current month
     const weeklyData = currentMonthSundays.map(sundayStr => {
-      // Get all attendance records for this Sunday
-      const sundayRecords = attendanceRecords.filter(record =>
-        record.date === sundayStr && record.status === 'Present'
-      );
-
-      // Separate member and new believer attendance records
-      const presentMemberIds = sundayRecords
-        .filter(record => record.memberId)
-        .map(record => record.memberId!);
-
-      const presentNewBelieverIds = sundayRecords
-        .filter(record => record.newBelieverId)
-        .map(record => record.newBelieverId!);
-
-      // Count actual present members and new believers (to avoid counting duplicates)
-      const presentMembers = members.filter(member => presentMemberIds.includes(member.id));
-      const presentNewBelievers = newBelievers.filter(nb => presentNewBelieverIds.includes(nb.id));
-
-      // Total attendance is the sum of present members and new believers
-      const dayAttendance = presentMembers.length + presentNewBelievers.length;
+      const dayAttendance = getUniquePresentAttendanceCount(attendanceRecords, { date: sundayStr });
 
       // Calculate rate based on total possible attendees (members + new believers)
       const totalPossibleAttendees = members.length + newBelievers.length;

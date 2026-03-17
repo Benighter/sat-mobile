@@ -82,12 +82,38 @@ export interface NewBeliever {
 
 export type AttendanceStatus = 'Present' | 'Absent';
 
+export interface AttendanceMemberSnapshot {
+  firstName: string;
+  lastName?: string;
+  role: MemberRole;
+  bacentaId: string;
+  bacentaName?: string;
+  bacentaLeaderId?: string;
+  linkedBacentaIds?: string[];
+  ministry?: string;
+  isNewBeliever?: boolean;
+  isFirstTimer?: boolean;
+  firstTimerWeekDate?: string;
+  frozen?: boolean;
+}
+
+export interface AttendanceNewBelieverSnapshot {
+  name: string;
+  surname?: string;
+  ministry?: string;
+  isFirstTime?: boolean;
+}
+
 export interface AttendanceRecord {
   id: string; // memberId_date (YYYY-MM-DD) or newBelieverId_date (YYYY-MM-DD)
   memberId?: string; // For regular members
   newBelieverId?: string; // For new believers
   date: string; // Sunday date as YYYY-MM-DD
   status: AttendanceStatus;
+  memberSnapshot?: AttendanceMemberSnapshot;
+  newBelieverSnapshot?: AttendanceNewBelieverSnapshot;
+  recordedAt?: string;
+  recordedBy?: string;
 }
 
 export interface SundayOfferingRecord {

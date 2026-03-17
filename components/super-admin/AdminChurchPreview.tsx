@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../../firebase.config';
 import { getSundaysOfMonth, getCurrentOrMostRecentSunday, getUpcomingSunday, formatFullDate, getMonthName } from '../../utils/dateUtils';
+import { getUniquePresentAttendanceCount } from '../../utils/attendanceUtils';
 
 interface AdminChurchPreviewProps {
   admin: {
@@ -84,21 +85,13 @@ const AdminChurchPreview: React.FC<AdminChurchPreviewProps> = ({ admin, onClose 
   let attendanceAverage = 0;
   if (elapsedSundays.length) {
     const sundayTotals = elapsedSundays.map((sunday) => {
-      const sundayRecords = attendance.filter((record) => record.date === sunday && record.status === 'Present');
-      const presentMemberIds = new Set(sundayRecords.filter((record) => record.memberId).map((record) => record.memberId));
-      const presentNewBelieverIds = new Set(sundayRecords.filter((record) => record.newBelieverId).map((record) => record.newBelieverId));
-      const presentMembers = members.filter((member) => !member.frozen && presentMemberIds.has(member.id));
-      const presentNewBelievers = newBelievers.filter((newBeliever) => presentNewBelieverIds.has(newBeliever.id));
-      return presentMembers.length + presentNewBelievers.length;
+      return getUniquePresentAttendanceCount(attendance, { date: sunday });
     });
     attendanceAverage = Number((sundayTotals.reduce((sum, total) => sum + total, 0) / elapsedSundays.length).toFixed(1));
   }
 
   const currentSunday = getCurrentOrMostRecentSunday();
-  const sundayRecords = attendance.filter(r => r.date === currentSunday && r.status === 'Present');
-  const presentMemberIds = new Set(sundayRecords.filter(r => r.memberId).map(r => r.memberId));
-  const presentNewBelieverIds = new Set(sundayRecords.filter(r => r.newBelieverId).map(r => r.newBelieverId));
-  const weeklyAttendance = members.filter(m => !m.frozen && presentMemberIds.has(m.id)).length + newBelievers.filter(nb => presentNewBelieverIds.has(nb.id)).length;
+  const weeklyAttendance = getUniquePresentAttendanceCount(attendance, { date: currentSunday });
 
   const upcomingSunday = getUpcomingSunday();
   const confirmationRecords = confirmations.filter(r => r.date === upcomingSunday && r.status === 'Confirmed');

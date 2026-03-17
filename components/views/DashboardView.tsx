@@ -4,6 +4,7 @@ import { useAppContext } from '../../contexts/FirebaseAppContext';
 // import { hasAdminPrivileges } from '../../utils/permissionUtils';
 import { PeopleIcon, AttendanceIcon, CalendarIcon, ChartBarIcon, PrayerIcon, CurrencyDollarIcon } from '../icons';
 import { getMonthName, getCurrentOrMostRecentSunday, formatFullDate, getUpcomingSunday, getCurrentMeetingWeek, getMeetingWeekRange, getCurrentWeekMonday, getWeeklyTotalsRange } from '../../utils/dateUtils';
+import { getUniquePresentAttendanceCount } from '../../utils/attendanceUtils';
 import { db } from '../../firebase.config';
 import { doc, getDoc } from 'firebase/firestore';
 import { firebaseUtils, headCountService } from '../../services/firebaseService';
@@ -223,30 +224,12 @@ const DashboardView: React.FC = memo(() => {
     if (!effectiveSundays.length) return 0;
 
     const sundayTotals = effectiveSundays.map((sunday) => {
-      const sundayRecords = attendanceRecords.filter(
-        (record) => record.date === sunday && record.status === 'Present'
-      );
-
-      const presentMemberIds = new Set(
-        sundayRecords
-          .filter((record) => record.memberId)
-          .map((record) => record.memberId as string)
-      );
-      const presentNewBelieverIds = new Set(
-        sundayRecords
-          .filter((record) => record.newBelieverId)
-          .map((record) => record.newBelieverId as string)
-      );
-
-      const presentMembers = members.filter((member) => presentMemberIds.has(member.id));
-      const presentNewBelievers = newBelievers.filter((newBeliever) => presentNewBelieverIds.has(newBeliever.id));
-
-      return presentMembers.length + presentNewBelievers.length;
+      return getUniquePresentAttendanceCount(attendanceRecords, { date: sunday });
     });
 
     const average = sundayTotals.reduce((sum, total) => sum + total, 0) / effectiveSundays.length;
     return Number(average.toFixed(1));
-  }, [attendanceRecords, displayedDate, displayedSundays, members, newBelievers]);
+  }, [attendanceRecords, displayedDate, displayedSundays]);
 
   const currentMonthAttendanceAverageDisplay = useMemo(() => (
     Number.isInteger(currentMonthAttendanceAverage)
@@ -257,27 +240,7 @@ const DashboardView: React.FC = memo(() => {
   // Calculate current week's attendance
   const getCurrentWeekAttendance = () => {
     const currentSunday = getCurrentOrMostRecentSunday();
-
-    // Get all attendance records for the current Sunday
-    const sundayRecords = attendanceRecords.filter(
-      record => record.date === currentSunday && record.status === 'Present'
-    );
-
-    // Get present member IDs and new believer IDs
-    const presentMemberIds = sundayRecords
-      .filter(record => record.memberId)
-      .map(record => record.memberId!);
-
-    const presentNewBelieverIds = sundayRecords
-      .filter(record => record.newBelieverId)
-      .map(record => record.newBelieverId!);
-
-    // Filter to only include members and new believers that actually exist
-    // This prevents counting orphaned attendance records for deleted members
-    const presentMembers = members.filter(member => presentMemberIds.includes(member.id));
-    const presentNewBelievers = newBelievers.filter(nb => presentNewBelieverIds.includes(nb.id));
-
-    const totalPresent = presentMembers.length + presentNewBelievers.length;
+    const totalPresent = getUniquePresentAttendanceCount(attendanceRecords, { date: currentSunday });
 
     return {
       total: totalPresent,

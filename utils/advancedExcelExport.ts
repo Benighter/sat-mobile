@@ -1,5 +1,6 @@
 import ExcelJS from 'exceljs';
 import { Member, Bacenta, AttendanceRecord } from '../types';
+import { getUniquePresentAttendanceCount } from './attendanceUtils';
 import { formatDateToYYYYMMDD } from './dateUtils';
 import { DirectoryHandle, FileSaveProgress, saveFileToDirectory } from './fileSystemUtils';
 
@@ -1041,7 +1042,7 @@ const createAdvancedAnalytics = async (workbook: ExcelJS.Workbook, data: Advance
   const weeklyData = sundays.map(sunday => {
     const dateStr = formatDateToYYYYMMDD(sunday);
     const dayRecords = attendanceRecords.filter(r => r.date === dateStr);
-    const presentCount = dayRecords.filter(r => r.status === 'Present').length;
+    const presentCount = getUniquePresentAttendanceCount(attendanceRecords, { date: dateStr });
     const absentCount = dayRecords.filter(r => r.status === 'Absent').length;
     const totalRecords = presentCount + absentCount;
     const rate = totalRecords > 0 ? Math.round((presentCount / totalRecords) * 100) : 0;
@@ -1051,7 +1052,7 @@ const createAdvancedAnalytics = async (workbook: ExcelJS.Workbook, data: Advance
     previousSunday.setDate(previousSunday.getDate() - 7);
     const prevDateStr = formatDateToYYYYMMDD(previousSunday);
     const prevRecords = attendanceRecords.filter(r => r.date === prevDateStr);
-    const prevPresentCount = prevRecords.filter(r => r.status === 'Present').length;
+    const prevPresentCount = getUniquePresentAttendanceCount(attendanceRecords, { date: prevDateStr });
     const prevTotalRecords = prevRecords.length;
     const prevRate = prevTotalRecords > 0 ? Math.round((prevPresentCount / prevTotalRecords) * 100) : 0;
 

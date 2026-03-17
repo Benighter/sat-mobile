@@ -1,5 +1,6 @@
 import * as XLSX from 'xlsx';
 import { Member, Bacenta, AttendanceRecord } from '../types';
+import { getUniquePresentAttendanceCount } from './attendanceUtils';
 import { formatDateToYYYYMMDD } from './dateUtils';
 import { DirectoryHandle, FileSaveProgress, saveFileToDirectory } from './fileSystemUtils';
 
@@ -283,7 +284,7 @@ const createAttendanceAnalyticsWorksheet = (data: ExcelData) => {
   sundays.forEach(sunday => {
     const dateStr = formatDateToYYYYMMDD(sunday);
     const dayRecords = attendanceRecords.filter(r => r.date === dateStr);
-    const presentCount = dayRecords.filter(r => r.status === 'Present').length;
+    const presentCount = getUniquePresentAttendanceCount(attendanceRecords, { date: dateStr });
     const absentCount = dayRecords.filter(r => r.status === 'Absent').length;
     const rate = (presentCount + absentCount) > 0 ? Math.round((presentCount / (presentCount + absentCount)) * 100) : 0;
 

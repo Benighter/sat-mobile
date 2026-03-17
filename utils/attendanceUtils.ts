@@ -1,4 +1,89 @@
+import { AttendanceMemberSnapshot, AttendanceNewBelieverSnapshot, AttendanceRecord, Bacenta, Member, NewBeliever } from '../types';
 import { formatDateToYYYYMMDD } from './dateUtils';
+
+type AttendanceCountOptions = {
+  date?: string;
+  dates?: Iterable<string>;
+  memberIds?: Set<string>;
+  newBelieverIds?: Set<string>;
+  recordFilter?: (record: AttendanceRecord) => boolean;
+};
+
+export const buildAttendanceMemberSnapshot = (
+  member: Member,
+  bacentas: Bacenta[] = []
+): AttendanceMemberSnapshot => {
+  const bacentaName = bacentas.find((bacenta) => bacenta.id === member.bacentaId)?.name;
+
+  return {
+    firstName: member.firstName,
+    lastName: member.lastName,
+    role: member.role,
+    bacentaId: member.bacentaId,
+    bacentaName,
+    bacentaLeaderId: member.bacentaLeaderId,
+    linkedBacentaIds: member.linkedBacentaIds,
+    ministry: member.ministry,
+    isNewBeliever: member.isNewBeliever,
+    isFirstTimer: member.isFirstTimer,
+    firstTimerWeekDate: member.firstTimerWeekDate,
+    frozen: member.frozen
+  };
+};
+
+export const buildAttendanceNewBelieverSnapshot = (
+  newBeliever: NewBeliever
+): AttendanceNewBelieverSnapshot => ({
+  name: newBeliever.name,
+  surname: newBeliever.surname,
+  ministry: newBeliever.ministry,
+  isFirstTime: newBeliever.isFirstTime
+});
+
+export const getAttendanceRecordDisplayName = (record: AttendanceRecord): string => {
+  if (record.memberSnapshot) {
+    return `${record.memberSnapshot.firstName} ${record.memberSnapshot.lastName || ''}`.trim();
+  }
+
+  if (record.newBelieverSnapshot) {
+    return `${record.newBelieverSnapshot.name} ${record.newBelieverSnapshot.surname || ''}`.trim();
+  }
+
+  if (record.memberId) return 'Removed member';
+  if (record.newBelieverId) return 'Removed new believer';
+  return 'Unknown attendee';
+};
+
+export const getUniquePresentAttendanceCount = (
+  attendanceRecords: AttendanceRecord[],
+  options: AttendanceCountOptions = {}
+): number => {
+  const dateSet = options.date
+    ? new Set([options.date])
+    : options.dates
+      ? new Set(options.dates)
+      : null;
+  const participantKeys = new Set<string>();
+
+  attendanceRecords.forEach((record) => {
+    if (record.status !== 'Present') return;
+    if (dateSet && !dateSet.has(record.date)) return;
+    if (options.recordFilter && !options.recordFilter(record)) return;
+
+    if (record.memberId) {
+      if (options.memberIds && !options.memberIds.has(record.memberId)) return;
+      participantKeys.add(`member:${record.memberId}`);
+      return;
+    }
+
+    if (record.newBelieverId) {
+      if (options.newBelieverIds && !options.newBelieverIds.has(record.newBelieverId)) return;
+      participantKeys.add(`newBeliever:${record.newBelieverId}`);
+    }
+  });
+
+  return participantKeys.size;
+};
 
 /**
  * Check if a date is editable based on user preferences and date constraints

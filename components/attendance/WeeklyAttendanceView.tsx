@@ -13,6 +13,7 @@ import {
   formatDateToYYYYMMDD,
   getWeeklyTotalsDates
 } from '../../utils/dateUtils';
+import { getAttendanceRecordDisplayName, getUniquePresentAttendanceCount } from '../../utils/attendanceUtils';
 import {
   ChevronLeftIcon,
   ChevronRightIcon,
@@ -22,7 +23,7 @@ import {
   TrendingUpIcon,
   XMarkIcon
 } from '../icons';
-import { Member, NewBeliever, Bacenta, SundayOfferingRecord } from '../../types';
+import { AttendanceRecord, Member, NewBeliever, Bacenta, SundayOfferingRecord } from '../../types';
 import { hasAdminPrivileges, isCampusShepherd } from '../../utils/permissionUtils';
 import { isLeadershipPosition, isMemberFirstTimerOnSunday } from '../../utils/memberStatus';
 import { MINISTRY_OPTIONS } from '../../constants';
@@ -52,6 +53,12 @@ interface BacentaLeaderGroup {
   linkedBacentaGroups: LinkedBacentaGroup[]; // Additional linked bacentas for this Green Bacenta
   newBelievers: NewBeliever[]; // Present new believers (unassigned or could be associated later)
   total: number; // mainMembers + sum fellowshipGroups totals + linked groups + newBelievers
+}
+
+interface HistoricalAttendee {
+  key: string;
+  name: string;
+  type: 'member' | 'newBeliever';
 }
 
 const WeeklyAttendanceView: React.FC = () => {
@@ -123,7 +130,7 @@ const WeeklyAttendanceView: React.FC = () => {
 
   const presentMembersForSelectedSunday = useMemo(() => {
     const filteredMembers = members.filter(member => {
-      if (member.frozen || !presentMemberIds.has(member.id)) return false;
+      if (!presentMemberIds.has(member.id)) return false;
       if (!normalizedSelectedMinistry) return true;
       return (member.ministry || '').trim().toLowerCase() === normalizedSelectedMinistry;
     });
@@ -133,13 +140,15 @@ const WeeklyAttendanceView: React.FC = () => {
     );
   }, [members, normalizedSelectedMinistry, presentMemberIds]);
 
-  const presentFirstTimerMembers = useMemo(() => (
-    presentMembersForSelectedSunday.filter(member => isMemberFirstTimerOnSunday(member, selectedSunday))
-  ), [presentMembersForSelectedSunday, selectedSunday]);
+  const activePresentMemberIdsForSelectedSunday = useMemo(() => new Set(
+    presentMembersForSelectedSunday
+      .filter(member => !member.frozen)
+      .map(member => member.id)
+  ), [presentMembersForSelectedSunday]);
 
-  const presentFirstTimeNewBelievers = useMemo(() => {
+  const presentNewBelieversForSelectedSunday = useMemo(() => {
     const filteredNewBelievers = newBelievers.filter(newBeliever => {
-      if (!presentNewBelieverIds.has(newBeliever.id) || !newBeliever.isFirstTime) return false;
+      if (!presentNewBelieverIds.has(newBeliever.id)) return false;
       if (!normalizedSelectedMinistry) return true;
       return (newBeliever.ministry || '').trim().toLowerCase() === normalizedSelectedMinistry;
     });
@@ -148,6 +157,14 @@ const WeeklyAttendanceView: React.FC = () => {
       `${a.name} ${a.surname || ''}`.localeCompare(`${b.name} ${b.surname || ''}`)
     );
   }, [newBelievers, normalizedSelectedMinistry, presentNewBelieverIds]);
+
+  const presentFirstTimerMembers = useMemo(() => (
+    presentMembersForSelectedSunday.filter(member => isMemberFirstTimerOnSunday(member, selectedSunday))
+  ), [presentMembersForSelectedSunday, selectedSunday]);
+
+  const presentFirstTimeNewBelievers = useMemo(() => (
+    presentNewBelieversForSelectedSunday.filter(newBeliever => newBeliever.isFirstTime)
+  ), [presentNewBelieversForSelectedSunday]);
 
   const totalPresentFirstTimers = presentFirstTimerMembers.length + presentFirstTimeNewBelievers.length;
   const parsedCashOffering = Math.max(0, Number(cashOfferingInput || 0));
@@ -234,9 +251,31 @@ const WeeklyAttendanceView: React.FC = () => {
     const presentNewBelieverIds = new Set(
       sundayRecords.filter(r => r.newBelieverId).map(r => r.newBelieverId as string)
     );
+    const memberMap = new Map<string, Member>();
+    members.forEach(member => memberMap.set(member.id, member));
+    const newBelieverMap = new Map<string, NewBeliever>();
+    newBelievers.forEach(newBeliever => newBelieverMap.set(newBeliever.id, newBeliever));
 
-    // Filter members by ministry if selected, and exclude frozen members
-    let filteredMembers = members.filter(m => !m.frozen && presentMemberIds.has(m.id));
+    const isRecordInSelectedMinistry = (record: AttendanceRecord) => {
+      if (!normalizedSelectedMinistry) return true;
+
+      if (record.memberId) {
+        const member = memberMap.get(record.memberId);
+        const ministry = member?.ministry || record.memberSnapshot?.ministry || '';
+        return ministry.trim().toLowerCase() === normalizedSelectedMinistry;
+      }
+
+      if (record.newBelieverId) {
+        const newBeliever = newBelieverMap.get(record.newBelieverId);
+        const ministry = newBeliever?.ministry || record.newBelieverSnapshot?.ministry || '';
+        return ministry.trim().toLowerCase() === normalizedSelectedMinistry;
+      }
+
+      return false;
+    };
+
+    // Keep frozen members in the rendered history so names persist after freezing.
+    let filteredMembers = members.filter(m => presentMemberIds.has(m.id));
     if (selectedMinistry) {
       filteredMembers = filteredMembers.filter(m =>
         m.ministry && m.ministry.toLowerCase() === selectedMinistry.toLowerCase()
@@ -244,7 +283,28 @@ const WeeklyAttendanceView: React.FC = () => {
     }
 
     const presentMembers = filteredMembers;
-    const presentNewBelievers = newBelievers.filter(nb => presentNewBelieverIds.has(nb.id));
+    const presentNewBelievers = presentNewBelieversForSelectedSunday;
+    const deletedAttendees: HistoricalAttendee[] = sundayRecords.flatMap((record) => {
+      if (!isRecordInSelectedMinistry(record)) return [];
+
+      if (record.memberId && !memberMap.has(record.memberId)) {
+        return [{
+          key: `member:${record.memberId}`,
+          name: getAttendanceRecordDisplayName(record),
+          type: 'member'
+        }];
+      }
+
+      if (record.newBelieverId && !newBelieverMap.has(record.newBelieverId)) {
+        return [{
+          key: `newBeliever:${record.newBelieverId}`,
+          name: getAttendanceRecordDisplayName(record),
+          type: 'newBeliever'
+        }];
+      }
+
+      return [];
+    }).sort((a, b) => a.name.localeCompare(b.name));
 
     // Helper lookups
     const bacentaMap = new Map<string, Bacenta>();
@@ -338,10 +398,16 @@ const WeeklyAttendanceView: React.FC = () => {
       leftoverGroup = { members: leftovers.sort((a, b) => (a.lastName || '').localeCompare(b.lastName || '') || a.firstName.localeCompare(b.firstName)) };
     }
 
-    const grandTotal = presentMembers.length + presentNewBelievers.length; // unique counts
+    const grandTotal = getUniquePresentAttendanceCount(attendanceRecords, {
+      date: selectedSunday,
+      recordFilter: isRecordInSelectedMinistry
+    });
+    const visibleNamedTotal = presentMembers.length + presentNewBelievers.length + deletedAttendees.length;
+    const unnamedHistoricalCount = Math.max(0, grandTotal - visibleNamedTotal);
+    const activeRosterPresentTotal = activePresentMemberIdsForSelectedSunday.size + presentNewBelievers.length;
 
-    return { groups, leftoverGroup, grandTotal };
-  }, [selectedSunday, attendanceRecords, members, newBelievers, bacentas, selectedMinistry]);
+    return { groups, leftoverGroup, grandTotal, deletedAttendees, unnamedHistoricalCount, activeRosterPresentTotal };
+  }, [selectedSunday, attendanceRecords, members, newBelievers, bacentas, normalizedSelectedMinistry, selectedMinistry, presentNewBelieversForSelectedSunday, activePresentMemberIdsForSelectedSunday]);
 
   // Helper: format date as "10 August 2025"
   const formatDayMonthYear = (dateStr: string) => {
@@ -362,23 +428,27 @@ const WeeklyAttendanceView: React.FC = () => {
           .concat(groupedAttendance.groups.flatMap(g => g.fellowshipGroups.flatMap(fg => fg.members)))
           .concat(groupedAttendance.groups.flatMap(g => g.linkedBacentaGroups.flatMap(lg => lg.members)))
           .concat(groupedAttendance.leftoverGroup?.members || []);
+        const ministryPresentEntries = [
+          ...ministryMembers.map(member => ({ name: `${member.firstName}${member.lastName ? ` ${member.lastName}` : ''}`, isHistorical: false })),
+          ...groupedAttendance.deletedAttendees.map(attendee => ({ name: attendee.name, isHistorical: true }))
+        ];
 
         // Get all members with the selected ministry (both present and absent)
         const allMinistryMembers = members.filter(m =>
           !m.frozen && m.ministry && m.ministry.toLowerCase() === selectedMinistry.toLowerCase()
         );
 
-        const presentMemberIds = new Set(ministryMembers.map(m => m.id));
+        const presentMemberIds = activePresentMemberIdsForSelectedSunday;
         const absentMembers = allMinistryMembers.filter(m => !presentMemberIds.has(m.id));
 
         let text = `*${selectedMinistry}'s attendance*\n`;
         text += `*${dateText}*\n\n`;
 
-        ministryMembers.forEach((m, idx) => {
-          text += `${idx + 1}. ${m.firstName}${m.lastName ? ' ' + m.lastName : ''}\n`;
+        ministryPresentEntries.forEach((entry, idx) => {
+          text += `${idx + 1}. ${entry.name}${entry.isHistorical ? ' (Removed)' : ''}\n`;
         });
 
-        text += `\n*Total: ${ministryMembers.length}*\n\n`;
+        text += `\n*Total: ${groupedAttendance.grandTotal}*\n\n`;
         text += `Absentees\n`;
 
         absentMembers.forEach((m, idx) => {
@@ -387,6 +457,9 @@ const WeeklyAttendanceView: React.FC = () => {
 
         text += `\n*Total: ${absentMembers.length}*\n\n`;
         text += `*Grand total: ${allMinistryMembers.length}*`;
+        if (groupedAttendance.unnamedHistoricalCount > 0) {
+          text += `\n*Historical attendees without names preserved: ${groupedAttendance.unnamedHistoricalCount}*`;
+        }
 
         await navigator.clipboard.writeText(text);
         showToast('success', 'Copied!', `${selectedMinistry} attendance copied to clipboard`);
@@ -396,7 +469,7 @@ const WeeklyAttendanceView: React.FC = () => {
       // Default format for general attendance
       let text = `Weekly Attendance - ${formatFullDate(selectedSunday)}\n\n`;
 
-      if (groupedAttendance.groups.length === 0 && !groupedAttendance.leftoverGroup) {
+      if (groupedAttendance.groups.length === 0 && !groupedAttendance.leftoverGroup && groupedAttendance.deletedAttendees.length === 0) {
         text += 'No attendance records for this Sunday.';
       } else {
         groupedAttendance.groups.forEach((group, i) => {
@@ -439,7 +512,17 @@ const WeeklyAttendanceView: React.FC = () => {
             });
           text += `Total: ${groupedAttendance.leftoverGroup.members.length}\n`;
         }
+        if (groupedAttendance.deletedAttendees.length > 0) {
+          text += `\nHistorical / Removed Attendees\n`;
+          groupedAttendance.deletedAttendees.forEach((attendee, idx) => {
+            text += `${idx + 1}. ${attendee.name}\n`;
+          });
+          text += `Total: ${groupedAttendance.deletedAttendees.length}\n`;
+        }
         text += `\nGrand Total: ${groupedAttendance.grandTotal}`;
+        if (groupedAttendance.unnamedHistoricalCount > 0) {
+          text += `\nHistorical attendees without names preserved: ${groupedAttendance.unnamedHistoricalCount}`;
+        }
       }
 
       await navigator.clipboard.writeText(text);
@@ -541,6 +624,17 @@ const WeeklyAttendanceView: React.FC = () => {
       text += '\n';
     } else {
       text += '\n';
+    }
+
+    if (groupedAttendance.deletedAttendees.length > 0) {
+      text += 'Historical attendees retained after removal\n';
+      groupedAttendance.deletedAttendees.forEach((attendee, index) => {
+        text += `${index + 1}. ${attendee.name}\n`;
+      });
+      text += '\n';
+    }
+    if (groupedAttendance.unnamedHistoricalCount > 0) {
+      text += `Historical attendees without names preserved: ${formatCount(groupedAttendance.unnamedHistoricalCount)}\n\n`;
     }
 
     text += `*New converts: ${formatCount(todaysNewConverts)}*\n`;
@@ -1072,11 +1166,16 @@ const WeeklyAttendanceView: React.FC = () => {
           <p className="text-sm font-medium text-gray-800 truncate leading-snug">
             {m.firstName} {m.lastName || ''}
           </p>
-          {(m.isNewBeliever || isFirstTimerForSelectedSunday) && (
+          {(m.isNewBeliever || isFirstTimerForSelectedSunday || m.frozen) && (
             <div className="flex flex-wrap gap-1 mt-0.5">
               {m.isNewBeliever && (
                 <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600 border border-blue-200 leading-tight">
                   ✝ New Believer
+                </span>
+              )}
+              {m.frozen && (
+                <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 leading-tight">
+                  Frozen
                 </span>
               )}
               {isFirstTimerForSelectedSunday && (
@@ -1127,6 +1226,20 @@ const WeeklyAttendanceView: React.FC = () => {
       </div>
     );
   };
+
+  const renderHistoricalAttendeeRow = (attendee: HistoricalAttendee, idx: number) => (
+    <div key={attendee.key} className="flex items-center gap-2.5 py-2 px-2 rounded-xl bg-amber-50/60 border border-amber-100">
+      <span className="text-[11px] text-amber-500 w-5 text-right shrink-0 tabular-nums">{idx + 1}</span>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium text-amber-900 truncate leading-snug">{attendee.name}</p>
+        <div className="flex flex-wrap gap-1 mt-0.5">
+          <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-white text-amber-700 border border-amber-200 leading-tight">
+            Removed {attendee.type === 'newBeliever' ? 'New Believer' : 'Member'}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <div className="min-h-screen bg-gray-50 p-4 sm:p-6 lg:p-8">
@@ -1397,7 +1510,7 @@ const WeeklyAttendanceView: React.FC = () => {
 
           {/* Professional Attendance Content */}
           <div className="p-6">
-            {groupedAttendance.groups.length === 0 && !groupedAttendance.leftoverGroup ? (
+            {groupedAttendance.grandTotal === 0 && groupedAttendance.unnamedHistoricalCount === 0 ? (
               <div className="text-center py-12">
                 <UsersIcon className="w-12 h-12 text-gray-300 mx-auto mb-4" />
                 <h3 className="text-lg font-medium text-gray-600 mb-1">No Attendance Records</h3>
@@ -1410,6 +1523,12 @@ const WeeklyAttendanceView: React.FC = () => {
               </div>
             ) : (
               <>
+                {groupedAttendance.unnamedHistoricalCount > 0 && (
+                  <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                    {groupedAttendance.unnamedHistoricalCount} historical attendee{groupedAttendance.unnamedHistoricalCount === 1 ? '' : 's'} could not be shown by name because the original attendance record did not store a snapshot.
+                  </div>
+                )}
+
                 {/* Ministry Mode: Flat List */}
                 {isMinistryContext ? (
                   <div className="space-y-6">
@@ -1425,13 +1544,20 @@ const WeeklyAttendanceView: React.FC = () => {
                             ...(groupedAttendance.leftoverGroup?.members || [])
                           ].sort((a, b) => (a.lastName || '').localeCompare(b.lastName || '') || a.firstName.localeCompare(b.firstName));
 
-                          return allPresentMembers.map(m => (
-                            <li key={m.id} className="text-gray-800">{m.firstName}{m.lastName ? ' ' + m.lastName : ''}</li>
-                          ));
+                          return (
+                            <>
+                              {allPresentMembers.map(m => (
+                                <li key={m.id} className="text-gray-800">{m.firstName}{m.lastName ? ' ' + m.lastName : ''}{m.frozen ? ' (Frozen)' : ''}</li>
+                              ))}
+                              {groupedAttendance.deletedAttendees.map(attendee => (
+                                <li key={attendee.key} className="text-amber-800">{attendee.name} (Removed)</li>
+                              ))}
+                            </>
+                          );
                         })()}
                       </ol>
                       <div className="mt-4 text-sm font-semibold text-gray-700">
-                        Total: {groupedAttendance.groups.reduce((sum, g) => sum + g.total, 0) + (groupedAttendance.leftoverGroup?.members.length || 0)}
+                        Total: {groupedAttendance.grandTotal}
                       </div>
                     </div>
 
@@ -1441,12 +1567,7 @@ const WeeklyAttendanceView: React.FC = () => {
                       <ol className="space-y-1 list-decimal list-inside">
                         {(() => {
                           // Get all present member IDs
-                          const presentMemberIds = new Set([
-                            ...groupedAttendance.groups.flatMap(g => g.mainMembers.map(m => m.id)),
-                            ...groupedAttendance.groups.flatMap(g => g.fellowshipGroups.flatMap(fg => fg.members.map(m => m.id))),
-                            ...groupedAttendance.groups.flatMap(g => g.linkedBacentaGroups.flatMap(lg => lg.members.map(m => m.id))),
-                            ...(groupedAttendance.leftoverGroup?.members.map(m => m.id) || [])
-                          ]);
+                          const presentMemberIds = activePresentMemberIdsForSelectedSunday;
 
                           // Get all ministry members (both present and absent)
                           const allMinistryMembers = members.filter(m =>
@@ -1465,16 +1586,10 @@ const WeeklyAttendanceView: React.FC = () => {
                       </ol>
                       <div className="mt-4 text-sm font-semibold text-gray-700">
                         Total: {(() => {
-                          const presentMemberIds = new Set([
-                            ...groupedAttendance.groups.flatMap(g => g.mainMembers.map(m => m.id)),
-                            ...groupedAttendance.groups.flatMap(g => g.fellowshipGroups.flatMap(fg => fg.members.map(m => m.id))),
-                            ...groupedAttendance.groups.flatMap(g => g.linkedBacentaGroups.flatMap(lg => lg.members.map(m => m.id))),
-                            ...(groupedAttendance.leftoverGroup?.members.map(m => m.id) || [])
-                          ]);
                           const allMinistryMembers = members.filter(m =>
                             !m.frozen && m.ministry && m.ministry.toLowerCase() === (selectedMinistry || activeMinistryName || '').toLowerCase()
                           );
-                          return allMinistryMembers.filter(m => !presentMemberIds.has(m.id)).length;
+                          return allMinistryMembers.filter(m => !activePresentMemberIdsForSelectedSunday.has(m.id)).length;
                         })()}
                       </div>
                     </div>
@@ -1565,6 +1680,15 @@ const WeeklyAttendanceView: React.FC = () => {
                         <div className="mt-4 text-sm font-semibold text-gray-700">Total: {groupedAttendance.leftoverGroup.members.length}</div>
                       </div>
                     )}
+                    {groupedAttendance.deletedAttendees.length > 0 && (
+                      <div className="border border-amber-200 rounded-xl p-4 shadow-sm bg-amber-50/40">
+                        <h3 className="text-lg font-semibold text-amber-900 mb-2">Historical / Removed Attendees</h3>
+                        <div className="space-y-1.5">
+                          {groupedAttendance.deletedAttendees.map((attendee, idx) => renderHistoricalAttendeeRow(attendee, idx))}
+                        </div>
+                        <div className="mt-4 text-sm font-semibold text-amber-800">Total: {groupedAttendance.deletedAttendees.length}</div>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -1576,7 +1700,7 @@ const WeeklyAttendanceView: React.FC = () => {
                       {/* Ministry-specific totals */}
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                         <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-center">
-                          <h4 className="text-sm font-medium text-green-800 mb-1">Present</h4>
+                          <h4 className="text-sm font-medium text-green-800 mb-1">Recorded Present</h4>
                           <span className="text-2xl font-bold text-green-600">{groupedAttendance.grandTotal}</span>
                         </div>
                         <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-center">
@@ -1586,7 +1710,7 @@ const WeeklyAttendanceView: React.FC = () => {
                               const allMinistryMembers = members.filter(m =>
                                 !m.frozen && m.ministry && m.ministry.toLowerCase() === selectedMinistry.toLowerCase()
                               );
-                              return allMinistryMembers.length - groupedAttendance.grandTotal;
+                              return Math.max(0, allMinistryMembers.length - groupedAttendance.activeRosterPresentTotal);
                             })()}
                           </span>
                         </div>
@@ -1605,6 +1729,11 @@ const WeeklyAttendanceView: React.FC = () => {
                       <p className="text-sm text-gray-500 text-center">
                         {selectedMinistry} ministry attendance for {formatFullDate(selectedSunday)}
                       </p>
+                      {groupedAttendance.deletedAttendees.length > 0 && (
+                        <p className="mt-2 text-xs text-amber-700 text-center">
+                          Historical list includes {groupedAttendance.deletedAttendees.length} attendee{groupedAttendance.deletedAttendees.length === 1 ? '' : 's'} removed after attendance was recorded.
+                        </p>
+                      )}
                     </>
                   ) : (
                     <>

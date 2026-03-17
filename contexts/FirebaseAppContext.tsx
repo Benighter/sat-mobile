@@ -30,6 +30,7 @@ import {
 } from '../services/firebaseService';
 import { crossTenantService } from '../services/crossTenantService';
 import { dataMigrationService } from '../utils/dataMigration';
+import { buildAttendanceMemberSnapshot, buildAttendanceNewBelieverSnapshot } from '../utils/attendanceUtils';
 import { withLeadershipFirstTimerRule } from '../utils/memberStatus';
 import { userService } from '../services/userService';
 import { isImageDataUrl } from '../services/imageStorageService';
@@ -1437,6 +1438,38 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     }
   }, [members, showToast, isMinistryContext, userProfile]);
 
+  const persistMemberAttendanceSnapshots = useCallback(async (member: Member) => {
+    const memberAttendanceRecords = attendanceRecords.filter((record) => record.memberId === member.id);
+    if (!memberAttendanceRecords.length) return;
+
+    const memberSnapshot = buildAttendanceMemberSnapshot(member, bacentas);
+    setAttendanceRecords((prev) => prev.map((record) => (
+      record.memberId === member.id
+        ? { ...record, memberSnapshot }
+        : record
+    )));
+
+    await Promise.all(memberAttendanceRecords.map((record) => (
+      attendanceFirebaseService.addOrUpdate({ ...record, memberSnapshot })
+    )));
+  }, [attendanceRecords, bacentas]);
+
+  const persistNewBelieverAttendanceSnapshots = useCallback(async (newBeliever: NewBeliever) => {
+    const newBelieverAttendanceRecords = attendanceRecords.filter((record) => record.newBelieverId === newBeliever.id);
+    if (!newBelieverAttendanceRecords.length) return;
+
+    const newBelieverSnapshot = buildAttendanceNewBelieverSnapshot(newBeliever);
+    setAttendanceRecords((prev) => prev.map((record) => (
+      record.newBelieverId === newBeliever.id
+        ? { ...record, newBelieverSnapshot }
+        : record
+    )));
+
+    await Promise.all(newBelieverAttendanceRecords.map((record) => (
+      attendanceFirebaseService.addOrUpdate({ ...record, newBelieverSnapshot })
+    )));
+  }, [attendanceRecords]);
+
   const deleteMemberHandler = useCallback(async (memberId: string) => {
     if (!ensureCanWrite()) throw new Error('Read-only access');
     try {
@@ -1506,6 +1539,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
 
       // Use ministry service for bidirectional sync in ministry mode
       const memberName = `${memberToDelete.firstName} ${memberToDelete.lastName || ''}`.trim();
+      await persistMemberAttendanceSnapshots(memberToDelete);
 
       if (isMinistryContext) {
         await ministryMembersService.delete(memberId, userProfile);
@@ -1542,7 +1576,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     } finally {
       setIsLoading(false);
     }
-  }, [showToast, members, userProfile, sundayConfirmations, outreachMembers]);
+  }, [showToast, members, userProfile, sundayConfirmations, outreachMembers, persistMemberAttendanceSnapshots]);
 
   // Bacenta handlers
   const addBacentaHandler = useCallback(async (bacentaData: Omit<Bacenta, 'id'>) => {
@@ -1696,6 +1730,12 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     if (!ensureCanWrite()) throw new Error('Read-only access');
     try {
       setIsLoading(true);
+      const newBelieverToDelete = newBelievers.find((newBeliever) => newBeliever.id === newBelieverId);
+      if (!newBelieverToDelete) {
+        throw new Error('New believer not found');
+      }
+
+      await persistNewBelieverAttendanceSnapshots(newBelieverToDelete);
       await newBelieversFirebaseService.delete(newBelieverId);
       showToast('success', 'New believer deleted successfully');
     } catch (error: any) {
@@ -1705,7 +1745,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     } finally {
       setIsLoading(false);
     }
-  }, [showToast]);
+  }, [showToast, newBelievers, persistNewBelieverAttendanceSnapshots]);
 
   // Outreach handlers
   const setOutreachMonth = useCallback((yyyymm: string) => {
@@ -1943,9 +1983,8 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
             const confs = sundayConfirmations.filter(c => c.memberId === d.id);
             for (const c of confs) await confirmationFirebaseService.delete(c.id);
 
-            // Remove attendance for this member
-            const att = attendanceRecords.filter(a => a.memberId === d.id);
-            for (const a of att) await attendanceFirebaseService.delete(a.id);
+            // Preserve attendance history with snapshots before removing the duplicate member
+            await persistMemberAttendanceSnapshots(d);
 
             // Remove prayer records for this member
             const prayers = prayerRecords.filter(p => p.memberId === d.id);
@@ -1983,7 +2022,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     } finally {
       setIsLoading(false);
     }
-  }, [isImpersonating, currentExternalPermission, members, sundayConfirmations, attendanceRecords, prayerRecords, showToast]);
+  }, [isImpersonating, currentExternalPermission, members, sundayConfirmations, prayerRecords, showToast, persistMemberAttendanceSnapshots]);
 
   const addOutreachMemberHandler = useCallback(async (data: Omit<OutreachMember, 'id' | 'createdDate' | 'lastUpdated'>): Promise<string> => {
     if (!ensureCanWrite()) throw new Error('Read-only access');
@@ -2592,12 +2631,18 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
   const markAttendanceHandler = useCallback(async (memberId: string, date: string, status: AttendanceStatus) => {
     if (!ensureCanWrite()) throw new Error('Read-only access');
     try {
+      const member = members.find((item) => item.id === memberId);
+      if (!member) {
+        throw new Error('Member not found');
+      }
+
       const recordId = `${memberId}_${date}`;
       const record: AttendanceRecord = {
         id: recordId,
         memberId,
         date,
-        status
+        status,
+        memberSnapshot: buildAttendanceMemberSnapshot(member, bacentas)
       };
 
       console.log('📝 Marking attendance:', recordId, status);
@@ -2664,17 +2709,23 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
       showToast('error', 'Failed to mark attendance', error.message);
       throw error;
     }
-  }, [showToast, isMinistryContext, userProfile, members]);
+  }, [showToast, isMinistryContext, userProfile, members, bacentas]);
 
   const markNewBelieverAttendanceHandler = useCallback(async (newBelieverId: string, date: string, status: AttendanceStatus) => {
     if (!ensureCanWrite()) throw new Error('Read-only access');
     try {
+      const newBeliever = newBelievers.find((item) => item.id === newBelieverId);
+      if (!newBeliever) {
+        throw new Error('New believer not found');
+      }
+
       const recordId = `${newBelieverId}_${date}`;
       const record: AttendanceRecord = {
         id: recordId,
         newBelieverId,
         date,
-        status
+        status,
+        newBelieverSnapshot: buildAttendanceNewBelieverSnapshot(newBeliever)
       };
 
       await attendanceFirebaseService.addOrUpdate(record);
@@ -2684,7 +2735,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
       showToast('error', 'Failed to mark new believer attendance', error.message);
       throw error;
     }
-  }, [showToast]);
+  }, [showToast, newBelievers]);
 
   const clearAttendanceHandler = useCallback(async (memberId: string, date: string) => {
     if (!ensureCanWrite()) throw new Error('Read-only access');
