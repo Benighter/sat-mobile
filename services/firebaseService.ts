@@ -34,7 +34,7 @@ import {
 import { db, auth } from '../firebase.config';
 import { Member, Bacenta, AttendanceRecord, NewBeliever, SundayConfirmation, Guest, MemberDeletionRequest, DeletionRequestStatus, OutreachBacenta, OutreachMember, PrayerRecord, PrayerSchedule, MeetingRecord, TitheRecord, BussingRecord, TransportRecord, SonOfGod, CustomPrayer, CustomPrayerRecord, SundayOfferingRecord } from '../types';
 import { applyLeadershipFirstTimerRule, withLeadershipFirstTimerRule } from '../utils/memberStatus';
-import { cleanupStoredImage, isImageDataUrl, MAX_INLINE_IMAGE_COLLECTION_LENGTH, persistImageValue, resolveInlineImageValue } from './imageStorageService';
+import { cleanupStoredImage, DEFAULT_INLINE_IMAGE_TARGET_LENGTH, isImageDataUrl, MAX_INLINE_IMAGE_COLLECTION_LENGTH, persistImageValue, resolveInlineImageValue } from './imageStorageService';
 // Lightweight inline type to avoid circular heavy imports for new feature (kept local to service)
 export interface HeadCountRecord {
   id: string; // `${date}_${section}`
@@ -1065,7 +1065,10 @@ export const membersFirebaseService = {
       const nowIso = new Date().toISOString();
       const profilePicture = await persistImageValue({
         imageValue: member.profilePicture,
-        path: `churches/${currentChurchId}/member-profile-images/${memberRef.id}`
+        path: `churches/${currentChurchId}/member-profile-images/${memberRef.id}`,
+        maxLength: DEFAULT_INLINE_IMAGE_TARGET_LENGTH,
+        processingErrorMessage: 'Failed to process profile picture.',
+        oversizeErrorMessage: 'Profile picture is still too large after compression. Please crop a smaller area and try again.'
       });
       const payload = withLeadershipFirstTimerRule({
         ...member,
@@ -1117,7 +1120,10 @@ export const membersFirebaseService = {
       if (Object.prototype.hasOwnProperty.call(sanitized, 'profilePicture')) {
         sanitized.profilePicture = await persistImageValue({
           imageValue: sanitized.profilePicture,
-          path: `churches/${currentChurchId}/member-profile-images/${memberId}`
+          path: `churches/${currentChurchId}/member-profile-images/${memberId}`,
+          maxLength: DEFAULT_INLINE_IMAGE_TARGET_LENGTH,
+          processingErrorMessage: 'Failed to process profile picture.',
+          oversizeErrorMessage: 'Profile picture is still too large after compression. Please crop a smaller area and try again.'
         });
       }
       const payload = {
