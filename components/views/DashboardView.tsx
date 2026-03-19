@@ -8,6 +8,7 @@ import { getUniquePresentAttendanceCount } from '../../utils/attendanceUtils';
 import { db } from '../../firebase.config';
 import { doc, getDoc } from 'firebase/firestore';
 import { firebaseUtils, headCountService } from '../../services/firebaseService';
+import useCurrencyFormatter from '../../hooks/useCurrencyFormatter';
 import { TabKeys } from '../../types';
 import { dashboardLayoutStorage } from '../../utils/localStorage';
 import { hasAdminPrivileges } from '../../utils/permissionUtils';
@@ -105,6 +106,7 @@ const StatCard: React.FC<StatCardProps> = memo(({ title, value, icon, descriptio
 
 const DashboardView: React.FC = memo(() => {
   const { members, attendanceRecords, newBelievers, displayedSundays, displayedDate, sundayConfirmations, guests, switchTab, user, userProfile, currentChurchId, allOutreachMembers, bacentas, prayerRecords, meetingRecords, isMinistryContext, titheRecords, transportRecords, activeMinistryName } = useAppContext(); // Use displayedSundays
+  const { formatIncomeAmount } = useCurrencyFormatter();
 
   const activeMembers = useMemo(() => {
     const filtered = members.filter(m => !m.frozen);
@@ -326,13 +328,6 @@ const DashboardView: React.FC = memo(() => {
 
   const bacentaMeetingAttendance = getCurrentWeekBacentaMeetingAttendance();
   const isAdmin = hasAdminPrivileges(userProfile);
-  const formatZAR = useCallback((n: number) => {
-    try {
-      return new Intl.NumberFormat('en-ZA', { style: 'currency', currency: 'ZAR', maximumFractionDigits: 2 }).format(n);
-    } catch {
-      return `R${(n || 0).toFixed(2)}`;
-    }
-  }, []);
 
   // Overall prayer totals (all-time)
   const overallPrayerMarks = useMemo(() => {
@@ -613,7 +608,7 @@ const DashboardView: React.FC = memo(() => {
               <>
                 <span>{`For ${bacentaMeetingAttendance.formattedWeek}`}</span>
                 <br />
-                <span>{`Income: ${formatZAR(bacentaMeetingAttendance.totalIncome)}`}</span>
+                <span>{`Income: ${formatIncomeAmount(bacentaMeetingAttendance.totalIncome)}`}</span>
               </>
             ) : (
               <> {`For ${bacentaMeetingAttendance.formattedWeek}`} </>

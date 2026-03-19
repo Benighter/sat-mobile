@@ -6,6 +6,7 @@ import Button from '../ui/Button';
 import ImageCropper from '../ui/ImageCropper';
 import ConfirmationModal from '../modals/confirmations/ConfirmationModal';
 import { useAppContext } from '../../contexts/FirebaseAppContext';
+import useCurrencyFormatter from '../../hooks/useCurrencyFormatter';
 import { compressImageForInlineSave } from '../../services/imageStorageService';
 
 interface BacentaAttendanceFormProps {
@@ -22,6 +23,7 @@ const BacentaAttendanceForm: React.FC<BacentaAttendanceFormProps> = ({
   existingRecord
 }) => {
   const { bacentas, members, saveMeetingRecordHandler, updateMeetingRecordHandler, deleteMeetingRecordHandler, showToast } = useAppContext();
+  const { formatIncomeAmount } = useCurrencyFormatter();
 
   // View/Edit mode state
   const [isViewMode, setIsViewMode] = useState(!!existingRecord);
@@ -462,7 +464,7 @@ const BacentaAttendanceForm: React.FC<BacentaAttendanceFormProps> = ({
           </div>
           <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
             <div className="text-xs text-gray-500">Offering</div>
-            <div className="mt-1 text-xl font-extrabold text-slate-900">R{(totalOffering||0).toFixed(2)}</div>
+            <div className="mt-1 text-xl font-extrabold text-slate-900">{formatIncomeAmount(totalOffering || 0)}</div>
           </div>
         </div>
 
@@ -941,15 +943,15 @@ const BacentaAttendanceForm: React.FC<BacentaAttendanceFormProps> = ({
                       </div>
                       <div className="p-3 rounded-xl bg-gray-50 border border-gray-200 text-center">
                         <p className="text-xs text-gray-500">Total cash offering</p>
-                        <p className="text-lg font-semibold">R{(cashOffering || 0).toFixed(2)}</p>
+                        <p className="text-lg font-semibold">{formatIncomeAmount(cashOffering || 0)}</p>
                       </div>
                       <div className="p-3 rounded-xl bg-gray-50 border border-gray-200 text-center">
                         <p className="text-xs text-gray-500">Total online offering</p>
-                        <p className="text-lg font-semibold">R{(onlineOffering || 0).toFixed(2)}</p>
+                        <p className="text-lg font-semibold">{formatIncomeAmount(onlineOffering || 0)}</p>
                       </div>
                       <div className="p-3 rounded-xl bg-gray-50 border border-gray-200 text-center">
                         <p className="text-xs text-gray-500">Total offering</p>
-                        <p className="text-lg font-semibold">R{(totalOffering || 0).toFixed(2)}</p>
+                        <p className="text-lg font-semibold">{formatIncomeAmount(totalOffering || 0)}</p>
                       </div>
                     </div>
                   </div>
@@ -990,14 +992,14 @@ const BacentaAttendanceForm: React.FC<BacentaAttendanceFormProps> = ({
               <div className="p-4 rounded-xl bg-white border border-gray-200 shadow-sm">
                 <p className="text-sm font-medium text-gray-700 mb-2">Offerings (Cash / Online)</p>
                 {isViewMode ? (
-                  <p className="text-base font-semibold">R{(cashOffering || 0).toFixed(2)} / R{(onlineOffering || 0).toFixed(2)}</p>
+                  <p className="text-base font-semibold">{formatIncomeAmount(cashOffering || 0)} / {formatIncomeAmount(onlineOffering || 0)}</p>
                 ) : (
                   <div className="grid grid-cols-2 gap-2">
                     <input type="number" min={0} step="0.01" value={cashOffering} onChange={(e) => setCashOffering(Number(e.target.value))} placeholder="Cash" className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
                     <input type="number" min={0} step="0.01" value={onlineOffering} onChange={(e) => setOnlineOffering(Number(e.target.value))} placeholder="Online" className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
                   </div>
                 )}
-                <p className="mt-2 text-sm text-gray-600">Total: <span className="font-semibold">R{(totalOffering || 0).toFixed(2)}</span></p>
+                <p className="mt-2 text-sm text-gray-600">Total: <span className="font-semibold">{formatIncomeAmount(totalOffering || 0)}</span></p>
               </div>
             </div>
 

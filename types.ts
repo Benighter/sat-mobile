@@ -413,6 +413,8 @@ export interface UserPreferences {
   allowEditPreviousSundays: boolean;
   /** Admin-only mode that unlocks Sunday income management in Weekly Attendance */
   isCampusShepherd?: boolean;
+  /** Preferred display currency for all income amounts across the app */
+  preferredCurrency?: string;
   /** Optional custom app display name shown in header */
   appDisplayName?: string;
   /** Optional selected ministry name; can be used as default app name */

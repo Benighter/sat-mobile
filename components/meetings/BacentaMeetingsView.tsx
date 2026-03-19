@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useAppContext } from '../../contexts/FirebaseAppContext';
 import { getLatestMeetingDay, formatDateToYYYYMMDD, getWednesdayOfWeek, getMeetingWeekDates } from '../../utils/dateUtils';
+import useCurrencyFormatter from '../../hooks/useCurrencyFormatter';
 import { CalendarIcon, ChevronLeftIcon, ChevronRightIcon, ClockIcon, BuildingOfficeIcon, CheckCircleIcon, ClipboardIcon } from '../icons';
 import { getActiveMembersByBacenta, getActiveMemberCount } from '../../utils/memberUtils';
 import BacentaAttendanceForm from './BacentaAttendanceForm';
@@ -83,6 +84,7 @@ const MeetingDatePicker: React.FC<{
 
 const BacentaMeetingsView: React.FC = () => {
   const { bacentas, members, meetingRecords, showToast, userProfile } = useAppContext();
+  const { formatIncomeAmount } = useCurrencyFormatter();
   const isAdmin = (userProfile?.role === 'admin');
 
   // Initialize with the latest meeting day (Wed/Thu). If it's Fri–Tue, we want last Thursday.
@@ -326,7 +328,7 @@ const BacentaMeetingsView: React.FC = () => {
 
         lines.push(`${idx}) ${WHITE_FLOWER} ${leaderName} (${bacenta.name})`);
         lines.push(`   • Attendance: ${attendance}`);
-        lines.push(`   • Offering: R${offering.toFixed(2)}`);
+        lines.push(`   • Offering: ${formatIncomeAmount(offering)}`);
         lines.push(`   • First Timers: ${firstTimers}`);
         lines.push(`   • Visitors: ${visitors}`);
         lines.push(`   • New Believers: ${converts}`);
@@ -380,9 +382,9 @@ const BacentaMeetingsView: React.FC = () => {
       // Totals
       lines.push(divider('Totals'));
       lines.push(`Meetings recorded: ${totalMeetingsRecorded}/${totalPossibleMeetings}`);
-      lines.push(`• Online: R${overallOnline.toFixed(2)}`);
-      lines.push(`• Cash: R${overallCash.toFixed(2)}`);
-      lines.push(`• Offering (Overall): R${overallOffering.toFixed(2)}`);
+      lines.push(`• Online: ${formatIncomeAmount(overallOnline)}`);
+      lines.push(`• Cash: ${formatIncomeAmount(overallCash)}`);
+      lines.push(`• Offering (Overall): ${formatIncomeAmount(overallOffering)}`);
       lines.push(`• First Timers: ${overallFirstTimers}`);
       lines.push(`• Visitors: ${overallVisitors}`);
       lines.push(`• New Believers: ${overallNewBelievers}`);
@@ -492,8 +494,8 @@ const BacentaMeetingsView: React.FC = () => {
                 {isAdmin && (
                   <div className="rounded-xl border border-amber-200 bg-white shadow-sm px-4 py-4 text-center">
                     <div className="text-xs text-amber-700 uppercase tracking-wider">Offering so far</div>
-                    <div className="text-xl sm:text-2xl font-extrabold text-amber-900 mt-1">R{weekSoFar.offering.toFixed(2)}</div>
-                    <div className="text-[10px] text-amber-700/80 mt-0.5">Online R{weekSoFar.online.toFixed(2)} · Cash R{weekSoFar.cash.toFixed(2)}</div>
+                    <div className="text-xl sm:text-2xl font-extrabold text-amber-900 mt-1">{formatIncomeAmount(weekSoFar.offering)}</div>
+                    <div className="text-[10px] text-amber-700/80 mt-0.5">Online {formatIncomeAmount(weekSoFar.online)} · Cash {formatIncomeAmount(weekSoFar.cash)}</div>
                   </div>
                 )}
 
@@ -555,7 +557,7 @@ const BacentaMeetingsView: React.FC = () => {
                           </h3>
                           <p className="text-sm text-gray-500">
                             {hasExistingRecord
-                              ? <>Total: <span className="font-semibold">{String(totals!.attendance).padStart(2, '0')}</span> · Offering: <span className="font-semibold">R{(totals!.offering || 0).toFixed(2)}</span></>
+                              ? <>Total: <span className="font-semibold">{String(totals!.attendance).padStart(2, '0')}</span> · Offering: <span className="font-semibold">{formatIncomeAmount(totals!.offering || 0)}</span></>
                               : <>{memberCount} member{memberCount !== 1 ? 's' : ''}</>}
                           </p>
                         </div>

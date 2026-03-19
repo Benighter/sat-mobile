@@ -27,6 +27,7 @@ import { AttendanceRecord, Member, NewBeliever, Bacenta, SundayOfferingRecord } 
 import { hasAdminPrivileges, isCampusShepherd } from '../../utils/permissionUtils';
 import { isLeadershipPosition, isMemberFirstTimerOnSunday } from '../../utils/memberStatus';
 import { MINISTRY_OPTIONS } from '../../constants';
+import useCurrencyFormatter from '../../hooks/useCurrencyFormatter';
 import { membersFirebaseService } from '../../services/firebaseService';
 import { compressImageFileForInlineSave, compressImageForInlineSave, DEFAULT_INLINE_IMAGE_COLLECTION_LENGTH, MAX_INLINE_IMAGE_COLLECTION_LENGTH } from '../../services/imageStorageService';
 
@@ -75,6 +76,7 @@ const WeeklyAttendanceView: React.FC = () => {
     activeMinistryName,
     saveSundayOfferingHandler
   } = useAppContext();
+  const { formatIncomeAmount } = useCurrencyFormatter();
 
   const canManageSundayIncome = isCampusShepherd(userProfile);
 
@@ -607,13 +609,13 @@ const WeeklyAttendanceView: React.FC = () => {
     text += `Campus Shepherd : ${campusShepherdName}\n\n`;
     text += `Date of service: ${formatSlashDate(selectedSunday)}\n\n`;
     text += `*Gathering service total attendance : ${formatCount(totalAttendance)}*\n\n`;
-    text += `*TOTAL Income (week) : ${formatReportCurrency(weeklyIncomeSummary.totalWeekIncome)}*\n\n`;
-    text += `*Gathering service Income Cash: ${formatCompactReportCurrency(weeklyIncomeSummary.sundayCashTotal)}*\n`;
-    text += `*Offering: ${formatReportCurrency(weeklyIncomeSummary.sundayCashOffering)}*\n`;
-    text += `*Tithe: ${formatReportCurrency(weeklyIncomeSummary.sundayCashTithe)}*\n\n`;
-    text += `*Total EFT transfers* (electronic only): ${formatReportCurrency(weeklyIncomeSummary.sundayOnlineTotal)}\n`;
-    text += `*EFT tithes : ${formatReportCurrency(weeklyIncomeSummary.sundayOnlineTithe)}:*\n`;
-    text += `*EFT offering : ${formatReportCurrency(weeklyIncomeSummary.sundayOnlineOffering)}*\n\n`;
+    text += `*TOTAL Income (week) : ${formatIncomeAmount(weeklyIncomeSummary.totalWeekIncome)}*\n\n`;
+    text += `*Gathering service Income Cash: ${formatIncomeAmount(weeklyIncomeSummary.sundayCashTotal, { compact: true })}*\n`;
+    text += `*Offering: ${formatIncomeAmount(weeklyIncomeSummary.sundayCashOffering)}*\n`;
+    text += `*Tithe: ${formatIncomeAmount(weeklyIncomeSummary.sundayCashTithe)}*\n\n`;
+    text += `*Total EFT transfers* (electronic only): ${formatIncomeAmount(weeklyIncomeSummary.sundayOnlineTotal)}\n`;
+    text += `*EFT tithes : ${formatIncomeAmount(weeklyIncomeSummary.sundayOnlineTithe)}:*\n`;
+    text += `*EFT offering : ${formatIncomeAmount(weeklyIncomeSummary.sundayOnlineOffering)}*\n\n`;
     text += 'Breakdown Per Bacenta Leader\n';
 
     if (leaderTotals.length > 0) {
@@ -975,19 +977,6 @@ const WeeklyAttendanceView: React.FC = () => {
     return `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear()}`;
   };
 
-  const formatZarAmount = (amount: number) => {
-    const normalizedAmount = Number.isFinite(amount) ? amount : 0;
-    return `R${normalizedAmount.toFixed(2).replace(/\.00$/, '')}`;
-  };
-
-  const formatUsdAmount = (amount: number) => {
-    const normalizedAmount = Number.isFinite(amount) ? amount : 0;
-    const approximateZarPerUsd = 16.88;
-    return `$${(normalizedAmount / approximateZarPerUsd).toFixed(2)}`;
-  };
-
-  const formatReportCurrency = (amount: number) => `${formatZarAmount(amount)} (${formatUsdAmount(amount)})`;
-  const formatCompactReportCurrency = (amount: number) => `${formatZarAmount(amount)}(${formatUsdAmount(amount)})`;
   const formatCount = (count: number) => String(Math.max(0, count)).padStart(2, '0');
   const weeklyIncomeSummary = useMemo(() => {
     const selectedDate = new Date(selectedSunday + 'T00:00:00');
@@ -1149,7 +1138,7 @@ const WeeklyAttendanceView: React.FC = () => {
             className="mt-1.5 w-full border-0 bg-transparent p-0 text-xl font-bold text-gray-900 outline-none"
           />
         ) : (
-          <p className="mt-1.5 text-xl font-bold text-gray-900">R{value.toFixed(2)}</p>
+          <p className="mt-1.5 text-xl font-bold text-gray-900">{formatIncomeAmount(value)}</p>
         )}
       </button>
     );
@@ -1370,9 +1359,9 @@ const WeeklyAttendanceView: React.FC = () => {
 
                       <div className="rounded-xl border border-slate-200 bg-slate-900 px-3 py-3.5 text-left lg:px-4 lg:py-4">
                         <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-300">Grand Total</p>
-                        <p className="mt-1 text-xl font-bold text-white lg:text-2xl">R{totalSundayIncome.toFixed(2)}</p>
+                        <p className="mt-1 text-xl font-bold text-white lg:text-2xl">{formatIncomeAmount(totalSundayIncome)}</p>
                         <p className="mt-1 text-xs text-slate-300">
-                          Offering R{totalSundayOffering.toFixed(2)} + Tithe R{totalSundayTithe.toFixed(2)}
+                          Offering {formatIncomeAmount(totalSundayOffering)} + Tithe {formatIncomeAmount(totalSundayTithe)}
                         </p>
                       </div>
                     </div>
@@ -1388,7 +1377,7 @@ const WeeklyAttendanceView: React.FC = () => {
                             </div>
                             <div className="text-right">
                               <p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-700">Subtotal</p>
-                              <p className="text-lg font-bold text-emerald-900">R{totalSundayOffering.toFixed(2)}</p>
+                              <p className="text-lg font-bold text-emerald-900">{formatIncomeAmount(totalSundayOffering)}</p>
                             </div>
                           </div>
 
@@ -1408,7 +1397,7 @@ const WeeklyAttendanceView: React.FC = () => {
                             </div>
                             <div className="text-right">
                               <p className="text-[10px] font-semibold uppercase tracking-wide text-blue-700">Subtotal</p>
-                              <p className="text-lg font-bold text-blue-900">R{totalSundayTithe.toFixed(2)}</p>
+                              <p className="text-lg font-bold text-blue-900">{formatIncomeAmount(totalSundayTithe)}</p>
                             </div>
                           </div>
 
@@ -1745,15 +1734,15 @@ const WeeklyAttendanceView: React.FC = () => {
                         <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
                           <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-center">
                             <p className="text-xs font-medium uppercase tracking-wide text-emerald-700">Sunday Cash</p>
-                            <p className="mt-1 text-xl font-bold text-emerald-900">R{weeklyIncomeSummary.sundayCashTotal.toFixed(2)}</p>
+                            <p className="mt-1 text-xl font-bold text-emerald-900">{formatIncomeAmount(weeklyIncomeSummary.sundayCashTotal)}</p>
                           </div>
                           <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-center">
                             <p className="text-xs font-medium uppercase tracking-wide text-amber-700">Sunday Online</p>
-                            <p className="mt-1 text-xl font-bold text-amber-900">R{weeklyIncomeSummary.sundayOnlineTotal.toFixed(2)}</p>
+                            <p className="mt-1 text-xl font-bold text-amber-900">{formatIncomeAmount(weeklyIncomeSummary.sundayOnlineTotal)}</p>
                           </div>
                           <div className="rounded-xl border border-slate-200 bg-slate-900 p-4 text-center">
                             <p className="text-xs font-medium uppercase tracking-wide text-slate-300">Sunday Total</p>
-                            <p className="mt-1 text-xl font-bold text-white">R{totalSundayIncome.toFixed(2)}</p>
+                            <p className="mt-1 text-xl font-bold text-white">{formatIncomeAmount(totalSundayIncome)}</p>
                           </div>
                         </div>
                       )}

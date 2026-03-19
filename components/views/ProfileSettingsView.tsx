@@ -3,10 +3,12 @@ import { useAppContext } from '../../contexts/FirebaseAppContext';
 // import { useTheme } from '../../contexts/ThemeContext'; // Theme selection disabled
 import { userService } from '../../services/userService';
 import { inviteService } from '../../services/inviteService';
+import useCurrencyFormatter from '../../hooks/useCurrencyFormatter';
+import { formatIncomeDisplay } from '../../utils/currency';
 import { getDefaultNotificationPreferences } from '../../utils/notificationUtils';
 // import { emailServiceClient } from '../../services/emailServiceClient'; // Email feature on hold
 // Ministry feature removed – no MINISTRY_OPTIONS import
-import { NotificationPreferences, CrossTenantInvite } from '../../types';
+import { NotificationPreferences, CrossTenantInvite, UserPreferences } from '../../types';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
 import Badge from '../ui/Badge';
@@ -24,6 +26,7 @@ import {
   ShieldCheckIcon,
   KeyIcon,
   UserGroupIcon,
+  CurrencyDollarIcon,
   RefreshIcon,
   BellIcon,
   CakeIcon,
@@ -33,12 +36,6 @@ import {
 import { collection, doc, getDocs, query, Timestamp, updateDoc, where } from 'firebase/firestore';
 import { db } from '../../firebase.config';
 import { crossTenantService } from '../../services/crossTenantService';
-
-interface UserPreferences {
-  // theme: 'light' | 'dark' | 'system'; // disabled
-  allowEditPreviousSundays: boolean;
-  isCampusShepherd?: boolean;
-}
 
 interface ProfileFormData {
   firstName: string;
@@ -62,11 +59,13 @@ const ProfileSettingsView: React.FC = () => {
     currentChurchId
   } = useAppContext();
   // const { theme, setTheme } = useTheme(); // Theme selection disabled
+  const { currencyOptions, rates } = useCurrencyFormatter();
 
   const [preferences, setPreferences] = useState<UserPreferences>({
-    // theme: theme,
+    theme: userProfile?.preferences?.theme || 'light',
     allowEditPreviousSundays: true, // default enabled
-    isCampusShepherd: userProfile?.preferences?.isCampusShepherd
+    isCampusShepherd: userProfile?.preferences?.isCampusShepherd,
+    preferredCurrency: userProfile?.preferences?.preferredCurrency || 'ZAR'
   });
 
   // Constituency (church) name editor – linked to Super Admin feature
@@ -113,9 +112,10 @@ const ProfileSettingsView: React.FC = () => {
   useEffect(() => {
     if (userProfile) {
       setPreferences({
-        // theme: theme,
+        theme: userProfile.preferences?.theme || 'light',
         allowEditPreviousSundays: true,
-        isCampusShepherd: userProfile.preferences?.isCampusShepherd
+        isCampusShepherd: userProfile.preferences?.isCampusShepherd,
+        preferredCurrency: userProfile.preferences?.preferredCurrency || 'ZAR'
       });
 
       setConstituencyName(userProfile.churchName || '');
@@ -531,6 +531,48 @@ const ProfileSettingsView: React.FC = () => {
             {/* Theme selection temporarily disabled */}
 
             {/* Edit Previous Sundays control temporarily disabled; default remains enabled */}
+
+            <div className="mt-6 rounded-2xl border border-emerald-100 bg-gradient-to-r from-emerald-50 to-cyan-50 p-6">
+              <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+                <div className="flex-1">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-600 text-white shadow-sm">
+                      <CurrencyDollarIcon className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-900">Currency Display</h3>
+                      <p className="text-sm text-gray-600">
+                        Income will use your selected currency, with USD shown in brackets unless USD is selected.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-4">
+                    <label className="mb-2 block text-sm font-medium text-gray-700" htmlFor="preferredCurrency">
+                      Preferred currency
+                    </label>
+                    <select
+                      id="preferredCurrency"
+                      value={preferences.preferredCurrency || 'ZAR'}
+                      onChange={(event) => setPreferences(prev => ({ ...prev, preferredCurrency: event.target.value }))}
+                      className="h-12 w-full rounded-2xl border-2 border-gray-200 bg-white px-4 text-base text-gray-900 transition-all duration-200 focus:border-emerald-500 focus:outline-none"
+                    >
+                      {currencyOptions.map(option => (
+                        <option key={option.code} value={option.code}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-white/70 bg-white/90 p-5 shadow-sm lg:min-w-[280px]">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">Preview</p>
+                  <p className="mt-2 text-2xl font-bold text-gray-900">{formatIncomeDisplay(1250, preferences.preferredCurrency || 'ZAR', rates)}</p>
+                  <p className="mt-2 text-sm text-gray-600">Stored internally in South African Rand.</p>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 

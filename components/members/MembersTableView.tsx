@@ -6,6 +6,7 @@ import { formatDisplayDate, getMonthName, getUpcomingSunday } from '../../utils/
 import { isDateEditable } from '../../utils/attendanceUtils';
 import { canDeleteMemberWithRole, hasAdminPrivileges } from '../../utils/permissionUtils';
 import { SmartTextParser } from '../../utils/smartTextParser';
+import useCurrencyFormatter from '../../hooks/useCurrencyFormatter';
 import { memberDeletionRequestService, ministryExclusionsService } from '../../services/firebaseService';
 import { UserIcon, TrashIcon, PhoneIcon, CalendarIcon, ChevronLeftIcon, ChevronRightIcon, EllipsisVerticalIcon, CheckIcon, ClockIcon, ClipboardIcon, ArrowRightIcon, CogIcon, SearchIcon, UserPlusIcon, ExclamationTriangleIcon } from '../icons';
 import ConstituencyTransferModal from '../modals/ConstituencyTransferModal';
@@ -76,6 +77,7 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
   // Get user preference for editing previous Sundays
   const allowEditPreviousSundays = userProfile?.preferences?.allowEditPreviousSundays ?? false;
   const isAdmin = hasAdminPrivileges(userProfile);
+  const { formatIncomeAmount } = useCurrencyFormatter();
 
   const [isCleaningDuplicates, setIsCleaningDuplicates] = useState(false);
   const handleCleanupDuplicates = async () => {
@@ -680,8 +682,8 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
           },
           {
             key: 'tithe_amount',
-            header: 'Amount (ZAR)',
-            width: '140px',
+            header: 'Amount',
+            width: '220px',
             align: 'center' as const,
             render: (member: Member) => {
               const rec = titheByMember.get(member.id);
@@ -715,7 +717,7 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
                       // Format after saving
                       e.currentTarget.value = amt ? formatCurrency(amt) : '';
                     }}
-                    className="w-28 px-2 py-1 border border-gray-300 rounded-md text-sm text-gray-900"
+                    className="w-52 px-2 py-1 border border-gray-300 rounded-md text-sm text-gray-900"
                     placeholder="0.00"
                     title={(rec?.lastUpdated ? `Last updated: ${new Date(rec.lastUpdated).toLocaleString()}` : 'Enter tithe amount')}
                   />
@@ -751,8 +753,8 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
           },
           {
             key: 'bussing_amount',
-      header: 'Transport (ZAR)',
-            width: '150px',
+          header: 'Transport',
+            width: '220px',
             align: 'center' as const,
             render: (member: Member) => {
               const rec = bussingByMember.get(member.id);
@@ -781,7 +783,7 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
                       markTransportHandler(member.id, paid, amt);
                       e.currentTarget.value = amt ? formatCurrency(amt) : '';
                     }}
-                    className="w-32 px-2 py-1 border border-gray-300 rounded-md text-sm text-gray-900"
+                    className="w-52 px-2 py-1 border border-gray-300 rounded-md text-sm text-gray-900"
                     placeholder="0.00"
         title={(rec?.lastUpdated ? `Last updated: ${new Date(rec.lastUpdated).toLocaleString()}` : 'Enter transport amount')}
                   />
@@ -944,11 +946,7 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
   }, [displayMembers, bussingByMember, isTithe]);
 
   const formatCurrency = (n: number) => {
-    try {
-      return new Intl.NumberFormat('en-ZA', { style: 'currency', currency: 'ZAR', maximumFractionDigits: 2 }).format(n);
-    } catch {
-      return `R${(n || 0).toFixed(2)}`;
-    }
+    return formatIncomeAmount(n, { compact: true });
   };
 
   // Get bacenta name if filtering by bacenta
