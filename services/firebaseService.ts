@@ -2859,6 +2859,8 @@ export const sundayOfferingFirebaseService = {
         onlineTithe: Number(record.onlineTithe || 0),
         totalTithe: Number(record.totalTithe ?? ((record.cashTithe || 0) + (record.onlineTithe || 0))),
         reportImages: persistedImages,
+        offeringProofs: record.offeringProofs || [],
+        titheProofs: record.titheProofs || [],
         recordedAt: record.recordedAt || Timestamp.now().toDate().toISOString(),
         recordedBy: currentUser?.uid || 'unknown',
         lastUpdated: new Date().toISOString()

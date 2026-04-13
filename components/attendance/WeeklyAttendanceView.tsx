@@ -21,15 +21,18 @@ import {
   UsersIcon,
   ClipboardIcon,
   TrendingUpIcon,
-  XMarkIcon
+  XMarkIcon,
+  CloudArrowUpIcon
 } from '../icons';
-import { AttendanceRecord, Member, NewBeliever, Bacenta, SundayOfferingRecord } from '../../types';
+import { AttendanceRecord, Member, NewBeliever, Bacenta, SundayOfferingRecord, ProofAttachment } from '../../types';
 import { hasAdminPrivileges, isCampusShepherd } from '../../utils/permissionUtils';
 import { isLeadershipPosition, isMemberFirstTimerOnSunday } from '../../utils/memberStatus';
 import { MINISTRY_OPTIONS } from '../../constants';
 import useCurrencyFormatter from '../../hooks/useCurrencyFormatter';
 import { membersFirebaseService } from '../../services/firebaseService';
 import { compressImageFileForInlineSave, compressImageForInlineSave, DEFAULT_INLINE_IMAGE_COLLECTION_LENGTH, MAX_INLINE_IMAGE_COLLECTION_LENGTH } from '../../services/imageStorageService';
+import ProofUploadModal from './ProofUploadModal';
+import ProofViewer from './ProofViewer';
 
 // New grouped structure types
 interface LinkedBacentaGroup {
@@ -113,6 +116,12 @@ const WeeklyAttendanceView: React.FC = () => {
   const reportImageInputRef = useRef<HTMLInputElement | null>(null);
   const lastCampusReportImageTapRef = useRef<{ index: number; time: number }>({ index: -1, time: 0 });
   const normalizedSelectedMinistry = selectedMinistry.trim().toLowerCase();
+  const [isOfferingProofModalOpen, setIsOfferingProofModalOpen] = useState(false);
+  const [isTitheProofModalOpen, setIsTitheProofModalOpen] = useState(false);
+  const [offeringProofs, setOfferingProofs] = useState<ProofAttachment[]>([]);
+  const [titheProofs, setTitheProofs] = useState<ProofAttachment[]>([]);
+  const [showOfferingProofs, setShowOfferingProofs] = useState(false);
+  const [showTitheProofs, setShowTitheProofs] = useState(false);
 
   const selectedSundayOffering = useMemo(() => (
     sundayOfferingRecords.find(record => record.date === selectedSunday) || null
@@ -194,6 +203,11 @@ const WeeklyAttendanceView: React.FC = () => {
       return nextImages[0] || null;
     });
   }, [selectedSundayOffering?.reportImages]);
+
+  useEffect(() => {
+    setOfferingProofs(selectedSundayOffering?.offeringProofs || []);
+    setTitheProofs(selectedSundayOffering?.titheProofs || []);
+  }, [selectedSundayOffering?.offeringProofs, selectedSundayOffering?.titheProofs]);
 
   const toggleFirstTimer = async (member: Member) => {
     const isFirstTimerForSelectedSunday = isMemberFirstTimerOnSunday(member, selectedSunday);
@@ -1023,7 +1037,9 @@ const WeeklyAttendanceView: React.FC = () => {
     onlineValue: string,
     cashTitheValue: string,
     onlineTitheValue: string,
-    reportImagesOverride?: string[]
+    reportImagesOverride?: string[],
+    offeringProofsOverride?: ProofAttachment[],
+    titheProofsOverride?: ProofAttachment[]
   ) => {
     if (!canManageSundayIncome) {
       return;
@@ -1049,6 +1065,8 @@ const WeeklyAttendanceView: React.FC = () => {
       onlineTithe: onlineTitheAmount,
       totalTithe: cashTitheAmount + onlineTitheAmount,
       reportImages: reportImagesOverride ?? reportImages,
+      offeringProofs: offeringProofsOverride ?? offeringProofs,
+      titheProofs: titheProofsOverride ?? titheProofs,
       notes: selectedSundayOffering?.notes || ''
     };
 
@@ -1057,6 +1075,36 @@ const WeeklyAttendanceView: React.FC = () => {
     } catch (error) {
       throw error;
     }
+  };
+
+  const handleSaveOfferingProofs = async (proofs: ProofAttachment[]) => {
+    const normalizedCash = String(Math.max(0, Number(cashOfferingInput || 0)));
+    const normalizedOnline = String(Math.max(0, Number(onlineOfferingInput || 0)));
+    const normalizedCashTithe = String(Math.max(0, Number(cashTitheInput || 0)));
+    const normalizedOnlineTithe = String(Math.max(0, Number(onlineTitheInput || 0)));
+    setOfferingProofs(proofs);
+    await persistSundayOffering(normalizedCash, normalizedOnline, normalizedCashTithe, normalizedOnlineTithe, undefined, proofs, undefined);
+    showToast('success', 'Offering proof saved');
+  };
+
+  const handleSaveTitheProofs = async (proofs: ProofAttachment[]) => {
+    const normalizedCash = String(Math.max(0, Number(cashOfferingInput || 0)));
+    const normalizedOnline = String(Math.max(0, Number(onlineOfferingInput || 0)));
+    const normalizedCashTithe = String(Math.max(0, Number(cashTitheInput || 0)));
+    const normalizedOnlineTithe = String(Math.max(0, Number(onlineTitheInput || 0)));
+    setTitheProofs(proofs);
+    await persistSundayOffering(normalizedCash, normalizedOnline, normalizedCashTithe, normalizedOnlineTithe, undefined, undefined, proofs);
+    showToast('success', 'Tithe proof saved');
+  };
+
+  const handleRemoveOfferingProof = async (index: number) => {
+    const updated = offeringProofs.filter((_, i) => i !== index);
+    await handleSaveOfferingProofs(updated);
+  };
+
+  const handleRemoveTitheProof = async (index: number) => {
+    const updated = titheProofs.filter((_, i) => i !== index);
+    await handleSaveTitheProofs(updated);
   };
 
   const handleOfferingCardClick = (field: 'cash-offering' | 'cash-tithe' | 'online-offering' | 'online-tithe') => {
@@ -1385,6 +1433,41 @@ const WeeklyAttendanceView: React.FC = () => {
                             {renderIncomeAmountCard('cash-offering', 'Cash', parsedCashOffering, cashOfferingInput, setCashOfferingInput, 'emerald')}
                             {renderIncomeAmountCard('online-offering', 'Online', parsedOnlineOffering, onlineOfferingInput, setOnlineOfferingInput, 'emerald')}
                           </div>
+
+                          {/* Offering Proof of Payment */}
+                          <div className="mt-3 pt-3 border-t border-emerald-200/60">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => setIsOfferingProofModalOpen(true)}
+                                  className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1.5 text-[11px] font-medium text-white transition-colors hover:bg-emerald-700"
+                                >
+                                  <CloudArrowUpIcon className="w-3.5 h-3.5" />
+                                  Upload Proof
+                                </button>
+                                {offeringProofs.length > 0 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setShowOfferingProofs(prev => !prev)}
+                                    className="inline-flex items-center gap-1 rounded-lg border border-emerald-300 bg-white px-2.5 py-1.5 text-[11px] font-medium text-emerald-700 transition-colors hover:bg-emerald-50"
+                                  >
+                                    {showOfferingProofs ? 'Hide' : 'View'} ({offeringProofs.length})
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                            {showOfferingProofs && offeringProofs.length > 0 && (
+                              <div className="mt-2">
+                                <ProofViewer
+                                  proofs={offeringProofs}
+                                  type="offering"
+                                  sundayDate={selectedSunday}
+                                  onRemove={handleRemoveOfferingProof}
+                                />
+                              </div>
+                            )}
+                          </div>
                       </section>
 
                       <section className="rounded-xl border border-blue-200 bg-blue-50/70 p-3 lg:p-4">
@@ -1404,6 +1487,41 @@ const WeeklyAttendanceView: React.FC = () => {
                           <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
                             {renderIncomeAmountCard('cash-tithe', 'Cash', parsedCashTithe, cashTitheInput, setCashTitheInput, 'blue')}
                             {renderIncomeAmountCard('online-tithe', 'Online', parsedOnlineTithe, onlineTitheInput, setOnlineTitheInput, 'blue')}
+                          </div>
+
+                          {/* Tithe Proof of Payment */}
+                          <div className="mt-3 pt-3 border-t border-blue-200/60">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => setIsTitheProofModalOpen(true)}
+                                  className="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-2.5 py-1.5 text-[11px] font-medium text-white transition-colors hover:bg-blue-700"
+                                >
+                                  <CloudArrowUpIcon className="w-3.5 h-3.5" />
+                                  Upload Proof
+                                </button>
+                                {titheProofs.length > 0 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setShowTitheProofs(prev => !prev)}
+                                    className="inline-flex items-center gap-1 rounded-lg border border-blue-300 bg-white px-2.5 py-1.5 text-[11px] font-medium text-blue-700 transition-colors hover:bg-blue-50"
+                                  >
+                                    {showTitheProofs ? 'Hide' : 'View'} ({titheProofs.length})
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                            {showTitheProofs && titheProofs.length > 0 && (
+                              <div className="mt-2">
+                                <ProofViewer
+                                  proofs={titheProofs}
+                                  type="tithe"
+                                  sundayDate={selectedSunday}
+                                  onRemove={handleRemoveTitheProof}
+                                />
+                              </div>
+                            )}
                           </div>
                       </section>
                     </div>
@@ -1944,6 +2062,22 @@ const WeeklyAttendanceView: React.FC = () => {
             </div>
           </div>
         )}
+
+        {/* Proof of Payment Modals */}
+        <ProofUploadModal
+          isOpen={isOfferingProofModalOpen}
+          onClose={() => setIsOfferingProofModalOpen(false)}
+          onUpload={handleSaveOfferingProofs}
+          existingProofs={offeringProofs}
+          type="offering"
+        />
+        <ProofUploadModal
+          isOpen={isTitheProofModalOpen}
+          onClose={() => setIsTitheProofModalOpen(false)}
+          onUpload={handleSaveTitheProofs}
+          existingProofs={titheProofs}
+          type="tithe"
+        />
       </div>
     </div>
   );

@@ -116,6 +116,13 @@ export interface AttendanceRecord {
   recordedBy?: string;
 }
 
+export interface ProofAttachment {
+  data: string;       // base64 data URL (image or PDF)
+  name: string;       // original file name
+  type: 'image' | 'pdf';
+  uploadedAt: string; // ISO timestamp
+}
+
 export interface SundayOfferingRecord {
   id: string; // sunday_YYYY-MM-DD
   date: string; // Sunday date as YYYY-MM-DD
@@ -126,6 +133,8 @@ export interface SundayOfferingRecord {
   onlineTithe?: number;
   totalTithe?: number;
   reportImages?: string[];
+  offeringProofs?: ProofAttachment[];
+  titheProofs?: ProofAttachment[];
   notes?: string;
   recordedAt?: string;
   recordedBy?: string;
