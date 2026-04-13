@@ -7,10 +7,13 @@ interface ProofUploadModalProps {
   onClose: () => void;
   onUpload: (proofs: ProofAttachment[]) => Promise<void>;
   existingProofs: ProofAttachment[];
-  type: 'offering' | 'tithe';
+  type: 'offering' | 'tithe' | 'cash-offering' | 'cash-tithe';
 }
 
-const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2MB per file
+const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB per file (before compression)
+const MAX_IMAGE_DIMENSION = 1920; // max width or height in pixels
+const JPEG_QUALITY = 0.82; // compression quality (high for document readability)
+const MAX_PDF_SIZE = 500 * 1024; // 500KB max for PDFs (stored as-is)
 const ACCEPTED_IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
 const ACCEPTED_PDF_TYPES = ['application/pdf'];
 const ALL_ACCEPTED_TYPES = [...ACCEPTED_IMAGE_TYPES, ...ACCEPTED_PDF_TYPES];
@@ -29,8 +32,8 @@ const ProofUploadModal: React.FC<ProofUploadModalProps> = ({
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const label = type === 'offering' ? 'Offering' : 'Tithe';
-  const accentColor = type === 'offering' ? 'emerald' : 'blue';
+  const label = type === 'offering' ? 'Online Offering' : type === 'tithe' ? 'Online Tithe' : type === 'cash-offering' ? 'Cash Offering Deposit' : 'Cash Tithe Deposit';
+  const accentColor = (type === 'offering' || type === 'cash-offering') ? 'emerald' : 'blue';
 
   const readFileAsDataUrl = (file: File): Promise<string> =>
     new Promise((resolve, reject) => {
@@ -38,6 +41,34 @@ const ProofUploadModal: React.FC<ProofUploadModalProps> = ({
       reader.onload = () => resolve(reader.result as string);
       reader.onerror = () => reject(new Error(`Failed to read ${file.name}`));
       reader.readAsDataURL(file);
+    });
+
+  const compressImage = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        let { width, height } = img;
+        if (width > MAX_IMAGE_DIMENSION || height > MAX_IMAGE_DIMENSION) {
+          if (width > height) {
+            height = Math.round(height * (MAX_IMAGE_DIMENSION / width));
+            width = MAX_IMAGE_DIMENSION;
+          } else {
+            width = Math.round(width * (MAX_IMAGE_DIMENSION / height));
+            height = MAX_IMAGE_DIMENSION;
+          }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) { reject(new Error('Canvas not supported')); return; }
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', JPEG_QUALITY));
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error(`Failed to load ${file.name}`)); };
+      img.src = url;
     });
 
   const processFiles = async (files: File[]) => {
@@ -50,19 +81,33 @@ const ProofUploadModal: React.FC<ProofUploadModalProps> = ({
         return;
       }
       if (file.size > MAX_FILE_SIZE) {
-        setError(`"${file.name}" is too large (${(file.size / 1024 / 1024).toFixed(1)}MB). Max size is 2MB.`);
+        setError(`"${file.name}" is too large (${(file.size / 1024 / 1024).toFixed(1)}MB). Max size is 5MB.`);
         return;
       }
 
-      const data = await readFileAsDataUrl(file);
       const isPdf = ACCEPTED_PDF_TYPES.includes(file.type);
 
-      newAttachments.push({
-        data,
-        name: file.name,
-        type: isPdf ? 'pdf' : 'image',
-        uploadedAt: new Date().toISOString(),
-      });
+      if (isPdf) {
+        if (file.size > MAX_PDF_SIZE) {
+          setError(`"${file.name}" is too large (${(file.size / 1024).toFixed(0)}KB). PDF max is 500KB.`);
+          return;
+        }
+        const data = await readFileAsDataUrl(file);
+        newAttachments.push({
+          data,
+          name: file.name,
+          type: 'pdf',
+          uploadedAt: new Date().toISOString(),
+        });
+      } else {
+        const data = await compressImage(file);
+        newAttachments.push({
+          data,
+          name: file.name,
+          type: 'image',
+          uploadedAt: new Date().toISOString(),
+        });
+      }
     }
 
     setStagedFiles(prev => [...prev, ...newAttachments]);

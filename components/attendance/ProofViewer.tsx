@@ -4,7 +4,7 @@ import { ProofAttachment } from '../../types';
 
 interface ProofViewerProps {
   proofs: ProofAttachment[];
-  type: 'offering' | 'tithe';
+  type: 'offering' | 'tithe' | 'cash-offering' | 'cash-tithe';
   sundayDate: string;
   onRemove?: (index: number) => void;
 }
@@ -14,12 +14,12 @@ const ProofViewer: React.FC<ProofViewerProps> = ({ proofs, type, sundayDate, onR
 
   if (!proofs.length) return null;
 
-  const accentColor = type === 'offering' ? 'emerald' : 'blue';
+  const accentColor = (type === 'offering' || type === 'cash-offering') ? 'emerald' : 'blue';
   const borderColor = accentColor === 'emerald' ? 'border-emerald-200' : 'border-blue-200';
   const bgLight = accentColor === 'emerald' ? 'bg-emerald-50/60' : 'bg-blue-50/60';
   const badgeBg = accentColor === 'emerald' ? 'bg-emerald-100' : 'bg-blue-100';
   const badgeText = accentColor === 'emerald' ? 'text-emerald-700' : 'text-blue-700';
-  const label = type === 'offering' ? 'Offering' : 'Tithe';
+  const label = type === 'offering' ? 'Online Offering' : type === 'tithe' ? 'Online Tithe' : type === 'cash-offering' ? 'Cash Offering' : 'Cash Tithe';
 
   const downloadProof = (proof: ProofAttachment) => {
     const link = document.createElement('a');

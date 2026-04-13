@@ -135,6 +135,8 @@ export interface SundayOfferingRecord {
   reportImages?: string[];
   offeringProofs?: ProofAttachment[];
   titheProofs?: ProofAttachment[];
+  cashOfferingProofs?: ProofAttachment[];
+  cashTitheProofs?: ProofAttachment[];
   notes?: string;
   recordedAt?: string;
   recordedBy?: string;

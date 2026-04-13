@@ -2861,6 +2861,8 @@ export const sundayOfferingFirebaseService = {
         reportImages: persistedImages,
         offeringProofs: record.offeringProofs || [],
         titheProofs: record.titheProofs || [],
+        cashOfferingProofs: record.cashOfferingProofs || [],
+        cashTitheProofs: record.cashTitheProofs || [],
         recordedAt: record.recordedAt || Timestamp.now().toDate().toISOString(),
         recordedBy: currentUser?.uid || 'unknown',
         lastUpdated: new Date().toISOString()

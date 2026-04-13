@@ -111,6 +111,7 @@ const WeeklyAttendanceView: React.FC = () => {
   const [isCampusReportImagePickerOpen, setIsCampusReportImagePickerOpen] = useState(false);
   const [campusReportImageIndex, setCampusReportImageIndex] = useState(0);
   const [isSavingReportImages, setIsSavingReportImages] = useState(false);
+  const [showReportImages, setShowReportImages] = useState(false);
   const [isSharingCampusReport, setIsSharingCampusReport] = useState(false);
   const [previewImageIndex, setPreviewImageIndex] = useState<number | null>(null);
   const reportImageInputRef = useRef<HTMLInputElement | null>(null);
@@ -118,10 +119,16 @@ const WeeklyAttendanceView: React.FC = () => {
   const normalizedSelectedMinistry = selectedMinistry.trim().toLowerCase();
   const [isOfferingProofModalOpen, setIsOfferingProofModalOpen] = useState(false);
   const [isTitheProofModalOpen, setIsTitheProofModalOpen] = useState(false);
+  const [isCashOfferingProofModalOpen, setIsCashOfferingProofModalOpen] = useState(false);
+  const [isCashTitheProofModalOpen, setIsCashTitheProofModalOpen] = useState(false);
   const [offeringProofs, setOfferingProofs] = useState<ProofAttachment[]>([]);
   const [titheProofs, setTitheProofs] = useState<ProofAttachment[]>([]);
+  const [cashOfferingProofs, setCashOfferingProofs] = useState<ProofAttachment[]>([]);
+  const [cashTitheProofs, setCashTitheProofs] = useState<ProofAttachment[]>([]);
   const [showOfferingProofs, setShowOfferingProofs] = useState(false);
   const [showTitheProofs, setShowTitheProofs] = useState(false);
+  const [showCashOfferingProofs, setShowCashOfferingProofs] = useState(false);
+  const [showCashTitheProofs, setShowCashTitheProofs] = useState(false);
 
   const selectedSundayOffering = useMemo(() => (
     sundayOfferingRecords.find(record => record.date === selectedSunday) || null
@@ -207,7 +214,9 @@ const WeeklyAttendanceView: React.FC = () => {
   useEffect(() => {
     setOfferingProofs(selectedSundayOffering?.offeringProofs || []);
     setTitheProofs(selectedSundayOffering?.titheProofs || []);
-  }, [selectedSundayOffering?.offeringProofs, selectedSundayOffering?.titheProofs]);
+    setCashOfferingProofs(selectedSundayOffering?.cashOfferingProofs || []);
+    setCashTitheProofs(selectedSundayOffering?.cashTitheProofs || []);
+  }, [selectedSundayOffering?.offeringProofs, selectedSundayOffering?.titheProofs, selectedSundayOffering?.cashOfferingProofs, selectedSundayOffering?.cashTitheProofs]);
 
   const toggleFirstTimer = async (member: Member) => {
     const isFirstTimerForSelectedSunday = isMemberFirstTimerOnSunday(member, selectedSunday);
@@ -1039,7 +1048,9 @@ const WeeklyAttendanceView: React.FC = () => {
     onlineTitheValue: string,
     reportImagesOverride?: string[],
     offeringProofsOverride?: ProofAttachment[],
-    titheProofsOverride?: ProofAttachment[]
+    titheProofsOverride?: ProofAttachment[],
+    cashOfferingProofsOverride?: ProofAttachment[],
+    cashTitheProofsOverride?: ProofAttachment[]
   ) => {
     if (!canManageSundayIncome) {
       return;
@@ -1067,6 +1078,8 @@ const WeeklyAttendanceView: React.FC = () => {
       reportImages: reportImagesOverride ?? reportImages,
       offeringProofs: offeringProofsOverride ?? offeringProofs,
       titheProofs: titheProofsOverride ?? titheProofs,
+      cashOfferingProofs: cashOfferingProofsOverride ?? cashOfferingProofs,
+      cashTitheProofs: cashTitheProofsOverride ?? cashTitheProofs,
       notes: selectedSundayOffering?.notes || ''
     };
 
@@ -1105,6 +1118,36 @@ const WeeklyAttendanceView: React.FC = () => {
   const handleRemoveTitheProof = async (index: number) => {
     const updated = titheProofs.filter((_, i) => i !== index);
     await handleSaveTitheProofs(updated);
+  };
+
+  const handleSaveCashOfferingProofs = async (proofs: ProofAttachment[]) => {
+    const normalizedCash = String(Math.max(0, Number(cashOfferingInput || 0)));
+    const normalizedOnline = String(Math.max(0, Number(onlineOfferingInput || 0)));
+    const normalizedCashTithe = String(Math.max(0, Number(cashTitheInput || 0)));
+    const normalizedOnlineTithe = String(Math.max(0, Number(onlineTitheInput || 0)));
+    setCashOfferingProofs(proofs);
+    await persistSundayOffering(normalizedCash, normalizedOnline, normalizedCashTithe, normalizedOnlineTithe, undefined, undefined, undefined, proofs, undefined);
+    showToast('success', 'Cash offering deposit proof saved');
+  };
+
+  const handleSaveCashTitheProofs = async (proofs: ProofAttachment[]) => {
+    const normalizedCash = String(Math.max(0, Number(cashOfferingInput || 0)));
+    const normalizedOnline = String(Math.max(0, Number(onlineOfferingInput || 0)));
+    const normalizedCashTithe = String(Math.max(0, Number(cashTitheInput || 0)));
+    const normalizedOnlineTithe = String(Math.max(0, Number(onlineTitheInput || 0)));
+    setCashTitheProofs(proofs);
+    await persistSundayOffering(normalizedCash, normalizedOnline, normalizedCashTithe, normalizedOnlineTithe, undefined, undefined, undefined, undefined, proofs);
+    showToast('success', 'Cash tithe deposit proof saved');
+  };
+
+  const handleRemoveCashOfferingProof = async (index: number) => {
+    const updated = cashOfferingProofs.filter((_, i) => i !== index);
+    await handleSaveCashOfferingProofs(updated);
+  };
+
+  const handleRemoveCashTitheProof = async (index: number) => {
+    const updated = cashTitheProofs.filter((_, i) => i !== index);
+    await handleSaveCashTitheProofs(updated);
   };
 
   const handleOfferingCardClick = (field: 'cash-offering' | 'cash-tithe' | 'online-offering' | 'online-tithe') => {
@@ -1435,38 +1478,76 @@ const WeeklyAttendanceView: React.FC = () => {
                           </div>
 
                           {/* Offering Proof of Payment */}
-                          <div className="mt-3 pt-3 border-t border-emerald-200/60">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() => setIsOfferingProofModalOpen(true)}
-                                  className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1.5 text-[11px] font-medium text-white transition-colors hover:bg-emerald-700"
-                                >
-                                  <CloudArrowUpIcon className="w-3.5 h-3.5" />
-                                  Upload Proof
-                                </button>
-                                {offeringProofs.length > 0 && (
+                          <div className="mt-3 pt-3 border-t border-emerald-200/60 space-y-2">
+                            {/* Online Offering Proof */}
+                            <div>
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
                                   <button
                                     type="button"
-                                    onClick={() => setShowOfferingProofs(prev => !prev)}
-                                    className="inline-flex items-center gap-1 rounded-lg border border-emerald-300 bg-white px-2.5 py-1.5 text-[11px] font-medium text-emerald-700 transition-colors hover:bg-emerald-50"
+                                    onClick={() => setIsOfferingProofModalOpen(true)}
+                                    className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1.5 text-[11px] font-medium text-white transition-colors hover:bg-emerald-700"
                                   >
-                                    {showOfferingProofs ? 'Hide' : 'View'} ({offeringProofs.length})
+                                    <CloudArrowUpIcon className="w-3.5 h-3.5" />
+                                    Online Proof
                                   </button>
-                                )}
+                                  {offeringProofs.length > 0 && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setShowOfferingProofs(prev => !prev)}
+                                      className="inline-flex items-center gap-1 rounded-lg border border-emerald-300 bg-white px-2.5 py-1.5 text-[11px] font-medium text-emerald-700 transition-colors hover:bg-emerald-50"
+                                    >
+                                      {showOfferingProofs ? 'Hide' : 'View'} ({offeringProofs.length})
+                                    </button>
+                                  )}
+                                </div>
                               </div>
+                              {showOfferingProofs && offeringProofs.length > 0 && (
+                                <div className="mt-2">
+                                  <ProofViewer
+                                    proofs={offeringProofs}
+                                    type="offering"
+                                    sundayDate={selectedSunday}
+                                    onRemove={handleRemoveOfferingProof}
+                                  />
+                                </div>
+                              )}
                             </div>
-                            {showOfferingProofs && offeringProofs.length > 0 && (
-                              <div className="mt-2">
-                                <ProofViewer
-                                  proofs={offeringProofs}
-                                  type="offering"
-                                  sundayDate={selectedSunday}
-                                  onRemove={handleRemoveOfferingProof}
-                                />
+
+                            {/* Cash Offering Deposit Proof */}
+                            <div>
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => setIsCashOfferingProofModalOpen(true)}
+                                    className="inline-flex items-center gap-1 rounded-lg bg-emerald-500 px-2.5 py-1.5 text-[11px] font-medium text-white transition-colors hover:bg-emerald-600"
+                                  >
+                                    <CloudArrowUpIcon className="w-3.5 h-3.5" />
+                                    Cash Deposit Proof
+                                  </button>
+                                  {cashOfferingProofs.length > 0 && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setShowCashOfferingProofs(prev => !prev)}
+                                      className="inline-flex items-center gap-1 rounded-lg border border-emerald-300 bg-white px-2.5 py-1.5 text-[11px] font-medium text-emerald-700 transition-colors hover:bg-emerald-50"
+                                    >
+                                      {showCashOfferingProofs ? 'Hide' : 'View'} ({cashOfferingProofs.length})
+                                    </button>
+                                  )}
+                                </div>
                               </div>
-                            )}
+                              {showCashOfferingProofs && cashOfferingProofs.length > 0 && (
+                                <div className="mt-2">
+                                  <ProofViewer
+                                    proofs={cashOfferingProofs}
+                                    type="cash-offering"
+                                    sundayDate={selectedSunday}
+                                    onRemove={handleRemoveCashOfferingProof}
+                                  />
+                                </div>
+                              )}
+                            </div>
                           </div>
                       </section>
 
@@ -1490,38 +1571,76 @@ const WeeklyAttendanceView: React.FC = () => {
                           </div>
 
                           {/* Tithe Proof of Payment */}
-                          <div className="mt-3 pt-3 border-t border-blue-200/60">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() => setIsTitheProofModalOpen(true)}
-                                  className="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-2.5 py-1.5 text-[11px] font-medium text-white transition-colors hover:bg-blue-700"
-                                >
-                                  <CloudArrowUpIcon className="w-3.5 h-3.5" />
-                                  Upload Proof
-                                </button>
-                                {titheProofs.length > 0 && (
+                          <div className="mt-3 pt-3 border-t border-blue-200/60 space-y-2">
+                            {/* Online Tithe Proof */}
+                            <div>
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
                                   <button
                                     type="button"
-                                    onClick={() => setShowTitheProofs(prev => !prev)}
-                                    className="inline-flex items-center gap-1 rounded-lg border border-blue-300 bg-white px-2.5 py-1.5 text-[11px] font-medium text-blue-700 transition-colors hover:bg-blue-50"
+                                    onClick={() => setIsTitheProofModalOpen(true)}
+                                    className="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-2.5 py-1.5 text-[11px] font-medium text-white transition-colors hover:bg-blue-700"
                                   >
-                                    {showTitheProofs ? 'Hide' : 'View'} ({titheProofs.length})
+                                    <CloudArrowUpIcon className="w-3.5 h-3.5" />
+                                    Online Proof
                                   </button>
-                                )}
+                                  {titheProofs.length > 0 && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setShowTitheProofs(prev => !prev)}
+                                      className="inline-flex items-center gap-1 rounded-lg border border-blue-300 bg-white px-2.5 py-1.5 text-[11px] font-medium text-blue-700 transition-colors hover:bg-blue-50"
+                                    >
+                                      {showTitheProofs ? 'Hide' : 'View'} ({titheProofs.length})
+                                    </button>
+                                  )}
+                                </div>
                               </div>
+                              {showTitheProofs && titheProofs.length > 0 && (
+                                <div className="mt-2">
+                                  <ProofViewer
+                                    proofs={titheProofs}
+                                    type="tithe"
+                                    sundayDate={selectedSunday}
+                                    onRemove={handleRemoveTitheProof}
+                                  />
+                                </div>
+                              )}
                             </div>
-                            {showTitheProofs && titheProofs.length > 0 && (
-                              <div className="mt-2">
-                                <ProofViewer
-                                  proofs={titheProofs}
-                                  type="tithe"
-                                  sundayDate={selectedSunday}
-                                  onRemove={handleRemoveTitheProof}
-                                />
+
+                            {/* Cash Tithe Deposit Proof */}
+                            <div>
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => setIsCashTitheProofModalOpen(true)}
+                                    className="inline-flex items-center gap-1 rounded-lg bg-blue-500 px-2.5 py-1.5 text-[11px] font-medium text-white transition-colors hover:bg-blue-600"
+                                  >
+                                    <CloudArrowUpIcon className="w-3.5 h-3.5" />
+                                    Cash Deposit Proof
+                                  </button>
+                                  {cashTitheProofs.length > 0 && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setShowCashTitheProofs(prev => !prev)}
+                                      className="inline-flex items-center gap-1 rounded-lg border border-blue-300 bg-white px-2.5 py-1.5 text-[11px] font-medium text-blue-700 transition-colors hover:bg-blue-50"
+                                    >
+                                      {showCashTitheProofs ? 'Hide' : 'View'} ({cashTitheProofs.length})
+                                    </button>
+                                  )}
+                                </div>
                               </div>
-                            )}
+                              {showCashTitheProofs && cashTitheProofs.length > 0 && (
+                                <div className="mt-2">
+                                  <ProofViewer
+                                    proofs={cashTitheProofs}
+                                    type="cash-tithe"
+                                    sundayDate={selectedSunday}
+                                    onRemove={handleRemoveCashTitheProof}
+                                  />
+                                </div>
+                              )}
+                            </div>
                           </div>
                       </section>
                     </div>
@@ -1563,10 +1682,19 @@ const WeeklyAttendanceView: React.FC = () => {
                       >
                         {isSavingReportImages ? 'Saving...' : 'Upload Pictures'}
                       </button>
+                      {reportImages.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setShowReportImages(prev => !prev)}
+                          className="inline-flex min-h-[44px] items-center justify-center rounded-lg border border-amber-300 bg-white px-4 py-2 text-sm font-medium text-amber-700 transition-colors hover:bg-amber-50"
+                        >
+                          {showReportImages ? 'Hide' : 'View'} ({reportImages.length})
+                        </button>
+                      )}
                     </div>
                   </div>
 
-                  {reportImages.length > 0 ? (
+                  {showReportImages && reportImages.length > 0 ? (
                     <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
                       {reportImages.map((image, index) => {
                         const isSelected = selectedReportImage === image;
@@ -1605,11 +1733,11 @@ const WeeklyAttendanceView: React.FC = () => {
                         );
                       })}
                     </div>
-                  ) : (
+                  ) : reportImages.length === 0 ? (
                     <div className="mt-4 rounded-xl border border-dashed border-gray-300 bg-white px-4 py-6 text-center text-sm text-gray-500">
                       No report pictures uploaded for this Sunday yet.
                     </div>
-                  )}
+                  ) : null}
                 </div>
               </div>
             )}
@@ -2077,6 +2205,20 @@ const WeeklyAttendanceView: React.FC = () => {
           onUpload={handleSaveTitheProofs}
           existingProofs={titheProofs}
           type="tithe"
+        />
+        <ProofUploadModal
+          isOpen={isCashOfferingProofModalOpen}
+          onClose={() => setIsCashOfferingProofModalOpen(false)}
+          onUpload={handleSaveCashOfferingProofs}
+          existingProofs={cashOfferingProofs}
+          type="cash-offering"
+        />
+        <ProofUploadModal
+          isOpen={isCashTitheProofModalOpen}
+          onClose={() => setIsCashTitheProofModalOpen(false)}
+          onUpload={handleSaveCashTitheProofs}
+          existingProofs={cashTitheProofs}
+          type="cash-tithe"
         />
       </div>
     </div>
