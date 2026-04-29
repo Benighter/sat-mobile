@@ -10,7 +10,7 @@ export interface Member {
   phoneNumber: string;
   buildingAddress: string;
   roomNumber?: string; // Room number for members
-  profilePicture?: string; // Firebase Storage URL or legacy base64 image string
+  profilePicture?: string; // Firebase Storage URL, transient blob URL, or legacy data URL
   bornAgainStatus: boolean;
   /** If true, member prays/speaks in tongues */
   speaksInTongues?: boolean;
@@ -117,10 +117,20 @@ export interface AttendanceRecord {
 }
 
 export interface ProofAttachment {
-  data: string;       // base64 data URL (image or PDF)
-  name: string;       // original file name
+  data?: string;       // legacy data URL or local preview URL
+  url?: string;        // Firebase Storage download URL
+  storagePath?: string;
+  name: string;        // original file name
   type: 'image' | 'pdf';
-  uploadedAt: string; // ISO timestamp
+  uploadedAt: string;  // ISO timestamp
+  size?: number;
+  contentType?: string;
+  file?: File;         // transient client-side upload source; never stored in Firestore
+}
+
+export interface SundayOfferingReportImageUpload {
+  previewUrl: string;
+  file: File;
 }
 
 export interface SundayOfferingRecord {
@@ -133,6 +143,7 @@ export interface SundayOfferingRecord {
   onlineTithe?: number;
   totalTithe?: number;
   reportImages?: string[];
+  reportImageUploads?: SundayOfferingReportImageUpload[];
   offeringProofs?: ProofAttachment[];
   titheProofs?: ProofAttachment[];
   cashOfferingProofs?: ProofAttachment[];
@@ -353,7 +364,7 @@ export interface MeetingRecord {
   id: string; // bacentaId_date (YYYY-MM-DD)
   bacentaId: string;
   date: string; // Meeting date as YYYY-MM-DD
-  meetingImage?: string; // Firebase Storage URL or legacy base64 image string
+  meetingImage?: string; // Firebase Storage URL, transient blob URL, or legacy data URL
   bacentaLeaderName: string;
   messagePreached: string;
   discussionLedBy: string;

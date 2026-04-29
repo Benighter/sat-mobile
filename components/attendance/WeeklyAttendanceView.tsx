@@ -25,14 +25,15 @@ import {
   CloudArrowUpIcon
 } from '../icons';
 import { AttendanceRecord, Member, NewBeliever, Bacenta, SundayOfferingRecord, ProofAttachment } from '../../types';
-import { hasAdminPrivileges, isCampusShepherd } from '../../utils/permissionUtils';
+import { isCampusShepherd } from '../../utils/permissionUtils';
 import { isLeadershipPosition, isMemberFirstTimerOnSunday } from '../../utils/memberStatus';
 import { MINISTRY_OPTIONS } from '../../constants';
 import useCurrencyFormatter from '../../hooks/useCurrencyFormatter';
 import { membersFirebaseService } from '../../services/firebaseService';
-import { compressImageFileForInlineSave, compressImageForInlineSave, DEFAULT_INLINE_IMAGE_COLLECTION_LENGTH, MAX_INLINE_IMAGE_COLLECTION_LENGTH } from '../../services/imageStorageService';
 import ProofUploadModal from './ProofUploadModal';
 import ProofViewer from './ProofViewer';
+
+const MAX_REPORT_IMAGE_FILE_SIZE = 100 * 1024 * 1024;
 
 // New grouped structure types
 interface LinkedBacentaGroup {
@@ -115,6 +116,8 @@ const WeeklyAttendanceView: React.FC = () => {
   const [isSharingCampusReport, setIsSharingCampusReport] = useState(false);
   const [previewImageIndex, setPreviewImageIndex] = useState<number | null>(null);
   const reportImageInputRef = useRef<HTMLInputElement | null>(null);
+  const reportImageUploadFilesRef = useRef<Map<string, File>>(new Map());
+  const reportImagePreviewUrlsRef = useRef<Set<string>>(new Set());
   const lastCampusReportImageTapRef = useRef<{ index: number; time: number }>({ index: -1, time: 0 });
   const normalizedSelectedMinistry = selectedMinistry.trim().toLowerCase();
   const [isOfferingProofModalOpen, setIsOfferingProofModalOpen] = useState(false);
@@ -133,6 +136,17 @@ const WeeklyAttendanceView: React.FC = () => {
   const selectedSundayOffering = useMemo(() => (
     sundayOfferingRecords.find(record => record.date === selectedSunday) || null
   ), [selectedSunday, sundayOfferingRecords]);
+
+  const cleanupReportImagePreview = (previewUrl: string) => {
+    if (!previewUrl.startsWith('blob:')) return;
+    URL.revokeObjectURL(previewUrl);
+    reportImageUploadFilesRef.current.delete(previewUrl);
+    reportImagePreviewUrlsRef.current.delete(previewUrl);
+  };
+
+  useEffect(() => () => {
+    Array.from(reportImagePreviewUrlsRef.current).forEach(cleanupReportImagePreview);
+  }, []);
 
   const presentMemberIds = useMemo(() => new Set(
     attendanceRecords
@@ -202,6 +216,11 @@ const WeeklyAttendanceView: React.FC = () => {
 
   useEffect(() => {
     const nextImages = selectedSundayOffering?.reportImages || [];
+    Array.from(reportImagePreviewUrlsRef.current).forEach(previewUrl => {
+      if (!nextImages.includes(previewUrl)) {
+        cleanupReportImagePreview(previewUrl);
+      }
+    });
     setReportImages(nextImages);
     setSelectedReportImage(currentSelected => {
       if (currentSelected && nextImages.includes(currentSelected)) {
@@ -273,9 +292,6 @@ const WeeklyAttendanceView: React.FC = () => {
     const presentMemberIds = new Set(
       sundayRecords.filter(r => r.memberId).map(r => r.memberId as string)
     );
-    const presentNewBelieverIds = new Set(
-      sundayRecords.filter(r => r.newBelieverId).map(r => r.newBelieverId as string)
-    );
     const memberMap = new Map<string, Member>();
     members.forEach(member => memberMap.set(member.id, member));
     const newBelieverMap = new Map<string, NewBeliever>();
@@ -309,14 +325,14 @@ const WeeklyAttendanceView: React.FC = () => {
 
     const presentMembers = filteredMembers;
     const presentNewBelievers = presentNewBelieversForSelectedSunday;
-    const deletedAttendees: HistoricalAttendee[] = sundayRecords.flatMap((record) => {
+    const deletedAttendees = sundayRecords.flatMap<HistoricalAttendee>((record) => {
       if (!isRecordInSelectedMinistry(record)) return [];
 
       if (record.memberId && !memberMap.has(record.memberId)) {
         return [{
           key: `member:${record.memberId}`,
           name: getAttendanceRecordDisplayName(record),
-          type: 'member'
+          type: 'member' as const
         }];
       }
 
@@ -324,7 +340,7 @@ const WeeklyAttendanceView: React.FC = () => {
         return [{
           key: `newBeliever:${record.newBelieverId}`,
           name: getAttendanceRecordDisplayName(record),
-          type: 'newBeliever'
+          type: 'newBeliever' as const
         }];
       }
 
@@ -669,26 +685,12 @@ const WeeklyAttendanceView: React.FC = () => {
     return text;
   };
 
-  const readFileAsDataUrl = (file: File): Promise<string> => new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = () => reject(new Error(`Failed to read ${file.name}`));
-    reader.readAsDataURL(file);
-  });
-
   const blobToDataUrl = (blob: Blob): Promise<string> => new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onloadend = () => resolve(reader.result as string);
     reader.onerror = () => reject(new Error('Failed to convert image for clipboard'));
     reader.readAsDataURL(blob);
   });
-
-  const escapeHtml = (value: string) => value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
 
   const dataUrlToBlob = (dataUrl: string): Blob => {
     const match = dataUrl.match(/^data:([^;,]+)?(;base64)?,(.*)$/);
@@ -762,43 +764,6 @@ const WeeklyAttendanceView: React.FC = () => {
     }
   };
 
-  const getInlineReportImageTotalLength = (imageValues: string[]) => imageValues.reduce(
-    (sum, imageValue) => sum + (imageValue.startsWith('data:image/') ? imageValue.length : 0),
-    0
-  );
-
-  const rebalanceReportImagesForSave = async (imageValues: string[]) => {
-    if (!imageValues.length) {
-      return imageValues;
-    }
-
-    const processingErrorMessage = 'Failed to process report picture.';
-    const oversizeErrorMessage = 'The selected report pictures are too large to save together. Remove some pictures or choose smaller ones and try again.';
-    let perImageTarget = Math.max(70000, Math.floor(DEFAULT_INLINE_IMAGE_COLLECTION_LENGTH / Math.max(1, imageValues.length)));
-    let balancedImages = await Promise.all(imageValues.map(imageValue => compressImageForInlineSave(imageValue, {
-      maxLength: perImageTarget,
-      processingErrorMessage,
-      oversizeErrorMessage
-    })));
-    let totalInlineLength = getInlineReportImageTotalLength(balancedImages);
-
-    for (let attempt = 0; totalInlineLength > MAX_INLINE_IMAGE_COLLECTION_LENGTH && attempt < 6; attempt += 1) {
-      perImageTarget = Math.max(50000, Math.floor(perImageTarget * 0.82));
-      balancedImages = await Promise.all(balancedImages.map(imageValue => compressImageForInlineSave(imageValue, {
-        maxLength: perImageTarget,
-        processingErrorMessage,
-        oversizeErrorMessage
-      })));
-      totalInlineLength = getInlineReportImageTotalLength(balancedImages);
-    }
-
-    if (totalInlineLength > MAX_INLINE_IMAGE_COLLECTION_LENGTH) {
-      throw new Error(oversizeErrorMessage);
-    }
-
-    return balancedImages;
-  };
-
   const handleReportImageFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files || []);
     event.target.value = '';
@@ -813,24 +778,26 @@ const WeeklyAttendanceView: React.FC = () => {
       return;
     }
 
-    try {
-      const totalImageCount = Math.max(1, reportImages.length + files.length);
-      const perImageTarget = Math.max(70000, Math.floor(DEFAULT_INLINE_IMAGE_COLLECTION_LENGTH / totalImageCount));
-      const addedImages: string[] = [];
+    const oversizedFile = files.find(file => file.size > MAX_REPORT_IMAGE_FILE_SIZE);
+    if (oversizedFile) {
+      showToast('error', 'Image too large', `"${oversizedFile.name}" is too large. Max size is 100MB.`);
+      return;
+    }
 
+    const addedImages: string[] = [];
+    try {
       for (const file of files) {
-        const compressedImage = await compressImageFileForInlineSave(file, {
-          maxLength: perImageTarget,
-          processingErrorMessage: 'Failed to process report picture.',
-          oversizeErrorMessage: 'Report picture is too large even after auto-compression. Please choose another picture.'
-        });
-        addedImages.push(compressedImage);
+        const previewUrl = URL.createObjectURL(file);
+        reportImageUploadFilesRef.current.set(previewUrl, file);
+        reportImagePreviewUrlsRef.current.add(previewUrl);
+        addedImages.push(previewUrl);
       }
 
-      const nextImages = await rebalanceReportImagesForSave([...reportImages, ...addedImages]);
+      const nextImages = [...reportImages, ...addedImages];
       await saveReportImages(nextImages, selectedReportImage || addedImages[0] || nextImages[0] || null);
       showToast('success', 'Pictures added', `${addedImages.length} picture${addedImages.length === 1 ? '' : 's'} added to this report.`);
     } catch (error: any) {
+      addedImages.forEach(cleanupReportImagePreview);
       showToast('error', 'Upload Failed', error?.message || 'Could not load the selected pictures.');
     }
   };
@@ -839,6 +806,7 @@ const WeeklyAttendanceView: React.FC = () => {
     const nextImages = reportImages.filter(image => image !== imageToRemove);
     const nextSelectedImage = selectedReportImage === imageToRemove ? (nextImages[0] || null) : selectedReportImage;
     await saveReportImages(nextImages, nextSelectedImage);
+    cleanupReportImagePreview(imageToRemove);
   };
 
   const openPreviewImage = (imageIndex: number) => {
@@ -1066,6 +1034,14 @@ const WeeklyAttendanceView: React.FC = () => {
       return;
     }
 
+    const nextReportImages = reportImagesOverride ?? reportImages;
+    const reportImageUploads = nextReportImages
+      .map(previewUrl => {
+        const file = reportImageUploadFilesRef.current.get(previewUrl);
+        return file ? { previewUrl, file } : null;
+      })
+      .filter((upload): upload is { previewUrl: string; file: File } => upload !== null);
+
     const record: SundayOfferingRecord = {
       id: `sunday_${selectedSunday}`,
       date: selectedSunday,
@@ -1075,7 +1051,8 @@ const WeeklyAttendanceView: React.FC = () => {
       cashTithe: cashTitheAmount,
       onlineTithe: onlineTitheAmount,
       totalTithe: cashTitheAmount + onlineTitheAmount,
-      reportImages: reportImagesOverride ?? reportImages,
+      reportImages: nextReportImages,
+      ...(reportImageUploads.length > 0 ? { reportImageUploads } : {}),
       offeringProofs: offeringProofsOverride ?? offeringProofs,
       titheProofs: titheProofsOverride ?? titheProofs,
       cashOfferingProofs: cashOfferingProofsOverride ?? cashOfferingProofs,
@@ -1095,7 +1072,6 @@ const WeeklyAttendanceView: React.FC = () => {
     const normalizedOnline = String(Math.max(0, Number(onlineOfferingInput || 0)));
     const normalizedCashTithe = String(Math.max(0, Number(cashTitheInput || 0)));
     const normalizedOnlineTithe = String(Math.max(0, Number(onlineTitheInput || 0)));
-    setOfferingProofs(proofs);
     await persistSundayOffering(normalizedCash, normalizedOnline, normalizedCashTithe, normalizedOnlineTithe, undefined, proofs, undefined);
     showToast('success', 'Offering proof saved');
   };
@@ -1105,7 +1081,6 @@ const WeeklyAttendanceView: React.FC = () => {
     const normalizedOnline = String(Math.max(0, Number(onlineOfferingInput || 0)));
     const normalizedCashTithe = String(Math.max(0, Number(cashTitheInput || 0)));
     const normalizedOnlineTithe = String(Math.max(0, Number(onlineTitheInput || 0)));
-    setTitheProofs(proofs);
     await persistSundayOffering(normalizedCash, normalizedOnline, normalizedCashTithe, normalizedOnlineTithe, undefined, undefined, proofs);
     showToast('success', 'Tithe proof saved');
   };
@@ -1125,7 +1100,6 @@ const WeeklyAttendanceView: React.FC = () => {
     const normalizedOnline = String(Math.max(0, Number(onlineOfferingInput || 0)));
     const normalizedCashTithe = String(Math.max(0, Number(cashTitheInput || 0)));
     const normalizedOnlineTithe = String(Math.max(0, Number(onlineTitheInput || 0)));
-    setCashOfferingProofs(proofs);
     await persistSundayOffering(normalizedCash, normalizedOnline, normalizedCashTithe, normalizedOnlineTithe, undefined, undefined, undefined, proofs, undefined);
     showToast('success', 'Cash offering deposit proof saved');
   };
@@ -1135,7 +1109,6 @@ const WeeklyAttendanceView: React.FC = () => {
     const normalizedOnline = String(Math.max(0, Number(onlineOfferingInput || 0)));
     const normalizedCashTithe = String(Math.max(0, Number(cashTitheInput || 0)));
     const normalizedOnlineTithe = String(Math.max(0, Number(onlineTitheInput || 0)));
-    setCashTitheProofs(proofs);
     await persistSundayOffering(normalizedCash, normalizedOnline, normalizedCashTithe, normalizedOnlineTithe, undefined, undefined, undefined, undefined, proofs);
     showToast('success', 'Cash tithe deposit proof saved');
   };

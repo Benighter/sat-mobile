@@ -21,9 +21,20 @@ const ProofViewer: React.FC<ProofViewerProps> = ({ proofs, type, sundayDate, onR
   const badgeText = accentColor === 'emerald' ? 'text-emerald-700' : 'text-blue-700';
   const label = type === 'offering' ? 'Online Offering' : type === 'tithe' ? 'Online Tithe' : type === 'cash-offering' ? 'Cash Offering' : 'Cash Tithe';
 
+  const getProofSource = (proof: ProofAttachment): string => proof.url || proof.data || '';
+  const imageIndexes = proofs
+    .map((proof, index) => ({ proof, index }))
+    .filter(({ proof }) => proof.type === 'image' && Boolean(getProofSource(proof)));
+  const previewPosition = previewIndex === null
+    ? -1
+    : imageIndexes.findIndex(({ index }) => index === previewIndex);
+
   const downloadProof = (proof: ProofAttachment) => {
+    const source = getProofSource(proof);
+    if (!source) return;
+
     const link = document.createElement('a');
-    link.href = proof.data;
+    link.href = source;
     const ext = proof.type === 'pdf' ? 'pdf' : proof.name.split('.').pop() || 'jpg';
     link.download = `${label.toLowerCase()}-proof-${sundayDate}-${Date.now()}.${ext}`;
     document.body.appendChild(link);
@@ -35,20 +46,26 @@ const ProofViewer: React.FC<ProofViewerProps> = ({ proofs, type, sundayDate, onR
   const closePreview = () => setPreviewIndex(null);
 
   const showPrevious = () => {
-    setPreviewIndex(i => i !== null ? (i - 1 + proofs.length) % proofs.length : null);
+    if (previewPosition === -1 || imageIndexes.length === 0) return;
+    const previousPosition = (previewPosition - 1 + imageIndexes.length) % imageIndexes.length;
+    setPreviewIndex(imageIndexes[previousPosition].index);
   };
+
   const showNext = () => {
-    setPreviewIndex(i => i !== null ? (i + 1) % proofs.length : null);
+    if (previewPosition === -1 || imageIndexes.length === 0) return;
+    const nextPosition = (previewPosition + 1) % imageIndexes.length;
+    setPreviewIndex(imageIndexes[nextPosition].index);
   };
 
   const currentPreview = previewIndex !== null ? proofs[previewIndex] : null;
+  const currentPreviewSource = currentPreview ? getProofSource(currentPreview) : '';
 
   return (
     <>
       <div className="space-y-2">
         {proofs.map((proof, index) => (
           <div
-            key={`${proof.name}-${index}`}
+            key={`${proof.storagePath || proof.url || proof.name}-${index}`}
             className={`rounded-xl border ${borderColor} ${bgLight} p-3 transition-all hover:shadow-sm`}
           >
             <div className="flex items-start gap-3">
@@ -59,7 +76,7 @@ const ProofViewer: React.FC<ProofViewerProps> = ({ proofs, type, sundayDate, onR
                 {proof.type === 'pdf' ? (
                   <DocumentTextIcon className="w-5 h-5 text-red-500" />
                 ) : (
-                  <img src={proof.data} alt={proof.name} className="w-10 h-10 rounded-lg object-cover" />
+                  <img src={getProofSource(proof)} alt={proof.name} className="w-10 h-10 rounded-lg object-cover" />
                 )}
               </div>
 
@@ -79,7 +96,7 @@ const ProofViewer: React.FC<ProofViewerProps> = ({ proofs, type, sundayDate, onR
 
             {/* Actions row */}
             <div className="flex items-center justify-end gap-1 mt-2 pt-2 border-t border-gray-200/50">
-              {proof.type === 'image' && (
+              {proof.type === 'image' && getProofSource(proof) && (
                 <button
                   onClick={() => openPreview(index)}
                   className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium text-gray-600 hover:bg-white/80 hover:text-gray-900 transition-colors"
@@ -112,8 +129,7 @@ const ProofViewer: React.FC<ProofViewerProps> = ({ proofs, type, sundayDate, onR
         ))}
       </div>
 
-      {/* Full-screen image preview */}
-      {previewIndex !== null && currentPreview && currentPreview.type === 'image' && (
+      {previewIndex !== null && currentPreview && currentPreview.type === 'image' && currentPreviewSource && (
         <div
           className="fixed inset-0 z-[10002] flex items-center justify-center bg-black/90"
           onClick={closePreview}
@@ -125,7 +141,7 @@ const ProofViewer: React.FC<ProofViewerProps> = ({ proofs, type, sundayDate, onR
             <XMarkIcon className="w-6 h-6" />
           </button>
 
-          {proofs.filter(p => p.type === 'image').length > 1 && (
+          {imageIndexes.length > 1 && (
             <>
               <button
                 onClick={(e) => { e.stopPropagation(); showPrevious(); }}
@@ -144,7 +160,7 @@ const ProofViewer: React.FC<ProofViewerProps> = ({ proofs, type, sundayDate, onR
 
           <div className="max-w-[90vw] max-h-[85vh] flex flex-col items-center" onClick={(e) => e.stopPropagation()}>
             <img
-              src={currentPreview.data}
+              src={currentPreviewSource}
               alt={currentPreview.name}
               className="max-w-full max-h-[80vh] object-contain rounded-lg"
             />
@@ -159,7 +175,7 @@ const ProofViewer: React.FC<ProofViewerProps> = ({ proofs, type, sundayDate, onR
               </button>
             </div>
             <p className="mt-1 text-xs text-white/50">
-              {previewIndex + 1} / {proofs.length}
+              {previewPosition + 1} / {imageIndexes.length}
             </p>
           </div>
         </div>

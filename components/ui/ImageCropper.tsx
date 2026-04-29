@@ -194,25 +194,8 @@ const ImageCropper: React.FC<ImageCropperProps> = ({
   }, [cropArea, imagePosition, imageSize, onCropComplete]);
 
   const useFullImage = useCallback(() => {
-    if (!imageRef.current || !canvasRef.current) return;
-
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d');
-    const img = imageRef.current;
-
-    if (!ctx) return;
-
-    // Set canvas size to original image size
-    canvas.width = img.naturalWidth;
-    canvas.height = img.naturalHeight;
-
-    // Draw the full image
-    ctx.drawImage(img, 0, 0);
-
-    // Convert to base64
-    const fullImage = canvas.toDataURL('image/jpeg', 0.9);
-    onCropComplete(fullImage);
-  }, [onCropComplete]);
+    onCropComplete(image);
+  }, [image, onCropComplete]);
 
   return (
     <div className="fixed inset-0 bg-gradient-to-br from-slate-900 via-gray-900 to-slate-800 z-50 flex flex-col max-h-screen">

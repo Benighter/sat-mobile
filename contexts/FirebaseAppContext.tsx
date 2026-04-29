@@ -33,7 +33,7 @@ import { dataMigrationService } from '../utils/dataMigration';
 import { buildAttendanceMemberSnapshot, buildAttendanceNewBelieverSnapshot } from '../utils/attendanceUtils';
 import { withLeadershipFirstTimerRule } from '../utils/memberStatus';
 import { userService } from '../services/userService';
-import { isImageDataUrl } from '../services/imageStorageService';
+import { isUnsavedImageValue } from '../services/imageStorageService';
 import { setNotificationContext } from '../services/notificationService';
 import {
   memberOperationsWithNotifications,
@@ -1322,7 +1322,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
         setMembers(prev => prev.map(m => {
           if (m.id !== sanitizedMemberData.id) return m;
           const optimisticUpdates = { ...updates } as Partial<Member>;
-          if (isImageDataUrl(optimisticUpdates.profilePicture)) {
+          if (isUnsavedImageValue(optimisticUpdates.profilePicture)) {
             delete optimisticUpdates.profilePicture;
           }
           return { ...m, ...optimisticUpdates } as Member;
@@ -1334,7 +1334,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
         setMembers(prev => prev.map(m => {
           if (m.id !== sanitizedMemberData.id) return m;
           const optimisticUpdates = { ...updates } as Partial<Member>;
-          if (isImageDataUrl(optimisticUpdates.profilePicture)) {
+          if (isUnsavedImageValue(optimisticUpdates.profilePicture)) {
             delete optimisticUpdates.profilePicture;
           }
           return { ...m, ...optimisticUpdates } as Member;
@@ -2386,17 +2386,17 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     if (!ensureCanWrite()) throw new Error('Read-only access');
     try {
       setIsLoading(true);
-      await meetingRecordsFirebaseService.addOrUpdate(record);
+      const persistedRecord = await meetingRecordsFirebaseService.addOrUpdate(record);
 
       // Update local state
       setMeetingRecords(prev => {
-        const existingIndex = prev.findIndex(r => r.id === record.id);
+        const existingIndex = prev.findIndex(r => r.id === persistedRecord.id);
         if (existingIndex >= 0) {
           const updated = [...prev];
-          updated[existingIndex] = record;
+          updated[existingIndex] = persistedRecord;
           return updated;
         } else {
-          return [record, ...prev];
+          return [persistedRecord, ...prev];
         }
       });
 
@@ -2406,16 +2406,16 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
       try {
         const { createNotificationHelpers } = await import('../services/notificationService');
         const leaderName = userProfile?.displayName || `${userProfile?.firstName || ''} ${userProfile?.lastName || ''}`.trim() || 'Unknown Leader';
-        const bacentaName = bacentas.find(b => b.id === record.bacentaId)?.name || 'Unknown Bacenta';
+        const bacentaName = bacentas.find(b => b.id === persistedRecord.bacentaId)?.name || 'Unknown Bacenta';
         const totals = {
-          attendance: (record.presentMemberIds?.length || 0) + (record.firstTimers || 0),
-          firstTimers: record.firstTimers || 0,
-          converts: record.converts || 0,
-          cash: record.cashOffering || 0,
-          online: record.onlineOffering || 0,
-          offering: record.totalOffering ?? ((record.cashOffering || 0) + (record.onlineOffering || 0))
+          attendance: (persistedRecord.presentMemberIds?.length || 0) + (persistedRecord.firstTimers || 0),
+          firstTimers: persistedRecord.firstTimers || 0,
+          converts: persistedRecord.converts || 0,
+          cash: persistedRecord.cashOffering || 0,
+          online: persistedRecord.onlineOffering || 0,
+          offering: persistedRecord.totalOffering ?? ((persistedRecord.cashOffering || 0) + (persistedRecord.onlineOffering || 0))
         };
-        await createNotificationHelpers.meetingRecordAdded(leaderName, bacentaName, record.date, totals);
+        await createNotificationHelpers.meetingRecordAdded(leaderName, bacentaName, persistedRecord.date, totals);
       } catch (notifyErr) {
         console.warn('⚠️ Failed to send meeting added notification:', notifyErr);
       }
@@ -2433,11 +2433,11 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     try {
       setIsLoading(true);
       const original = meetingRecords.find(r => r.id === record.id);
-      await meetingRecordsFirebaseService.addOrUpdate(record);
+      const persistedRecord = await meetingRecordsFirebaseService.addOrUpdate(record);
 
       // Update local state
       setMeetingRecords(prev =>
-        prev.map(r => r.id === record.id ? record : r)
+        prev.map(r => r.id === persistedRecord.id ? persistedRecord : r)
       );
 
       showToast('success', 'Meeting record updated successfully');
@@ -2446,33 +2446,33 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
       try {
         const { createNotificationHelpers } = await import('../services/notificationService');
         const leaderName = userProfile?.displayName || `${userProfile?.firstName || ''} ${userProfile?.lastName || ''}`.trim() || 'Unknown Leader';
-        const bacentaName = bacentas.find(b => b.id === record.bacentaId)?.name || 'Unknown Bacenta';
+        const bacentaName = bacentas.find(b => b.id === persistedRecord.bacentaId)?.name || 'Unknown Bacenta';
 
         // Compute simple change summary
         const changes: string[] = [];
         if (original) {
           const len = (a?: any[]) => (Array.isArray(a) ? a.length : 0);
-          if (len(original.presentMemberIds) !== len(record.presentMemberIds)) changes.push('Attendance');
-          if ((original.firstTimers || 0) !== (record.firstTimers || 0)) changes.push('First Timers');
-          if ((original.converts || 0) !== (record.converts || 0)) changes.push('Converts');
-          if ((original.cashOffering || 0) !== (record.cashOffering || 0)) changes.push('Cash Offering');
-          if ((original.onlineOffering || 0) !== (record.onlineOffering || 0)) changes.push('Online Offering');
-          if ((original.totalOffering || 0) !== (record.totalOffering || 0)) changes.push('Total Offering');
-          if ((original.messagePreached || '') !== (record.messagePreached || '')) changes.push('Message');
-          if ((original.discussionLedBy || '') !== (record.discussionLedBy || '')) changes.push('Discussion');
-          if (len(original.guests) !== len(record.guests)) changes.push('Guests');
-          if ((original.meetingImage || '') !== (record.meetingImage || '')) changes.push('Image');
+          if (len(original.presentMemberIds) !== len(persistedRecord.presentMemberIds)) changes.push('Attendance');
+          if ((original.firstTimers || 0) !== (persistedRecord.firstTimers || 0)) changes.push('First Timers');
+          if ((original.converts || 0) !== (persistedRecord.converts || 0)) changes.push('Converts');
+          if ((original.cashOffering || 0) !== (persistedRecord.cashOffering || 0)) changes.push('Cash Offering');
+          if ((original.onlineOffering || 0) !== (persistedRecord.onlineOffering || 0)) changes.push('Online Offering');
+          if ((original.totalOffering || 0) !== (persistedRecord.totalOffering || 0)) changes.push('Total Offering');
+          if ((original.messagePreached || '') !== (persistedRecord.messagePreached || '')) changes.push('Message');
+          if ((original.discussionLedBy || '') !== (persistedRecord.discussionLedBy || '')) changes.push('Discussion');
+          if (len(original.guests) !== len(persistedRecord.guests)) changes.push('Guests');
+          if ((original.meetingImage || '') !== (persistedRecord.meetingImage || '')) changes.push('Image');
         }
 
         const totals = {
-          attendance: (record.presentMemberIds?.length || 0) + (record.firstTimers || 0),
-          firstTimers: record.firstTimers || 0,
-          converts: record.converts || 0,
-          cash: record.cashOffering || 0,
-          online: record.onlineOffering || 0,
-          offering: record.totalOffering ?? ((record.cashOffering || 0) + (record.onlineOffering || 0))
+          attendance: (persistedRecord.presentMemberIds?.length || 0) + (persistedRecord.firstTimers || 0),
+          firstTimers: persistedRecord.firstTimers || 0,
+          converts: persistedRecord.converts || 0,
+          cash: persistedRecord.cashOffering || 0,
+          online: persistedRecord.onlineOffering || 0,
+          offering: persistedRecord.totalOffering ?? ((persistedRecord.cashOffering || 0) + (persistedRecord.onlineOffering || 0))
         };
-        await createNotificationHelpers.meetingRecordUpdated(leaderName, bacentaName, record.date, changes, totals);
+        await createNotificationHelpers.meetingRecordUpdated(leaderName, bacentaName, persistedRecord.date, changes, totals);
       } catch (notifyErr) {
         console.warn('⚠️ Failed to send meeting updated notification:', notifyErr);
       }

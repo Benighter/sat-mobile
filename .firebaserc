@@ -1,5 +1,15 @@
 {
   "projects": {
     "default": "sat-mobile-de6f1"
-  }
+  },
+  "targets": {
+    "sat-mobile-de6f1": {
+      "storage": {
+        "default": [
+          "sat-mobile-de6f1.firebasestorage.app"
+        ]
+      }
+    }
+  },
+  "etags": {}
 }

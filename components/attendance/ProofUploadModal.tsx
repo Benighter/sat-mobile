@@ -10,10 +10,7 @@ interface ProofUploadModalProps {
   type: 'offering' | 'tithe' | 'cash-offering' | 'cash-tithe';
 }
 
-const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB per file (before compression)
-const MAX_IMAGE_DIMENSION = 1920; // max width or height in pixels
-const JPEG_QUALITY = 0.82; // compression quality (high for document readability)
-const MAX_PDF_SIZE = 500 * 1024; // 500KB max for PDFs (stored as-is)
+const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB per file, stored in Firebase Storage
 const ACCEPTED_IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
 const ACCEPTED_PDF_TYPES = ['application/pdf'];
 const ALL_ACCEPTED_TYPES = [...ACCEPTED_IMAGE_TYPES, ...ACCEPTED_PDF_TYPES];
@@ -35,79 +32,50 @@ const ProofUploadModal: React.FC<ProofUploadModalProps> = ({
   const label = type === 'offering' ? 'Online Offering' : type === 'tithe' ? 'Online Tithe' : type === 'cash-offering' ? 'Cash Offering Deposit' : 'Cash Tithe Deposit';
   const accentColor = (type === 'offering' || type === 'cash-offering') ? 'emerald' : 'blue';
 
-  const readFileAsDataUrl = (file: File): Promise<string> =>
-    new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = () => reject(new Error(`Failed to read ${file.name}`));
-      reader.readAsDataURL(file);
-    });
+  const getProofSource = (proof: ProofAttachment): string => proof.url || proof.data || '';
 
-  const compressImage = (file: File): Promise<string> =>
-    new Promise((resolve, reject) => {
-      const img = new Image();
-      const url = URL.createObjectURL(file);
-      img.onload = () => {
-        URL.revokeObjectURL(url);
-        let { width, height } = img;
-        if (width > MAX_IMAGE_DIMENSION || height > MAX_IMAGE_DIMENSION) {
-          if (width > height) {
-            height = Math.round(height * (MAX_IMAGE_DIMENSION / width));
-            width = MAX_IMAGE_DIMENSION;
-          } else {
-            width = Math.round(width * (MAX_IMAGE_DIMENSION / height));
-            height = MAX_IMAGE_DIMENSION;
-          }
-        }
-        const canvas = document.createElement('canvas');
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) { reject(new Error('Canvas not supported')); return; }
-        ctx.drawImage(img, 0, 0, width, height);
-        resolve(canvas.toDataURL('image/jpeg', JPEG_QUALITY));
-      };
-      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error(`Failed to load ${file.name}`)); };
-      img.src = url;
+  const revokePreviewUrl = (proof: ProofAttachment) => {
+    if (proof.data?.startsWith('blob:')) {
+      URL.revokeObjectURL(proof.data);
+    }
+  };
+
+  const clearStagedFiles = () => {
+    setStagedFiles(prev => {
+      prev.forEach(revokePreviewUrl);
+      return [];
     });
+  };
 
   const processFiles = async (files: File[]) => {
     setError(null);
     const newAttachments: ProofAttachment[] = [];
 
+    const invalidFile = files.find(file => !ALL_ACCEPTED_TYPES.includes(file.type));
+    if (invalidFile) {
+      setError(`"${invalidFile.name}" is not a supported file type. Use JPG, PNG, WEBP, or PDF.`);
+      return;
+    }
+
+    const oversizedFile = files.find(file => file.size > MAX_FILE_SIZE);
+    if (oversizedFile) {
+      setError(`"${oversizedFile.name}" is too large (${(oversizedFile.size / 1024 / 1024).toFixed(1)}MB). Max size is 100MB.`);
+      return;
+    }
+
     for (const file of files) {
-      if (!ALL_ACCEPTED_TYPES.includes(file.type)) {
-        setError(`"${file.name}" is not a supported file type. Use JPG, PNG, WEBP, or PDF.`);
-        return;
-      }
-      if (file.size > MAX_FILE_SIZE) {
-        setError(`"${file.name}" is too large (${(file.size / 1024 / 1024).toFixed(1)}MB). Max size is 5MB.`);
-        return;
-      }
-
       const isPdf = ACCEPTED_PDF_TYPES.includes(file.type);
+      const previewUrl = isPdf ? undefined : URL.createObjectURL(file);
 
-      if (isPdf) {
-        if (file.size > MAX_PDF_SIZE) {
-          setError(`"${file.name}" is too large (${(file.size / 1024).toFixed(0)}KB). PDF max is 500KB.`);
-          return;
-        }
-        const data = await readFileAsDataUrl(file);
-        newAttachments.push({
-          data,
-          name: file.name,
-          type: 'pdf',
-          uploadedAt: new Date().toISOString(),
-        });
-      } else {
-        const data = await compressImage(file);
-        newAttachments.push({
-          data,
-          name: file.name,
-          type: 'image',
-          uploadedAt: new Date().toISOString(),
-        });
-      }
+      newAttachments.push({
+        data: previewUrl,
+        name: file.name,
+        type: isPdf ? 'pdf' : 'image',
+        uploadedAt: new Date().toISOString(),
+        size: file.size,
+        contentType: file.type || (isPdf ? 'application/pdf' : 'image/jpeg'),
+        file,
+      });
     }
 
     setStagedFiles(prev => [...prev, ...newAttachments]);
@@ -127,7 +95,11 @@ const ProofUploadModal: React.FC<ProofUploadModalProps> = ({
   };
 
   const handleRemoveStaged = (index: number) => {
-    setStagedFiles(prev => prev.filter((_, i) => i !== index));
+    setStagedFiles(prev => {
+      const removed = prev[index];
+      if (removed) revokePreviewUrl(removed);
+      return prev.filter((_, i) => i !== index);
+    });
   };
 
   const handleUpload = async () => {
@@ -137,7 +109,7 @@ const ProofUploadModal: React.FC<ProofUploadModalProps> = ({
     try {
       const merged = [...existingProofs, ...stagedFiles];
       await onUpload(merged);
-      setStagedFiles([]);
+      clearStagedFiles();
       onClose();
     } catch (err: any) {
       setError(err?.message || 'Upload failed. Please try again.');
@@ -148,7 +120,7 @@ const ProofUploadModal: React.FC<ProofUploadModalProps> = ({
 
   const handleClose = () => {
     if (!isUploading) {
-      setStagedFiles([]);
+      clearStagedFiles();
       setError(null);
       onClose();
     }
@@ -218,7 +190,7 @@ const ProofUploadModal: React.FC<ProofUploadModalProps> = ({
               Tap to select or drag files here
             </p>
             <p className="text-xs text-gray-500 mt-1">
-              JPG, PNG, WEBP, or PDF — max 2MB each
+              JPG, PNG, WEBP, or PDF - max 100MB each
             </p>
           </div>
 
@@ -247,7 +219,7 @@ const ProofUploadModal: React.FC<ProofUploadModalProps> = ({
                       {file.type === 'pdf' ? (
                         <DocumentTextIcon className="w-5 h-5 text-red-600" />
                       ) : (
-                        <img src={file.data} alt={file.name} className="w-10 h-10 rounded-lg object-cover" />
+                        <img src={getProofSource(file)} alt={file.name} className="w-10 h-10 rounded-lg object-cover" />
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
@@ -285,7 +257,7 @@ const ProofUploadModal: React.FC<ProofUploadModalProps> = ({
                       {proof.type === 'pdf' ? (
                         <DocumentTextIcon className="w-5 h-5 text-red-500" />
                       ) : (
-                        <img src={proof.data} alt={proof.name} className="w-10 h-10 rounded-lg object-cover" />
+                        <img src={getProofSource(proof)} alt={proof.name} className="w-10 h-10 rounded-lg object-cover" />
                       )}
                     </div>
                     <div className="flex-1 min-w-0">

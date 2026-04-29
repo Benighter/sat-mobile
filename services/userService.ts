@@ -15,9 +15,7 @@ import { db } from '../firebase.config';
 import { User, Church } from '../types';
 import {
   cleanupStoredImage,
-  compressImageForInlineSave,
-  DEFAULT_INLINE_IMAGE_TARGET_LENGTH,
-  resolveInlineImageValue
+  persistImageValue
 } from './imageStorageService';
 
 const sanitizeFirestoreValue = <T>(value: T): T => {
@@ -37,6 +35,8 @@ const sanitizeFirestoreValue = <T>(value: T): T => {
 
   return value;
 };
+
+const storageVersionId = (): string => `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 
 // User Service for managing user profiles and church data
 export const userService = {
@@ -69,14 +69,12 @@ export const userService = {
           return;
         }
 
-        payload.profilePicture = resolveInlineImageValue(
-          await compressImageForInlineSave(payload.profilePicture, {
-            maxLength: DEFAULT_INLINE_IMAGE_TARGET_LENGTH,
-            processingErrorMessage: 'Failed to process profile picture.',
-            oversizeErrorMessage: 'Profile picture is still too large after compression. Please crop a smaller area and try again.'
-          }),
-          'Profile picture is too large to save right now. Please crop it smaller and try again.'
-        );
+        payload.profilePicture = await persistImageValue({
+          imageValue: payload.profilePicture,
+          path: `users/${uid}/profile-picture/${storageVersionId()}`,
+          processingErrorMessage: 'Failed to upload profile picture.',
+          oversizeErrorMessage: 'Please select a valid profile picture.'
+        });
         await updateDoc(doc(db, 'users', uid), {
           ...payload,
           lastUpdated: new Date().toISOString()

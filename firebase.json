@@ -2,6 +2,12 @@
   "firestore": {
     "rules": "firestore.rules"
   },
+  "storage": [
+    {
+      "bucket": "sat-mobile-de6f1.firebasestorage.app",
+      "rules": "storage.rules"
+    }
+  ],
   "functions": {
     "source": "functions",
     "runtime": "nodejs18",

@@ -1,17 +1,19 @@
-import React, { useState, useRef } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { Camera, X, User, Upload, Crop } from 'lucide-react';
 import ImageCropper from './ImageCropper';
 import ImageCropperWithPresets from './ImageCropperWithPresets';
 
 interface ImageUploadProps {
   value?: string; // Storage URL or data URL
-  onChange: (base64: string | null) => void;
+  onChange: (imageValue: string | null) => void;
   onError?: (title: string, message: string) => void; // optional toast handler
   className?: string;
   size?: 'sm' | 'md' | 'lg';
   enableCropping?: boolean; // Enable cropping functionality
   cropPresets?: boolean; // Use preset cropper (default: true)
 }
+
+const MAX_IMAGE_FILE_SIZE = 100 * 1024 * 1024;
 
 const ImageUpload: React.FC<ImageUploadProps> = ({
   value,
@@ -27,11 +29,30 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
   const [showCropper, setShowCropper] = useState(false);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const objectUrlsRef = useRef<Set<string>>(new Set());
 
   const sizeClasses = {
     sm: 'w-16 h-16',
     md: 'w-24 h-24',
     lg: 'w-32 h-32'
+  };
+
+  useEffect(() => () => {
+    objectUrlsRef.current.forEach((objectUrl) => URL.revokeObjectURL(objectUrl));
+    objectUrlsRef.current.clear();
+  }, []);
+
+  const revokeObjectUrl = (objectUrl?: string | null) => {
+    if (objectUrl && objectUrlsRef.current.has(objectUrl)) {
+      URL.revokeObjectURL(objectUrl);
+      objectUrlsRef.current.delete(objectUrl);
+    }
+  };
+
+  const createPreviewUrl = (file: File): string => {
+    const objectUrl = URL.createObjectURL(file);
+    objectUrlsRef.current.add(objectUrl);
+    return objectUrl;
   };
 
   const handleFileSelect = (file: File) => {
@@ -43,17 +64,18 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
         return;
       }
 
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const base64 = e.target?.result as string;
-        if (enableCropping) {
-          setSelectedImage(base64);
-          setShowCropper(true);
-        } else {
-          onChange(base64);
-        }
-      };
-      reader.readAsDataURL(file);
+      if (file.size > MAX_IMAGE_FILE_SIZE) {
+        onError?.('Image too large', 'Please upload an image smaller than 100MB.');
+        return;
+      }
+
+      const previewUrl = createPreviewUrl(file);
+      if (enableCropping) {
+        setSelectedImage(previewUrl);
+        setShowCropper(true);
+      } else {
+        onChange(previewUrl);
+      }
     } else {
       onError?.('Invalid file', 'Please select a valid image file.');
     }
@@ -61,11 +83,17 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
 
   const handleCropComplete = (croppedImage: string) => {
     onChange(croppedImage);
+    if (selectedImage && selectedImage !== croppedImage) {
+      revokeObjectUrl(selectedImage);
+    }
     setShowCropper(false);
     setSelectedImage(null);
   };
 
   const handleCropCancel = () => {
+    if (selectedImage !== value) {
+      revokeObjectUrl(selectedImage);
+    }
     setShowCropper(false);
     setSelectedImage(null);
   };

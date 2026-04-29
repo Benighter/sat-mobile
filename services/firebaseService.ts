@@ -32,9 +32,10 @@ import {
   fetchSignInMethodsForEmail
 } from 'firebase/auth';
 import { db, auth } from '../firebase.config';
-import { Member, Bacenta, AttendanceRecord, NewBeliever, SundayConfirmation, Guest, MemberDeletionRequest, DeletionRequestStatus, OutreachBacenta, OutreachMember, PrayerRecord, PrayerSchedule, MeetingRecord, TitheRecord, BussingRecord, TransportRecord, SonOfGod, CustomPrayer, CustomPrayerRecord, SundayOfferingRecord } from '../types';
+import { Member, Bacenta, AttendanceRecord, NewBeliever, SundayConfirmation, Guest, MemberDeletionRequest, DeletionRequestStatus, OutreachBacenta, OutreachMember, PrayerRecord, PrayerSchedule, MeetingRecord, TitheRecord, BussingRecord, TransportRecord, SonOfGod, CustomPrayer, CustomPrayerRecord, SundayOfferingRecord, ProofAttachment } from '../types';
 import { applyLeadershipFirstTimerRule, withLeadershipFirstTimerRule } from '../utils/memberStatus';
-import { cleanupStoredImage, DEFAULT_INLINE_IMAGE_TARGET_LENGTH, isImageDataUrl, MAX_INLINE_IMAGE_COLLECTION_LENGTH, persistImageValue, resolveInlineImageValue } from './imageStorageService';
+import { cleanupStoredImage, persistImageValue } from './imageStorageService';
+import { dataUrlToBlob, deleteStorageObjectIfExists, ensureFileExtension, getDataUrlContentType, isBlobUrl, isDataUrl, uploadMediaToStorage } from './mediaStorageService';
 // Lightweight inline type to avoid circular heavy imports for new feature (kept local to service)
 export interface HeadCountRecord {
   id: string; // `${date}_${section}`
@@ -80,6 +81,224 @@ const normalizeSundayReportImages = (images?: string[] | null): string[] => {
   return images
     .map(image => (typeof image === 'string' ? image.trim() : ''))
     .filter(Boolean);
+};
+
+const SUNDAY_OFFERING_PROOF_FIELDS = [
+  'offeringProofs',
+  'titheProofs',
+  'cashOfferingProofs',
+  'cashTitheProofs'
+] as const;
+
+type SundayOfferingProofField = typeof SUNDAY_OFFERING_PROOF_FIELDS[number];
+
+const randomStorageId = (): string =>
+  `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+
+const sanitizeStorageSegment = (value: string): string => {
+  const cleaned = (value || 'item')
+    .trim()
+    .replace(/[^a-zA-Z0-9._-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+
+  return cleaned || 'item';
+};
+
+const buildSundayOfferingStoragePath = (
+  churchId: string,
+  offeringId: string,
+  folder: string,
+  fileName: string,
+  contentType?: string | null
+): string => {
+  const safeOfferingId = sanitizeStorageSegment(offeringId);
+  const safeFolder = sanitizeStorageSegment(folder);
+  const safeFileName = ensureFileExtension(fileName, contentType);
+  return `churches/${churchId}/sundayOfferings/${safeOfferingId}/${safeFolder}/${randomStorageId()}-${safeFileName}`;
+};
+
+const getStoredProofReferences = (proofs?: ProofAttachment[]): string[] => {
+  if (!Array.isArray(proofs)) return [];
+
+  return proofs.flatMap(proof => {
+    const references = [proof.storagePath, proof.url];
+    if (proof.data && !isDataUrl(proof.data) && !isBlobUrl(proof.data)) {
+      references.push(proof.data);
+    }
+    return references.filter((value): value is string => typeof value === 'string' && Boolean(value.trim()));
+  });
+};
+
+const getSundayOfferingStoredMediaReferences = (record?: SundayOfferingRecord | null): string[] => {
+  if (!record) return [];
+
+  return SUNDAY_OFFERING_PROOF_FIELDS.flatMap(field => getStoredProofReferences(record[field]));
+};
+
+const assertSundayOfferingFirestorePayloadIsSafe = (record: SundayOfferingRecord): void => {
+  const hasInlineReportImage = normalizeSundayReportImages(record.reportImages).some(isDataUrl);
+  const hasInlineProof = SUNDAY_OFFERING_PROOF_FIELDS.some(field => (
+    (record[field] || []).some(proof => typeof proof.data === 'string' && isDataUrl(proof.data))
+  ));
+
+  if (hasInlineReportImage || hasInlineProof) {
+    throw new Error('Sunday offering media must be uploaded to Storage before saving. Please try again.');
+  }
+
+  const estimatedPayloadLength = JSON.stringify(record).length;
+  if (estimatedPayloadLength > 900000) {
+    throw new Error('Sunday offering details are still too large to save safely. Remove some notes or attachments and try again.');
+  }
+};
+
+const persistSundayReportImages = async (
+  churchId: string,
+  offeringId: string,
+  images: string[] | undefined,
+  uploads: SundayOfferingRecord['reportImageUploads'],
+  registerUpload: (storagePath: string) => void
+): Promise<string[]> => {
+  const uploadByPreviewUrl = new Map((uploads || []).map(upload => [upload.previewUrl, upload.file]));
+
+  return Promise.all(normalizeSundayReportImages(images).map(async (imageValue, index) => {
+    if (isBlobUrl(imageValue)) {
+      const file = uploadByPreviewUrl.get(imageValue);
+      if (!file) {
+        throw new Error('A selected report picture could not be uploaded. Please reselect it and try again.');
+      }
+
+      const contentType = file.type || 'image/jpeg';
+      const storagePath = buildSundayOfferingStoragePath(churchId, offeringId, 'reportImages', file.name || `report-${index + 1}`, contentType);
+      const uploaded = await uploadMediaToStorage({
+        file,
+        storagePath,
+        contentType,
+        customMetadata: {
+          churchId,
+          offeringId,
+          mediaType: 'sunday-report-image'
+        }
+      });
+      registerUpload(uploaded.storagePath);
+      return uploaded.url;
+    }
+
+    if (isDataUrl(imageValue)) {
+      const contentType = getDataUrlContentType(imageValue);
+      const blob = dataUrlToBlob(imageValue);
+      const storagePath = buildSundayOfferingStoragePath(churchId, offeringId, 'reportImages', `report-${index + 1}`, contentType);
+      const uploaded = await uploadMediaToStorage({
+        file: blob,
+        storagePath,
+        contentType,
+        customMetadata: {
+          churchId,
+          offeringId,
+          mediaType: 'sunday-report-image'
+        }
+      });
+      registerUpload(uploaded.storagePath);
+      return uploaded.url;
+    }
+
+    return imageValue;
+  }));
+};
+
+const persistProofAttachments = async (
+  churchId: string,
+  offeringId: string,
+  field: SundayOfferingProofField,
+  proofs: ProofAttachment[] | undefined,
+  registerUpload: (storagePath: string) => void
+): Promise<ProofAttachment[]> => {
+  if (!Array.isArray(proofs) || proofs.length === 0) return [];
+
+  const persistedProofs = await Promise.all(proofs.map(async (proof, index): Promise<ProofAttachment | null> => {
+    const file = proof.file;
+    const sourceData = typeof proof.data === 'string' ? proof.data.trim() : '';
+    const existingUrl = typeof proof.url === 'string' ? proof.url.trim() : '';
+    const existingStoragePath = typeof proof.storagePath === 'string' ? proof.storagePath.trim() : '';
+    const proofType = proof.type === 'pdf' ? 'pdf' : 'image';
+    const fallbackContentType = proofType === 'pdf' ? 'application/pdf' : 'image/jpeg';
+
+    if (file) {
+      const contentType = file.type || proof.contentType || fallbackContentType;
+      const storagePath = buildSundayOfferingStoragePath(churchId, offeringId, field, proof.name || `${field}-${index + 1}`, contentType);
+      const uploaded = await uploadMediaToStorage({
+        file,
+        storagePath,
+        contentType,
+        customMetadata: {
+          churchId,
+          offeringId,
+          mediaType: field,
+          originalName: proof.name || ''
+        }
+      });
+      registerUpload(uploaded.storagePath);
+
+      return {
+        name: proof.name || `${field}-${index + 1}`,
+        type: proofType,
+        uploadedAt: proof.uploadedAt || new Date().toISOString(),
+        url: uploaded.url,
+        storagePath: uploaded.storagePath,
+        size: uploaded.size,
+        contentType: uploaded.contentType
+      };
+    }
+
+    if (sourceData && isDataUrl(sourceData)) {
+      const contentType = getDataUrlContentType(sourceData) || proof.contentType || fallbackContentType;
+      const blob = dataUrlToBlob(sourceData);
+      const storagePath = buildSundayOfferingStoragePath(churchId, offeringId, field, proof.name || `${field}-${index + 1}`, contentType);
+      const uploaded = await uploadMediaToStorage({
+        file: blob,
+        storagePath,
+        contentType,
+        customMetadata: {
+          churchId,
+          offeringId,
+          mediaType: field,
+          originalName: proof.name || ''
+        }
+      });
+      registerUpload(uploaded.storagePath);
+
+      return {
+        name: proof.name || `${field}-${index + 1}`,
+        type: proofType,
+        uploadedAt: proof.uploadedAt || new Date().toISOString(),
+        url: uploaded.url,
+        storagePath: uploaded.storagePath,
+        size: uploaded.size,
+        contentType: uploaded.contentType
+      };
+    }
+
+    if (sourceData && isBlobUrl(sourceData)) {
+      throw new Error(`A selected ${proofType === 'pdf' ? 'PDF' : 'image'} proof could not be uploaded. Please reselect it and try again.`);
+    }
+
+    const storedUrl = existingUrl || (sourceData && !isDataUrl(sourceData) && !isBlobUrl(sourceData) ? sourceData : '');
+    if (!storedUrl && !existingStoragePath) {
+      return null;
+    }
+
+    return {
+      name: proof.name || `${field}-${index + 1}`,
+      type: proofType,
+      uploadedAt: proof.uploadedAt || new Date().toISOString(),
+      url: storedUrl || undefined,
+      storagePath: existingStoragePath || undefined,
+      size: proof.size,
+      contentType: proof.contentType || fallbackContentType
+    };
+  }));
+
+  return persistedProofs.filter((proof): proof is ProofAttachment => proof !== null);
 };
 
 // Helper: map a real email to a ministry-only Auth email alias (same inbox for providers that support plus-addressing)
@@ -936,7 +1155,7 @@ export const runBackfillMinistrySync = async (): Promise<{ success: boolean; syn
 
 // DISABLED: Cross-ministry sync removed for ministry independence
 // Force sync all members with ministry assignments across all churches
-export const runCrossMinistrySync = async (ministryName?: string): Promise<{ success: boolean; synced?: number }> => {
+export const runCrossMinistrySync = async (_ministryName?: string): Promise<{ success: boolean; synced?: number }> => {
   console.log('⚠️ [runCrossMinistrySync] DISABLED - Ministry sync has been removed for ministry independence');
   return { success: false, synced: 0 };
 
@@ -1017,7 +1236,7 @@ export const membersFirebaseService = {
         return querySnapshot.docs.map(doc => normalizeMember({
           ...doc.data(),
           id: doc.id
-        }) as Member);
+        } as Member));
       });
     } catch (error: any) {
       throw firebaseUtils.handleOfflineError('Fetch members', error);
@@ -1065,10 +1284,9 @@ export const membersFirebaseService = {
       const nowIso = new Date().toISOString();
       const profilePicture = await persistImageValue({
         imageValue: member.profilePicture,
-        path: `churches/${currentChurchId}/member-profile-images/${memberRef.id}`,
-        maxLength: DEFAULT_INLINE_IMAGE_TARGET_LENGTH,
-        processingErrorMessage: 'Failed to process profile picture.',
-        oversizeErrorMessage: 'Profile picture is still too large after compression. Please crop a smaller area and try again.'
+        path: `churches/${currentChurchId}/member-profile-images/${memberRef.id}/${randomStorageId()}`,
+        processingErrorMessage: 'Failed to upload profile picture.',
+        oversizeErrorMessage: 'Please select a valid profile picture.'
       });
       const payload = withLeadershipFirstTimerRule({
         ...member,
@@ -1120,10 +1338,9 @@ export const membersFirebaseService = {
       if (Object.prototype.hasOwnProperty.call(sanitized, 'profilePicture')) {
         sanitized.profilePicture = await persistImageValue({
           imageValue: sanitized.profilePicture,
-          path: `churches/${currentChurchId}/member-profile-images/${memberId}`,
-          maxLength: DEFAULT_INLINE_IMAGE_TARGET_LENGTH,
-          processingErrorMessage: 'Failed to process profile picture.',
-          oversizeErrorMessage: 'Profile picture is still too large after compression. Please crop a smaller area and try again.'
+          path: `churches/${currentChurchId}/member-profile-images/${memberId}/${randomStorageId()}`,
+          processingErrorMessage: 'Failed to upload profile picture.',
+          oversizeErrorMessage: 'Please select a valid profile picture.'
         });
       }
       const payload = {
@@ -1134,13 +1351,6 @@ export const membersFirebaseService = {
       if (Object.prototype.hasOwnProperty.call(sanitized, 'profilePicture') && existingMember?.profilePicture && existingMember.profilePicture !== payload.profilePicture) {
         await cleanupStoredImage(existingMember.profilePicture);
       }
-
-      // Reload after update so simulation receives the latest 'after' state
-      let afterDoc: Member | null = null;
-      try {
-        const snapAfter = await getDoc(memberRef);
-        if (snapAfter.exists()) afterDoc = { id: snapAfter.id, ...(snapAfter.data() as any) } as Member;
-      } catch {}
 
       // REMOVED: Sync simulation disabled for ministry independence
       // try {
@@ -2741,26 +2951,31 @@ export const meetingRecordsFirebaseService = {
   },
 
   // Add or update meeting record
-  addOrUpdate: async (record: MeetingRecord): Promise<void> => {
+  addOrUpdate: async (record: MeetingRecord): Promise<MeetingRecord> => {
     try {
       const meetingsRef = collection(db, getChurchCollectionPath('meetings'));
       const docRef = doc(meetingsRef, record.id);
       const existingSnap = await getDoc(docRef);
       const existingRecord = existingSnap.exists() ? ({ id: existingSnap.id, ...(existingSnap.data() as any) } as MeetingRecord) : null;
-      const meetingImage = resolveInlineImageValue(
-        record.meetingImage,
-        'Meeting image is too large to save right now. Please crop it smaller and try again.'
-      );
-
-      await setDoc(docRef, {
+      const meetingImage = await persistImageValue({
+        imageValue: record.meetingImage,
+        path: `churches/${currentChurchId}/meeting-images/${record.id}/${randomStorageId()}`,
+        processingErrorMessage: 'Failed to upload meeting image.',
+        oversizeErrorMessage: 'Please select a valid meeting image.'
+      });
+      const persistedRecord = {
         ...record,
         meetingImage,
         updatedAt: new Date().toISOString(),
         recordedBy: currentUser?.uid || 'unknown'
-      }, { merge: true });
+      } as MeetingRecord;
+
+      await setDoc(docRef, persistedRecord, { merge: true });
       if (existingRecord?.meetingImage && existingRecord.meetingImage !== meetingImage) {
         await cleanupStoredImage(existingRecord.meetingImage);
       }
+
+      return persistedRecord;
     } catch (error: any) {
       throw new Error(`Failed to save meeting record: ${error.message}`);
     }
@@ -2834,48 +3049,59 @@ export const sundayOfferingFirebaseService = {
   },
 
   addOrUpdate: async (record: SundayOfferingRecord): Promise<SundayOfferingRecord> => {
+    const uploadedStoragePaths: string[] = [];
+
     try {
+      const churchId = currentChurchId;
+      if (!churchId) {
+        throw new Error('No church context available. User must be signed in.');
+      }
+
       const offeringsRef = collection(db, getChurchCollectionPath('sundayOfferings'));
       const docRef = doc(offeringsRef, record.id);
       const existingSnap = await getDoc(docRef);
       const existingRecord = existingSnap.exists() ? ({ id: existingSnap.id, ...existingSnap.data() } as SundayOfferingRecord) : null;
-      const normalizedImages = normalizeSundayReportImages(record.reportImages);
-      const persistedImages = normalizedImages.map(imageValue => resolveInlineImageValue(
-        imageValue,
-        'Report picture is too large to save right now. Please choose a smaller picture and try again.'
-      ));
-      const totalInlineImageLength = persistedImages.reduce(
-        (sum, imageValue) => sum + (isImageDataUrl(imageValue) ? imageValue.length : 0),
-        0
-      );
-
-      if (totalInlineImageLength > MAX_INLINE_IMAGE_COLLECTION_LENGTH) {
-        throw new Error('The selected report pictures are too large to save together. Remove some pictures or choose smaller ones and try again.');
-      }
+      const { reportImageUploads, ...recordForFirestore } = record;
+      const registerUpload = (storagePath: string) => uploadedStoragePaths.push(storagePath);
+      const persistedImages = await persistSundayReportImages(churchId, record.id, record.reportImages, reportImageUploads, registerUpload);
+      const persistedOfferingProofs = await persistProofAttachments(churchId, record.id, 'offeringProofs', record.offeringProofs, registerUpload);
+      const persistedTitheProofs = await persistProofAttachments(churchId, record.id, 'titheProofs', record.titheProofs, registerUpload);
+      const persistedCashOfferingProofs = await persistProofAttachments(churchId, record.id, 'cashOfferingProofs', record.cashOfferingProofs, registerUpload);
+      const persistedCashTitheProofs = await persistProofAttachments(churchId, record.id, 'cashTitheProofs', record.cashTitheProofs, registerUpload);
 
       const sanitizedRecord: SundayOfferingRecord = {
-        ...record,
+        ...recordForFirestore,
         cashTithe: Number(record.cashTithe || 0),
         onlineTithe: Number(record.onlineTithe || 0),
         totalTithe: Number(record.totalTithe ?? ((record.cashTithe || 0) + (record.onlineTithe || 0))),
         reportImages: persistedImages,
-        offeringProofs: record.offeringProofs || [],
-        titheProofs: record.titheProofs || [],
-        cashOfferingProofs: record.cashOfferingProofs || [],
-        cashTitheProofs: record.cashTitheProofs || [],
+        offeringProofs: persistedOfferingProofs,
+        titheProofs: persistedTitheProofs,
+        cashOfferingProofs: persistedCashOfferingProofs,
+        cashTitheProofs: persistedCashTitheProofs,
         recordedAt: record.recordedAt || Timestamp.now().toDate().toISOString(),
         recordedBy: currentUser?.uid || 'unknown',
         lastUpdated: new Date().toISOString()
       };
 
+      assertSundayOfferingFirestorePayloadIsSafe(sanitizedRecord);
+
       await setDoc(docRef, sanitizedRecord, { merge: true });
 
       const previousImages = normalizeSundayReportImages(existingRecord?.reportImages);
       const removedImages = previousImages.filter(imageUrl => !persistedImages.includes(imageUrl));
-      await Promise.all(removedImages.map(imageUrl => cleanupStoredImage(imageUrl)));
+      const previousProofReferences = getSundayOfferingStoredMediaReferences(existingRecord);
+      const nextProofReferences = new Set(getSundayOfferingStoredMediaReferences(sanitizedRecord));
+      const removedProofReferences = previousProofReferences.filter(reference => !nextProofReferences.has(reference));
+
+      await Promise.all([
+        ...removedImages.map(imageUrl => deleteStorageObjectIfExists(imageUrl)),
+        ...removedProofReferences.map(reference => deleteStorageObjectIfExists(reference))
+      ]);
 
       return sanitizedRecord;
     } catch (error: any) {
+      await Promise.all(uploadedStoragePaths.map(storagePath => deleteStorageObjectIfExists(storagePath)));
       throw new Error(`Failed to save Sunday offering: ${error.message}`);
     }
   },

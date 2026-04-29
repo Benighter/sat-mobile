@@ -2,11 +2,11 @@
 // Provides helpers to create threads, list threads, subscribe to messages, and send messages
 
 import { addDoc, collection, doc, getDocs, onSnapshot, orderBy, query, serverTimestamp, Timestamp, Unsubscribe, updateDoc, where, writeBatch, deleteDoc, limit, startAfter } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { getFunctions, httpsCallable } from 'firebase/functions';
-import { db, storage } from '../firebase.config';
+import { db } from '../firebase.config';
 import { firebaseUtils } from './firebaseService';
 import type { User } from '../types';
+import { ensureFileExtension, uploadMediaToStorage } from './mediaStorageService';
 
 export type ChatThreadType = 'dm' | 'group';
 
@@ -157,13 +157,18 @@ export const chatService = {
     if (!churchId) throw new Error('No church context');
     if (!file) throw new Error('No file provided');
 
-    const ext = (file instanceof File && file.name.split('.').pop()) || 'jpg';
-    const path = `chat/${churchId}/${threadId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-    const storageRef = ref(storage, path);
+    const contentType = (file as any).type || 'image/jpeg';
+    const fileName = file instanceof File ? file.name : `image-${Date.now()}.jpg`;
+    const path = `chat/${churchId}/${threadId}/${Date.now()}-${Math.random().toString(36).slice(2)}-${ensureFileExtension(fileName, contentType)}`;
     let url: string | null = null;
     try {
-      await uploadBytes(storageRef, file);
-      url = await getDownloadURL(storageRef);
+      const uploaded = await uploadMediaToStorage({
+        file,
+        storagePath: path,
+        contentType,
+        cacheControl: 'private,max-age=604800'
+      });
+      url = uploaded.url;
     } catch (directErr) {
       // Fallback: use callable relay if direct upload fails (e.g., corporate proxy/CORS)
       try {

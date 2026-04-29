@@ -7,7 +7,6 @@ import ImageCropper from '../ui/ImageCropper';
 import ConfirmationModal from '../modals/confirmations/ConfirmationModal';
 import { useAppContext } from '../../contexts/FirebaseAppContext';
 import useCurrencyFormatter from '../../hooks/useCurrencyFormatter';
-import { compressImageForInlineSave } from '../../services/imageStorageService';
 
 interface BacentaAttendanceFormProps {
   bacentaId: string;
@@ -15,6 +14,8 @@ interface BacentaAttendanceFormProps {
   onBack: () => void;
   existingRecord?: any; // View/edit of a saved meeting record
 }
+
+const MAX_MEETING_IMAGE_FILE_SIZE = 100 * 1024 * 1024;
 
 const BacentaAttendanceForm: React.FC<BacentaAttendanceFormProps> = ({
   bacentaId,
@@ -30,7 +31,7 @@ const BacentaAttendanceForm: React.FC<BacentaAttendanceFormProps> = ({
   const [showImageModal, setShowImageModal] = useState(false);
 
   // Form state
-  const [meetingImageBase64, setMeetingImageBase64] = useState<string>(existingRecord?.meetingImage || '');
+  const [meetingImage, setMeetingImage] = useState<string>(existingRecord?.meetingImage || '');
   const [showImageCropper, setShowImageCropper] = useState(false);
   const [tempImageUrl, setTempImageUrl] = useState<string>('');
   const [messagePreached, setMessagePreached] = useState(existingRecord?.messagePreached || '');
@@ -56,13 +57,11 @@ const BacentaAttendanceForm: React.FC<BacentaAttendanceFormProps> = ({
   // Refs
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const compressMeetingImage = React.useCallback(async (imageValue: string): Promise<string> => (
-    compressImageForInlineSave(imageValue, {
-      maxLength: 680000,
-      processingErrorMessage: 'Failed to process meeting image.',
-      oversizeErrorMessage: 'Meeting image is still too large after auto-compression. Please crop a smaller area and try again.'
-    })
-  ), []);
+  React.useEffect(() => () => {
+    if (tempImageUrl) {
+      URL.revokeObjectURL(tempImageUrl);
+    }
+  }, [tempImageUrl]);
 
   // Get bacenta and leader info
   const bacenta = bacentas.find(b => b.id === bacentaId);
@@ -137,6 +136,11 @@ const BacentaAttendanceForm: React.FC<BacentaAttendanceFormProps> = ({
       return false;
     }
 
+    if (file.size > MAX_MEETING_IMAGE_FILE_SIZE) {
+      try { showToast('error', 'Image too large', 'Please upload an image smaller than 100MB.'); } catch {}
+      return false;
+    }
+
     return true;
   };
 
@@ -153,17 +157,12 @@ const BacentaAttendanceForm: React.FC<BacentaAttendanceFormProps> = ({
     }
   };
 
-  const handleImageCrop = async (croppedImageBase64: string) => {
-    try {
-      const compressedImage = await compressMeetingImage(croppedImageBase64);
-      setMeetingImageBase64(compressedImage);
-      setShowImageCropper(false);
-      if (tempImageUrl) {
-        URL.revokeObjectURL(tempImageUrl);
-        setTempImageUrl('');
-      }
-    } catch (error: any) {
-      try { showToast('error', 'Image too large', error?.message || 'Failed to compress meeting image.'); } catch {}
+  const handleImageCrop = async (croppedImage: string) => {
+    setMeetingImage(croppedImage);
+    setShowImageCropper(false);
+    if (tempImageUrl && tempImageUrl !== croppedImage) {
+      URL.revokeObjectURL(tempImageUrl);
+      setTempImageUrl('');
     }
   };
 
@@ -176,7 +175,7 @@ const BacentaAttendanceForm: React.FC<BacentaAttendanceFormProps> = ({
   };
 
   const removeImage = () => {
-    setMeetingImageBase64('');
+    setMeetingImage('');
     setShowImageCropper(false);
     if (tempImageUrl) {
       URL.revokeObjectURL(tempImageUrl);
@@ -191,7 +190,7 @@ const BacentaAttendanceForm: React.FC<BacentaAttendanceFormProps> = ({
   const handleCancelEdit = () => {
     if (existingRecord) {
       // Reset to original values
-      setMeetingImageBase64(existingRecord.meetingImage || '');
+      setMeetingImage(existingRecord.meetingImage || '');
       setMessagePreached(existingRecord.messagePreached || '');
       setDiscussionLedBy(existingRecord.discussionLedBy || '');
       setBacentaLeaderName(existingRecord.bacentaLeaderName || '');
@@ -230,15 +229,11 @@ const BacentaAttendanceForm: React.FC<BacentaAttendanceFormProps> = ({
     if (isSubmitting) return;
     setIsSubmitting(true);
     try {
-      const normalizedMeetingImage = await compressMeetingImage(meetingImageBase64);
-      if (normalizedMeetingImage !== meetingImageBase64) {
-        setMeetingImageBase64(normalizedMeetingImage);
-      }
       const meetingRecord = {
         id: `${bacentaId}_${meetingDate}`,
         bacentaId,
         date: meetingDate,
-        meetingImage: normalizedMeetingImage,
+        meetingImage,
         bacentaLeaderName: bacentaLeader ? `${bacentaLeader.firstName} ${bacentaLeader.lastName}` : bacentaLeaderName,
         messagePreached,
         discussionLedBy,
@@ -502,12 +497,12 @@ const BacentaAttendanceForm: React.FC<BacentaAttendanceFormProps> = ({
                 id="meeting-image-input"
               />
 
-            {meetingImageBase64 ? (
+            {meetingImage ? (
               /* Enhanced Image Preview */
               <div className="relative">
                 <div className="relative rounded-2xl overflow-hidden border-2 border-gray-100 shadow-lg group">
                   <img
-                    src={meetingImageBase64}
+                    src={meetingImage}
                     alt="Meeting photo"
                     className={`w-full h-64 object-cover transition-all duration-300 cursor-pointer ${isViewMode ? 'hover:scale-105' : ''}`}
                     onClick={() => setShowImageModal(true)}
@@ -597,7 +592,7 @@ const BacentaAttendanceForm: React.FC<BacentaAttendanceFormProps> = ({
           </div>
 
           {/* Fullscreen Image Modal with Zoom/Pan */}
-          {showImageModal && meetingImageBase64 && (
+          {showImageModal && meetingImage && (
             <div className="fixed inset-0 z-50 bg-black/90 flex flex-col">
               <div className="flex items-center justify-between p-4">
                 <span className="text-white text-sm">Tap/scroll to zoom, drag to pan</span>
@@ -622,7 +617,7 @@ const BacentaAttendanceForm: React.FC<BacentaAttendanceFormProps> = ({
                 onDoubleClick={onDoubleClick}
               >
                 <img
-                  src={meetingImageBase64}
+                  src={meetingImage}
                   alt="Full size meeting"
                   className="max-w-none will-change-transform"
                   style={{ transform: `translate(${offset.x}px, ${offset.y}px) scale(${zoom})` }}
