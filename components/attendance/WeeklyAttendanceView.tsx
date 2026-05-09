@@ -1,7 +1,9 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { getBlob, ref as storageRef } from 'firebase/storage';
 import { Capacitor } from '@capacitor/core';
 import { Directory, Filesystem } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
+import { storage } from '../../firebase.config';
 import { useAppContext } from '../../contexts/FirebaseAppContext';
 import {
   getCurrentOrMostRecentSunday,
@@ -30,6 +32,7 @@ import { isLeadershipPosition, isMemberFirstTimerOnSunday } from '../../utils/me
 import { MINISTRY_OPTIONS } from '../../constants';
 import useCurrencyFormatter from '../../hooks/useCurrencyFormatter';
 import { membersFirebaseService } from '../../services/firebaseService';
+import { isFirebaseStorageUrl } from '../../services/mediaStorageService';
 import ProofUploadModal from './ProofUploadModal';
 import ProofViewer from './ProofViewer';
 
@@ -80,9 +83,19 @@ const WeeklyAttendanceView: React.FC = () => {
     activeMinistryName,
     saveSundayOfferingHandler
   } = useAppContext();
-  const { formatIncomeAmount } = useCurrencyFormatter();
+  const { formatIncomeAmount, zarPerUsdRate } = useCurrencyFormatter();
 
   const canManageSundayIncome = isCampusShepherd(userProfile);
+  const liveUsdZarRateLabel = useMemo(() => {
+    if (!canManageSundayIncome || !zarPerUsdRate) {
+      return null;
+    }
+
+    return new Intl.NumberFormat(undefined, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 4
+    }).format(zarPerUsdRate);
+  }, [canManageSundayIncome, zarPerUsdRate]);
 
   // Keep constituency name in sync with App Preferences (and react immediately to updates)
   const [constituencyName, setConstituencyName] = useState<string>(userProfile?.churchName || '');
@@ -715,11 +728,26 @@ const WeeklyAttendanceView: React.FC = () => {
   };
 
   const getImageBlob = async (imageValue: string): Promise<Blob> => {
-    if (imageValue.startsWith('data:')) {
-      return dataUrlToBlob(imageValue);
+    const normalizedImageValue = imageValue.trim();
+
+    if (!normalizedImageValue) {
+      throw new Error('Selected picture is missing');
     }
 
-    const response = await fetch(imageValue);
+    if (normalizedImageValue.startsWith('data:')) {
+      return dataUrlToBlob(normalizedImageValue);
+    }
+
+    if (isFirebaseStorageUrl(normalizedImageValue)) {
+      try {
+        return await getBlob(storageRef(storage, normalizedImageValue));
+      } catch (error) {
+        console.warn('Failed to load report picture from Firebase Storage:', error);
+        throw new Error('Failed to load the selected picture from Storage. Please try again.');
+      }
+    }
+
+    const response = await fetch(normalizedImageValue);
     if (!response.ok) {
       throw new Error('Failed to load the selected picture');
     }
@@ -921,19 +949,32 @@ const WeeklyAttendanceView: React.FC = () => {
         return;
       }
 
-      if (selectedReportImage) {
-        const imageBlob = await getImageBlob(selectedReportImage);
-        const extension = imageBlob.type.includes('png') ? 'png' : imageBlob.type.includes('webp') ? 'webp' : 'jpg';
-        const reportFile = new File([imageBlob], `gathering-service-${selectedSunday}.${extension}`, { type: imageBlob.type || 'image/jpeg' });
+      let couldNotAttachPicture = false;
 
-        if (!navigator.canShare || navigator.canShare({ files: [reportFile] })) {
-          await navigator.share({
-            title: 'Gathering Service attendance',
-            text,
-            files: [reportFile]
-          });
-          closeCampusReportModal();
-          return;
+      if (selectedReportImage) {
+        try {
+          const imageBlob = await getImageBlob(selectedReportImage);
+          const extension = imageBlob.type.includes('png') ? 'png' : imageBlob.type.includes('webp') ? 'webp' : 'jpg';
+          const reportFile = new File([imageBlob], `gathering-service-${selectedSunday}.${extension}`, { type: imageBlob.type || 'image/jpeg' });
+
+          if (!navigator.canShare || navigator.canShare({ files: [reportFile] })) {
+            await navigator.share({
+              title: 'Gathering Service attendance',
+              text,
+              files: [reportFile]
+            });
+            closeCampusReportModal();
+            return;
+          }
+
+          couldNotAttachPicture = true;
+        } catch (error: any) {
+          if (error?.name === 'AbortError') {
+            throw error;
+          }
+
+          console.warn('Unable to attach campus report picture; sharing text only:', error);
+          couldNotAttachPicture = true;
         }
       }
 
@@ -942,6 +983,10 @@ const WeeklyAttendanceView: React.FC = () => {
         text
       });
       closeCampusReportModal();
+
+      if (couldNotAttachPicture) {
+        showToast('warning', 'Picture not attached', 'The report text was shared without the selected picture.');
+      }
     } catch (error: any) {
       if (error?.name !== 'AbortError') {
         console.error('Failed to share campus shepherd report:', error);
@@ -1419,6 +1464,9 @@ const WeeklyAttendanceView: React.FC = () => {
                         <p className="mt-1 text-xs sm:text-sm text-gray-600">
                           Offering and tithe are grouped separately. Tap any amount card to edit for {formatCompactDate(selectedSunday)}.
                         </p>
+                        <p className="mt-2 text-xs font-medium text-emerald-700">
+                          {liveUsdZarRateLabel ? `Live rate: 1 USD = ZAR ${liveUsdZarRateLabel}` : 'Updating live USD/ZAR rate...'}
+                        </p>
                       </div>
 
                       <div className="rounded-xl border border-slate-200 bg-slate-900 px-3 py-3.5 text-left lg:px-4 lg:py-4">
@@ -1426,6 +1474,9 @@ const WeeklyAttendanceView: React.FC = () => {
                         <p className="mt-1 text-xl font-bold text-white lg:text-2xl">{formatIncomeAmount(totalSundayIncome)}</p>
                         <p className="mt-1 text-xs text-slate-300">
                           Offering {formatIncomeAmount(totalSundayOffering)} + Tithe {formatIncomeAmount(totalSundayTithe)}
+                        </p>
+                        <p className="mt-2 text-[10px] font-medium text-slate-400">
+                          {liveUsdZarRateLabel ? `1 USD = ZAR ${liveUsdZarRateLabel}` : 'Updating USD rate...'}
                         </p>
                       </div>
                     </div>

@@ -1,0 +1,17 @@
+[
+  {
+    "origin": ["*"],
+    "method": ["GET", "HEAD", "OPTIONS"],
+    "responseHeader": [
+      "Authorization",
+      "Content-Type",
+      "Content-Length",
+      "Content-Disposition",
+      "Content-Range",
+      "Range",
+      "X-Firebase-Storage-Version",
+      "X-Goog-*"
+    ],
+    "maxAgeSeconds": 3600
+  }
+]

@@ -1,27 +1,42 @@
 const BASE_CURRENCY = 'ZAR';
 const USD_CURRENCY = 'USD';
-const CACHE_KEY = 'sat-mobile-exchange-rates-v1';
+const CACHE_KEY = 'sat-mobile-exchange-rates-v2';
 const CACHE_TTL_MS = 12 * 60 * 60 * 1000;
-const FALLBACK_RATES: Record<string, number> = {
-  ZAR: 1,
-  USD: 1 / 16.88
-};
+const DISPLAY_CACHE_TTL_MS = 5 * 60 * 1000;
+const OPEN_EXCHANGE_RATE_URL = `https://open.er-api.com/v6/latest/${BASE_CURRENCY}`;
+const FRANKFURTER_RATE_URL = `https://api.frankfurter.app/latest?from=${BASE_CURRENCY}&to=${USD_CURRENCY}`;
+const CURRENCY_API_RATE_URL = `https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/${BASE_CURRENCY.toLowerCase()}.json`;
+const FALLBACK_RATES: Record<string, number> = { ZAR: 1 };
 
 export type CurrencyRates = Record<string, number>;
 
 export interface ExchangeRateSnapshot {
   base: string;
   fetchedAt: number;
+  providerUpdatedAt?: number;
+  providerNextUpdateAt?: number;
   rates: CurrencyRates;
+}
+
+export interface LoadExchangeRateOptions {
+  forceRefresh?: boolean;
+  maxAgeMs?: number;
 }
 
 export interface CurrencyFormatOptions {
   compact?: boolean;
+  showUsdComparison?: boolean;
 }
 
 export interface CurrencyOption {
   code: string;
   label: string;
+}
+
+interface LiveRateResult {
+  providerUpdatedAt?: number;
+  providerNextUpdateAt?: number;
+  rates: CurrencyRates;
 }
 
 let inMemorySnapshot: ExchangeRateSnapshot | null = null;
@@ -37,6 +52,122 @@ const getDisplayNames = () => {
   } catch {
     return null;
   }
+};
+
+const normalizeTimestamp = (value: unknown): number | undefined => {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+};
+
+const sanitizeRates = (rates: Record<string, number> | null | undefined): CurrencyRates => {
+  const sanitizedRates: CurrencyRates = { [BASE_CURRENCY]: 1 };
+
+  Object.entries(rates || {}).forEach(([code, rate]) => {
+    const normalizedCode = code.trim().toUpperCase();
+    if (normalizedCode && typeof rate === 'number' && Number.isFinite(rate) && rate > 0) {
+      sanitizedRates[normalizedCode] = rate;
+    }
+  });
+
+  sanitizedRates[BASE_CURRENCY] = 1;
+  return sanitizedRates;
+};
+
+const hasUsableRate = (rates: CurrencyRates, currencyCode: string): boolean => {
+  const rate = rates[normalizeCurrencyCode(currencyCode)];
+  return typeof rate === 'number' && Number.isFinite(rate) && rate > 0;
+};
+
+const parseProviderDate = (value: unknown): number | undefined => {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+
+  const timestamp = Date.parse(`${value}T00:00:00Z`);
+  return Number.isFinite(timestamp) ? timestamp : undefined;
+};
+
+const fetchJson = async <T>(url: string): Promise<T> => {
+  const response = await fetch(url, { cache: 'no-store' });
+  if (!response.ok) {
+    throw new Error(`Exchange rate request failed with ${response.status}`);
+  }
+
+  return response.json() as Promise<T>;
+};
+
+const fetchOpenExchangeRates = async (): Promise<LiveRateResult> => {
+  const payload = await fetchJson<{
+    rates?: Record<string, number>;
+    result?: string;
+    time_last_update_unix?: number;
+    time_next_update_unix?: number;
+  }>(OPEN_EXCHANGE_RATE_URL);
+
+  const rates = sanitizeRates(payload.rates);
+  if (payload.result === 'error' || !hasUsableRate(rates, USD_CURRENCY)) {
+    throw new Error('Open exchange rate payload is missing USD');
+  }
+
+  return {
+    providerUpdatedAt: normalizeTimestamp(payload.time_last_update_unix)
+      ? (payload.time_last_update_unix as number) * 1000
+      : undefined,
+    providerNextUpdateAt: normalizeTimestamp(payload.time_next_update_unix)
+      ? (payload.time_next_update_unix as number) * 1000
+      : undefined,
+    rates
+  };
+};
+
+const fetchFrankfurterRates = async (): Promise<LiveRateResult> => {
+  const payload = await fetchJson<{
+    date?: string;
+    rates?: Record<string, number>;
+  }>(FRANKFURTER_RATE_URL);
+
+  const rates = sanitizeRates(payload.rates);
+  if (!hasUsableRate(rates, USD_CURRENCY)) {
+    throw new Error('Frankfurter payload is missing USD');
+  }
+
+  return {
+    providerUpdatedAt: parseProviderDate(payload.date),
+    rates
+  };
+};
+
+const fetchCurrencyApiRates = async (): Promise<LiveRateResult> => {
+  const payload = await fetchJson<{
+    date?: string;
+    zar?: Record<string, number>;
+  }>(CURRENCY_API_RATE_URL);
+
+  const lowerCaseRates = payload.zar || {};
+  const rates = sanitizeRates(Object.fromEntries(
+    Object.entries(lowerCaseRates).map(([code, rate]) => [code.toUpperCase(), rate])
+  ));
+  if (!hasUsableRate(rates, USD_CURRENCY)) {
+    throw new Error('Currency API payload is missing USD');
+  }
+
+  return {
+    providerUpdatedAt: parseProviderDate(payload.date),
+    rates
+  };
+};
+
+const fetchLiveRates = async (): Promise<LiveRateResult> => {
+  const providers = [fetchOpenExchangeRates, fetchFrankfurterRates, fetchCurrencyApiRates];
+
+  for (const fetchProvider of providers) {
+    try {
+      return await fetchProvider();
+    } catch {
+      // Try the next live provider before falling back to cached ZAR-only display.
+    }
+  }
+
+  throw new Error('No live USD/ZAR exchange rate provider is available');
 };
 
 const readCachedSnapshot = (): ExchangeRateSnapshot | null => {
@@ -59,13 +190,14 @@ const readCachedSnapshot = (): ExchangeRateSnapshot | null => {
       return null;
     }
 
+    const providerUpdatedAt = normalizeTimestamp(parsed.providerUpdatedAt);
+    const providerNextUpdateAt = normalizeTimestamp(parsed.providerNextUpdateAt);
+
     inMemorySnapshot = {
       ...parsed,
-      rates: {
-        ...parsed.rates,
-        [BASE_CURRENCY]: 1,
-        [USD_CURRENCY]: parsed.rates[USD_CURRENCY] ?? FALLBACK_RATES[USD_CURRENCY]
-      }
+      providerUpdatedAt,
+      providerNextUpdateAt,
+      rates: sanitizeRates(parsed.rates)
     };
 
     return inMemorySnapshot;
@@ -94,12 +226,16 @@ const buildFallbackSnapshot = (): ExchangeRateSnapshot => ({
   rates: { ...FALLBACK_RATES }
 });
 
-const isSnapshotFresh = (snapshot: ExchangeRateSnapshot | null) => {
+const isSnapshotFresh = (snapshot: ExchangeRateSnapshot | null, maxAgeMs: number = CACHE_TTL_MS) => {
   if (!snapshot) {
     return false;
   }
 
-  return Date.now() - snapshot.fetchedAt < CACHE_TTL_MS;
+  if (typeof snapshot.providerNextUpdateAt === 'number' && Date.now() >= snapshot.providerNextUpdateAt) {
+    return false;
+  }
+
+  return Date.now() - snapshot.fetchedAt < maxAgeMs;
 };
 
 export const normalizeCurrencyCode = (currencyCode?: string | null): string => {
@@ -146,12 +282,18 @@ export const getCurrencyOptions = (rates?: CurrencyRates): CurrencyOption[] => {
 };
 
 export const getCurrencySelectionSnapshot = (): ExchangeRateSnapshot => {
-  return readCachedSnapshot() || buildFallbackSnapshot();
+  const cachedSnapshot = readCachedSnapshot();
+  if (cachedSnapshot && isSnapshotFresh(cachedSnapshot, DISPLAY_CACHE_TTL_MS) && hasUsableRate(cachedSnapshot.rates, USD_CURRENCY)) {
+    return cachedSnapshot;
+  }
+
+  return buildFallbackSnapshot();
 };
 
-export const loadExchangeRates = async (): Promise<ExchangeRateSnapshot> => {
+export const loadExchangeRates = async (options: LoadExchangeRateOptions = {}): Promise<ExchangeRateSnapshot> => {
+  const { forceRefresh = false, maxAgeMs = CACHE_TTL_MS } = options;
   const cachedSnapshot = readCachedSnapshot();
-  if (isSnapshotFresh(cachedSnapshot)) {
+  if (!forceRefresh && isSnapshotFresh(cachedSnapshot, maxAgeMs) && hasUsableRate(cachedSnapshot?.rates || {}, USD_CURRENCY)) {
     return cachedSnapshot as ExchangeRateSnapshot;
   }
 
@@ -161,31 +303,21 @@ export const loadExchangeRates = async (): Promise<ExchangeRateSnapshot> => {
 
   inFlightSnapshotPromise = (async () => {
     try {
-      const response = await fetch('https://open.er-api.com/v6/latest/ZAR');
-      if (!response.ok) {
-        throw new Error(`Exchange rate request failed with ${response.status}`);
-      }
-
-      const payload = await response.json() as { rates?: Record<string, number>; result?: string };
-      if (payload.result === 'error' || !payload.rates || typeof payload.rates.USD !== 'number') {
-        throw new Error('Exchange rate payload is missing rates');
-      }
+      const liveRateResult = await fetchLiveRates();
 
       const snapshot: ExchangeRateSnapshot = {
         base: BASE_CURRENCY,
         fetchedAt: Date.now(),
-        rates: {
-          ...payload.rates,
-          [BASE_CURRENCY]: 1,
-          [USD_CURRENCY]: payload.rates[USD_CURRENCY]
-        }
+        providerUpdatedAt: liveRateResult.providerUpdatedAt,
+        providerNextUpdateAt: liveRateResult.providerNextUpdateAt,
+        rates: liveRateResult.rates
       };
 
       writeCachedSnapshot(snapshot);
       return snapshot;
     } catch {
       const staleSnapshot = readCachedSnapshot();
-      if (staleSnapshot) {
+      if (staleSnapshot && hasUsableRate(staleSnapshot.rates, USD_CURRENCY)) {
         return staleSnapshot;
       }
 
@@ -208,10 +340,31 @@ export const convertFromZar = (amount: number, currencyCode: string, rates: Curr
 
   const rate = rates[normalizedCode];
   if (typeof rate !== 'number' || !Number.isFinite(rate)) {
-    return normalizedAmount;
+    return normalizedCode === BASE_CURRENCY ? normalizedAmount : Number.NaN;
   }
 
   return normalizedAmount * rate;
+};
+
+export const getZarPerUsdRate = (rates: CurrencyRates): number | null => {
+  const usdRate = rates[USD_CURRENCY];
+  if (typeof usdRate !== 'number' || !Number.isFinite(usdRate) || usdRate <= 0) {
+    return null;
+  }
+
+  return 1 / usdRate;
+};
+
+export const formatZarPerUsdRate = (rates: CurrencyRates): string | null => {
+  const zarPerUsdRate = getZarPerUsdRate(rates);
+  if (!zarPerUsdRate) {
+    return null;
+  }
+
+  return new Intl.NumberFormat(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 4
+  }).format(zarPerUsdRate);
 };
 
 const formatCurrencyValue = (amount: number, currencyCode: string): string => {
@@ -233,11 +386,21 @@ const formatCurrencyValue = (amount: number, currencyCode: string): string => {
 
 export const formatPrimaryCurrencyAmount = (amount: number, preferredCurrency: string, rates: CurrencyRates): string => {
   const normalizedCurrency = normalizeCurrencyCode(preferredCurrency);
-  return formatCurrencyValue(convertFromZar(amount, normalizedCurrency, rates), normalizedCurrency);
+  const convertedAmount = convertFromZar(amount, normalizedCurrency, rates);
+  if (!Number.isFinite(convertedAmount)) {
+    return formatCurrencyValue(amount, BASE_CURRENCY);
+  }
+
+  return formatCurrencyValue(convertedAmount, normalizedCurrency);
 };
 
-export const formatUsdAmount = (amount: number, rates: CurrencyRates): string => {
-  return formatCurrencyValue(convertFromZar(amount, USD_CURRENCY, rates), USD_CURRENCY);
+export const formatUsdAmount = (amount: number, rates: CurrencyRates): string | null => {
+  const convertedAmount = convertFromZar(amount, USD_CURRENCY, rates);
+  if (!Number.isFinite(convertedAmount)) {
+    return null;
+  }
+
+  return formatCurrencyValue(convertedAmount, USD_CURRENCY);
 };
 
 export const formatIncomeDisplay = (
@@ -249,12 +412,17 @@ export const formatIncomeDisplay = (
   const normalizedCurrency = normalizeCurrencyCode(preferredCurrency);
   const primaryAmount = formatPrimaryCurrencyAmount(amount, normalizedCurrency, rates);
 
-  if (normalizedCurrency === USD_CURRENCY) {
+  if (normalizedCurrency === USD_CURRENCY || !options.showUsdComparison) {
     return primaryAmount;
   }
 
+  const usdAmount = formatUsdAmount(amount, rates);
+  if (!usdAmount) {
+    return `${primaryAmount}${options.compact ? '' : ' '}(updating USD...)`;
+  }
+
   const separator = options.compact ? '' : ' ';
-  return `${primaryAmount}${separator}(${formatUsdAmount(amount, rates)})`;
+  return `${primaryAmount}${separator}(${usdAmount})`;
 };
 
 export const BASE_MONEY_CURRENCY = BASE_CURRENCY;
