@@ -1,6 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist';
+import type { PDFDocumentProxy, RenderTask } from 'pdfjs-dist';
+import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import { ArrowDownTrayIcon, DocumentTextIcon, EyeIcon, XMarkIcon, ChevronLeftIcon, ChevronRightIcon } from '../icons';
 import { ProofAttachment } from '../../types';
+
+GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
 interface ProofViewerProps {
   proofs: ProofAttachment[];
@@ -8,6 +13,201 @@ interface ProofViewerProps {
   sundayDate: string;
   onRemove?: (index: number) => void;
 }
+
+interface PdfCanvasReviewProps {
+  source: string;
+  fileName: string;
+  onDownload: () => void;
+  onOpen: () => void;
+}
+
+const PdfCanvasReview: React.FC<PdfCanvasReviewProps> = ({ source, fileName, onDownload, onOpen }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const renderTaskRef = useRef<RenderTask | null>(null);
+  const [pdfDocument, setPdfDocument] = useState<PDFDocumentProxy | null>(null);
+  const [pageNumber, setPageNumber] = useState(1);
+  const [pageCount, setPageCount] = useState(0);
+  const [containerWidth, setContainerWidth] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRendering, setIsRendering] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const updateWidth = () => setContainerWidth(container.clientWidth);
+    updateWidth();
+
+    const resizeObserver = new ResizeObserver(updateWidth);
+    resizeObserver.observe(container);
+    return () => resizeObserver.disconnect();
+  }, []);
+
+  useEffect(() => {
+    let isCancelled = false;
+    const loadingTask = getDocument({ url: source });
+
+    setIsLoading(true);
+    setError(null);
+    setPdfDocument(null);
+    setPageNumber(1);
+    setPageCount(0);
+
+    loadingTask.promise
+      .then((loadedDocument) => {
+        if (isCancelled) {
+          loadedDocument.destroy();
+          return;
+        }
+
+        setPdfDocument(loadedDocument);
+        setPageCount(loadedDocument.numPages);
+      })
+      .catch(() => {
+        if (!isCancelled) {
+          setError('Could not load this PDF for in-app review.');
+        }
+      })
+      .finally(() => {
+        if (!isCancelled) {
+          setIsLoading(false);
+        }
+      });
+
+    return () => {
+      isCancelled = true;
+      loadingTask.destroy();
+    };
+  }, [source]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!pdfDocument || !canvas || containerWidth <= 0) return;
+
+    let isCancelled = false;
+
+    const renderPage = async () => {
+      renderTaskRef.current?.cancel();
+      setIsRendering(true);
+
+      try {
+        const page = await pdfDocument.getPage(pageNumber);
+        if (isCancelled) return;
+
+        const baseViewport = page.getViewport({ scale: 1 });
+        const availableWidth = Math.min(Math.max(containerWidth - 32, 280), 980);
+        const pageScale = availableWidth / baseViewport.width;
+        const viewport = page.getViewport({ scale: pageScale });
+        const outputScale = Math.min(window.devicePixelRatio || 1, 2);
+        const canvasContext = canvas.getContext('2d');
+        if (!canvasContext) return;
+
+        canvas.width = Math.floor(viewport.width * outputScale);
+        canvas.height = Math.floor(viewport.height * outputScale);
+        canvas.style.width = `${Math.floor(viewport.width)}px`;
+        canvas.style.height = `${Math.floor(viewport.height)}px`;
+
+        canvasContext.setTransform(1, 0, 0, 1, 0, 0);
+        canvasContext.clearRect(0, 0, canvas.width, canvas.height);
+
+        const renderTask = page.render({
+          canvas,
+          viewport,
+          transform: outputScale !== 1 ? [outputScale, 0, 0, outputScale, 0, 0] : undefined,
+        });
+
+        renderTaskRef.current = renderTask;
+        await renderTask.promise;
+      } catch (err: any) {
+        if (err?.name !== 'RenderingCancelledException' && !isCancelled) {
+          setError('Could not render this PDF page.');
+        }
+      } finally {
+        if (!isCancelled) {
+          renderTaskRef.current = null;
+          setIsRendering(false);
+        }
+      }
+    };
+
+    renderPage();
+
+    return () => {
+      isCancelled = true;
+      renderTaskRef.current?.cancel();
+    };
+  }, [pdfDocument, pageNumber, containerWidth]);
+
+  useEffect(() => () => {
+    pdfDocument?.destroy();
+  }, [pdfDocument]);
+
+  const goToPreviousPage = () => setPageNumber(current => Math.max(1, current - 1));
+  const goToNextPage = () => setPageNumber(current => Math.min(pageCount, current + 1));
+
+  return (
+    <div ref={containerRef} className="flex min-h-0 flex-1 flex-col bg-gray-100">
+      <div className="flex flex-wrap items-center justify-center gap-2 border-b border-gray-200 bg-white px-3 py-2">
+        <button
+          onClick={goToPreviousPage}
+          disabled={!pdfDocument || pageNumber <= 1}
+          className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          <ChevronLeftIcon className="h-4 w-4" />
+          Page
+        </button>
+        <span className="min-w-[84px] text-center text-xs font-semibold text-gray-600">
+          {pageCount ? `${pageNumber} / ${pageCount}` : 'Loading'}
+        </span>
+        <button
+          onClick={goToNextPage}
+          disabled={!pdfDocument || pageNumber >= pageCount}
+          className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          Page
+          <ChevronRightIcon className="h-4 w-4" />
+        </button>
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-auto px-3 py-4">
+        <div className="mx-auto flex min-h-full w-full max-w-5xl items-center justify-center">
+          {error ? (
+            <div className="flex max-w-sm flex-col items-center rounded-xl border border-red-100 bg-white px-6 py-8 text-center shadow-sm">
+              <DocumentTextIcon className="mb-4 h-12 w-12 text-red-400" />
+              <p className="text-sm font-semibold text-gray-800">{error}</p>
+              <p className="mt-1 text-xs text-gray-500">Open it in the browser or download it to review {fileName}.</p>
+              <div className="mt-4 flex items-center gap-2">
+                <button
+                  onClick={onOpen}
+                  className="rounded-lg bg-gray-900 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-gray-800"
+                >
+                  Open PDF
+                </button>
+                <button
+                  onClick={onDownload}
+                  className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-700 transition-colors hover:bg-gray-50"
+                >
+                  Download
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="relative flex w-full justify-center">
+              {(isLoading || isRendering) && (
+                <div className="absolute left-1/2 top-4 z-10 -translate-x-1/2 rounded-full bg-gray-900/80 px-3 py-1.5 text-xs font-medium text-white shadow-lg">
+                  {isLoading ? 'Loading PDF...' : 'Rendering page...'}
+                </div>
+              )}
+              <canvas ref={canvasRef} className="max-w-full rounded-lg bg-white shadow-lg" />
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const ProofViewer: React.FC<ProofViewerProps> = ({ proofs, type, sundayDate, onRemove }) => {
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
@@ -26,14 +226,6 @@ const ProofViewer: React.FC<ProofViewerProps> = ({ proofs, type, sundayDate, onR
   const previewPosition = previewIndex === null
     ? -1
     : reviewableIndexes.findIndex(({ index }) => index === previewIndex);
-
-  const getPdfReviewSource = (source: string): string => {
-    if (!source || source.startsWith('blob:') || source.startsWith('data:') || source.includes('#')) {
-      return source;
-    }
-
-    return `${source}#toolbar=1&navpanes=0&view=FitH`;
-  };
 
   const downloadProof = (proof: ProofAttachment) => {
     const source = getProofSource(proof);
@@ -75,7 +267,6 @@ const ProofViewer: React.FC<ProofViewerProps> = ({ proofs, type, sundayDate, onR
 
   const currentPreview = previewIndex !== null ? proofs[previewIndex] : null;
   const currentPreviewSource = currentPreview ? getProofSource(currentPreview) : '';
-  const currentPdfReviewSource = currentPreview?.type === 'pdf' ? getPdfReviewSource(currentPreviewSource) : '';
 
   useEffect(() => {
     if (previewIndex === null) return;
@@ -247,34 +438,12 @@ const ProofViewer: React.FC<ProofViewerProps> = ({ proofs, type, sundayDate, onR
                 </div>
               </div>
 
-              <div className="min-h-0 flex-1 bg-gray-100">
-                <object
-                  data={currentPdfReviewSource}
-                  type="application/pdf"
-                  className="h-full w-full"
-                  aria-label={`Review ${currentPreview.name}`}
-                >
-                  <div className="flex h-full flex-col items-center justify-center px-6 text-center">
-                    <DocumentTextIcon className="mb-4 h-12 w-12 text-red-400" />
-                    <p className="text-sm font-semibold text-gray-800">This browser cannot show the PDF inline.</p>
-                    <p className="mt-1 max-w-sm text-xs text-gray-500">Open it in a new tab or download it to review the document.</p>
-                    <div className="mt-4 flex items-center gap-2">
-                      <button
-                        onClick={() => openProofInNewTab(currentPreview)}
-                        className="rounded-lg bg-gray-900 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-gray-800"
-                      >
-                        Open PDF
-                      </button>
-                      <button
-                        onClick={() => downloadProof(currentPreview)}
-                        className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-700 transition-colors hover:bg-gray-50"
-                      >
-                        Download
-                      </button>
-                    </div>
-                  </div>
-                </object>
-              </div>
+              <PdfCanvasReview
+                source={currentPreviewSource}
+                fileName={currentPreview.name}
+                onDownload={() => downloadProof(currentPreview)}
+                onOpen={() => openProofInNewTab(currentPreview)}
+              />
             </div>
           ) : (
             <div className="flex max-h-[85vh] max-w-[90vw] flex-col items-center" onClick={(e) => e.stopPropagation()}>
