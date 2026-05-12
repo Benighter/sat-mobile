@@ -1,4 +1,4 @@
-import { Member, MemberRole, MemberStatus } from '../types';
+import { Member, MemberRole, MemberStatus, NewBeliever } from '../types';
 import { formatDateToYYYYMMDD, getCurrentOrMostRecentSunday } from './dateUtils';
 
 export type MemberListStatusFilter = 'active' | 'frozen' | 'went_home' | 'all';
@@ -78,6 +78,45 @@ export const isMemberCurrentlyFirstTimer = (
   sunday: string = getCurrentOrMostRecentSunday()
 ): boolean => {
   return isMemberFirstTimerOnSunday(member, sunday);
+};
+
+export const getMemberNewBelieverWeekDate = (
+  member?: Pick<Member, 'isNewBeliever' | 'newBelieverWeekDate' | 'createdDate' | 'lastUpdated'> | null
+): string | undefined => {
+  if (!member?.isNewBeliever) return undefined;
+
+  const explicitWeekDate = (member.newBelieverWeekDate || '').trim();
+  if (explicitWeekDate) return explicitWeekDate;
+
+  // Legacy fallback for records created before newBelieverWeekDate existed.
+  return getSundayForDateReference(member.lastUpdated || member.createdDate);
+};
+
+export const isMemberNewBelieverOnSunday = (
+  member?: Pick<Member, 'isNewBeliever' | 'newBelieverWeekDate' | 'createdDate' | 'lastUpdated'> | null,
+  sunday?: string
+): boolean => {
+  if (!member || !sunday) return false;
+  return getMemberNewBelieverWeekDate(member) === sunday;
+};
+
+export const getNewBelieverFirstTimeWeekDate = (
+  newBeliever?: Pick<NewBeliever, 'isFirstTime' | 'firstTimeWeekDate' | 'joinedDate' | 'createdDate'> | null
+): string | undefined => {
+  if (!newBeliever?.isFirstTime) return undefined;
+
+  const explicitWeekDate = (newBeliever.firstTimeWeekDate || '').trim();
+  if (explicitWeekDate) return explicitWeekDate;
+
+  return getSundayForDateReference(newBeliever.joinedDate || newBeliever.createdDate);
+};
+
+export const isNewBelieverFirstTimeOnSunday = (
+  newBeliever?: Pick<NewBeliever, 'isFirstTime' | 'firstTimeWeekDate' | 'joinedDate' | 'createdDate'> | null,
+  sunday?: string
+): boolean => {
+  if (!newBeliever || !sunday) return false;
+  return getNewBelieverFirstTimeWeekDate(newBeliever) === sunday;
 };
 
 export const withLeadershipFirstTimerRule = <T extends Partial<Member>>(member: T): T => {

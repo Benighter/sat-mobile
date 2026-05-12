@@ -17,7 +17,7 @@ import ChangePasswordModal from '../auth/ChangePasswordModal';
 import AdminInviteManager from '../admin/AdminInviteManager';
 import InviteMigrationPanel from '../admin/InviteMigrationPanel';
 import PushNotificationSettings from '../notifications/PushNotificationSettings';
-import { hasAdminPrivileges, hasLeaderPrivileges } from '../../utils/permissionUtils';
+import { canManageAdminInvites, hasAdminPrivileges, hasLeaderPrivileges, isCampusShepherd, isPromotedCampusAdmin } from '../../utils/permissionUtils';
 import {
   SunIcon,
   UserIcon,
@@ -108,7 +108,9 @@ const ProfileSettingsView: React.FC = () => {
   const [isSavingCampusShepherd, setIsSavingCampusShepherd] = useState(false);
   // const [isSendingTestEmail, setIsSendingTestEmail] = useState(false); // Email feature on hold
 
-  const canConfigureCurrencyDisplay = hasAdminPrivileges(userProfile) && preferences.isCampusShepherd === true;
+  const isPromotedAdmin = isPromotedCampusAdmin(userProfile);
+  const canConfigureCurrencyDisplay = isCampusShepherd(userProfile);
+  const canOpenAdminInviteManagement = canManageAdminInvites(userProfile);
   const liveUsdZarRateLabel = formatZarPerUsdRate(rates);
 
   // Update state when userProfile changes
@@ -402,7 +404,7 @@ const ProfileSettingsView: React.FC = () => {
                 </div>
                 <div className="flex items-center justify-center lg:justify-start text-gray-600 dark:text-dark-300 bg-gray-50 dark:bg-dark-700 rounded-2xl p-3">
                   <ShieldCheckIcon className="w-5 h-5 mr-3 text-purple-500" />
-                  <span className="text-sm font-medium capitalize">{userProfile.role || 'Member'}</span>
+                  <span className="text-sm font-medium capitalize">{isPromotedAdmin ? 'Promoted Campus Admin' : (userProfile.role || 'Member')}</span>
                 </div>
               </div>
             </div>
@@ -604,6 +606,11 @@ const ProfileSettingsView: React.FC = () => {
                     <p className="text-gray-600">
                       Controls whether this admin can view and manage Sunday income inside Weekly Attendance.
                     </p>
+                    {isPromotedAdmin && (
+                      <p className="mt-2 text-sm font-medium text-purple-700">
+                        Your Campus Shepherd access is managed by the main leader.
+                      </p>
+                    )}
                     <p className="mt-3 text-sm font-medium text-gray-800">
                       Current status:{' '}
                       <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${
@@ -626,7 +633,7 @@ const ProfileSettingsView: React.FC = () => {
                     <Button
                       type="button"
                       variant="primary"
-                      disabled={isSavingCampusShepherd || preferences.isCampusShepherd === true}
+                      disabled={isPromotedAdmin || isSavingCampusShepherd || preferences.isCampusShepherd === true}
                       onClick={() => handleCampusShepherdPreferenceUpdate(true)}
                       className="h-12 px-6 rounded-2xl font-medium transition-all duration-200 flex items-center justify-center min-w-[130px]"
                     >
@@ -635,7 +642,7 @@ const ProfileSettingsView: React.FC = () => {
                     <Button
                       type="button"
                       variant="secondary"
-                      disabled={isSavingCampusShepherd || preferences.isCampusShepherd === false}
+                      disabled={isPromotedAdmin || isSavingCampusShepherd || preferences.isCampusShepherd === false}
                       onClick={() => handleCampusShepherdPreferenceUpdate(false)}
                       className="h-12 px-6 rounded-2xl font-medium transition-all duration-200 flex items-center justify-center min-w-[130px]"
                     >
@@ -646,11 +653,12 @@ const ProfileSettingsView: React.FC = () => {
               </div>
 
               {/* Admin Invite Management */}
+              {canOpenAdminInviteManagement && (
               <div className="bg-gradient-to-r from-green-50 to-teal-50 rounded-2xl p-6 border border-green-100">
                 <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
                   <div className="flex-1">
                     <h3 className="text-lg font-semibold text-gray-900 mb-2">Admin Invite Management</h3>
-                    <p className="text-gray-600">Generate invites to promote other admins to leaders under your authority</p>
+                    <p className="text-gray-600">Generate invites and promote accepted leaders under your authority</p>
                   </div>
                   <Button
                     type="button"
@@ -663,6 +671,7 @@ const ProfileSettingsView: React.FC = () => {
                   </Button>
                 </div>
               </div>
+              )}
 
               {/* Data Migration Tool */}
               <div className="bg-gradient-to-r from-orange-50 to-amber-50 rounded-2xl p-6 border border-orange-100">
@@ -823,14 +832,16 @@ const ProfileSettingsView: React.FC = () => {
                   <div className="flex-1">
                     <h3 className="text-lg font-semibold text-gray-900 mb-2">Role Information</h3>
                     <p className="text-gray-600">
-                      {userProfile?.role === 'leader'
+                      {isPromotedAdmin
+                        ? 'You have campus admin privileges for operations. Inviting leaders and deleting members are restricted to the main leader.'
+                        : userProfile?.role === 'leader'
                         ? 'You have leader privileges to manage all church data and attendance records'
                         : 'You have full admin privileges including role management and system administration'}
                     </p>
                   </div>
                   <div className="flex-shrink-0">
-                    <Badge color={userProfile?.role === 'admin' ? 'blue' : 'purple'} size="md">
-                      {userProfile?.role === 'admin' ? 'Administrator' : 'Leader'}
+                    <Badge color={isPromotedAdmin || userProfile?.role === 'admin' ? 'blue' : 'purple'} size="md">
+                      {isPromotedAdmin ? 'Promoted Campus Admin' : userProfile?.role === 'admin' ? 'Administrator' : 'Leader'}
                     </Badge>
                   </div>
                 </div>

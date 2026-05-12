@@ -27,6 +27,7 @@ export const buildAttendanceMemberSnapshot = (
     isNewBeliever: member.isNewBeliever,
     isFirstTimer: member.isFirstTimer,
     firstTimerWeekDate: member.firstTimerWeekDate,
+    newBelieverWeekDate: member.newBelieverWeekDate,
     frozen: member.frozen
   };
 };
@@ -37,7 +38,8 @@ export const buildAttendanceNewBelieverSnapshot = (
   name: newBeliever.name,
   surname: newBeliever.surname,
   ministry: newBeliever.ministry,
-  isFirstTime: newBeliever.isFirstTime
+  isFirstTime: newBeliever.isFirstTime,
+  firstTimeWeekDate: newBeliever.firstTimeWeekDate
 });
 
 export const getAttendanceRecordDisplayName = (record: AttendanceRecord): string => {

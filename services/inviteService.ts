@@ -490,6 +490,18 @@ export const inviteService = {
         ...(previousChurchName ? { churchName: previousChurchName } : {}),
         isInvitedAdminLeader: false,
         invitedByAdminId: null,
+        isPromotedCampusAdmin: false,
+        promotedByAdminId: null,
+        promotedByAdminName: null,
+        promotedAt: null,
+        ...((inviteData as any)?.promotedPreviousCampusShepherdPreference !== undefined
+          ? {
+              preferences: {
+                ...((userData as any).preferences || {}),
+                isCampusShepherd: (inviteData as any).promotedPreviousCampusShepherdPreference === true
+              }
+            }
+          : {}),
         lastUpdated: new Date().toISOString()
       });
 
@@ -501,6 +513,126 @@ export const inviteService = {
       return { success: true, message: `${userData.displayName || userData.firstName} has been removed as a leader and restored to their previous state.` };
     } catch (error: any) {
       throw new Error(`Failed to remove leader access: ${error.message}`);
+    }
+  },
+
+  promoteInvitedLeaderToCampusAdmin: async (
+    inviteId: string,
+    promoter: Pick<User, 'uid' | 'displayName' | 'churchId'>
+  ): Promise<void> => {
+    try {
+      const inviteRef = doc(db, 'adminInvites', inviteId);
+      const inviteSnap = await getDoc(inviteRef);
+      if (!inviteSnap.exists()) {
+        throw new Error('Invite not found');
+      }
+
+      const invite = { id: inviteSnap.id, ...inviteSnap.data() } as AdminInvite;
+      if (invite.status !== 'accepted') {
+        throw new Error('Only accepted invites can be promoted');
+      }
+      if (invite.handledAs === 'cross-tenant-link') {
+        throw new Error('Read-only cross-tenant links cannot be promoted');
+      }
+      if (invite.createdBy !== promoter.uid) {
+        throw new Error('Only the main leader who sent this invite can promote this person');
+      }
+      if (invite.promotedToCampusAdmin === true) {
+        return;
+      }
+
+      const userRef = doc(db, 'users', invite.invitedUserId);
+      const userSnap = await getDoc(userRef);
+      if (!userSnap.exists()) {
+        throw new Error('Invited user profile not found');
+      }
+
+      const userData = userSnap.data() as User;
+      const previousCampusShepherdPreference = typeof userData.preferences?.isCampusShepherd === 'boolean'
+        ? userData.preferences.isCampusShepherd
+        : null;
+      const nowIso = new Date().toISOString();
+
+      await updateDoc(userRef, {
+        role: 'admin',
+        churchId: invite.churchId,
+        isInvitedAdminLeader: true,
+        invitedByAdminId: invite.createdBy,
+        isPromotedCampusAdmin: true,
+        promotedByAdminId: promoter.uid,
+        promotedByAdminName: promoter.displayName,
+        promotedAt: nowIso,
+        preferences: {
+          ...(userData.preferences || {}),
+          isCampusShepherd: true
+        },
+        lastUpdated: nowIso
+      });
+
+      await updateDoc(inviteRef, {
+        promotedToCampusAdmin: true,
+        promotedAt: nowIso,
+        promotedBy: promoter.uid,
+        promotedByName: promoter.displayName,
+        promotedPreviousCampusShepherdPreference: previousCampusShepherdPreference,
+        unpromotedAt: null
+      });
+    } catch (error: any) {
+      throw new Error(`Failed to promote invited leader: ${error.message}`);
+    }
+  },
+
+  unpromoteCampusAdminToLeader: async (
+    inviteId: string,
+    promoterUid: string
+  ): Promise<void> => {
+    try {
+      const inviteRef = doc(db, 'adminInvites', inviteId);
+      const inviteSnap = await getDoc(inviteRef);
+      if (!inviteSnap.exists()) {
+        throw new Error('Invite not found');
+      }
+
+      const invite = { id: inviteSnap.id, ...inviteSnap.data() } as AdminInvite;
+      if (invite.createdBy !== promoterUid) {
+        throw new Error('Only the main leader who promoted this person can unpromote them');
+      }
+      if (invite.promotedToCampusAdmin !== true) {
+        return;
+      }
+
+      const userRef = doc(db, 'users', invite.invitedUserId);
+      const userSnap = await getDoc(userRef);
+      if (!userSnap.exists()) {
+        throw new Error('Promoted user profile not found');
+      }
+
+      const userData = userSnap.data() as User;
+      const restoredCampusShepherdPreference = invite.promotedPreviousCampusShepherdPreference === true;
+      const nowIso = new Date().toISOString();
+
+      await updateDoc(userRef, {
+        role: 'leader',
+        churchId: invite.churchId,
+        isInvitedAdminLeader: true,
+        invitedByAdminId: invite.createdBy,
+        isPromotedCampusAdmin: false,
+        promotedByAdminId: null,
+        promotedByAdminName: null,
+        promotedAt: null,
+        preferences: {
+          ...(userData.preferences || {}),
+          isCampusShepherd: restoredCampusShepherdPreference
+        },
+        lastUpdated: nowIso
+      });
+
+      await updateDoc(inviteRef, {
+        promotedToCampusAdmin: false,
+        unpromotedAt: nowIso
+      });
+    } catch (error: any) {
+      throw new Error(`Failed to unpromote campus admin: ${error.message}`);
     }
   },
 

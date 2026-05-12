@@ -8,6 +8,7 @@ import Button from '../ui/Button';
 import { BirthdayNotificationService } from '../../services/birthdayNotificationService';
 import { userService } from '../../services/userService';
 import { BellIcon } from '../icons';
+import { hasAdminPrivileges } from '../../utils/permissionUtils';
 
 // Minimal stat item to keep layout clean
 const StatItem = ({ icon, label, value, bg, onClick }: { icon: React.ReactNode; label: string; value: React.ReactNode; bg?: string; onClick?: () => void }) => (
@@ -218,7 +219,7 @@ const BirthdaysView: React.FC = () => {
           Celebrate with your church family. This month and the next 7 days.
         </p>
         {/* Quick action: trigger all birthday notifications now (admin only) */}
-        {userProfile?.role === 'admin' && (
+        {hasAdminPrivileges(userProfile) && (
           <div className="mt-3 flex flex-col items-center">
             <Button
               variant="primary"

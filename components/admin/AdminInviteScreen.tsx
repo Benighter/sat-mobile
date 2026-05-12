@@ -3,7 +3,7 @@ import { useAppContext } from '../../contexts/FirebaseAppContext';
 import { inviteService } from '../../services/inviteService';
 import { AdminInvite, User } from '../../types';
 import Button from '../ui/Button';
-import { canManageAdminInvites } from '../../utils/permissionUtils';
+import { canManageAdminInvites, isCampusShepherd, isPromotedCampusAdmin } from '../../utils/permissionUtils';
 import {
   CheckIcon,
   XMarkIcon,
@@ -29,7 +29,23 @@ const AdminInviteScreen: React.FC<AdminInviteScreenProps> = ({ isOpen, onClose }
   const [searchedUser, setSearchedUser] = useState<User | null>(null);
   const [isSearching, setIsSearching] = useState(false);
   const [isSendingInvite, setIsSendingInvite] = useState(false);
+  const [updatingInviteIds, setUpdatingInviteIds] = useState<Set<string>>(new Set());
   const [activeTab, setActiveTab] = useState<'search' | 'invites'>('search');
+  const isCampusShepherdMode = isCampusShepherd(userProfile);
+  const isPromotedMode = isPromotedCampusAdmin(userProfile);
+  const canPromoteInvitedAdmins = isCampusShepherdMode && !isPromotedMode;
+
+  const modeLabel = isPromotedMode
+    ? 'Promoted Campus Admin Mode'
+    : isCampusShepherdMode
+      ? 'Campus Shepherd Mode'
+      : 'Admin Mode';
+
+  const modeDescription = isPromotedMode
+    ? 'You can manage campus operations, but leader invites and member deletion are restricted.'
+    : isCampusShepherdMode
+      ? 'You can invite leaders and promote accepted invitees into restricted campus admins.'
+      : 'Leadership invite management is active.';
 
   // Detect navbar height for proper positioning
   useEffect(() => {
@@ -188,6 +204,48 @@ const AdminInviteScreen: React.FC<AdminInviteScreenProps> = ({ isOpen, onClose }
     }
   };
 
+  const runInviteUpdate = async (inviteId: string, action: () => Promise<void>) => {
+    setUpdatingInviteIds(prev => new Set(prev).add(inviteId));
+    try {
+      await action();
+      await loadInvites();
+    } finally {
+      setUpdatingInviteIds(prev => { const next = new Set(prev); next.delete(inviteId); return next; });
+    }
+  };
+
+  const handlePromoteToCampusAdmin = async (invite: AdminInvite) => {
+    if (!userProfile) return;
+
+    try {
+      await runInviteUpdate(invite.id, async () => {
+        await inviteService.promoteInvitedLeaderToCampusAdmin(invite.id, {
+          uid: userProfile.uid,
+          displayName: userProfile.displayName,
+          churchId: userProfile.churchId
+        });
+      });
+      showToast('success', `${invite.invitedUserName} promoted to campus admin`);
+    } catch (error: any) {
+      console.error('Error promoting campus admin:', error);
+      showToast('error', 'Failed to promote admin', error.message);
+    }
+  };
+
+  const handleUnpromoteCampusAdmin = async (invite: AdminInvite) => {
+    if (!userProfile) return;
+
+    try {
+      await runInviteUpdate(invite.id, async () => {
+        await inviteService.unpromoteCampusAdminToLeader(invite.id, userProfile.uid);
+      });
+      showToast('success', `${invite.invitedUserName} reverted to leader access`);
+    } catch (error: any) {
+      console.error('Error unpromoting campus admin:', error);
+      showToast('error', 'Failed to unpromote admin', error.message);
+    }
+  };
+
   const handleDeleteInvite = async (invite: AdminInvite) => {
     try {
       await inviteService.deleteInvite(invite.id);
@@ -261,6 +319,16 @@ const AdminInviteScreen: React.FC<AdminInviteScreenProps> = ({ isOpen, onClose }
           <div className="text-center">
             <h1 className="text-3xl sm:text-4xl font-extrabold text-gray-900 tracking-tight">Leadership Management</h1>
             <p className="text-sm sm:text-base text-gray-600">Invite admins to become leaders</p>
+            <div className="mt-3 inline-flex max-w-full flex-col items-center gap-1 rounded-2xl border border-indigo-100 bg-white/75 px-4 py-2 shadow-sm sm:flex-row sm:gap-2">
+              <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
+                isCampusShepherdMode
+                  ? 'bg-emerald-100 text-emerald-800'
+                  : 'bg-slate-100 text-slate-700'
+              }`}>
+                {modeLabel}
+              </span>
+              <span className="text-center text-xs text-gray-600 sm:text-left">{modeDescription}</span>
+            </div>
           </div>
 
           {/* Icon */}
@@ -502,17 +570,24 @@ const AdminInviteScreen: React.FC<AdminInviteScreenProps> = ({ isOpen, onClose }
                           </div>
                           {/* Status Badge - Fixed width and alignment */}
                           <div className="flex-shrink-0">
-                            <span className={`inline-flex items-center justify-center px-2 py-1 text-xs font-medium rounded-full min-w-[70px] text-center ${
-                              getStatusColor(invite.status, invite.expiresAt) === 'green'
-                                ? 'bg-green-100 text-green-700'
-                                : getStatusColor(invite.status, invite.expiresAt) === 'red'
-                                ? 'bg-red-100 text-red-700'
-                                : getStatusColor(invite.status, invite.expiresAt) === 'gray'
-                                ? 'bg-gray-100 text-gray-700'
-                                : 'bg-blue-100 text-blue-700'
-                            }`}>
-                              {getStatusText(invite.status, invite.expiresAt)}
-                            </span>
+                            <div className="flex flex-col items-end gap-1">
+                              <span className={`inline-flex items-center justify-center px-2 py-1 text-xs font-medium rounded-full min-w-[70px] text-center ${
+                                getStatusColor(invite.status, invite.expiresAt) === 'green'
+                                  ? 'bg-green-100 text-green-700'
+                                  : getStatusColor(invite.status, invite.expiresAt) === 'red'
+                                  ? 'bg-red-100 text-red-700'
+                                  : getStatusColor(invite.status, invite.expiresAt) === 'gray'
+                                  ? 'bg-gray-100 text-gray-700'
+                                  : 'bg-blue-100 text-blue-700'
+                              }`}>
+                                {getStatusText(invite.status, invite.expiresAt)}
+                              </span>
+                              {invite.promotedToCampusAdmin === true && (
+                                <span className="inline-flex items-center justify-center rounded-full bg-purple-100 px-2 py-1 text-[11px] font-semibold text-purple-700">
+                                  Campus Admin
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </div>
 
@@ -531,7 +606,7 @@ const AdminInviteScreen: React.FC<AdminInviteScreenProps> = ({ isOpen, onClose }
                         </div>
 
                         {/* Action Buttons - Consistent positioning */}
-                        <div className="flex justify-end">
+                        <div className="flex flex-wrap justify-end gap-2">
                           {invite.status === 'pending' && !isExpired(invite.expiresAt) && (
                             <Button
                               variant="ghost"
@@ -542,6 +617,31 @@ const AdminInviteScreen: React.FC<AdminInviteScreenProps> = ({ isOpen, onClose }
                               <XMarkIcon className="w-3 h-3 mr-1" />
                               Cancel Invite
                             </Button>
+                          )}
+                          {invite.status === 'accepted' && canPromoteInvitedAdmins && invite.handledAs !== 'cross-tenant-link' && (
+                            invite.promotedToCampusAdmin === true ? (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleUnpromoteCampusAdmin(invite)}
+                                disabled={updatingInviteIds.has(invite.id)}
+                                className="h-7 px-3 bg-amber-50 hover:bg-amber-100 text-amber-700 hover:text-amber-800 border border-amber-200 rounded-lg text-xs font-medium transition-all duration-200 flex items-center disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                <XMarkIcon className="w-3 h-3 mr-1" />
+                                {updatingInviteIds.has(invite.id) ? 'Updating...' : 'Unpromote Admin'}
+                              </Button>
+                            ) : (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handlePromoteToCampusAdmin(invite)}
+                                disabled={updatingInviteIds.has(invite.id)}
+                                className="h-7 px-3 bg-purple-50 hover:bg-purple-100 text-purple-700 hover:text-purple-800 border border-purple-200 rounded-lg text-xs font-medium transition-all duration-200 flex items-center disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                <CheckIcon className="w-3 h-3 mr-1" />
+                                {updatingInviteIds.has(invite.id) ? 'Updating...' : 'Promote to Admin'}
+                              </Button>
+                            )
                           )}
                           {invite.status === 'accepted' && (
                             <Button

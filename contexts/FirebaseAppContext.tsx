@@ -32,6 +32,7 @@ import { crossTenantService } from '../services/crossTenantService';
 import { dataMigrationService } from '../utils/dataMigration';
 import { buildAttendanceMemberSnapshot, buildAttendanceNewBelieverSnapshot } from '../utils/attendanceUtils';
 import { withLeadershipFirstTimerRule } from '../utils/memberStatus';
+import { isCampusShepherd, isPromotedCampusAdmin } from '../utils/permissionUtils';
 import { userService } from '../services/userService';
 import { isUnsavedImageValue } from '../services/imageStorageService';
 import { setNotificationContext } from '../services/notificationService';
@@ -1728,6 +1729,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
 
   const deleteNewBelieverHandler = useCallback(async (newBelieverId: string) => {
     if (!ensureCanWrite()) throw new Error('Read-only access');
+    if (isPromotedCampusAdmin(userProfile)) throw new Error('Promoted campus admins cannot delete members');
     try {
       setIsLoading(true);
       const newBelieverToDelete = newBelievers.find((newBeliever) => newBeliever.id === newBelieverId);
@@ -1745,7 +1747,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     } finally {
       setIsLoading(false);
     }
-  }, [showToast, newBelievers, persistNewBelieverAttendanceSnapshots]);
+  }, [showToast, newBelievers, persistNewBelieverAttendanceSnapshots, userProfile]);
 
   // Outreach handlers
   const setOutreachMonth = useCallback((yyyymm: string) => {
@@ -2182,6 +2184,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
 
   const deleteOutreachMemberHandler = useCallback(async (id: string) => {
     if (!ensureCanWrite()) throw new Error('Read-only access');
+    if (isPromotedCampusAdmin(userProfile)) throw new Error('Promoted campus admins cannot delete members');
     try {
       setIsLoading(true);
       const { hasAdminPrivileges } = await import('../utils/permissionUtils');
@@ -2537,7 +2540,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
 
   const saveSundayOfferingHandler = useCallback(async (record: SundayOfferingRecord) => {
     if (!ensureCanWrite()) throw new Error('Read-only access');
-    if (userProfile?.role !== 'admin') throw new Error('Only admins can manage Sunday offerings');
+    if (!isCampusShepherd(userProfile)) throw new Error('Only Campus Shepherd admins can manage Sunday offerings');
     try {
       setIsLoading(true);
       const savedRecord = await sundayOfferingFirebaseService.addOrUpdate(record);

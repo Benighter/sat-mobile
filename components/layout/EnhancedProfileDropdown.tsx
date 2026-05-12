@@ -12,7 +12,7 @@ import {
   ExclamationTriangleIcon,
   InformationCircleIcon
 } from '../icons';
-import { hasLeaderPrivileges, hasAdminPrivileges } from '../../utils/permissionUtils';
+import { hasLeaderPrivileges, hasAdminPrivileges, isPromotedCampusAdmin } from '../../utils/permissionUtils';
 import AboutModal from '../modals/general/AboutModal';
 import { 
   getViewportSize, 
@@ -471,7 +471,7 @@ const EnhancedProfileDropdown: React.FC<EnhancedProfileDropdownProps> = ({
             )}
 
             {/* Admin Deletion Requests - Admins only */}
-            {hasAdminPrivileges(userProfile) && (
+            {hasAdminPrivileges(userProfile) && !isPromotedCampusAdmin(userProfile) && (
               <button
                 onClick={() => {
                   switchTab({ id: TabKeys.ADMIN_DELETION_REQUESTS, name: 'Admin Deletion Requests' });

@@ -190,7 +190,7 @@ const SundayConfirmationsView: React.FC = () => {
         date: selectedSunday,
         updatedAt: new Date().toISOString(),
         userId: user.uid,
-        setByAdmin: userProfile?.role === 'admin'
+        setByAdmin: isAdmin
       });
       showToast('success', 'Target Updated', `Confirmation target set to ${newTarget}`);
     } catch (error: any) {

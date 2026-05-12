@@ -28,7 +28,12 @@ import {
 } from '../icons';
 import { AttendanceRecord, Member, NewBeliever, Bacenta, SundayOfferingRecord, ProofAttachment } from '../../types';
 import { isCampusShepherd } from '../../utils/permissionUtils';
-import { isLeadershipPosition, isMemberFirstTimerOnSunday } from '../../utils/memberStatus';
+import {
+  isLeadershipPosition,
+  isMemberFirstTimerOnSunday,
+  isMemberNewBelieverOnSunday,
+  isNewBelieverFirstTimeOnSunday
+} from '../../utils/memberStatus';
 import { MINISTRY_OPTIONS } from '../../constants';
 import useCurrencyFormatter from '../../hooks/useCurrencyFormatter';
 import { membersFirebaseService } from '../../services/firebaseService';
@@ -207,9 +212,13 @@ const WeeklyAttendanceView: React.FC = () => {
     presentMembersForSelectedSunday.filter(member => isMemberFirstTimerOnSunday(member, selectedSunday))
   ), [presentMembersForSelectedSunday, selectedSunday]);
 
+  const presentNewBelieverMembers = useMemo(() => (
+    presentMembersForSelectedSunday.filter(member => isMemberNewBelieverOnSunday(member, selectedSunday))
+  ), [presentMembersForSelectedSunday, selectedSunday]);
+
   const presentFirstTimeNewBelievers = useMemo(() => (
-    presentNewBelieversForSelectedSunday.filter(newBeliever => newBeliever.isFirstTime)
-  ), [presentNewBelieversForSelectedSunday]);
+    presentNewBelieversForSelectedSunday.filter(newBeliever => isNewBelieverFirstTimeOnSunday(newBeliever, selectedSunday))
+  ), [presentNewBelieversForSelectedSunday, selectedSunday]);
 
   const totalPresentFirstTimers = presentFirstTimerMembers.length + presentFirstTimeNewBelievers.length;
   const parsedCashOffering = Math.max(0, Number(cashOfferingInput || 0));
@@ -274,10 +283,17 @@ const WeeklyAttendanceView: React.FC = () => {
   };
 
   const toggleNewBeliever = async (member: Member) => {
+    const isNewBelieverForSelectedSunday = isMemberNewBelieverOnSunday(member, selectedSunday);
+
     if (togglingNewBeliever.has(member.id)) return;
     setTogglingNewBeliever(prev => new Set(prev).add(member.id));
     try {
-      await membersFirebaseService.update(member.id, { isNewBeliever: !member.isNewBeliever });
+      await membersFirebaseService.update(
+        member.id,
+        isNewBelieverForSelectedSunday
+          ? { isNewBeliever: false, newBelieverWeekDate: '' }
+          : { isNewBeliever: true, newBelieverWeekDate: selectedSunday }
+      );
     } catch {
       showToast('error', 'Update Failed', 'Could not update new believer status.');
     } finally {
@@ -647,14 +663,9 @@ const WeeklyAttendanceView: React.FC = () => {
       .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
 
     const totalAttendance = groupedAttendance.grandTotal;
-    const presentNewBelieverIds = new Set(
-      attendanceRecords
-        .filter(record => record.date === selectedSunday && record.status === 'Present' && record.newBelieverId)
-        .map(record => record.newBelieverId as string)
-    );
-    const presentMemberNewConverts = presentMembersForSelectedSunday.filter(member => member.isNewBeliever).length;
+    const presentMemberNewConverts = presentNewBelieverMembers.length;
     const todaysFirstTimers = totalPresentFirstTimers;
-    const todaysNewConverts = presentMemberNewConverts + presentNewBelieverIds.size;
+    const todaysNewConverts = presentMemberNewConverts + presentFirstTimeNewBelievers.length;
 
     let text = '*Gathering Service attendance*\n\n';
     text += `*Campus Name : ${campusName}*\n\n`;
@@ -1256,6 +1267,7 @@ const WeeklyAttendanceView: React.FC = () => {
   // Mobile-friendly member row: icon-only circular tag buttons + active tag chips below name
   const renderMemberRow = (m: Member, idx: number) => {
     const isFirstTimerForSelectedSunday = isMemberFirstTimerOnSunday(m, selectedSunday);
+    const isNewBelieverForSelectedSunday = isMemberNewBelieverOnSunday(m, selectedSunday);
 
     return (
       <div key={m.id} className="flex items-center gap-2.5 py-2 px-2 rounded-xl transition-colors active:bg-gray-50/80">
@@ -1264,9 +1276,9 @@ const WeeklyAttendanceView: React.FC = () => {
           <p className="text-sm font-medium text-gray-800 truncate leading-snug">
             {m.firstName} {m.lastName || ''}
           </p>
-          {(m.isNewBeliever || isFirstTimerForSelectedSunday || m.frozen) && (
+          {(isNewBelieverForSelectedSunday || isFirstTimerForSelectedSunday || m.frozen) && (
             <div className="flex flex-wrap gap-1 mt-0.5">
-              {m.isNewBeliever && (
+              {isNewBelieverForSelectedSunday && (
                 <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600 border border-blue-200 leading-tight">
                   ✝ New Believer
                 </span>
@@ -1288,9 +1300,9 @@ const WeeklyAttendanceView: React.FC = () => {
           <button
             onClick={() => toggleNewBeliever(m)}
             disabled={togglingNewBeliever.has(m.id)}
-            aria-label={m.isNewBeliever ? 'Remove new believer tag' : 'Mark as new believer'}
+            aria-label={isNewBelieverForSelectedSunday ? 'Remove new believer tag' : 'Mark as new believer'}
             className={`w-8 h-8 flex items-center justify-center rounded-full border-2 text-sm font-bold transition-all duration-150 disabled:opacity-40 active:scale-90 touch-manipulation ${
-              m.isNewBeliever
+              isNewBelieverForSelectedSunday
                 ? 'bg-blue-500 border-blue-400 text-white shadow-sm shadow-blue-200'
                 : 'bg-white border-gray-200 text-gray-300 hover:border-blue-300 hover:text-blue-400'
             }`}

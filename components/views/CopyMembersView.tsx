@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useAppContext } from '../../contexts/FirebaseAppContext';
 import { Member } from '../../types';
-import { isMemberWentHome, MemberListStatusFilter } from '../../utils/memberStatus';
+import { isMemberCurrentlyFirstTimer, isMemberWentHome, MemberListStatusFilter } from '../../utils/memberStatus';
 import { ArrowLeftIcon, ClipboardIcon } from '../icons';
 import { formatBirthdayDisplay } from '../../utils/birthdayUtils';
 import Button from '../ui/Button';
@@ -12,7 +12,7 @@ interface CopyOptions {
   includeBirthdays: boolean;
   includeBacentaName: boolean;
   groupByBacenta: boolean;
-  memberType: 'all' | 'leadersOnly' | 'excludeLeaders';
+  memberType: 'all' | 'leadersOnly' | 'excludeLeaders' | 'firstTimersOnly';
 }
 
 const CopyMembersView: React.FC = () => {
@@ -138,6 +138,8 @@ const CopyMembersView: React.FC = () => {
       case 'excludeLeaders':
         // Exclude all leadership roles (Green Bacenta, Red Bacenta, Assistant, Admin) - only include Members
         return filteredMembers.filter(m => m.role === 'Member' || !m.role);
+      case 'firstTimersOnly':
+        return filteredMembers.filter(m => isMemberCurrentlyFirstTimer(m));
       case 'all':
       default:
         return filteredMembers;
@@ -422,6 +424,19 @@ const CopyMembersView: React.FC = () => {
                 />
                 <span className="text-sm font-medium text-gray-700">Exclude Leaders</span>
                 <span className="text-xs text-gray-500">(Members only)</span>
+              </label>
+
+              <label className="flex items-center space-x-3 cursor-pointer">
+                <input
+                  type="radio"
+                  name="memberType"
+                  value="firstTimersOnly"
+                  checked={options.memberType === 'firstTimersOnly'}
+                  onChange={(e) => setOptions(prev => ({ ...prev, memberType: e.target.value as any }))}
+                  className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+                />
+                <span className="text-sm font-medium text-gray-700">First Timers Only</span>
+                <span className="text-xs text-gray-500">(Current or most recent Sunday)</span>
               </label>
             </div>
           </div>

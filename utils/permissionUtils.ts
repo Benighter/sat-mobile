@@ -9,7 +9,12 @@ import { User } from '../types';
  */
 export const hasAdminPrivileges = (user: User | null): boolean => {
   if (!user) return false;
-  return user.role === 'admin';
+  return user.role === 'admin' || isPromotedCampusAdmin(user);
+};
+
+export const isPromotedCampusAdmin = (user: User | null): boolean => {
+  if (!user) return false;
+  return user.isPromotedCampusAdmin === true;
 };
 
 /**
@@ -24,6 +29,7 @@ export const hasCampusShepherdPreference = (user: User | null): boolean => {
  * Check whether the current admin is marked as a Campus Shepherd.
  */
 export const isCampusShepherd = (user: User | null): boolean => {
+  if (isPromotedCampusAdmin(user)) return true;
   if (!hasAdminPrivileges(user)) return false;
   return user?.preferences?.isCampusShepherd === true;
 };
@@ -80,7 +86,8 @@ export const canManageNewBelievers = (user: User | null): boolean => {
  * @returns boolean indicating if the user can manage admin invites
  */
 export const canManageAdminInvites = (user: User | null): boolean => {
-  return hasAdminPrivileges(user);
+  if (!user) return false;
+  return user.role === 'admin' && !isPromotedCampusAdmin(user);
 };
 
 /**
@@ -155,6 +162,7 @@ export const isInvitedAdminLeader = (user: User | null): boolean => {
  */
 export const canDeleteLeaders = (user: User | null): boolean => {
   if (!user) return false;
+  if (isPromotedCampusAdmin(user)) return false;
 
   // Only original admins can delete leaders
   // Invited admin leaders (who became leaders through invites) cannot delete leaders
@@ -169,6 +177,7 @@ export const canDeleteLeaders = (user: User | null): boolean => {
  */
 export const canDeleteMemberWithRole = (user: User | null, memberRole: string): boolean => {
   if (!user) return false;
+  if (isPromotedCampusAdmin(user)) return false;
 
   // If the member is a regular member, any leader or admin can delete them
   if (memberRole === 'Member') {

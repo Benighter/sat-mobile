@@ -6,6 +6,7 @@ import { CalendarIcon, ChevronLeftIcon, ChevronRightIcon, ClockIcon, BuildingOff
 import { getActiveMembersByBacenta, getActiveMemberCount } from '../../utils/memberUtils';
 import BacentaAttendanceForm from './BacentaAttendanceForm';
 import { APP_BACK_INTERCEPT_EVENT } from '../../utils/mobileBack';
+import { hasAdminPrivileges } from '../../utils/permissionUtils';
 
 // Meeting date picker that cycles through Wed -> Thu -> Next Wed -> Next Thu
 const MeetingDatePicker: React.FC<{
@@ -85,7 +86,7 @@ const MeetingDatePicker: React.FC<{
 const BacentaMeetingsView: React.FC = () => {
   const { bacentas, members, meetingRecords, showToast, userProfile } = useAppContext();
   const { formatIncomeAmount } = useCurrencyFormatter();
-  const isAdmin = (userProfile?.role === 'admin');
+  const isAdmin = hasAdminPrivileges(userProfile);
 
   // Initialize with the latest meeting day (Wed/Thu). If it's Fri–Tue, we want last Thursday.
   const [currentDate, setCurrentDate] = useState<string>(() => {

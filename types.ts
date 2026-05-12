@@ -22,6 +22,8 @@ export interface Member {
   firstTimerWeekDate?: string;
   /** If true, member has been tagged as a new believer (persistent until removed) */
   isNewBeliever?: boolean;
+  /** Sunday date (YYYY-MM-DD) for the week this member should count as a new believer in weekly attendance */
+  newBelieverWeekDate?: string;
   /** Optional ministry assignment for the member */
   ministry?: string;
   /** Optional ministry-specific position/title (e.g., Ushers: Usher at the door) */
@@ -72,6 +74,7 @@ export interface NewBeliever {
   occupation: string;
   year: string;
   isFirstTime: boolean; // First Time? boolean field
+  firstTimeWeekDate?: string; // Sunday date (YYYY-MM-DD) for the week this person counts as a first timer
   ministry: string; // Ministry dropdown selection
   joinedDate: string; // ISO string, YYYY-MM-DD - when they joined
   createdDate: string; // ISO string
@@ -94,6 +97,7 @@ export interface AttendanceMemberSnapshot {
   isNewBeliever?: boolean;
   isFirstTimer?: boolean;
   firstTimerWeekDate?: string;
+  newBelieverWeekDate?: string;
   frozen?: boolean;
 }
 
@@ -102,6 +106,7 @@ export interface AttendanceNewBelieverSnapshot {
   surname?: string;
   ministry?: string;
   isFirstTime?: boolean;
+  firstTimeWeekDate?: string;
 }
 
 export interface AttendanceRecord {
@@ -490,6 +495,10 @@ export interface User {
   isActive: boolean;
   isInvitedAdminLeader?: boolean; // True if this user became a leader through an admin invite
   invitedByAdminId?: string; // UID of the admin who invited this user to become a leader
+  isPromotedCampusAdmin?: boolean; // True if an invited leader has been promoted to campus admin privileges
+  promotedByAdminId?: string; // UID of the main admin who promoted this user
+  promotedByAdminName?: string;
+  promotedAt?: string;
 }
 
 export interface Church {
@@ -588,8 +597,14 @@ export interface AdminInvite {
   respondedAt?: string;
   revokedAt?: string; // When leader access was revoked
   accessChurchId?: string; // Church ID that the leader should have access to
-  handledAs?: 'cross-tenant-link'; // When accepted without role change, provide cross-tenant access instead
+  handledAs?: 'cross-tenant-link' | 'leader-role-change'; // Invite handling mode
   isMinistryInvite?: boolean; // True if this is a ministry mode invitation
+  promotedToCampusAdmin?: boolean;
+  promotedAt?: string;
+  promotedBy?: string;
+  promotedByName?: string;
+  unpromotedAt?: string;
+  promotedPreviousCampusShepherdPreference?: boolean | null;
 }
 
 // Cross-tenant (admin-to-admin) access sharing
