@@ -28,22 +28,17 @@ export const pushNotificationHelpers = {
   getPermissionStatus: () => pushNotificationService.getPermissionStatus(),
   requestPermissions: () => pushNotificationService.requestPermissions(),
   sendTestNotification: async () => {
-    // Send a local test notification
-    if ('Notification' in window && Notification.permission === 'granted') {
-      try {
-        const registration = await navigator.serviceWorker.ready;
-        await registration.showNotification('Test Notification', {
-          body: 'This is a test push notification from SAT Mobile',
-          icon: '/icon-192.png',
-          badge: '/icon-192.png'
-        });
-        return true;
-      } catch (e) {
-        console.error('Failed to send test notification:', e);
-        return false;
-      }
-    }
-    return false;
+    return pushNotificationService.displaySystemNotification({
+      title: 'SAT Mobile',
+      body: 'This is a test notification from SAT Mobile',
+      data: { activityType: 'system_message', deepLink: '/notifications' },
+      icon: '/icon-192.png',
+      badge: '/icon-192.png',
+      sound: 'default'
+    }, {
+      dedupeKey: `test-${Date.now()}`,
+      requestPermission: true
+    });
   }
 };
 

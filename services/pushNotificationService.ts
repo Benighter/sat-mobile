@@ -2,6 +2,7 @@
 // Handles Firebase Cloud Messaging and device token management
 
 import { getMessaging, getToken, onMessage } from 'firebase/messaging';
+import { LocalNotifications } from '@capacitor/local-notifications';
 import { PushNotifications } from '@capacitor/push-notifications';
 import { Capacitor } from '@capacitor/core';
 import { doc, setDoc, collection, query, where, getDocs } from 'firebase/firestore';
@@ -38,6 +39,12 @@ interface PushNotificationPayload {
   sound?: string;
 }
 
+interface SystemNotificationOptions {
+  dedupeKey?: string;
+  requestPermission?: boolean;
+  autoCloseMs?: number;
+}
+
 class PushNotificationService {
   private static readonly ANDROID_CHANNEL_ID = 'sat_mobile_notifications';
   private messaging: any = null;
@@ -46,10 +53,13 @@ class PushNotificationService {
   private isInitialized = false;
   private nativePushConfigured = false;
   private nativeListenersRegistered = false;
+  private localNotificationListenersRegistered = false;
   private pendingNativeRegistration: Promise<string | null> | null = null;
   private resolvePendingNativeRegistration: ((token: string | null) => void) | null = null;
   private rejectPendingNativeRegistration: ((error: unknown) => void) | null = null;
   private lastRegistrationError: string | null = null;
+  private localNotificationId = Date.now() % 1000000;
+  private displayedSystemNotifications = new Map<string, number>();
   private vapidKey = (() => {
     const env: any = (typeof import.meta !== 'undefined' ? (import.meta as any).env : {}) || {};
     return (env.VITE_FIREBASE_VAPID_KEY || process.env.REACT_APP_FIREBASE_VAPID_KEY || '').trim();
@@ -103,6 +113,72 @@ class PushNotificationService {
     this.pendingNativeRegistration = null;
     this.resolvePendingNativeRegistration = null;
     this.rejectPendingNativeRegistration = null;
+  }
+
+  private nextLocalNotificationId(): number {
+    this.localNotificationId = (this.localNotificationId + 1) % 2147483647;
+    return this.localNotificationId || 1;
+  }
+
+  private getSystemNotificationDedupeKey(payload: PushNotificationPayload, fallback?: string): string {
+    return (
+      payload.data?.notificationId ||
+      fallback ||
+      `${payload.title}:${payload.body}:${payload.data?.activityType || 'general'}`
+    );
+  }
+
+  private shouldDisplaySystemNotification(dedupeKey: string): boolean {
+    const now = Date.now();
+    const dedupeWindowMs = 30000;
+
+    for (const [key, timestamp] of this.displayedSystemNotifications.entries()) {
+      if (now - timestamp > dedupeWindowMs) {
+        this.displayedSystemNotifications.delete(key);
+      }
+    }
+
+    const lastDisplayedAt = this.displayedSystemNotifications.get(dedupeKey);
+    if (lastDisplayedAt && now - lastDisplayedAt <= dedupeWindowMs) {
+      return false;
+    }
+
+    this.displayedSystemNotifications.set(dedupeKey, now);
+    return true;
+  }
+
+  private getBrowserBadgeUrl(payloadBadge?: string): string {
+    return payloadBadge && payloadBadge.startsWith('/') ? payloadBadge : '/icon-192.png';
+  }
+
+  private async ensureLocalNotificationListeners(): Promise<void> {
+    if (!Capacitor.isNativePlatform() || this.localNotificationListenersRegistered || !Capacitor.isPluginAvailable('LocalNotifications')) {
+      return;
+    }
+
+    LocalNotifications.addListener('localNotificationActionPerformed', (action) => {
+      this.handleNotificationClick(action.notification);
+    });
+
+    this.localNotificationListenersRegistered = true;
+  }
+
+  private async ensureLocalNotificationPermission(shouldRequest = true): Promise<boolean> {
+    if (!Capacitor.isNativePlatform() || !Capacitor.isPluginAvailable('LocalNotifications')) {
+      return false;
+    }
+
+    const currentStatus = await LocalNotifications.checkPermissions();
+    if (currentStatus.display === 'granted') {
+      return true;
+    }
+
+    if (currentStatus.display === 'denied' || !shouldRequest) {
+      return false;
+    }
+
+    const requestedStatus = await LocalNotifications.requestPermissions();
+    return requestedStatus.display === 'granted';
   }
 
   private async ensureNativePushListeners(): Promise<void> {
@@ -301,15 +377,30 @@ class PushNotificationService {
     }
 
     try {
-      await PushNotifications.createChannel({
-        id: PushNotificationService.ANDROID_CHANNEL_ID,
-        name: 'SAT Mobile Notifications',
-        description: 'General alerts and activity updates',
-        importance: 5,
-        visibility: 1,
-        vibration: true,
-        lights: true,
-      });
+      if (Capacitor.isPluginAvailable('PushNotifications')) {
+        await PushNotifications.createChannel({
+          id: PushNotificationService.ANDROID_CHANNEL_ID,
+          name: 'SAT Mobile Notifications',
+          description: 'General alerts and activity updates',
+          importance: 5,
+          visibility: 1,
+          vibration: true,
+          lights: true,
+        });
+      }
+
+      if (Capacitor.isPluginAvailable('LocalNotifications')) {
+        await LocalNotifications.createChannel({
+          id: PushNotificationService.ANDROID_CHANNEL_ID,
+          name: 'SAT Mobile Notifications',
+          description: 'General alerts and activity updates',
+          importance: 5,
+          visibility: 1,
+          vibration: true,
+          lights: true,
+          sound: 'default'
+        } as any);
+      }
     } catch (error) {
       console.warn('Failed to ensure Android notification channel:', error);
     }
@@ -571,6 +662,46 @@ class PushNotificationService {
         basePayload.title = '👋 New Guest Added';
         basePayload.body = `${notification.leaderName} added ${notification.details.guestName}`;
         break;
+      case 'member_deleted':
+        basePayload.title = '🗑️ Member Deleted';
+        basePayload.body = `${notification.leaderName} deleted ${notification.details.memberName}`;
+        break;
+      case 'attendance_updated':
+        basePayload.title = '📅 Attendance Updated';
+        basePayload.body = notification.details.description;
+        break;
+      case 'new_believer_updated':
+        basePayload.title = '🙏 New Believer Updated';
+        basePayload.body = notification.details.description;
+        break;
+      case 'bacenta_assignment_changed':
+        basePayload.title = '🏠 Bacenta Assignment Changed';
+        basePayload.body = notification.details.description;
+        break;
+      case 'member_freeze_toggled':
+        basePayload.title = '❄️ Member Status Changed';
+        basePayload.body = notification.details.description;
+        break;
+      case 'member_converted':
+        basePayload.title = '🔁 Outreach Member Converted';
+        basePayload.body = notification.details.description;
+        break;
+      case 'birthday_reminder':
+        basePayload.title = '🎂 Birthday Reminder';
+        basePayload.body = notification.details.description;
+        break;
+      case 'meeting_record_added':
+        basePayload.title = '📝 Meeting Record Added';
+        basePayload.body = notification.details.description;
+        break;
+      case 'meeting_record_updated':
+        basePayload.title = '✏️ Meeting Record Updated';
+        basePayload.body = notification.details.description;
+        break;
+      case 'meeting_record_deleted':
+        basePayload.title = '🗑️ Meeting Record Deleted';
+        basePayload.body = notification.details.description;
+        break;
       default:
         basePayload.body = notification.details.description;
     }
@@ -578,36 +709,127 @@ class PushNotificationService {
     return basePayload;
   }
 
-  // Handle foreground notification display
-  private handleForegroundNotification(notification: any): void {
-    if ('Notification' in window && Notification.permission === 'granted') {
-      const title = notification.title || notification.notification?.title || 'SAT Mobile';
-      const body = notification.body || notification.notification?.body || 'New notification received';
-      
+  async displayAdminNotification(notification: AdminNotification, options: SystemNotificationOptions = {}): Promise<boolean> {
+    return this.displaySystemNotification(
+      this.createNotificationPayload(notification),
+      {
+        ...options,
+        dedupeKey: options.dedupeKey || notification.id
+      }
+    );
+  }
+
+  async displaySystemNotification(
+    payload: PushNotificationPayload,
+    options: SystemNotificationOptions = {}
+  ): Promise<boolean> {
+    const title = payload.title?.trim() || 'SAT Mobile';
+    const body = payload.body?.trim() || 'New notification received';
+    const data = payload.data || {};
+    const dedupeKey = this.getSystemNotificationDedupeKey({ ...payload, title, body, data }, options.dedupeKey);
+
+    if (!this.shouldDisplaySystemNotification(dedupeKey)) {
+      return false;
+    }
+
+    try {
+      if (Capacitor.isNativePlatform()) {
+        if (!Capacitor.isPluginAvailable('LocalNotifications')) {
+          console.warn('LocalNotifications plugin is not available on this native platform.');
+          return false;
+        }
+
+        const permissionGranted = await this.ensureLocalNotificationPermission(options.requestPermission !== false);
+        if (!permissionGranted) {
+          return false;
+        }
+
+        await this.ensureAndroidNotificationChannel();
+        await this.ensureLocalNotificationListeners();
+
+        await LocalNotifications.schedule({
+          notifications: [{
+            id: this.nextLocalNotificationId(),
+            title,
+            body,
+            channelId: PushNotificationService.ANDROID_CHANNEL_ID,
+            smallIcon: 'ic_notification',
+            iconColor: '#334155',
+            sound: payload.sound || 'default',
+            extra: {
+              ...data,
+              dedupeKey
+            }
+          }]
+        } as any);
+
+        return true;
+      }
+
+      if (typeof window === 'undefined' || !('Notification' in window)) {
+        return false;
+      }
+
+      let permission = Notification.permission;
+      if (permission === 'default' && options.requestPermission !== false) {
+        permission = await Notification.requestPermission();
+      }
+
+      if (permission !== 'granted') {
+        return false;
+      }
+
       const browserNotification = new Notification(title, {
         body,
-        icon: '/icon-192.png',
-        badge: '/icon-192.png',
-        tag: 'sat-mobile-notification'
+        icon: payload.icon || '/icon-192.png',
+        badge: this.getBrowserBadgeUrl(payload.badge),
+        tag: dedupeKey,
+        renotify: true,
+        data
       });
 
-      // Auto close after 5 seconds
-      setTimeout(() => {
+      window.setTimeout(() => {
         browserNotification.close();
-      }, 5000);
+      }, options.autoCloseMs ?? 7000);
 
-      // Handle click
       browserNotification.onclick = () => {
         window.focus();
-        this.handleNotificationClick(notification);
+        this.handleNotificationClick({ data });
         browserNotification.close();
       };
+
+      return true;
+    } catch (error) {
+      console.warn('Failed to display system notification:', error);
+      return false;
     }
+  }
+
+  private normalizeIncomingNotification(notification: any): PushNotificationPayload {
+    const notificationBlock = notification.notification || {};
+    const data = notification.data || notificationBlock.data || notification.extra || {};
+
+    return {
+      title: notification.title || notificationBlock.title || 'SAT Mobile',
+      body: notification.body || notificationBlock.body || 'New notification received',
+      data,
+      icon: notification.icon || notificationBlock.icon || '/icon-192.png',
+      badge: notification.badge || notificationBlock.badge || '/icon-192.png',
+      sound: notification.sound || notificationBlock.sound || 'default'
+    };
+  }
+
+  // Handle foreground notification display
+  private handleForegroundNotification(notification: any): void {
+    void this.displaySystemNotification(
+      this.normalizeIncomingNotification(notification),
+      { requestPermission: false }
+    );
   }
 
   // Handle notification click/tap
   private handleNotificationClick(notification: any): void {
-    const data = notification.data || notification.notification?.data || {};
+    const data = notification.data || notification.extra || notification.notification?.data || notification.notification?.extra || {};
     
     if (data.deepLink) {
       // Navigate to specific screen
@@ -654,7 +876,7 @@ class PushNotificationService {
   isSupported(): boolean {
     // Native (Capacitor) – rely on plugin availability
     if (Capacitor.isNativePlatform()) {
-      return this.nativePushConfigured && Capacitor.isPluginAvailable('PushNotifications');
+      return Capacitor.isPluginAvailable('LocalNotifications') || (this.nativePushConfigured && Capacitor.isPluginAvailable('PushNotifications'));
     }
 
     // Web environment feature detection
@@ -690,6 +912,7 @@ class PushNotificationService {
       configurationIssue: this.getConfigurationIssue(),
       lastRegistrationError: this.lastRegistrationError,
       pluginAvailable: Capacitor.isNativePlatform() ? Capacitor.isPluginAvailable('PushNotifications') : false,
+      localNotificationsAvailable: Capacitor.isNativePlatform() ? Capacitor.isPluginAvailable('LocalNotifications') : false,
       hasNotification: typeof window !== 'undefined' && 'Notification' in window,
       hasServiceWorker: typeof navigator !== 'undefined' && 'serviceWorker' in navigator,
       hasPushManager: typeof window !== 'undefined' && 'PushManager' in window,
@@ -701,11 +924,19 @@ class PushNotificationService {
   // Get current notification permission status
   async getPermissionStatus(): Promise<'granted' | 'denied' | 'default'> {
     if (Capacitor.isNativePlatform()) {
-      if (!this.nativePushConfigured) {
-        return 'default';
+      if (Capacitor.isPluginAvailable('LocalNotifications')) {
+        const localStatus = await LocalNotifications.checkPermissions();
+        if (localStatus.display === 'granted' || localStatus.display === 'denied') {
+          return localStatus.display;
+        }
       }
-      const status = await PushNotifications.checkPermissions();
-      return status.receive === 'granted' || status.receive === 'denied' ? status.receive : 'default';
+
+      if (this.nativePushConfigured && Capacitor.isPluginAvailable('PushNotifications')) {
+        const status = await PushNotifications.checkPermissions();
+        return status.receive === 'granted' || status.receive === 'denied' ? status.receive : 'default';
+      }
+
+      return 'default';
     } else {
       return Notification.permission;
     }
@@ -715,14 +946,31 @@ class PushNotificationService {
   async requestPermissions(): Promise<boolean> {
     try {
       if (Capacitor.isNativePlatform()) {
-        if (!this.nativePushConfigured) {
-          console.warn('Native push permission request skipped because native push is disabled.');
-          return false;
+        let localPermissionGranted = false;
+
+        if (Capacitor.isPluginAvailable('LocalNotifications')) {
+          localPermissionGranted = await this.ensureLocalNotificationPermission(true);
+          if (localPermissionGranted) {
+            await this.ensureAndroidNotificationChannel();
+            await this.ensureLocalNotificationListeners();
+          }
         }
+
+        if (!this.nativePushConfigured) {
+          if (!localPermissionGranted) {
+            this.lastRegistrationError = 'Notification permission was not granted on the device.';
+          } else {
+            this.lastRegistrationError = 'Native push token registration requires android/app/google-services.json plus VITE_ENABLE_NATIVE_PUSH=true.';
+          }
+          return localPermissionGranted;
+        }
+
         const result = await PushNotifications.requestPermissions();
         if (result.receive !== 'granted') {
-          this.lastRegistrationError = 'Notification permission was not granted on the device.';
-          return false;
+          if (!localPermissionGranted) {
+            this.lastRegistrationError = 'Notification permission was not granted on the device.';
+          }
+          return localPermissionGranted;
         }
 
         await this.ensureAndroidNotificationChannel();

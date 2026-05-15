@@ -20,6 +20,9 @@ importers:
       '@capacitor/filesystem':
         specifier: ^7.1.2
         version: 7.1.6(@capacitor/core@7.4.5)
+      '@capacitor/local-notifications':
+        specifier: ^7.0.6
+        version: 7.0.6(@capacitor/core@7.4.5)
       '@capacitor/push-notifications':
         specifier: ^7.0.2
         version: 7.0.4(@capacitor/core@7.4.5)
@@ -136,6 +139,11 @@ packages:
 
   '@capacitor/filesystem@7.1.6':
     resolution: {integrity: sha512-7NGrmp9v/ejR2C2QKr66na5IJMCBH78TEX2AwqQyq2MCR3yM2PsWvFPAnNOYlBHPgBzzxEC+sjPRBk1bDsXJvg==}
+    peerDependencies:
+      '@capacitor/core': '>=7.0.0'
+
+  '@capacitor/local-notifications@7.0.6':
+    resolution: {integrity: sha512-RuZQ9P5aAlw6VU2i0i6g4i1XYZbbeDE9oaBg87gggHaUUscX7b1lltTlC1t11/JCPoyjECnZ/N8xfDNZ26hKhw==}
     peerDependencies:
       '@capacitor/core': '>=7.0.0'
 
@@ -2579,6 +2587,10 @@ snapshots:
     dependencies:
       '@capacitor/core': 7.4.5
       '@capacitor/synapse': 1.0.4
+
+  '@capacitor/local-notifications@7.0.6(@capacitor/core@7.4.5)':
+    dependencies:
+      '@capacitor/core': 7.4.5
 
   '@capacitor/push-notifications@7.0.4(@capacitor/core@7.4.5)':
     dependencies:

@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { Bell } from 'lucide-react';
 import { notificationService, setNotificationContext } from '../../services/notificationService';
+import { pushNotificationService } from '../../services/pushNotificationService';
 import { useAppContext } from '../../contexts/FirebaseAppContext';
 import { hasLeaderPrivileges } from '../../utils/permissionUtils';
 import NotificationCenter from './NotificationCenter';
@@ -10,6 +11,8 @@ const NotificationBadge: React.FC = () => {
   const [isNotificationCenterOpen, setIsNotificationCenterOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const { userProfile, currentChurchId } = useAppContext();
+  const hasHydratedNotificationsRef = useRef(false);
+  const knownNotificationIdsRef = useRef<Set<string>>(new Set());
 
   // Show notification badge for leaders and admins
   const isLeader = hasLeaderPrivileges(userProfile);
@@ -22,6 +25,8 @@ const NotificationBadge: React.FC = () => {
 
     // Set notification context
     setNotificationContext(userProfile, currentChurchId);
+    hasHydratedNotificationsRef.current = false;
+    knownNotificationIdsRef.current = new Set();
 
     // Load initial unread count
     loadUnreadCount();
@@ -35,6 +40,28 @@ const NotificationBadge: React.FC = () => {
         (notifications) => {
           const unread = notifications.filter(n => !n.isRead).length;
           setUnreadCount(unread);
+
+          const currentIds = new Set(notifications.map(notification => notification.id));
+
+          if (!hasHydratedNotificationsRef.current) {
+            knownNotificationIdsRef.current = currentIds;
+            hasHydratedNotificationsRef.current = true;
+            return;
+          }
+
+          const newUnreadNotifications = notifications
+            .filter(notification => !notification.isRead && !knownNotificationIdsRef.current.has(notification.id))
+            .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+          knownNotificationIdsRef.current = currentIds;
+
+          for (const notification of newUnreadNotifications) {
+            pushNotificationService.displayAdminNotification(notification, {
+              requestPermission: false
+            }).catch(error => {
+              console.warn('Failed to display system notification:', error);
+            });
+          }
         }
       );
     } catch (error) {

@@ -66,6 +66,7 @@ export const notificationService = {
 
       const notificationsRef = collection(db, getNotificationCollectionPath(currentChurchId));
       const batch = writeBatch(db);
+      const notificationsForPush: Array<{ adminId: string; notification: AdminNotification }> = [];
 
       // Create a notification for each linked admin
       for (const adminId of linkedAdminIds) {
@@ -87,6 +88,13 @@ export const notificationService = {
 
         const newNotificationRef = doc(notificationsRef);
         batch.set(newNotificationRef, notificationData);
+        notificationsForPush.push({
+          adminId,
+          notification: {
+            ...notificationData,
+            id: newNotificationRef.id
+          }
+        });
         console.log(`📝 Prepared notification for admin ${adminId}:`, {
           activityType,
           description: details.description,
@@ -100,18 +108,8 @@ export const notificationService = {
       // Fire-and-forget: send push notifications to each admin
       try {
         const { pushNotificationService } = await import('./pushNotificationService');
-        const pushPayload = pushNotificationService.createNotificationPayload({
-          id: '',
-          activityType,
-          details,
-          leaderName,
-          leaderId,
-          adminId: '',
-          timestamp: new Date().toISOString(),
-          isRead: false,
-          churchId: currentChurchId!
-        } as any);
-        for (const adminId of linkedAdminIds) {
+        for (const { adminId, notification } of notificationsForPush) {
+          const pushPayload = pushNotificationService.createNotificationPayload(notification);
           pushNotificationService.sendToUser(adminId, pushPayload).catch(e =>
             console.warn(`📲 Push to admin ${adminId} failed (non-blocking):`, e)
           );
@@ -142,6 +140,7 @@ export const notificationService = {
 
       const notificationsRef = collection(db, getNotificationCollectionPath(currentChurchId));
       const batch = writeBatch(db);
+      const notificationsForPush: Array<{ recipientId: string; notification: AdminNotification }> = [];
 
       for (const adminId of recipients) {
         const notificationData: Omit<AdminNotification, 'id'> = {
@@ -160,6 +159,13 @@ export const notificationService = {
         };
         const newNotificationRef = doc(notificationsRef);
         batch.set(newNotificationRef, notificationData);
+        notificationsForPush.push({
+          recipientId: adminId,
+          notification: {
+            ...notificationData,
+            id: newNotificationRef.id
+          }
+        });
       }
 
       await batch.commit();
@@ -167,18 +173,8 @@ export const notificationService = {
       // Fire-and-forget: send push notifications to each recipient
       try {
         const { pushNotificationService } = await import('./pushNotificationService');
-        const pushPayload = pushNotificationService.createNotificationPayload({
-          id: '',
-          activityType,
-          details: { description, ...details },
-          leaderName: actor?.name || currentUser?.displayName || 'System',
-          leaderId: actor?.id || currentUser?.uid || 'system',
-          adminId: '',
-          timestamp: new Date().toISOString(),
-          isRead: false,
-          churchId: currentChurchId!
-        } as any);
-        for (const recipientId of recipients) {
+        for (const { recipientId, notification } of notificationsForPush) {
+          const pushPayload = pushNotificationService.createNotificationPayload(notification);
           pushNotificationService.sendToUser(recipientId, pushPayload).catch(e =>
             console.warn(`📲 Push to recipient ${recipientId} failed (non-blocking):`, e)
           );

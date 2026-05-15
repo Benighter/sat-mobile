@@ -62,7 +62,7 @@ const PushNotificationSettings: React.FC<PushNotificationSettingsProps> = ({ cla
         if (initialized) {
           setIsInitialized(true);
           setPermissionStatus('granted');
-          showToast('success', 'Success', 'Push notifications enabled successfully!');
+          showToast('success', 'Success', 'Notifications enabled successfully!');
         } else {
           showToast('error', 'Error', 'Failed to initialize push notifications');
         }
@@ -72,12 +72,12 @@ const PushNotificationSettings: React.FC<PushNotificationSettingsProps> = ({ cla
         showToast(
           'error',
           status === 'denied' ? 'Permission Denied' : 'Notifications Not Enabled',
-          'Push notifications require permission to work'
+          'Notifications require permission to work'
         );
       }
     } catch (error) {
-      console.error('Failed to enable push notifications:', error);
-      showToast('error', 'Error', 'Failed to enable push notifications');
+      console.error('Failed to enable notifications:', error);
+      showToast('error', 'Error', 'Failed to enable notifications');
     } finally {
       setIsLoading(false);
     }
@@ -169,13 +169,14 @@ const PushNotificationSettings: React.FC<PushNotificationSettingsProps> = ({ cla
               <Bell className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h3 className="text-lg font-semibold text-gray-900">Push Notifications</h3>
-              <p className="text-sm text-gray-500">Get notified even when the app is closed</p>
+                        <h3 className="text-lg font-semibold text-gray-900">Phone & Browser Notifications</h3>
+                        <p className="text-sm text-gray-500">Show SAT Mobile alerts in your device notification tray</p>
             </div>
           </div>
           {getStatusBadge()}
         </div>
       </div>
+  showToast('success', 'Success', 'Notifications enabled successfully!');
 
       <div className="p-6">
         {!isSupported ? (
@@ -183,7 +184,7 @@ const PushNotificationSettings: React.FC<PushNotificationSettingsProps> = ({ cla
             <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <BellOff className="w-8 h-8 text-gray-400" />
             </div>
-            <h4 className="text-lg font-medium text-gray-900 mb-2">Push notifications not supported</h4>
+            <h4 className="text-lg font-medium text-gray-900 mb-2">Notifications not supported</h4>
             <p className="text-gray-500 max-w-sm mx-auto">
               We could not verify full push support. You can still attempt to enable notifications below.
             </p>
@@ -279,9 +280,9 @@ const PushNotificationSettings: React.FC<PushNotificationSettingsProps> = ({ cla
             <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <Bell className="w-8 h-8 text-blue-600" />
             </div>
-            <h4 className="text-lg font-medium text-gray-900 mb-2">Enable Push Notifications</h4>
+            <h4 className="text-lg font-medium text-gray-900 mb-2">Enable Notifications</h4>
             <p className="text-gray-500 max-w-sm mx-auto mb-6">
-              Get instant notifications on your device when important activities happen, even when the app is closed.
+              Get instant phone or browser alerts when important activities happen in SAT Mobile.
             </p>
 
             <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg p-4 mb-6 max-w-sm mx-auto">
@@ -334,7 +335,7 @@ const PushNotificationSettings: React.FC<PushNotificationSettingsProps> = ({ cla
                 <div className="flex-1">
                   <h4 className="font-medium text-gray-900 mb-1">Notifications are active</h4>
                   <p className="text-sm text-gray-600 mb-3">
-                    You will receive push notifications on this device when activities happen in your church.
+                     You will receive SAT Mobile alerts on this device when activities happen in your church.
                   </p>
                   <div className="flex items-center space-x-2 text-xs text-gray-500">
                     {getPlatformIcon()}

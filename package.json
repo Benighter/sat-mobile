@@ -30,6 +30,7 @@
     "@capacitor/cli": "^7.4.1",
     "@capacitor/core": "^7.4.1",
     "@capacitor/filesystem": "^7.1.2",
+    "@capacitor/local-notifications": "^7.0.6",
     "@capacitor/push-notifications": "^7.0.2",
     "@capacitor/share": "^7.0.4",
     "@google/generative-ai": "^0.24.1",
