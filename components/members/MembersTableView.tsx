@@ -48,6 +48,7 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
     openMemberForm,
     openBacentaForm,
     deleteMemberHandler,
+    createDeletionRequestHandler,
     attendanceRecords,
     markAttendanceHandler,
     clearAttendanceHandler,
@@ -903,6 +904,7 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
             getConfirmationStatus={getConfirmationStatus}
             markConfirmationHandler={markConfirmationHandler}
             deleteMemberHandler={deleteMemberHandler}
+            createDeletionRequestHandler={createDeletionRequestHandler}
             showConfirmation={showConfirmation}
             userProfile={userProfile}
             members={members}
@@ -918,7 +920,7 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
     const cols = [...baseScrollableColumns, ...attendanceColumns];
     if (!isTithe) cols.push(actionsColumn);
     return cols;
-  }, [currentMonthSundays, attendanceRecords, sundayConfirmations, deleteMemberHandler, getAttendanceStatus, getConfirmationStatus, handleAttendanceToggle, upcomingSunday, markConfirmationHandler, isTithe, titheByMember, bussingByMember, markTitheHandler, markTransportHandler]);
+  }, [currentMonthSundays, attendanceRecords, sundayConfirmations, deleteMemberHandler, createDeletionRequestHandler, getAttendanceStatus, getConfirmationStatus, handleAttendanceToggle, upcomingSunday, markConfirmationHandler, isTithe, titheByMember, bussingByMember, markTitheHandler, markTransportHandler]);
 
   // Get displayed month name
   const currentMonthName = getMonthName(displayedDate.getMonth());
@@ -1425,6 +1427,7 @@ interface MemberActionsDropdownProps {
   getConfirmationStatus: (memberId: string, date: string) => ConfirmationStatus | undefined;
   markConfirmationHandler: (memberId: string, date: string, status: ConfirmationStatus) => void;
   deleteMemberHandler: (memberId: string) => void;
+  createDeletionRequestHandler: (memberId: string, reason?: string) => Promise<void>;
   showConfirmation: (
     type: 'deleteMember' | 'createDeletionRequest' | 'deleteBacenta' | 'deleteNewBeliever' | 'clearData' | 'clearSelectedData' | 'clearAllNewBelievers',
     data: any,
@@ -1445,6 +1448,7 @@ const MemberActionsDropdown: React.FC<MemberActionsDropdownProps> = ({
   getConfirmationStatus,
   markConfirmationHandler,
   deleteMemberHandler,
+  createDeletionRequestHandler,
   showConfirmation,
   userProfile,
   members,
@@ -1573,19 +1577,7 @@ const MemberActionsDropdown: React.FC<MemberActionsDropdownProps> = ({
           { member },
           async () => {
             try {
-              await memberDeletionRequestService.create({
-                memberId: member.id,
-                memberName: `${member.firstName} ${member.lastName || ''}`.trim(),
-                requestedBy: userProfile?.uid || '',
-                requestedByName: `${userProfile?.firstName || ''} ${userProfile?.lastName || ''}`.trim(),
-                requestedAt: new Date().toISOString(),
-                status: 'pending',
-                reason: '', // Could be enhanced to ask for reason
-                churchId: userProfile?.churchId || ''
-              });
-
-              showToast('success', 'Deletion Request Submitted',
-                `Your request to delete ${member.firstName} ${member.lastName || ''} has been submitted for admin approval.`);
+              await createDeletionRequestHandler(member.id);
             } catch (error: any) {
               console.error('Error creating deletion request:', error);
               showToast('error', 'Request Failed',
