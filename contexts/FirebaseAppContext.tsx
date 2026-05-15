@@ -3771,7 +3771,10 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     try {
       if (user) {
         // Refresh both the auth context and user profile
-        await authService.refreshCurrentUser();
+        const refreshedUser = await authService.refreshCurrentUser();
+        if (refreshedUser) {
+          setUser(refreshedUser);
+        }
         let profile = await userService.getUserProfile(user.uid);
         // If profile has churchId but churchName might be outdated, fetch church doc
         if (profile?.churchId) {

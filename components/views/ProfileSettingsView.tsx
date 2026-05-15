@@ -14,6 +14,7 @@ import Input from '../ui/Input';
 import Badge from '../ui/Badge';
 import ImageUpload from '../ui/ImageUpload';
 import ChangePasswordModal from '../auth/ChangePasswordModal';
+import EmailVerificationPrompt from '../auth/EmailVerificationPrompt';
 import AdminInviteManager from '../admin/AdminInviteManager';
 import InviteMigrationPanel from '../admin/InviteMigrationPanel';
 import PushNotificationSettings from '../notifications/PushNotificationSettings';
@@ -891,6 +892,8 @@ const ProfileSettingsView: React.FC = () => {
             </div>
             <h2 className="text-2xl font-bold text-gray-900">Security Settings</h2>
           </div>
+
+          <EmailVerificationPrompt mode="settings" className="mb-6" />
 
           <div className="bg-gradient-to-r from-red-50 to-pink-50 rounded-2xl p-6 border border-red-100">
             <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">

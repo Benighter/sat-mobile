@@ -3,6 +3,7 @@ import { PerformanceMonitor } from './utils/performance';
 import { FirebaseAppProvider, useAppContext } from './contexts/FirebaseAppContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { AuthScreen } from './components/auth/AuthScreen';
+import EmailVerificationPrompt from './components/auth/EmailVerificationPrompt';
 
 import DashboardView from './components/views/DashboardView';
 import LazyWrapper, { LazyMemberListView, LazyAttendanceAnalyticsView, LazyWeeklyAttendanceView, LazySundayConfirmationsView, LazyNewBelieversView, LazySonsOfGodView, LazyOutreachView, LazyBacentaOutreachView, LazyPrayerView, LazyPrayerMemberDetailsView, LazyMinistriesView, LazyBacentaLeadersView, LazyMyDeletionRequestsView, LazyMemberDeletionRequestsView, LazyBacentaMeetingsView, LazySundayHeadCountsView, LazySundayHeadCountSectionView, LazyContactView, LazyChatView } from './components/common/LazyWrapper';
@@ -850,6 +851,7 @@ const AppContent: React.FC = memo(() => {
       >
         <GestureWrapper>
           <div className="container mx-auto px-2 sm:px-4 desktop:px-8 desktop-lg:px-12 py-2 sm:py-3 md:py-4 desktop:py-6 desktop-lg:py-8 compact-layout desktop:desktop-dense-layout">
+            <EmailVerificationPrompt />
             <div className="animate-fade-in">
               {renderView()}
             </div>

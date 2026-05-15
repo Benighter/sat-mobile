@@ -54,6 +54,7 @@ export interface FirebaseUser {
   uid: string;
   email: string | null;
   displayName: string | null;
+  emailVerified: boolean;
   churchId?: string;
   // Indicates this user registered when Ministry Mode was enabled
   isMinistryAccount?: boolean;
@@ -364,6 +365,7 @@ export const authService = {
         uid: user.uid,
         email: (userData?.email as string | null) || user.email,
         displayName: (userData?.displayName as string | null) || user.displayName,
+        emailVerified: user.emailVerified,
         churchId: userData?.churchId,
         isMinistryAccount: userData?.isMinistryAccount === true,
         contexts: userData?.contexts
@@ -417,6 +419,7 @@ export const authService = {
         uid: user.uid,
         email: (userData?.email as string | null) || email.trim().toLowerCase(),
         displayName: (userData?.displayName as string | null) || user.displayName,
+        emailVerified: user.emailVerified,
         churchId: userData?.churchId,
         isMinistryAccount: true,
         contexts: userData?.contexts
@@ -471,6 +474,7 @@ export const authService = {
         uid: user.uid,
         email: user.email,
         displayName,
+        emailVerified: user.emailVerified,
         churchId
       };
 
@@ -615,6 +619,7 @@ export const authService = {
         uid: userUid,
         email: userAuth.email,
         displayName,
+        emailVerified: userAuth.emailVerified,
         churchId: isMinistryFlow ? (ministryChurchId as string) : (defaultChurchId as string),
         isMinistryAccount: isMinistryFlow,
         contexts: mergedUser.contexts
@@ -721,6 +726,7 @@ export const authService = {
           uid: user.uid,
           email: (userData?.email as string | null) || user.email,
           displayName: (userData?.displayName as string | null) || user.displayName,
+          emailVerified: user.emailVerified,
           churchId: userData?.churchId,
           isMinistryAccount: userData?.isMinistryAccount === true,
           contexts: userData?.contexts
@@ -740,6 +746,7 @@ export const authService = {
   refreshCurrentUser: async (): Promise<FirebaseUser | null> => {
     const user = auth.currentUser;
     if (user) {
+      try { await user.reload(); } catch {}
       const userDoc = await getDoc(doc(db, 'users', user.uid));
       const userData = userDoc.data();
 
@@ -747,6 +754,7 @@ export const authService = {
         uid: user.uid,
         email: (userData?.email as string | null) || user.email,
         displayName: (userData?.displayName as string | null) || user.displayName,
+        emailVerified: user.emailVerified,
         churchId: userData?.churchId,
         isMinistryAccount: userData?.isMinistryAccount === true,
         contexts: userData?.contexts
@@ -944,6 +952,7 @@ export const contextService = {
       uid,
       email: (merged.email as string) || authUser.email,
       displayName: merged.displayName,
+      emailVerified: authUser.emailVerified,
       churchId: ministryChurchId,
       isMinistryAccount: true,
       contexts: merged.contexts
