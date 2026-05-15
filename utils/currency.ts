@@ -46,11 +46,23 @@ const DEFAULT_CURRENCY_CODES = [
   'ZAR', 'USD', 'EUR', 'GBP', 'NGN', 'KES', 'GHS', 'BWP', 'NAD', 'MZN', 'ZMW', 'AUD', 'CAD', 'JPY', 'CNY', 'INR'
 ];
 
+const CURRENCY_CODE_PATTERN = /^[A-Z]{3}$/;
+
 const getDisplayNames = () => {
   try {
     return new Intl.DisplayNames(undefined, { type: 'currency' });
   } catch {
     return null;
+  }
+};
+
+const isValidCurrencyCode = (currencyCode: string): boolean => CURRENCY_CODE_PATTERN.test(currencyCode);
+
+const getCurrencyDisplayName = (displayNames: Intl.DisplayNames | null, currencyCode: string): string => {
+  try {
+    return displayNames?.of(currencyCode) || currencyCode;
+  } catch {
+    return currencyCode;
   }
 };
 
@@ -240,7 +252,7 @@ const isSnapshotFresh = (snapshot: ExchangeRateSnapshot | null, maxAgeMs: number
 
 export const normalizeCurrencyCode = (currencyCode?: string | null): string => {
   const normalizedCode = String(currencyCode || BASE_CURRENCY).trim().toUpperCase();
-  return normalizedCode || BASE_CURRENCY;
+  return isValidCurrencyCode(normalizedCode) ? normalizedCode : BASE_CURRENCY;
 };
 
 export const getAllCurrencyCodes = (): string[] => {
@@ -270,14 +282,15 @@ export const getCurrencyOptions = (rates?: CurrencyRates): CurrencyOption[] => {
 
   return Array.from(codes)
     .map(code => normalizeCurrencyCode(code))
+    .filter((code, index, normalizedCodes) => isValidCurrencyCode(code) && normalizedCodes.indexOf(code) === index)
     .sort((left, right) => {
-      const leftName = displayNames?.of(left) || left;
-      const rightName = displayNames?.of(right) || right;
+      const leftName = getCurrencyDisplayName(displayNames, left);
+      const rightName = getCurrencyDisplayName(displayNames, right);
       return leftName.localeCompare(rightName);
     })
     .map(code => ({
       code,
-      label: `${displayNames?.of(code) || code} (${code})`
+      label: `${getCurrencyDisplayName(displayNames, code)} (${code})`
     }));
 };
 

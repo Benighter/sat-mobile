@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Bell, BellOff, Smartphone, Globe, Check, AlertCircle, Settings, CheckCircle } from 'lucide-react';
+import { Capacitor } from '@capacitor/core';
 import { useAppContext } from '../../contexts/FirebaseAppContext';
 import { pushNotificationHelpers } from '../../services/enhancedNotificationIntegration';
 import { pushNotificationService } from '../../services/pushNotificationService';
@@ -14,10 +15,11 @@ const PushNotificationSettings: React.FC<PushNotificationSettingsProps> = ({ cla
   const [permissionStatus, setPermissionStatus] = useState<'granted' | 'denied' | 'default'>('default');
   const [isInitialized, setIsInitialized] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-
   const [showDeniedHelp, setShowDeniedHelp] = useState(false);
 
   const { showToast } = useAppContext();
+  const isNativeApp = Capacitor.isNativePlatform();
+  const platformName = isNativeApp ? Capacitor.getPlatform() : 'web';
 
   useEffect(() => {
     checkPushNotificationStatus();
@@ -27,17 +29,15 @@ const PushNotificationSettings: React.FC<PushNotificationSettingsProps> = ({ cla
     try {
       setIsLoading(true);
 
-      // Check if push notifications are supported
       const supported = await pushNotificationHelpers.isSupported();
       setIsSupported(supported);
+
       try {
-        // Direct access to diagnostics (optional chain if service not yet exported)
         const d: any = (pushNotificationService as any).getSupportDiagnostics?.();
         if (d) setDiagnostics(d);
       } catch { }
 
       if (supported) {
-        // Check current permission status
         const status = await pushNotificationHelpers.getPermissionStatus();
         setPermissionStatus(status);
         setIsInitialized(status === 'granted');
@@ -54,23 +54,26 @@ const PushNotificationSettings: React.FC<PushNotificationSettingsProps> = ({ cla
     try {
       setIsLoading(true);
 
-      // Request permissions
       const granted = await pushNotificationHelpers.requestPermissions();
 
       if (granted) {
-        // Initialize push notifications
         const initialized = await pushNotificationHelpers.initialize();
 
         if (initialized) {
           setIsInitialized(true);
           setPermissionStatus('granted');
-          showToast('success', 'Success', 'Push notifications enabled successfully! 🎉');
+          showToast('success', 'Success', 'Push notifications enabled successfully!');
         } else {
           showToast('error', 'Error', 'Failed to initialize push notifications');
         }
       } else {
-        setPermissionStatus('denied');
-        showToast('error', 'Permission Denied', 'Push notifications require permission to work');
+        const status = await pushNotificationHelpers.getPermissionStatus();
+        setPermissionStatus(status);
+        showToast(
+          'error',
+          status === 'denied' ? 'Permission Denied' : 'Notifications Not Enabled',
+          'Push notifications require permission to work'
+        );
       }
     } catch (error) {
       console.error('Failed to enable push notifications:', error);
@@ -80,14 +83,25 @@ const PushNotificationSettings: React.FC<PushNotificationSettingsProps> = ({ cla
     }
   };
 
-
-
   const getPlatformIcon = () => {
     const userAgent = navigator.userAgent;
-    if (userAgent.includes('Mobile') || userAgent.includes('Android') || userAgent.includes('iPhone')) {
+    if (isNativeApp || userAgent.includes('Mobile') || userAgent.includes('Android') || userAgent.includes('iPhone')) {
       return <Smartphone className="w-5 h-5 text-blue-600" />;
     }
     return <Globe className="w-5 h-5 text-blue-600" />;
+  };
+
+  const getPlatformLabel = () => {
+    if (isNativeApp) {
+      return `${platformName.charAt(0).toUpperCase()}${platformName.slice(1)} App`;
+    }
+
+    const userAgent = navigator.userAgent;
+    if (userAgent.includes('Mobile') || userAgent.includes('Android') || userAgent.includes('iPhone')) {
+      return 'Mobile Browser';
+    }
+
+    return 'Desktop Browser';
   };
 
   const getStatusBadge = () => {
@@ -148,7 +162,6 @@ const PushNotificationSettings: React.FC<PushNotificationSettingsProps> = ({ cla
 
   return (
     <div className={`bg-white rounded-lg border border-gray-200 ${className}`}>
-      {/* Header */}
       <div className="p-6 border-b border-gray-200">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3">
@@ -164,17 +177,15 @@ const PushNotificationSettings: React.FC<PushNotificationSettingsProps> = ({ cla
         </div>
       </div>
 
-      {/* Content */}
       <div className="p-6">
         {!isSupported ? (
-          // Not supported
           <div className="text-center py-8">
             <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <BellOff className="w-8 h-8 text-gray-400" />
             </div>
             <h4 className="text-lg font-medium text-gray-900 mb-2">Push notifications not supported</h4>
             <p className="text-gray-500 max-w-sm mx-auto">
-              We couldn't verify full push support. You can still attempt to enable notifications below.
+              We could not verify full push support. You can still attempt to enable notifications below.
             </p>
             <div className="mt-4 space-y-2 text-xs text-left inline-block bg-gray-50 rounded-lg p-3 max-w-sm">
               <div className="font-medium text-gray-700">Diagnostics</div>
@@ -198,21 +209,24 @@ const PushNotificationSettings: React.FC<PushNotificationSettingsProps> = ({ cla
                   </>
                 )}
               </button>
-              <button
-                onClick={() => { localStorage.setItem('forcePushSupport', 'true'); checkPushNotificationStatus(); }}
-                className="text-xs text-blue-600 hover:underline"
-              >Force support & recheck</button>
+              {!isNativeApp && (
+                <button
+                  onClick={() => { localStorage.setItem('forcePushSupport', 'true'); checkPushNotificationStatus(); }}
+                  className="text-xs text-blue-600 hover:underline"
+                >Force support and recheck</button>
+              )}
             </div>
           </div>
         ) : permissionStatus === 'denied' ? (
-          // Permission denied
           <div className="text-center py-8">
             <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <BellOff className="w-8 h-8 text-red-500" />
             </div>
             <h4 className="text-lg font-medium text-gray-900 mb-2">Notifications blocked</h4>
             <p className="text-gray-500 max-w-sm mx-auto mb-4">
-              You've previously blocked notifications. Browsers won't show the prompt again until you re-enable permissions manually.
+              {isNativeApp
+                ? 'Notifications are blocked for SAT Mobile on this device. Turn them back on in system settings, then return here and recheck.'
+                : "You've previously blocked notifications. Browsers will not show the prompt again until you re-enable permissions manually."}
             </p>
             <div className="space-y-4">
               <div>
@@ -221,25 +235,36 @@ const PushNotificationSettings: React.FC<PushNotificationSettingsProps> = ({ cla
                   className="inline-flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                 >
                   <Settings className="w-4 h-4" />
-                  <span>{showDeniedHelp ? 'Hide Fix Steps' : 'How To Re‑Enable'}</span>
+                  <span>{showDeniedHelp ? 'Hide Fix Steps' : 'How To Re-Enable'}</span>
                 </button>
               </div>
               {showDeniedHelp && (
                 <div className="text-left mx-auto max-w-md bg-red-50 border border-red-200 rounded-lg p-4 space-y-3 text-sm leading-relaxed">
                   <p className="font-medium text-red-700">Steps to re-enable:</p>
-                  <ol className="list-decimal list-inside space-y-1 text-red-800">
-                    <li><span className="font-semibold">Chrome / Edge (Desktop):</span> Click the lock icon → Site Settings → Notifications → Allow → Reload.</li>
-                    <li><span className="font-semibold">Chrome (Android):</span> Tap lock icon in address bar → Permissions → Notifications → Allow → Reload.</li>
-                    <li><span className="font-semibold">Safari (iOS 16.4+):</span> Add site to Home Screen first, open the installed app, then in iOS Settings → Notifications → find app name → Allow.</li>
-                    <li><span className="font-semibold">Safari (macOS):</span> Safari → Settings → Websites → Notifications → Allow for this site.</li>
-                    <li><span className="font-semibold">Firefox:</span> Click shield/lock icon → Permissions → Re-enable notifications.</li>
-                  </ol>
-                  <p className="text-xs text-red-600">After changing the setting, come back and press "Recheck" below.</p>
+                  {isNativeApp ? (
+                    <ol className="list-decimal list-inside space-y-1 text-red-800">
+                      <li><span className="font-semibold">Android:</span> Open Settings, then Apps, then SAT Mobile.</li>
+                      <li>Tap Notifications and turn on Allow notifications.</li>
+                      <li>Make sure the SAT Mobile Notifications channel is also allowed.</li>
+                      <li>Return to SAT Mobile and press Recheck.</li>
+                    </ol>
+                  ) : (
+                    <ol className="list-decimal list-inside space-y-1 text-red-800">
+                      <li><span className="font-semibold">Chrome / Edge (Desktop):</span> Click the lock icon, then Site Settings, then Notifications, then Allow, then Reload.</li>
+                      <li><span className="font-semibold">Chrome (Android):</span> Tap the lock icon in the address bar, then Permissions, then Notifications, then Allow, then Reload.</li>
+                      <li><span className="font-semibold">Safari (iOS 16.4+):</span> Add the site to Home Screen first, open the installed app, then use iOS Settings, Notifications, app name, Allow.</li>
+                      <li><span className="font-semibold">Safari (macOS):</span> Safari, Settings, Websites, Notifications, then Allow for this site.</li>
+                      <li><span className="font-semibold">Firefox:</span> Click the shield or lock icon, then Permissions, then re-enable notifications.</li>
+                    </ol>
+                  )}
+                  <p className="text-xs text-red-600">After changing the setting, come back and press Recheck below.</p>
                   <div className="flex flex-wrap gap-2 pt-2">
-                    <button
-                      onClick={() => { localStorage.setItem('forcePushSupport', 'true'); checkPushNotificationStatus(); }}
-                      className="px-3 py-1.5 text-xs rounded-md bg-white border border-red-300 text-red-700 hover:bg-red-100"
-                    >Force Recheck</button>
+                    {!isNativeApp && (
+                      <button
+                        onClick={() => { localStorage.setItem('forcePushSupport', 'true'); checkPushNotificationStatus(); }}
+                        className="px-3 py-1.5 text-xs rounded-md bg-white border border-red-300 text-red-700 hover:bg-red-100"
+                      >Force Recheck</button>
+                    )}
                     <button
                       onClick={checkPushNotificationStatus}
                       className="px-3 py-1.5 text-xs rounded-md bg-red-600 text-white hover:bg-red-700"
@@ -250,7 +275,6 @@ const PushNotificationSettings: React.FC<PushNotificationSettingsProps> = ({ cla
             </div>
           </div>
         ) : !isInitialized ? (
-          // Not enabled - show enable option
           <div className="text-center py-8">
             <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <Bell className="w-8 h-8 text-blue-600" />
@@ -260,9 +284,8 @@ const PushNotificationSettings: React.FC<PushNotificationSettingsProps> = ({ cla
               Get instant notifications on your device when important activities happen, even when the app is closed.
             </p>
 
-            {/* Features list */}
             <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg p-4 mb-6 max-w-sm mx-auto">
-              <h5 className="font-medium text-gray-900 mb-3">You'll be notified about:</h5>
+              <h5 className="font-medium text-gray-900 mb-3">You will be notified about:</h5>
               <div className="space-y-2 text-sm text-gray-600">
                 <div className="flex items-center space-x-2">
                   <Check className="w-4 h-4 text-green-500" />
@@ -302,9 +325,7 @@ const PushNotificationSettings: React.FC<PushNotificationSettingsProps> = ({ cla
             </button>
           </div>
         ) : (
-          // Enabled - show status and test option
           <div className="space-y-6">
-            {/* Status info */}
             <div className="bg-gradient-to-r from-green-50 to-blue-50 rounded-lg p-4">
               <div className="flex items-start space-x-3">
                 <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center mt-0.5">
@@ -313,29 +334,22 @@ const PushNotificationSettings: React.FC<PushNotificationSettingsProps> = ({ cla
                 <div className="flex-1">
                   <h4 className="font-medium text-gray-900 mb-1">Notifications are active</h4>
                   <p className="text-sm text-gray-600 mb-3">
-                    You'll receive push notifications on this device when activities happen in your church.
+                    You will receive push notifications on this device when activities happen in your church.
                   </p>
                   <div className="flex items-center space-x-2 text-xs text-gray-500">
                     {getPlatformIcon()}
-                    <span>
-                      {navigator.userAgent.includes('Mobile') || navigator.userAgent.includes('Android') || navigator.userAgent.includes('iPhone')
-                        ? 'Mobile Device'
-                        : 'Desktop Browser'
-                      }
-                    </span>
+                    <span>{getPlatformLabel()}</span>
                   </div>
                 </div>
               </div>
             </div>
 
-
-            {/* Privacy note */}
             <div className="bg-gray-50 rounded-lg p-4">
               <h5 className="font-medium text-gray-700 mb-2">Privacy & Control</h5>
               <div className="text-sm text-gray-600 space-y-1">
-                <p>• Notifications are only sent for activities related to your church</p>
-                <p>• You can disable notifications anytime in your browser settings</p>
-                <p>• No personal data is included in notification content</p>
+                <p>Notifications are only sent for activities related to your church</p>
+                <p>You can disable notifications anytime in system or browser settings</p>
+                <p>No personal data is included in notification content</p>
               </div>
             </div>
           </div>

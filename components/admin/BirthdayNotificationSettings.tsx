@@ -224,7 +224,10 @@ const BirthdayNotificationSettings: React.FC<BirthdayNotificationSettingsProps> 
         { force: true, actorAdminId: userProfile?.uid }
       );
       setTriggeredNow(true);
-      showToast('success', 'Notifications Sent', `Processed ${results.processed}, sent ${results.sent}, failed ${results.failed}`);
+      const toastType = results.failed > 0 ? (results.sent > 0 ? 'warning' : 'error') : 'success';
+      const toastTitle = results.failed > 0 ? 'Notifications Failed' : 'Notifications Sent';
+      const firstError = results.errors?.[0];
+      showToast(toastType, toastTitle, firstError || `Processed ${results.processed}, sent ${results.sent}, failed ${results.failed}`);
       setTimeout(() => setTriggeredNow(false), 5000);
     } catch (error: any) {
       showToast('error', 'Trigger Failed', error.message || 'Failed to trigger processing');

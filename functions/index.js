@@ -8,8 +8,7 @@ const { defineSecret } = require('firebase-functions/params');
 const { Resend } = require('resend');
 const { randomUUID } = require('crypto');
 
-// Secret for SendGrid API Key (configure via: firebase functions:secrets:set SENDGRID_API_KEY)
-const SENDGRID_API_KEY = defineSecret('SENDGRID_API_KEY');
+// Secret for Resend API Key (configure via: firebase functions:secrets:set RESEND_API_KEY)
 const RESEND_API_KEY = defineSecret('RESEND_API_KEY');
 
 // Initialize Firebase Admin SDK
@@ -18,7 +17,9 @@ if (!admin.apps.length) {
 }
 
 // Send push notification function
-exports.sendPushNotification = functions.https.onCall(async (data, context) => {
+exports.sendPushNotification = functions
+  .runWith({ invoker: 'public' })
+  .https.onCall(async (data, context) => {
   // Verify authentication
   if (!context.auth) {
     throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
@@ -137,7 +138,7 @@ exports.sendPushNotification = functions.https.onCall(async (data, context) => {
     console.error('Error sending push notification:', error);
     throw new functions.https.HttpsError('internal', 'Failed to send push notification');
   }
-});
+  });
 
 // Callable: relayUploadChatImage (CORS workaround for Storage uploads)
 // data: { threadId, churchId, data (base64 string), mimeType, caption }
@@ -286,38 +287,44 @@ exports.relayPersistImage = functions.https.onCall(async (data, context) => {
 
 // Shared provider-based email sender
 async function sendEmailWithProviders({ to, subject, html, text, from }) {
-  const fromAddress = from || 'no-reply@sat-mobile.app';
+  const fromAddress = from || 'SAT Mobile <onboarding@resend.dev>';
   const resendKey = RESEND_API_KEY.value();
-  if (resendKey) {
-    const resend = new Resend(resendKey);
-    const result = await resend.emails.send({
-      from: fromAddress,
-      to,
-      subject,
-      html: html || undefined,
-      text: text || undefined
-    });
-    if (result?.error) {
-      throw new Error(result.error?.message || 'Resend error');
-    }
-    return { success: true, messageId: result?.data?.id || null };
+  if (!resendKey) {
+    throw new Error('RESEND_API_KEY is not configured');
   }
-  // Fallback to SendGrid
-  sgMail.setApiKey(SENDGRID_API_KEY.value());
-  const [response] = await sgMail.send({
+
+  const resend = new Resend(resendKey);
+  const result = await resend.emails.send({
     to,
     from: fromAddress,
     subject,
     html: html || undefined,
     text: text || undefined
   });
-  const messageId = response?.headers?.['x-message-id'] || response?.headers?.['x-message-id'.toLowerCase()];
-  return { success: true, messageId: messageId || null, statusCode: response?.statusCode || response?.status };
+  if (result?.error) {
+    throw new Error(result.error?.message || 'Resend error');
+  }
+  return { success: true, messageId: result?.data?.id || null };
 }
 
 // Callable: send birthday email using provider(s) — admin only
+function getEmailProviderFailure(err) {
+  const message = err?.message || 'Failed to send email';
+  if (/verify a domain|domain is not verified|testing emails/i.test(message)) {
+    return {
+      status: 412,
+      code: 'failed-precondition',
+      message: `${message} Verify sat-mobile.app in Resend before sending birthday emails to other recipients.`
+    };
+  }
+  if (err?.code === 403 || /permission|forbidden/i.test(message)) {
+    return { status: 403, code: 'permission-denied', message };
+  }
+  return { status: 500, code: 'internal', message };
+}
+
 exports.sendBirthdayEmail = functions
-  .runWith({ secrets: [SENDGRID_API_KEY, RESEND_API_KEY] })
+  .runWith({ secrets: [RESEND_API_KEY], invoker: 'public' })
   .https.onCall(async (data, context) => {
     if (!context.auth) {
       throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
@@ -351,8 +358,8 @@ exports.sendBirthdayEmail = functions
       return await sendEmailWithProviders({ to, subject, html, text, from });
     } catch (err) {
       console.error('sendBirthdayEmail failed', err);
-      const code = err?.code === 403 ? 'permission-denied' : 'internal';
-      throw new functions.https.HttpsError(code, err?.message || 'Failed to send email');
+      const failure = getEmailProviderFailure(err);
+      throw new functions.https.HttpsError(failure.code, failure.message);
     }
   });
 
@@ -370,7 +377,7 @@ function setCors(req, res) {
 
 // HTTP (CORS-enabled) fallback for sending birthday email (for local dev or non-callable clients)
 exports.sendBirthdayEmailHttp = functions
-  .runWith({ secrets: [SENDGRID_API_KEY, RESEND_API_KEY] })
+  .runWith({ secrets: [RESEND_API_KEY], invoker: 'public' })
   .https.onRequest(async (req, res) => {
     setCors(req, res);
     if (req.method === 'OPTIONS') {
@@ -406,7 +413,8 @@ exports.sendBirthdayEmailHttp = functions
       return res.status(200).json(result);
     } catch (err) {
       console.error('sendBirthdayEmailHttp failed', err);
-      return res.status(500).json({ success: false, error: err?.message || 'Failed to send email' });
+      const failure = getEmailProviderFailure(err);
+      return res.status(failure.status).json({ success: false, error: failure.message });
     }
   });
 

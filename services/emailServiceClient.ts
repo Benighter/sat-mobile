@@ -2,6 +2,9 @@ import { EmailNotificationService } from './emailNotificationService';
 import { getPrimaryEmailApiUrl } from '../constants';
 import { Member, NotificationRecipient, Bacenta } from '../types';
 
+const FIREBASE_FUNCTIONS_REGION = 'us-central1';
+const FIREBASE_PROJECT_ID = 'sat-mobile-de6f1';
+
 /**
  * Client for calling Cloud Function to send emails.
  */
@@ -32,28 +35,35 @@ export const emailServiceClient = {
       }
     }
 
-    // Local dev: try CORS-enabled HTTP function first
+    // Prefer Firebase callable in production. The SDK handles auth and callable protocol details.
     try {
-      const httpUrl = `https://us-central1-sat-mobile-de6f1.cloudfunctions.net/sendBirthdayEmailHttp`;
-      const response = await fetch(httpUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ to, subject, html, text })
-      });
-      if (response.ok) {
-        const data = await response.json();
-        if (data?.success) return data;
-      }
-    } catch (err) {
-      // ignore and fallback to callable
+      const { getFunctions, httpsCallable } = await import('firebase/functions');
+      const appFunctions = getFunctions(undefined as any, FIREBASE_FUNCTIONS_REGION);
+      const fn = httpsCallable(appFunctions, 'sendBirthdayEmail');
+      const res: any = await fn({ to, subject, html, text });
+      return res?.data || { success: false };
+    } catch (callableErr) {
+      console.warn('Birthday email callable failed, falling back to authenticated HTTP:', callableErr);
     }
 
-    // Fallback: Firebase callable (requires auth; no CORS on callable path)
-    const { getFunctions, httpsCallable } = await import('firebase/functions');
-    const appFunctions = getFunctions();
-    const fn = httpsCallable(appFunctions, 'sendBirthdayEmail');
-    const res: any = await fn({ to, subject, html, text });
-    return res?.data || { success: false };
+    const [{ getAuth }] = await Promise.all([
+      import('firebase/auth')
+    ]);
+    const idToken = await getAuth().currentUser?.getIdToken();
+    const httpUrl = `https://${FIREBASE_FUNCTIONS_REGION}-${FIREBASE_PROJECT_ID}.cloudfunctions.net/sendBirthdayEmailHttp`;
+    const response = await fetch(httpUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(idToken ? { Authorization: `Bearer ${idToken}` } : {})
+      },
+      body: JSON.stringify({ to, subject, html, text })
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data?.error || `HTTP ${response.status}`);
+    }
+    return data?.success ? data : { success: false, error: data?.error || 'Unknown email send failure' };
   },
 
   /**

@@ -16,6 +16,7 @@ export default defineConfig(({ mode }) => {
       build: {
         outDir: 'dist',
         assetsDir: 'assets',
+        modulePreload: false,
         sourcemap: false,
         minify: 'terser',
         target: 'es2020',

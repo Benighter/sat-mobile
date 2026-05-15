@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { stopNotificationSound } from '../../services/notificationSound';
 import { Bell, Check, CheckCheck, X, User, Users, UserPlus, Calendar, Heart, Home, Trash2, Clock, Sparkles, Snowflake, Repeat, Cake } from 'lucide-react';
 import { AdminNotification, NotificationActivityType } from '../../types';
 import { notificationService } from '../../services/notificationService';
@@ -23,13 +22,6 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({ isOpen, onClose
       loadNotifications();
     }
   }, [isOpen, userProfile?.uid]);
-
-  // Stop any playing notification sound when the center is opened
-  useEffect(() => {
-    if (isOpen) {
-      try { stopNotificationSound(); } catch { /* ignore */ }
-    }
-  }, [isOpen]);
 
   // Handle clicking outside to close modal
   useEffect(() => {

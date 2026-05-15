@@ -200,6 +200,31 @@ class PushNotificationService {
     throw lastError ?? new Error('Native push registration failed.');
   }
 
+  private async requestNativePermissionIfNeeded(): Promise<boolean> {
+    if (!this.nativePushConfigured) {
+      this.lastRegistrationError = 'Native push requires android/app/google-services.json plus VITE_ENABLE_NATIVE_PUSH=true.';
+      return false;
+    }
+
+    const currentStatus = await PushNotifications.checkPermissions();
+    if (currentStatus.receive === 'granted') {
+      return true;
+    }
+
+    if (currentStatus.receive === 'denied') {
+      this.lastRegistrationError = 'Notification permission is blocked in the device settings.';
+      return false;
+    }
+
+    const requestedStatus = await PushNotifications.requestPermissions();
+    if (requestedStatus.receive !== 'granted') {
+      this.lastRegistrationError = 'Notification permission was not granted on the device.';
+      return false;
+    }
+
+    return true;
+  }
+
   // Initialize push notification service
   async initialize(): Promise<boolean> {
     if (this.isInitialized) {
@@ -258,15 +283,15 @@ class PushNotificationService {
 
   // Initialize Capacitor push notifications for mobile platforms
   private async initializeCapacitorPushNotifications(): Promise<void> {
-    // Request permission for push notifications
-    const permResult = await PushNotifications.requestPermissions();
-    
+    await this.ensureAndroidNotificationChannel();
+    await this.ensureNativePushListeners();
+
+    const permResult = await PushNotifications.checkPermissions();
+
     if (permResult.receive === 'granted') {
-      await this.ensureAndroidNotificationChannel();
-      await this.ensureNativePushListeners();
       await this.registerNativeTokenWithRetry();
     } else {
-      this.lastRegistrationError = 'Notification permission was not granted on the device.';
+      this.lastRegistrationError = 'Notification permission has not been granted yet.';
     }
   }
 
@@ -292,14 +317,17 @@ class PushNotificationService {
 
   // Set user context for push notifications
   setUserContext(user: User | null, churchId: string | null): void {
+    const previousUser = this.currentUser;
+    const previousChurchId = this.currentChurchId;
+
     this.currentUser = user;
     this.currentChurchId = churchId;
 
     // Initialize token registration if user is available
     if (user && churchId && (!Capacitor.isNativePlatform() || this.nativePushConfigured)) {
       this.registerDeviceToken();
-    } else {
-      this.unregisterDeviceToken();
+    } else if (previousUser && previousChurchId) {
+      this.unregisterDeviceTokensFor(previousUser, previousChurchId);
     }
   }
 
@@ -325,6 +353,12 @@ class PushNotificationService {
           console.warn('Skipping native device token registration because native push is disabled.');
           return null;
         }
+
+        const permissionGranted = await this.requestNativePermissionIfNeeded();
+        if (!permissionGranted) {
+          return null;
+        }
+
         token = await this.registerNativeTokenWithRetry();
       } else {
         // Web platform - use Firebase Messaging
@@ -421,12 +455,15 @@ class PushNotificationService {
   // Unregister device token when user logs out
   async unregisterDeviceToken(): Promise<void> {
     if (!this.currentUser || !this.currentChurchId) return;
+    await this.unregisterDeviceTokensFor(this.currentUser, this.currentChurchId);
+  }
 
+  private async unregisterDeviceTokensFor(user: User, churchId: string): Promise<void> {
     try {
       // Get all tokens for this user and mark as inactive
       const tokensQuery = query(
-        collection(db, `churches/${this.currentChurchId}/deviceTokens`),
-        where('userId', '==', this.currentUser.uid),
+        collection(db, `churches/${churchId}/deviceTokens`),
+        where('userId', '==', user.uid),
         where('isActive', '==', true)
       );
 
@@ -543,16 +580,6 @@ class PushNotificationService {
 
   // Handle foreground notification display
   private handleForegroundNotification(notification: any): void {
-    try {
-      // Attempt to play a short notification sound on web
-      if (typeof window !== 'undefined') {
-        // Lazy import to avoid bundling issues in non-web platforms
-        import('./notificationSound').then(m => {
-          m.startNotificationSound(3000);
-        }).catch(() => {/* ignore */});
-      }
-    } catch { /* ignore */ }
-    // Show in-app notification or update UI
     if ('Notification' in window && Notification.permission === 'granted') {
       const title = notification.title || notification.notification?.title || 'SAT Mobile';
       const body = notification.body || notification.notification?.body || 'New notification received';
@@ -574,9 +601,6 @@ class PushNotificationService {
         window.focus();
         this.handleNotificationClick(notification);
         browserNotification.close();
-        try {
-          import('./notificationSound').then(m => m.stopNotificationSound()).catch(() => {/* ignore */});
-        } catch { /* ignore */ }
       };
     }
   }
@@ -681,8 +705,7 @@ class PushNotificationService {
         return 'default';
       }
       const status = await PushNotifications.checkPermissions();
-      const mapped = (status.receive === 'prompt' ? 'default' : status.receive) as 'granted' | 'denied' | 'default';
-      return mapped;
+      return status.receive === 'granted' || status.receive === 'denied' ? status.receive : 'default';
     } else {
       return Notification.permission;
     }
@@ -697,7 +720,20 @@ class PushNotificationService {
           return false;
         }
         const result = await PushNotifications.requestPermissions();
-        return result.receive === 'granted';
+        if (result.receive !== 'granted') {
+          this.lastRegistrationError = 'Notification permission was not granted on the device.';
+          return false;
+        }
+
+        await this.ensureAndroidNotificationChannel();
+        await this.ensureNativePushListeners();
+        try {
+          await this.registerNativeTokenWithRetry();
+        } catch (error) {
+          this.lastRegistrationError = this.toErrorMessage(error);
+          console.error('Native push permission was granted, but token registration failed:', error);
+        }
+        return true;
       } else {
         if (!('Notification' in window)) {
           console.warn('Notification API not present in this browser');
