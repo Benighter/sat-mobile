@@ -1,5 +1,7 @@
 // Enhanced Authentication Screen with Login and Register
 import React, { useState, useEffect, ReactNode } from 'react';
+import { sendEmailVerification } from 'firebase/auth';
+import { auth } from '../../firebase.config';
 import { useAppContext } from '../../contexts/FirebaseAppContext';
 import { authService, FirebaseUser, setActiveContext } from '../../services/firebaseService';
 import { LoginForm } from './LoginForm';
@@ -9,6 +11,8 @@ import OptimizedLoader from '../common/OptimizedLoader';
 import SuperAdminDashboard from '../super-admin/SuperAdminDashboard';
 import { getAppDisplayName } from '../../constants';
 import { TabKeys } from '../../types';
+import { CheckIcon, EnvelopeIcon, RefreshIcon } from '../icons';
+import Button from '../ui/Button';
 import Modal from '../ui/Modal';
 import ContactView from '../views/ContactView';
 
@@ -61,6 +65,32 @@ interface RememberedLoginDetails {
 }
 
 const REMEMBERED_LOGIN_KEY = 'sat_mobile_remembered_login';
+const VERIFICATION_SENT_KEY_PREFIX = 'sat-email-verification-last-sent-';
+const RESEND_COOLDOWN_MS = 60 * 1000;
+const VERIFICATION_RECHECK_INTERVAL_MS = 10 * 1000;
+
+const getVerificationSentKey = (uid: string) => `${VERIFICATION_SENT_KEY_PREFIX}${uid}`;
+
+const readVerificationSentAt = (uid?: string | null): number | null => {
+  if (!uid || typeof window === 'undefined') {
+    return null;
+  }
+
+  try {
+    const value = window.localStorage.getItem(getVerificationSentKey(uid));
+    const parsedValue = value ? Number(value) : NaN;
+    return Number.isFinite(parsedValue) ? parsedValue : null;
+  } catch {
+    return null;
+  }
+};
+
+const writeVerificationSentAt = (uid: string, value: number) => {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(getVerificationSentKey(uid), String(value));
+  } catch {}
+};
 
 const getRememberedLoginDetails = (): RememberedLoginDetails | null => {
   if (typeof window === 'undefined') {
@@ -108,6 +138,210 @@ const clearRememberedLoginDetails = (): void => {
   try {
     localStorage.removeItem(REMEMBERED_LOGIN_KEY);
   } catch {}
+};
+
+interface EmailVerificationGateProps {
+  user: FirebaseUser;
+  ministryMode: boolean;
+  showToast: AuthScreenProps['showToast'];
+  onVerified: (user: FirebaseUser) => void;
+  onSignOut: () => void;
+}
+
+const EmailVerificationGate: React.FC<EmailVerificationGateProps> = ({ user, ministryMode, showToast, onVerified, onSignOut }) => {
+  const [isChecking, setIsChecking] = useState(false);
+  const [isSending, setIsSending] = useState(false);
+  const [lastSentAt, setLastSentAt] = useState<number | null>(() => readVerificationSentAt(user.uid));
+  const checkInFlightRef = React.useRef(false);
+  const verifiedToastShownRef = React.useRef(false);
+
+  const rememberSentAt = (value: number) => {
+    writeVerificationSentAt(user.uid, value);
+    setLastSentAt(value);
+  };
+
+  const refreshVerificationStatus = React.useCallback(async (options?: { silent?: boolean }) => {
+    const silent = options?.silent === true;
+    const firebaseUser = auth.currentUser;
+
+    if (!firebaseUser) {
+      if (!silent) {
+        showToast('error', 'Session Unavailable', 'Please sign in again to refresh your verification status.');
+      }
+      return false;
+    }
+
+    if (checkInFlightRef.current) {
+      return false;
+    }
+
+    checkInFlightRef.current = true;
+    if (!silent) {
+      setIsChecking(true);
+    }
+
+    try {
+      await firebaseUser.reload();
+      const isVerified = auth.currentUser?.emailVerified === true;
+
+      if (isVerified) {
+        const refreshedUser = await authService.refreshCurrentUser();
+        onVerified(refreshedUser || { ...user, emailVerified: true });
+
+        if (!silent || !verifiedToastShownRef.current) {
+          showToast('success', 'Email Verified', 'Welcome to SAT Mobile.');
+          verifiedToastShownRef.current = true;
+        }
+      } else if (!silent) {
+        showToast('info', 'Still Unverified', 'After opening the verification link, return here. SAT Mobile is checking automatically.');
+      }
+
+      return isVerified;
+    } catch (error: any) {
+      if (!silent) {
+        showToast('error', 'Verification Check Failed', error?.message || 'Could not refresh your verification status.');
+      }
+      return false;
+    } finally {
+      checkInFlightRef.current = false;
+      if (!silent) {
+        setIsChecking(false);
+      }
+    }
+  }, [onVerified, showToast, user]);
+
+  useEffect(() => {
+    const runSilentCheck = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+        return;
+      }
+      void refreshVerificationStatus({ silent: true });
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        runSilentCheck();
+      }
+    };
+
+    runSilentCheck();
+    const intervalId = window.setInterval(runSilentCheck, VERIFICATION_RECHECK_INTERVAL_MS);
+    window.addEventListener('focus', runSilentCheck);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener('focus', runSilentCheck);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [refreshVerificationStatus]);
+
+  const handleResendVerification = async () => {
+    const firebaseUser = auth.currentUser;
+
+    if (!firebaseUser) {
+      showToast('error', 'Session Unavailable', 'Please sign in again before sending a verification email.');
+      return;
+    }
+
+    if (!firebaseUser.email) {
+      showToast('error', 'No Email Address', 'This account does not have an email address that Firebase can verify.');
+      return;
+    }
+
+    setIsSending(true);
+    try {
+      if (firebaseUser.emailVerified) {
+        await refreshVerificationStatus({ silent: false });
+        return;
+      }
+
+      const storedLastSentAt = readVerificationSentAt(firebaseUser.uid);
+      const mostRecentSend = Math.max(storedLastSentAt || 0, lastSentAt || 0);
+      const elapsedMs = Date.now() - mostRecentSend;
+
+      if (mostRecentSend && elapsedMs < RESEND_COOLDOWN_MS) {
+        const waitSeconds = Math.ceil((RESEND_COOLDOWN_MS - elapsedMs) / 1000);
+        showToast('warning', 'Please Wait', `You can request another verification email in ${waitSeconds} seconds.`);
+        return;
+      }
+
+      await sendEmailVerification(firebaseUser);
+      rememberSentAt(Date.now());
+      showToast('success', 'Verification Email Sent', `Check ${firebaseUser.email}. If it is not in your inbox, check Spam or Promotions.`);
+    } catch (error: any) {
+      if (error?.code === 'auth/too-many-requests') {
+        rememberSentAt(Date.now());
+        showToast('warning', 'Please Wait', 'Firebase is limiting verification emails for now. Try again in a few minutes.');
+      } else {
+        showToast('error', 'Verification Email Failed', error?.message || 'Could not send the verification email.');
+      }
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  const gateClasses = ministryMode
+    ? 'bg-gradient-to-br from-rose-50 via-fuchsia-50 to-purple-50'
+    : 'bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50';
+
+  return (
+    <div className={`min-h-screen flex items-center justify-center p-4 ${gateClasses}`}>
+      <div className="w-full max-w-md rounded-3xl border border-white/60 bg-white/95 p-8 shadow-2xl backdrop-blur-xl">
+        <div className="text-center">
+          <div className="mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-3xl bg-green-50 text-green-600 ring-1 ring-green-100">
+            <CheckIcon className="h-10 w-10" />
+          </div>
+          <h1 className="text-2xl font-bold text-gray-900">Verify your email</h1>
+          <p className="mt-3 text-sm leading-6 text-gray-600">
+            Open the verification link sent to <span className="font-semibold text-gray-900 break-all">{user.email || 'your email address'}</span>, then return here. SAT Mobile will open automatically once the email is verified.
+          </p>
+          <p className="mt-2 text-xs font-medium text-gray-500">Check Spam or Promotions if the message is not in your inbox.</p>
+        </div>
+
+        <div className="mt-6 rounded-2xl border border-green-100 bg-green-50/80 p-4 text-sm text-green-800">
+          Email verification helps SAT Mobile protect your account and prepare important notifications like reminders and birthday alerts.
+        </div>
+
+        <div className="mt-6 flex flex-col gap-3">
+          <Button
+            type="button"
+            variant="primary"
+            onClick={handleResendVerification}
+            disabled={isSending || isChecking}
+            loading={isSending}
+            leftIcon={<EnvelopeIcon className="h-4 w-4" />}
+            className="w-full justify-center"
+          >
+            {lastSentAt ? 'Resend Email' : 'Send Verification Email'}
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => void refreshVerificationStatus({ silent: false })}
+            disabled={isChecking || isSending}
+            loading={isChecking}
+            leftIcon={<RefreshIcon className="h-4 w-4" />}
+            className="w-full justify-center"
+          >
+            I Verified
+          </Button>
+          <button
+            type="button"
+            onClick={onSignOut}
+            className="w-full rounded-xl px-4 py-3 text-sm font-semibold text-gray-600 transition hover:bg-gray-100 hover:text-gray-900"
+          >
+            Use a different account
+          </button>
+        </div>
+
+        <div className="mt-5 flex items-center justify-center gap-2 text-xs font-medium text-gray-500">
+          <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-green-600 border-t-transparent" />
+          Checking every few seconds
+        </div>
+      </div>
+    </div>
+  );
 };
 
 export const AuthScreen: React.FC<AuthScreenProps> = ({ children, showToast }) => {
@@ -281,7 +515,11 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ children, showToast }) =
       }
 
       setUser(user);
-      showToast('success', 'Welcome Back!', `Signed in as ${user.displayName || user.email}`);
+      if (user.emailVerified) {
+        showToast('success', 'Welcome Back!', `Signed in as ${user.displayName || user.email}`);
+      } else {
+        showToast('info', 'Verify Your Email', 'Please verify your email to continue into SAT Mobile.');
+      }
     } catch (error: any) {
       const raw = error.message || error.code || error.toString();
       const friendlyMessage = getErrorMessage(raw);
@@ -313,15 +551,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ children, showToast }) =
   };
 
   const handleRegisterSuccess = () => {
-    // Registration successful – user will be signed in automatically.
-    // If in ministry mode, route to Ministries dashboard after auth state flips.
-    if (ministryMode) {
-      try {
-        switchTab({ id: 'ministries', name: 'Ministries' });
-      } catch {}
-    } else {
-      setAuthMode('login');
-    }
+    setError(null);
   };
 
   const switchToRegister = () => {
@@ -365,6 +595,25 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ children, showToast }) =
           className="fixed bottom-4 right-4 z-50 px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold shadow-lg"
         >Exit Impersonation</button>
       </div>
+    );
+  }
+
+  if (user && !user.emailVerified) {
+    return (
+      <EmailVerificationGate
+        user={user}
+        ministryMode={ministryMode}
+        showToast={showToast}
+        onVerified={(verifiedUser) => {
+          setUser(verifiedUser);
+          if (ministryMode) {
+            try {
+              switchTab({ id: 'ministries', name: 'Ministries' });
+            } catch {}
+          }
+        }}
+        onSignOut={handleSignOut}
+      />
     );
   }
 

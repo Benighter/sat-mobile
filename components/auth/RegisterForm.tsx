@@ -1,10 +1,21 @@
 import React, { useState } from 'react';
+import { sendEmailVerification } from 'firebase/auth';
+import { auth } from '../../firebase.config';
 import { authService } from '../../services/firebaseService';
 // contextService methods are embedded in service as helpers; we'll call through authService.register for normal mode
 import { contextService } from '../../services/firebaseService';
 import { setActiveContext } from '../../services/firebaseService';
 import { EyeIcon, EyeSlashIcon } from '../icons/index';
 import { MINISTRY_OPTIONS } from '../../constants';
+
+const VERIFICATION_SENT_KEY_PREFIX = 'sat-email-verification-last-sent-';
+
+const rememberVerificationSentAt = (uid: string) => {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(`${VERIFICATION_SENT_KEY_PREFIX}${uid}`, String(Date.now()));
+  } catch {}
+};
 
 // Utility: map Firebase registration errors to friendly messages; otherwise pass through
 const getErrorMessage = (error: string, ministryMode: boolean): string => {
@@ -58,16 +69,6 @@ interface RegisterFormData {
 }
 
 const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, onSwitchToLogin: _onSwitchToLogin, showToast, ministryMode = false }) => {
-  // One-off hard refresh after signup to ensure auth/profile/context are fully initialized
-  const hardRefreshAfterSignup = React.useCallback(() => {
-    try {
-      // Cache-busting reload using replace avoids back-stack duplicate
-      const base = window.location.origin + window.location.pathname;
-      window.location.replace(`${base}?signup=${Date.now()}`);
-    } catch {
-      window.location.reload();
-    }
-  }, []);
   const [formData, setFormData] = useState<RegisterFormData>({
     firstName: '',
     lastName: '',
@@ -85,6 +86,7 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, onSwitchToLogin:
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isCheckingEmail, setIsCheckingEmail] = useState(false);
   const [showResetHint, setShowResetHint] = useState(false);
+  const [verificationEmail, setVerificationEmail] = useState<string | null>(null);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -467,14 +469,26 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, onSwitchToLogin:
   try { await setActiveContext('default'); } catch {}
       }
 
-  showToast('success', 'Registration Successful!',
-        'Welcome! Your account has been created successfully.');
+      const firebaseUser = auth.currentUser;
+      if (firebaseUser?.email && !firebaseUser.emailVerified) {
+        try {
+          await sendEmailVerification(firebaseUser);
+          rememberVerificationSentAt(firebaseUser.uid);
+          showToast('success', 'Verification Email Sent', `Check ${firebaseUser.email}. If it is not in your inbox, check Spam or Promotions.`);
+        } catch (verificationError: any) {
+          showToast(
+            verificationError?.code === 'auth/too-many-requests' ? 'warning' : 'error',
+            verificationError?.code === 'auth/too-many-requests' ? 'Please Wait' : 'Verification Email Failed',
+            verificationError?.code === 'auth/too-many-requests'
+              ? 'Firebase is limiting verification emails for now. Use Resend Email on the next screen in a few minutes.'
+              : verificationError?.message || 'Your account was created, but we could not send the verification email automatically.'
+          );
+        }
+      }
+
+      setVerificationEmail(firebaseUser?.email || formData.email.trim().toLowerCase());
+      showToast('info', 'Verify Your Email', 'Your account is ready. Verify your email and SAT Mobile will open automatically.');
       onSuccess();
-      // Give the UI a brief moment to show the toast, then hard-refresh
-      setTimeout(() => {
-        try { showToast('info', 'Finalizing setup', 'Refreshing the app…'); } catch {}
-        hardRefreshAfterSignup();
-      }, 350);
     } catch (error: any) {
       const msg = getErrorMessage(error.message || error.code || error.toString(), ministryMode);
       showToast('error', 'Registration Failed', msg);
@@ -487,6 +501,27 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, onSwitchToLogin:
   };
 
   // No ministry selector in SAT variant
+
+  if (verificationEmail) {
+    return (
+      <div className="space-y-5 text-center">
+        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-green-50 text-green-600 ring-1 ring-green-100">
+          <span className="text-2xl">@</span>
+        </div>
+        <div>
+          <h2 className="text-xl font-bold text-gray-900">Check your email</h2>
+          <p className="mt-2 text-sm leading-6 text-gray-600">
+            We sent a verification link to <span className="font-semibold text-gray-900 break-all">{verificationEmail}</span>. Open the link, then return to SAT Mobile. The app will continue automatically once Firebase confirms it.
+          </p>
+          <p className="mt-2 text-xs text-gray-500">If you do not see it, check Spam or Promotions.</p>
+        </div>
+        <div className="flex items-center justify-center gap-2 text-sm font-medium text-green-700">
+          <div className="h-4 w-4 animate-spin rounded-full border-2 border-green-600 border-t-transparent" />
+          Waiting for verification...
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
