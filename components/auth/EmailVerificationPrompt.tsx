@@ -30,6 +30,16 @@ const writeLastSentAt = (uid: string, value: number) => {
 };
 
 const getFirebaseErrorToast = (error: any) => {
+  const message = String(error?.message || '');
+
+  if (message.includes('ERR_BLOCKED_BY_CLIENT')) {
+    return {
+      type: 'warning' as const,
+      title: 'Request Blocked',
+      message: 'A browser or device filter blocked a Firebase request. Disable blockers for SAT Mobile and try again.'
+    };
+  }
+
   switch (error?.code) {
     case 'auth/too-many-requests':
       return {
@@ -103,8 +113,7 @@ const EmailVerificationPrompt: React.FC<EmailVerificationPromptProps> = ({ mode 
 
     setIsSending(true);
     try {
-      await firebaseUser.reload();
-      if (auth.currentUser?.emailVerified) {
+      if (firebaseUser.emailVerified) {
         syncVerificationState();
         showToast('success', 'Email Already Verified', 'Your account email is already verified.');
         return;
