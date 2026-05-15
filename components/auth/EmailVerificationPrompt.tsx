@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { sendEmailVerification } from 'firebase/auth';
 import { auth } from '../../firebase.config';
 import { useAppContext } from '../../contexts/FirebaseAppContext';
@@ -13,6 +13,7 @@ interface EmailVerificationPromptProps {
 }
 
 const RESEND_COOLDOWN_MS = 60 * 1000;
+const VERIFICATION_RECHECK_INTERVAL_MS = 10 * 1000;
 
 const getLastSentKey = (uid: string) => `sat-email-verification-last-sent-${uid}`;
 
@@ -76,6 +77,8 @@ const EmailVerificationPrompt: React.FC<EmailVerificationPromptProps> = ({ mode 
   const [lastSentAt, setLastSentAt] = useState<number | null>(null);
   const [isSending, setIsSending] = useState(false);
   const [isChecking, setIsChecking] = useState(false);
+  const autoCheckInFlightRef = useRef(false);
+  const verifiedToastShownRef = useRef(false);
 
   const syncVerificationState = useCallback(() => {
     const firebaseUser = auth.currentUser;
@@ -97,6 +100,89 @@ const EmailVerificationPrompt: React.FC<EmailVerificationPromptProps> = ({ mode 
     writeLastSentAt(uid, value);
     setLastSentAt(value);
   };
+
+  const refreshVerificationStatus = useCallback(async (options?: { silent?: boolean }) => {
+    const silent = options?.silent === true;
+    const firebaseUser = auth.currentUser;
+
+    if (!firebaseUser) {
+      if (!silent) {
+        showToast('error', 'Session Unavailable', 'Please sign in again to refresh your verification status.');
+      }
+      return false;
+    }
+
+    if (autoCheckInFlightRef.current) {
+      return false;
+    }
+
+    autoCheckInFlightRef.current = true;
+    if (!silent) {
+      setIsChecking(true);
+    }
+
+    try {
+      await firebaseUser.reload();
+      const verified = auth.currentUser?.emailVerified === true;
+
+      syncVerificationState();
+
+      if (verified) {
+        setDismissed(true);
+        setIsVerified(true);
+        await refreshUserProfile();
+
+        if (!silent || !verifiedToastShownRef.current) {
+          showToast('success', 'Email Verified', 'Thanks, your account email is now verified.');
+          verifiedToastShownRef.current = true;
+        }
+      } else if (!silent) {
+        showToast('info', 'Still Unverified', 'After opening the email link, return to the app. We will keep checking automatically.');
+      }
+
+      return verified;
+    } catch (error: any) {
+      if (!silent) {
+        const toast = getFirebaseErrorToast(error);
+        showToast(toast.type, toast.title, toast.message);
+      }
+      return false;
+    } finally {
+      autoCheckInFlightRef.current = false;
+      if (!silent) {
+        setIsChecking(false);
+      }
+    }
+  }, [refreshUserProfile, showToast, syncVerificationState]);
+
+  useEffect(() => {
+    if (mode !== 'banner' || !user || !email || isVerified) {
+      return;
+    }
+
+    const runSilentCheck = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+        return;
+      }
+      void refreshVerificationStatus({ silent: true });
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        runSilentCheck();
+      }
+    };
+
+    const intervalId = window.setInterval(runSilentCheck, VERIFICATION_RECHECK_INTERVAL_MS);
+    window.addEventListener('focus', runSilentCheck);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener('focus', runSilentCheck);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [email, isVerified, mode, refreshVerificationStatus, user]);
 
   const handleResendVerification = async () => {
     const firebaseUser = auth.currentUser;
@@ -131,7 +217,7 @@ const EmailVerificationPrompt: React.FC<EmailVerificationPromptProps> = ({ mode 
 
       await sendEmailVerification(firebaseUser);
       rememberSentAt(firebaseUser.uid, Date.now());
-      showToast('success', 'Verification Email Sent', `Check ${firebaseUser.email} for the verification link.`);
+      showToast('success', 'Verification Email Sent', `Check ${firebaseUser.email}. If it is not in your inbox, check Spam or Promotions.`);
     } catch (error: any) {
       if (error?.code === 'auth/too-many-requests') {
         rememberSentAt(firebaseUser.uid, Date.now());
@@ -144,32 +230,7 @@ const EmailVerificationPrompt: React.FC<EmailVerificationPromptProps> = ({ mode 
   };
 
   const handleRecheckVerification = async () => {
-    const firebaseUser = auth.currentUser;
-
-    if (!firebaseUser) {
-      showToast('error', 'Session Unavailable', 'Please sign in again to refresh your verification status.');
-      return;
-    }
-
-    setIsChecking(true);
-    try {
-      await firebaseUser.reload();
-      syncVerificationState();
-      await refreshUserProfile();
-
-      if (auth.currentUser?.emailVerified) {
-        setDismissed(true);
-        setIsVerified(true);
-        showToast('success', 'Email Verified', 'Thanks, your account email is now verified.');
-      } else {
-        showToast('info', 'Still Unverified', 'After opening the email link, return here and tap I verified again.');
-      }
-    } catch (error: any) {
-      const toast = getFirebaseErrorToast(error);
-      showToast(toast.type, toast.title, toast.message);
-    } finally {
-      setIsChecking(false);
-    }
+    await refreshVerificationStatus();
   };
 
   if (!user) {
@@ -191,8 +252,13 @@ const EmailVerificationPrompt: React.FC<EmailVerificationPromptProps> = ({ mode 
   const message = !email
     ? 'This account does not have an email address that Firebase can verify.'
     : isVerified
-      ? 'Your account email is verified.'
-      : 'Verify your email to keep your account secure. After clicking the email link, return to the app and recheck your status.';
+      ? 'Your account email is verified for SAT Mobile notifications, birthday reminders, and other important account messages.'
+      : 'Verify your email so SAT Mobile can send notifications, birthday reminders, and important account messages. If you do not see the email, check Spam or Promotions. After clicking the link, return to the app; this message will update automatically.';
+  const settingsStatusDescription = !email
+    ? 'No verifiable email address is attached to this account.'
+    : isVerified
+      ? 'Verified and ready for notification emails.'
+      : 'Unverified. Email notifications may not reach this account until verification is complete.';
   const settingsContainerClasses = !email
     ? 'border-gray-200 bg-gray-50'
     : isVerified
@@ -243,6 +309,7 @@ const EmailVerificationPrompt: React.FC<EmailVerificationPromptProps> = ({ mode 
               </span>
             </div>
             <p className="text-sm text-gray-600">{message}</p>
+            <p className="mt-2 text-xs font-semibold text-gray-500">Status: {settingsStatusDescription}</p>
             {email && <p className="mt-2 break-all text-xs font-medium text-gray-500">{email}</p>}
           </div>
           {actions}
