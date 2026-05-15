@@ -7,7 +7,6 @@ import Modal from '../ui/Modal';
 import Button from '../ui/Button';
 import { BirthdayNotificationService } from '../../services/birthdayNotificationService';
 import { userService } from '../../services/userService';
-import { BellIcon } from '../icons';
 import { hasAdminPrivileges } from '../../utils/permissionUtils';
 
 // Minimal stat item to keep layout clean
@@ -27,8 +26,6 @@ const BirthdaysView: React.FC = () => {
 
   const [isTriggering, setIsTriggering] = useState(false);
   const [triggeredNow, setTriggeredNow] = useState(false);
-  const [isTestingPushEmail, setIsTestingPushEmail] = useState(false);
-  const [testPushEmailDone, setTestPushEmailDone] = useState(false);
 
   const upcomingBirthdays = useMemo(() => getUpcomingBirthdays(members), [members]);
   const selectedMonthBirthdays = useMemo(() => getBirthdaysForMonth(members, displayedDate), [members, displayedDate]);
@@ -45,12 +42,6 @@ const BirthdaysView: React.FC = () => {
   const passedBirthdays = useMemo(() => selectedMonthBirthdays.filter(b => b.hasPassedThisYear && !b.isToday), [selectedMonthBirthdays]);
   const monthFutureBirthdays = useMemo(() => selectedMonthBirthdays.filter(b => !b.hasPassedThisYear && !b.isToday), [selectedMonthBirthdays]);
   const monthTodaysBirthdays = useMemo(() => selectedMonthBirthdays.filter(b => b.isToday), [selectedMonthBirthdays]);
-
-  // Count of birthdays we would send for (Upcoming This Month + Today) within next 7 days
-  const next7DaysCount = useMemo(() => {
-    const entries = [...monthTodaysBirthdays, ...monthFutureBirthdays].filter(e => e.daysUntil <= 7);
-    return entries.length;
-  }, [monthTodaysBirthdays, monthFutureBirthdays]);
 
   const isCurrentMonth = useMemo(() => {
     const now = new Date();
@@ -268,62 +259,6 @@ const BirthdaysView: React.FC = () => {
             >
               {triggeredNow ? 'Triggered!' : 'Send Birthday Notifications Now'}
             </Button>
-            <Button
-              variant="secondary"
-              onClick={async () => {
-                if (!currentChurchId) {
-                  showToast('error', 'No context', 'Cannot determine church');
-                  return;
-                }
-                setIsTestingPushEmail(true);
-                try {
-                  const fakeMember = {
-                    id: `test-${userProfile?.uid || 'unknown'}`,
-                    firstName: userProfile?.firstName || 'Test',
-                    lastName: userProfile?.lastName || 'User',
-                    birthday: new Date().toISOString().split('T')[0],
-                    phoneNumber: '',
-                    buildingAddress: '',
-                    roomNumber: '',
-                    role: 'Member' as const,
-                    bornAgainStatus: false,
-                    bacentaId: bacentas[0]?.id || '',
-                    status: 'active' as const,
-                    createdDate: new Date().toISOString(),
-                    lastUpdated: new Date().toISOString(),
-                  };
-                  const users = await userService.getChurchUsers(currentChurchId);
-                  const svc = BirthdayNotificationService.getInstance();
-                  const results = await svc.processBirthdayNotifications(
-                    currentChurchId,
-                    [fakeMember as any],
-                    users as any,
-                    bacentas,
-                    [0],
-                    new Date(),
-                    { force: true, actorAdminId: userProfile?.uid }
-                  );
-                  setTestPushEmailDone(true);
-                  showToast(
-                    results.sent > 0 ? 'success' : 'warning',
-                    'Test Complete',
-                    `Push + Email: ${results.sent} sent, ${results.failed} failed. Check inbox & browser notifications.`
-                  );
-                  setTimeout(() => setTestPushEmailDone(false), 5000);
-                } catch (error: any) {
-                  showToast('error', 'Test Failed', error.message || 'Test failed');
-                } finally {
-                  setIsTestingPushEmail(false);
-                }
-              }}
-              loading={isTestingPushEmail}
-              leftIcon={testPushEmailDone ? <CheckIcon className="w-4 h-4" /> : <BellIcon className="w-4 h-4" />}
-            >
-              {testPushEmailDone ? 'Test Sent!' : '🧪 Test Push + Email'}
-            </Button>
-            <p className="mt-2 text-xs text-gray-500 dark:text-dark-400">
-              {`Will send ${next7DaysCount} birthday${next7DaysCount !== 1 ? 's' : ''} in the next 7 days`}
-            </p>
           </div>
         )}
       </div>

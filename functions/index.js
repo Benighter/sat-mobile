@@ -146,18 +146,21 @@ exports.sendPushNotification = functions
   });
 
 // Callable: relayUploadChatImage (CORS workaround for Storage uploads)
-// data: { threadId, churchId, data (base64 string), mimeType, caption }
+// data: { threadId, churchId, scope, data (base64 string), mimeType, caption }
 exports.relayUploadChatImage = functions.https.onCall(async (data, context) => {
   if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Auth required');
-  const { threadId, churchId, data: b64, mimeType, caption } = data || {};
-  if (!threadId || !churchId || !b64) {
-    throw new functions.https.HttpsError('invalid-argument', 'threadId, churchId and data required');
+  const { threadId, churchId, scope, data: b64, mimeType, caption } = data || {};
+  if (!threadId || !b64) {
+    throw new functions.https.HttpsError('invalid-argument', 'threadId and data required');
   }
   try {
     const uid = context.auth.uid;
     const db = admin.firestore();
     // Verify user is participant of thread
-    const threadRef = db.doc(`churches/${churchId}/chatThreads/${threadId}`);
+    const isGlobalThread = scope === 'global' || churchId === 'global';
+    const threadRef = isGlobalThread
+      ? db.doc(`chatThreads/${threadId}`)
+      : db.doc(`churches/${churchId}/chatThreads/${threadId}`);
     const threadSnap = await threadRef.get();
     if (!threadSnap.exists) throw new functions.https.HttpsError('not-found', 'Thread not found');
     const thread = threadSnap.data() || {};
@@ -165,14 +168,15 @@ exports.relayUploadChatImage = functions.https.onCall(async (data, context) => {
     if (!participants.includes(uid)) throw new functions.https.HttpsError('permission-denied', 'Not a participant');
 
     const buffer = Buffer.from(b64, 'base64');
-    const storagePath = `chat/${churchId}/${threadId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${(mimeType||'image/png').split('/').pop()}`;
+  const storageScope = isGlobalThread ? 'global' : churchId;
+  const storagePath = `chat/${storageScope}/${threadId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${(mimeType||'image/png').split('/').pop()}`;
     const bucket = admin.storage().bucket();
     const file = bucket.file(storagePath);
     await file.save(buffer, { contentType: mimeType || 'image/png', resumable: false, public: false });
     const [signedUrl] = await file.getSignedUrl({ action: 'read', expires: Date.now() + 1000*60*60*24*30 }); // 30 days
 
     // Write message
-    const msgRef = db.collection(`churches/${churchId}/chatThreads/${threadId}/messages`).doc();
+  const msgRef = threadRef.collection('messages').doc();
     await msgRef.set({
       senderId: uid,
       text: caption || '',
@@ -2187,60 +2191,112 @@ exports.onMemberDeletionRequestCreated = functions.firestore
 
 
 
+function getChatSenderName(message, thread, senderId) {
+  return message.senderName || (thread.participantProfiles && thread.participantProfiles[senderId]?.name) || 'New message';
+}
+
+function getChatMessagePreview(message) {
+  const text = (message.text || '').toString().trim();
+  if (text) return text;
+  if (Array.isArray(message.attachments) && message.attachments.length > 0) return 'Photo';
+  return 'New message';
+}
+
+function getChatCandidateChurchIds(user, fallbackChurchId) {
+  return Array.from(new Set([
+    user && user.churchId,
+    user && user.contexts && user.contexts.defaultChurchId,
+    user && user.contexts && user.contexts.ministryChurchId,
+    fallbackChurchId,
+  ].filter(Boolean)));
+}
+
+async function getActiveChatDeviceTokensForRecipients(db, recipientIds, fallbackChurchId) {
+  const tokens = new Set();
+
+  await Promise.all(recipientIds.map(async (recipientId) => {
+    const userSnap = await db.doc(`users/${recipientId}`).get();
+    const user = userSnap.exists ? userSnap.data() : null;
+    const candidateChurchIds = getChatCandidateChurchIds(user, fallbackChurchId);
+
+    await Promise.all(candidateChurchIds.map(async (candidateChurchId) => {
+      const tokenSnap = await db
+        .collection(`churches/${candidateChurchId}/deviceTokens`)
+        .where('userId', '==', recipientId)
+        .where('isActive', '==', true)
+        .get();
+
+      tokenSnap.docs.forEach((tokenDoc) => {
+        const token = (tokenDoc.data() || {}).id || tokenDoc.id;
+        if (token) tokens.add(token);
+      });
+    }));
+  }));
+
+  return Array.from(tokens);
+}
+
+async function handleChatMessageCreated(snap, threadRef, threadId, fallbackChurchId) {
+  const data = snap.data() || {};
+  const senderId = data.senderId;
+  const preview = getChatMessagePreview(data);
+
+  const threadSnap = await threadRef.get();
+  if (!threadSnap.exists) return;
+  const thread = threadSnap.data() || {};
+  const participants = Array.isArray(thread.participants) ? thread.participants : [];
+  const recipients = participants.filter((uid) => uid !== senderId);
+  const senderName = getChatSenderName(data, thread, senderId);
+
+  const updates = {
+    lastMessage: {
+      text: preview.slice(0, 500),
+      senderId,
+      senderName,
+      at: admin.firestore.FieldValue.serverTimestamp()
+    },
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  };
+  recipients.forEach((uid) => {
+    updates[`unreadCounts.${uid}`] = admin.firestore.FieldValue.increment(1);
+  });
+  await threadRef.set(updates, { merge: true });
+
+  try {
+    if (recipients.length === 0) return;
+
+    const db = admin.firestore();
+    const tokens = await getActiveChatDeviceTokensForRecipients(db, recipients, fallbackChurchId);
+    if (tokens.length === 0) return;
+
+    const title = thread.type === 'group' ? (thread.name || 'Group chat') : senderName;
+    const body = thread.type === 'group' ? `${senderName}: ${preview}` : preview;
+
+    await admin.messaging().sendEachForMulticast({
+      tokens: tokens.slice(0, 500),
+      notification: { title, body: body.slice(0, 180) },
+      data: { deepLink: `/chat/${threadId}`, threadId, activityType: 'chat_message' },
+      android: { priority: 'high', notification: { channelId: 'sat_mobile_notifications', sound: 'default' } },
+      apns: { payload: { aps: { sound: 'default', badge: 1 } } },
+    });
+  } catch (e) {
+    console.error('Chat push send failed', e);
+  }
+}
+
 // Chat message trigger: update thread metadata, unread counts, and push to recipients
 exports.onMessageCreated = functions.firestore
   .document('churches/{churchId}/chatThreads/{threadId}/messages/{messageId}')
   .onCreate(async (snap, context) => {
     const { churchId, threadId } = context.params;
-    const data = snap.data() || {};
-    const senderId = data.senderId;
-    const text = (data.text || '').toString();
+    const threadRef = admin.firestore().doc(`churches/${churchId}/chatThreads/${threadId}`);
+    await handleChatMessageCreated(snap, threadRef, threadId, churchId);
+  });
 
-    const db = admin.firestore();
-    const threadRef = db.doc(`churches/${churchId}/chatThreads/${threadId}`);
-    const threadSnap = await threadRef.get();
-    if (!threadSnap.exists) return;
-    const thread = threadSnap.data() || {};
-    const participants = Array.isArray(thread.participants) ? thread.participants : [];
-
-    // Update thread metadata and unread counts
-    const updates = {
-      lastMessage: { text: text.slice(0, 500), senderId, at: admin.firestore.FieldValue.serverTimestamp() },
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    };
-    participants.forEach((uid) => {
-      if (uid !== senderId) {
-        updates[`unreadCounts.${uid}`] = admin.firestore.FieldValue.increment(1);
-      }
-    });
-    await threadRef.set(updates, { merge: true });
-
-    // Send FCM push to recipients (for up to 10 users per query limitation)
-    try {
-      const recipients = participants.filter((p) => p !== senderId).slice(0, 10);
-      if (recipients.length === 0) return;
-
-      const tokensSnap = await db
-        .collection(`churches/${churchId}/deviceTokens`)
-        .where('userId', 'in', recipients)
-        .where('isActive', '==', true)
-        .get();
-
-      const tokens = tokensSnap.docs.map((d) => (d.data() || {}).id).filter(Boolean);
-      if (tokens.length === 0) return;
-
-      const senderName = (thread.participantProfiles && thread.participantProfiles[senderId]?.name) || 'New message';
-      const title = thread.type === 'group' ? (thread.name || 'Group') : senderName;
-      const body = thread.type === 'group' ? `${senderName}: ${text}` : text;
-
-      await admin.messaging().sendEachForMulticast({
-        tokens,
-        notification: { title, body: body.slice(0, 180) },
-        data: { deepLink: `/chat/${threadId}`, threadId },
-        android: { priority: 'high', notification: { channelId: 'sat_mobile_notifications', sound: 'default' } },
-        apns: { payload: { aps: { sound: 'default', badge: 1 } } },
-      });
-    } catch (e) {
-      console.error('Chat push send failed', e);
-    }
+exports.onGlobalMessageCreated = functions.firestore
+  .document('chatThreads/{threadId}/messages/{messageId}')
+  .onCreate(async (snap, context) => {
+    const { threadId } = context.params;
+    const threadRef = admin.firestore().doc(`chatThreads/${threadId}`);
+    await handleChatMessageCreated(snap, threadRef, threadId);
   });

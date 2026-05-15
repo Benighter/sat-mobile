@@ -57,6 +57,7 @@ const ChatView: React.FC = () => {
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [allUsers, setAllUsers] = useState<User[]>([]);
+  const [isLoadingUsers, setIsLoadingUsers] = useState(false);
   const [participantIds, setParticipantIds] = useState<string[]>([]);
   const [groupName, setGroupName] = useState('');
   const [messageText, setMessageText] = useState('');
@@ -104,9 +105,19 @@ const ChatView: React.FC = () => {
   useEffect(() => {
     let mounted = true;
     (async () => {
-      if (currentChurchId) {
-        const users = await userService.getChurchUsers(currentChurchId);
+      setIsLoadingUsers(true);
+      try {
+        const users = await userService.getAllActiveUsers();
         if (mounted) setAllUsers(users);
+      } catch (error: any) {
+        console.warn('Failed to load global chat users, falling back to current church:', error);
+        if (currentChurchId) {
+          const users = await userService.getChurchUsers(currentChurchId);
+          if (mounted) setAllUsers(users);
+          showToast('warning', 'Limited Chat Directory', 'Could only load accounts in your current church.');
+        }
+      } finally {
+        if (mounted) setIsLoadingUsers(false);
       }
     })();
     return () => { mounted = false; };
@@ -175,7 +186,8 @@ const ChatView: React.FC = () => {
     if (existing) {
       setActiveThreadId(existing.id);
     } else {
-      const id = await chatService.createDirectThread(uid, userProfile);
+      const partner = allUsers.find(user => user.uid === uid) || uid;
+      const id = await chatService.createDirectThread(partner, userProfile);
       setActiveThreadId(id);
     }
     setIsCreating(false);
@@ -184,7 +196,8 @@ const ChatView: React.FC = () => {
   const startGroup = async () => {
     if (!userProfile) return;
     if (participantIds.length === 0) return;
-    const id = await chatService.createGroupThread(groupName || 'Group', participantIds, userProfile);
+    const selectedUsers = allUsers.filter(user => participantIds.includes(user.uid));
+    const id = await chatService.createGroupThread(groupName || 'Group', participantIds, userProfile, selectedUsers);
     setActiveThreadId(id);
     setIsCreating(false);
     setParticipantIds([]);
@@ -196,7 +209,8 @@ const ChatView: React.FC = () => {
     const text = messageText.trim();
     setMessageText('');
     try {
-      await chatService.sendMessage(activeThreadId, text, userProfile.uid);
+      const senderName = userProfile.displayName || `${userProfile.firstName || ''} ${userProfile.lastName || ''}`.trim() || userProfile.email;
+      await chatService.sendMessage(activeThreadId, text, userProfile.uid, senderName);
     } catch (e: any) {
       showToast('error', 'Failed to send', e?.message || '');
     }
@@ -364,14 +378,21 @@ const ChatView: React.FC = () => {
                 </div>
               </div>
               <div className="p-3 border-b border-gray-200 dark:border-dark-600">
-                <input value={userSearch} onChange={(e)=>setUserSearch(e.target.value)} placeholder="Search people" className="w-full px-3 py-2 rounded-lg border" />
+                <input value={userSearch} onChange={(e)=>setUserSearch(e.target.value)} placeholder="Search anyone with an account" className="w-full px-3 py-2 rounded-lg border" />
               </div>
               <div className="flex-1 overflow-y-auto p-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {allUsers.filter(u => u.uid !== userProfile?.uid).filter(u => {
+                {isLoadingUsers ? (
+                  <div className="col-span-full h-full flex items-center justify-center text-sm text-gray-500">Loading accounts...</div>
+                ) : allUsers.filter(u => u.uid !== userProfile?.uid).filter(u => {
                   const q = userSearch.trim().toLowerCase();
                   if (!q) return true;
-                  const name = (u.displayName || `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.email || '').toLowerCase();
-                  return name.includes(q);
+                  const searchable = [
+                    u.displayName,
+                    `${u.firstName || ''} ${u.lastName || ''}`.trim(),
+                    u.email,
+                    u.churchName
+                  ].filter(Boolean).join(' ').toLowerCase();
+                  return searchable.includes(q);
                 }).map(u => {
                   const name = u.displayName || `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.email;
                   const photo = u.profilePicture;
@@ -382,7 +403,7 @@ const ChatView: React.FC = () => {
                       {photo ? <img src={photo} alt={name} className="w-10 h-10 rounded-full object-cover" /> : <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex items-center justify-center text-sm font-semibold">{initials}</div>}
                       <div className="min-w-0 flex-1">
                         <div className="font-medium truncate">{name}</div>
-                        <div className="text-xs text-gray-500 truncate">Tap to chat. Use checkbox to multi-select.</div>
+                        <div className="text-xs text-gray-500 truncate">{u.churchName || u.email || 'SAT Mobile account'}</div>
                       </div>
                       <input type="checkbox" className="w-4 h-4" checked={isSelected} onClick={e => e.stopPropagation()} onChange={(e) => {
                         e.stopPropagation();

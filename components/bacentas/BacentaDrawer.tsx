@@ -12,6 +12,7 @@ import {
   UsersIcon,
   ClockIcon,
   ChartBarIcon,
+  ChatBubbleLeftRightIcon,
   CakeIcon,
   BuildingOfficeIcon,
   CalendarIcon,
@@ -279,6 +280,15 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
                       onClose();
                     }}
                   />
+                  <NavigationItem
+                    icon={<ChatBubbleLeftRightIcon className="w-4 h-4" />}
+                    label="Chat"
+                    isActive={currentTab.id === TabKeys.CHAT}
+                    onClick={() => {
+                      switchTab({ id: TabKeys.CHAT, name: 'Chat' });
+                      onClose();
+                    }}
+                  />
                   <button onClick={() => setIsFlockOpen(v => !v)} className="w-full flex items-center justify-between p-2.5 sm:p-3 rounded-lg bg-gray-50 dark:bg-dark-700 hover:bg-gray-100 dark:hover:bg-dark-600 border border-gray-200 dark:border-dark-600">
                     <div className="flex items-center space-x-2 sm:space-x-3">
                       <div className="text-gray-600 dark:text-dark-300"><PeopleIcon className="w-4 h-4" /></div>
@@ -368,6 +378,15 @@ const BacentaDrawer: React.FC<BacentaDrawerProps> = ({ isOpen, onClose }) => {
 
                     onClick={() => {
                       switchTab({ id: TabKeys.BIRTHDAYS, name: 'Birthdays' });
+                      onClose();
+                    }}
+                  />
+                  <NavigationItem
+                    icon={<ChatBubbleLeftRightIcon className="w-4 h-4" />}
+                    label="Chat"
+                    isActive={currentTab.id === TabKeys.CHAT}
+                    onClick={() => {
+                      switchTab({ id: TabKeys.CHAT, name: 'Chat' });
                       onClose();
                     }}
                   />

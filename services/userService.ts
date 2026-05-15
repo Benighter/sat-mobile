@@ -6,6 +6,7 @@ import {
   updateDoc,
   query,
   where,
+  limit as firestoreLimit,
   Timestamp
 } from 'firebase/firestore';
 
@@ -37,6 +38,19 @@ const sanitizeFirestoreValue = <T>(value: T): T => {
 };
 
 const storageVersionId = (): string => `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+
+const sortUsersByName = (users: User[]): User[] => {
+  users.sort((a: any, b: any) => {
+    const af = (a.firstName || a.displayName || '').toLowerCase();
+    const bf = (b.firstName || b.displayName || '').toLowerCase();
+    if (af !== bf) return af.localeCompare(bf);
+    const al = (a.lastName || '').toLowerCase();
+    const bl = (b.lastName || '').toLowerCase();
+    if (al !== bl) return al.localeCompare(bl);
+    return (a.email || '').localeCompare(b.email || '');
+  });
+  return users;
+};
 
 // User Service for managing user profiles and church data
 export const userService = {
@@ -132,19 +146,11 @@ export const userService = {
       const querySnapshot = await getDocs(usersQuery);
       const users = querySnapshot.docs.map(doc => ({
         ...doc.data(),
-        id: doc.id
+        id: doc.id,
+        uid: (doc.data() as any).uid || doc.id
       })) as User[];
 
-      // Sort by firstName then lastName locally
-      users.sort((a: any, b: any) => {
-        const af = (a.firstName || '').toLowerCase();
-        const bf = (b.firstName || '').toLowerCase();
-        if (af !== bf) return af.localeCompare(bf);
-        const al = (a.lastName || '').toLowerCase();
-        const bl = (b.lastName || '').toLowerCase();
-        return al.localeCompare(bl);
-      });
-      return users;
+      return sortUsersByName(users);
     } catch (primaryError: any) {
       // Fallback: query only by churchId and filter active in-memory (for older indexes)
       try {
@@ -154,19 +160,43 @@ export const userService = {
         );
         const snapshot = await getDocs(fallbackQuery);
         const users = snapshot.docs
-          .map(doc => ({ ...doc.data(), id: doc.id }) as User)
+          .map(doc => ({ ...doc.data(), id: doc.id, uid: (doc.data() as any).uid || doc.id }) as User)
           .filter(u => (u as any).isActive !== false);
-        users.sort((a: any, b: any) => {
-          const af = (a.firstName || '').toLowerCase();
-          const bf = (b.firstName || '').toLowerCase();
-          if (af !== bf) return af.localeCompare(bf);
-          const al = (a.lastName || '').toLowerCase();
-          const bl = (b.lastName || '').toLowerCase();
-          return al.localeCompare(bl);
-        });
-        return users;
+        return sortUsersByName(users);
       } catch (fallbackError: any) {
         throw new Error(`Failed to get church users: ${primaryError.message || fallbackError.message}`);
+      }
+    }
+  },
+
+  // Get active accounts across the app so chat can start conversations outside the current church context.
+  getAllActiveUsers: async (maxCount: number = 1000): Promise<User[]> => {
+    try {
+      const usersQuery = query(
+        collection(db, 'users'),
+        where('isActive', '==', true),
+        firestoreLimit(maxCount)
+      );
+
+      const querySnapshot = await getDocs(usersQuery);
+      const users = querySnapshot.docs.map(userDoc => ({
+        ...userDoc.data(),
+        id: userDoc.id,
+        uid: (userDoc.data() as any).uid || userDoc.id
+      })) as User[];
+
+      return sortUsersByName(users.filter(user => !!user.uid));
+    } catch (primaryError: any) {
+      try {
+        const fallbackQuery = query(collection(db, 'users'), firestoreLimit(maxCount));
+        const snapshot = await getDocs(fallbackQuery);
+        const users = snapshot.docs
+          .map(userDoc => ({ ...userDoc.data(), id: userDoc.id, uid: (userDoc.data() as any).uid || userDoc.id }) as User)
+          .filter(user => !!user.uid && (user as any).isActive !== false && !(user as any).isDeleted);
+
+        return sortUsersByName(users);
+      } catch (fallbackError: any) {
+        throw new Error(`Failed to get app users: ${primaryError.message || fallbackError.message}`);
       }
     }
   },

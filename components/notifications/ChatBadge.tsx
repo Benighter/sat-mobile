@@ -1,50 +1,106 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ChatBubbleLeftRightIcon } from '../icons';
 import { useAppContext } from '../../contexts/FirebaseAppContext';
 import { chatService, ChatThread } from '../../services/chatService';
+import { pushNotificationService } from '../../services/pushNotificationService';
 import { TabKeys } from '../../types';
 
 const ChatBadge: React.FC = () => {
-  const { userProfile, switchTab } = useAppContext();
+  const { userProfile, switchTab, currentTab } = useAppContext();
   const [threads, setThreads] = useState<ChatThread[]>([]);
+  const hasHydratedThreadsRef = useRef(false);
+  const knownLastMessagesRef = useRef<Map<string, string>>(new Map());
+
+  const getLastMessageKey = (thread: ChatThread): string => {
+    const lastMessage = thread.lastMessage as any;
+    const at = lastMessage?.at?.toMillis?.() || lastMessage?.at?.seconds || '';
+    return `${lastMessage?.senderId || ''}:${at}:${lastMessage?.text || ''}`;
+  };
+
+  const getUnreadForThread = (thread: ChatThread, uid: string): number => {
+    const countRaw = thread.unreadCounts?.[uid];
+    const count = typeof countRaw === 'number' ? countRaw : undefined;
+
+    const computePredicted = () => {
+      try {
+        const lastMessage = thread.lastMessage as any;
+        const lastRead = (thread.lastReadAt || ({} as any))[uid];
+        const messageAt = lastMessage?.at?.toMillis ? lastMessage.at.toMillis() : (lastMessage?.at?.seconds ? lastMessage.at.seconds * 1000 : 0);
+        const readAt = lastRead?.toMillis ? lastRead.toMillis() : (lastRead?.seconds ? lastRead.seconds * 1000 : 0);
+        const bufferMs = 2000;
+        return !!lastMessage && lastMessage.senderId !== uid && (!readAt || (messageAt > (readAt + bufferMs)));
+      } catch {
+        return false;
+      }
+    };
+
+    const predicted = computePredicted();
+    if (count === undefined) return predicted ? 1 : 0;
+    return Math.max(count, predicted ? 1 : 0);
+  };
 
   useEffect(() => {
     if (!userProfile?.uid) return;
-    const unsub = chatService.onThreadsForUser(userProfile.uid, setThreads);
+    hasHydratedThreadsRef.current = false;
+    knownLastMessagesRef.current = new Map();
+
+    const unsub = chatService.onThreadsForUser(userProfile.uid, (items) => {
+      setThreads(items);
+
+      const currentKeys = new Map(items.map(thread => [thread.id, getLastMessageKey(thread)]));
+      if (!hasHydratedThreadsRef.current) {
+        knownLastMessagesRef.current = currentKeys;
+        hasHydratedThreadsRef.current = true;
+        return;
+      }
+
+      if (currentTab.id === TabKeys.CHAT) {
+        knownLastMessagesRef.current = currentKeys;
+        return;
+      }
+
+      const incomingThreads = items.filter(thread => {
+        const lastMessage = thread.lastMessage as any;
+        if (!lastMessage || lastMessage.senderId === userProfile.uid) return false;
+        if (getUnreadForThread(thread, userProfile.uid) <= 0) return false;
+        return knownLastMessagesRef.current.get(thread.id) !== currentKeys.get(thread.id);
+      });
+
+      knownLastMessagesRef.current = currentKeys;
+
+      incomingThreads.forEach(thread => {
+        const lastMessage = thread.lastMessage as any;
+        const senderName = lastMessage.senderName || thread.participantProfiles?.[lastMessage.senderId]?.name || 'New message';
+        const body = thread.type === 'group'
+          ? `${senderName}: ${lastMessage.text || 'Photo'}`
+          : (lastMessage.text || 'Photo');
+
+        pushNotificationService.displaySystemNotification({
+          title: thread.type === 'group' ? (thread.name || 'Group chat') : senderName,
+          body,
+          data: {
+            activityType: 'chat_message',
+            deepLink: `/chat/${thread.id}`,
+            threadId: thread.id
+          },
+          icon: '/icon-192.png',
+          badge: '/icon-192.png',
+          sound: 'default'
+        }, {
+          requestPermission: false,
+          dedupeKey: `chat:${thread.id}:${currentKeys.get(thread.id)}`
+        }).catch(error => {
+          console.warn('Failed to display chat notification:', error);
+        });
+      });
+    });
     return () => unsub();
-  }, [userProfile?.uid]);
+  }, [currentTab.id, userProfile?.uid]);
 
   const unread = useMemo(() => {
     const uid = userProfile?.uid;
     if (!uid) return 0;
-    return threads.reduce((sum, t) => {
-      const countRaw = t.unreadCounts?.[uid];
-      const count = typeof countRaw === 'number' ? countRaw : undefined;
-
-      const computePredicted = () => {
-        try {
-          const lm = t.lastMessage as any;
-          const lastRead = (t.lastReadAt || ({} as any))[uid];
-          const lmAt = lm?.at?.toMillis ? lm.at.toMillis() : (lm?.at?.seconds ? lm.at.seconds * 1000 : 0);
-          const lrAt = lastRead?.toMillis ? lastRead.toMillis() : (lastRead?.seconds ? lastRead.seconds * 1000 : 0);
-          const bufferMs = 2000; // 2s buffer to avoid flip-flop races
-          return !!lm && lm.senderId !== uid && (!lrAt || (lmAt > (lrAt + bufferMs)));
-        } catch {
-          return false;
-        }
-      };
-
-      const predicted = computePredicted();
-
-      // If CF-provided count is missing, rely on predicted (legacy / emulator cases)
-      if (count === undefined) {
-        return sum + (predicted ? 1 : 0);
-      }
-
-      // Otherwise, use the max of authoritative count and prediction (never sum),
-      // which prevents 1→2→1 bounce while still surfacing unread in CF lag.
-      return sum + Math.max(count, predicted ? 1 : 0);
-    }, 0);
+    return threads.reduce((sum, thread) => sum + getUnreadForThread(thread, uid), 0);
   }, [threads, userProfile?.uid]);
 
   if (!userProfile) return null;

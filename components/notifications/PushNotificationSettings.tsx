@@ -151,7 +151,7 @@ const PushNotificationSettings: React.FC<PushNotificationSettingsProps> = ({ cla
 
   if (isLoading && !isSupported && permissionStatus === 'default') {
     return (
-      <div className={`bg-white rounded-lg border border-gray-200 p-6 ${className}`}>
+      <div className={`rounded-[28px] border border-slate-200/80 bg-white/95 p-6 shadow-[0_24px_55px_-36px_rgba(15,23,42,0.45)] ${className}`}>
         <div className="flex items-center justify-center space-x-2">
           <div className="animate-spin w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full"></div>
           <span className="text-gray-600">Loading notification settings...</span>
@@ -161,27 +161,26 @@ const PushNotificationSettings: React.FC<PushNotificationSettingsProps> = ({ cla
   }
 
   return (
-    <div className={`bg-white rounded-lg border border-gray-200 ${className}`}>
-      <div className="p-6 border-b border-gray-200">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
+    <div className={`overflow-hidden rounded-[28px] border border-slate-200/80 bg-white/95 shadow-[0_24px_55px_-36px_rgba(15,23,42,0.45)] ${className}`}>
+      <div className="border-b border-slate-200/80 p-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-4">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[18px] bg-gradient-to-br from-blue-500 to-purple-600 shadow-sm">
               <Bell className="w-5 h-5 text-white" />
             </div>
-            <div>
-                        <h3 className="text-lg font-semibold text-gray-900">Phone & Browser Notifications</h3>
-                        <p className="text-sm text-gray-500">Show SAT Mobile alerts in your device notification tray</p>
+            <div className="min-w-0">
+              <h3 className="text-lg font-semibold text-slate-900">Phone & Browser Notifications</h3>
+              <p className="text-sm leading-6 text-slate-500">Show SAT Mobile alerts in your device notification tray</p>
             </div>
           </div>
           {getStatusBadge()}
         </div>
       </div>
-  showToast('success', 'Success', 'Notifications enabled successfully!');
 
       <div className="p-6">
         {!isSupported ? (
-          <div className="text-center py-8">
-            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+          <div className="py-8 text-center">
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-[22px] bg-gray-100">
               <BellOff className="w-8 h-8 text-gray-400" />
             </div>
             <h4 className="text-lg font-medium text-gray-900 mb-2">Notifications not supported</h4>
@@ -219,8 +218,8 @@ const PushNotificationSettings: React.FC<PushNotificationSettingsProps> = ({ cla
             </div>
           </div>
         ) : permissionStatus === 'denied' ? (
-          <div className="text-center py-8">
-            <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+          <div className="py-8 text-center">
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-[22px] bg-red-100">
               <BellOff className="w-8 h-8 text-red-500" />
             </div>
             <h4 className="text-lg font-medium text-gray-900 mb-2">Notifications blocked</h4>
@@ -276,8 +275,8 @@ const PushNotificationSettings: React.FC<PushNotificationSettingsProps> = ({ cla
             </div>
           </div>
         ) : !isInitialized ? (
-          <div className="text-center py-8">
-            <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+          <div className="py-8 text-center">
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-[22px] bg-blue-100">
               <Bell className="w-8 h-8 text-blue-600" />
             </div>
             <h4 className="text-lg font-medium text-gray-900 mb-2">Enable Notifications</h4>
@@ -327,9 +326,9 @@ const PushNotificationSettings: React.FC<PushNotificationSettingsProps> = ({ cla
           </div>
         ) : (
           <div className="space-y-6">
-            <div className="bg-gradient-to-r from-green-50 to-blue-50 rounded-lg p-4">
+            <div className="rounded-[24px] bg-gradient-to-r from-green-50 to-blue-50 p-5">
               <div className="flex items-start space-x-3">
-                <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center mt-0.5">
+                <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-green-100">
                   <CheckCircle className="w-5 h-5 text-green-600" />
                 </div>
                 <div className="flex-1">
@@ -345,7 +344,7 @@ const PushNotificationSettings: React.FC<PushNotificationSettingsProps> = ({ cla
               </div>
             </div>
 
-            <div className="bg-gray-50 rounded-lg p-4">
+            <div className="rounded-[24px] bg-gray-50 p-5">
               <h5 className="font-medium text-gray-700 mb-2">Privacy & Control</h5>
               <div className="text-sm text-gray-600 space-y-1">
                 <p>Notifications are only sent for activities related to your church</p>

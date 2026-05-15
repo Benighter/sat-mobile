@@ -38,6 +38,7 @@ import OfflineIndicator from './components/common/OfflineIndicator';
 import PendingInviteNotification from './components/notifications/PendingInviteNotification';
 import NotificationBadge from './components/notifications/NotificationBadge';
 import DeletionRequestNotificationBadge from './components/notifications/DeletionRequestNotificationBadge';
+import ChatBadge from './components/notifications/ChatBadge';
 import ConfirmationModal from './components/modals/confirmations/ConfirmationModal';
 import Modal from './components/ui/Modal';
 import { addNativeBackButtonListener, dispatchBackIntercept, exitNativeApp } from './utils/mobileBack';
@@ -818,6 +819,11 @@ const AppContent: React.FC = memo(() => {
               {/* Admin Notification Badge */}
               <div className="flex-shrink-0">
                 <NotificationBadge />
+              </div>
+
+              {/* Chat Badge */}
+              <div className="flex-shrink-0">
+                <ChatBadge />
               </div>
 
               {/* Deletion Request Notification Badge */}

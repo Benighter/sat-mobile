@@ -1,6 +1,6 @@
 // Barrel exports for Cloud Functions (TypeScript)
 export { sendPushNotification } from './sendPushNotification';
-export { onMessageCreated } from './chatTriggers';
+export { onMessageCreated, onGlobalMessageCreated } from './chatTriggers';
 
 // Bridge exports for ministry sync triggers/callables implemented in CommonJS (index.js)
 // This ensures deployments that use the TypeScript entry also expose the ministry sync functions.

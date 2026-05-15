@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useAppContext } from '../../contexts/FirebaseAppContext';
 // import { useTheme } from '../../contexts/ThemeContext'; // Theme selection disabled
 import { userService } from '../../services/userService';
@@ -11,14 +11,13 @@ import { getDefaultNotificationPreferences } from '../../utils/notificationUtils
 import { NotificationPreferences, CrossTenantInvite, UserPreferences } from '../../types';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
-import Badge from '../ui/Badge';
 import ImageUpload from '../ui/ImageUpload';
 import ChangePasswordModal from '../auth/ChangePasswordModal';
 import EmailVerificationPrompt from '../auth/EmailVerificationPrompt';
 import AdminInviteManager from '../admin/AdminInviteManager';
 import InviteMigrationPanel from '../admin/InviteMigrationPanel';
 import PushNotificationSettings from '../notifications/PushNotificationSettings';
-import { canManageAdminInvites, hasAdminPrivileges, hasLeaderPrivileges, isCampusShepherd, isPromotedCampusAdmin } from '../../utils/permissionUtils';
+import { canManageAdminInvites, hasAdminPrivileges, isCampusShepherd, isPromotedCampusAdmin } from '../../utils/permissionUtils';
 import {
   SunIcon,
   UserIcon,
@@ -44,6 +43,60 @@ interface ProfileFormData {
   phoneNumber: string;
   profilePicture: string;
 }
+
+type SettingsTabId = 'profile' | 'app' | 'notifications' | 'management' | 'constituencies' | 'security';
+
+interface SettingsTabDefinition {
+  id: SettingsTabId;
+  label: string;
+  description: string;
+  icon: React.ComponentType<{ className?: string }>;
+  gradient: string;
+}
+
+interface SettingsTabButtonProps {
+  tab: SettingsTabDefinition;
+  isActive: boolean;
+  onClick: () => void;
+  compact?: boolean;
+}
+
+const SettingsTabButton: React.FC<SettingsTabButtonProps> = ({
+  tab,
+  isActive,
+  onClick,
+  compact = false
+}) => {
+  const Icon = tab.icon;
+
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={isActive}
+      onClick={onClick}
+      className={`group relative flex w-full border text-left transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300 focus-visible:ring-offset-2 ${
+        compact
+          ? 'min-h-[176px] flex-col items-center justify-center rounded-[28px] px-5 py-6 text-center'
+          : 'items-start gap-4 rounded-[26px] p-4'
+      } ${
+        isActive
+          ? 'border-slate-900 bg-slate-900 text-white shadow-[0_24px_48px_-30px_rgba(15,23,42,0.88)]'
+          : 'border-slate-200/90 bg-white text-slate-700 hover:-translate-y-0.5 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 hover:shadow-[0_18px_36px_-28px_rgba(15,23,42,0.45)]'
+      }`}
+    >
+      <div className={`flex shrink-0 items-center justify-center bg-gradient-to-br ${tab.gradient} text-white shadow-sm ring-1 ring-white/25 ${compact ? 'mb-4 h-16 w-16 rounded-[22px]' : 'h-12 w-12 rounded-2xl'}`}>
+        <Icon className="h-5 w-5" />
+      </div>
+      <div className={`min-w-0 ${compact ? 'w-full text-center' : 'flex-1 text-left'}`}>
+        <p className={`font-semibold tracking-tight ${compact ? 'text-[1.05rem]' : 'text-base'}`}>{tab.label}</p>
+        <p className={`mt-2 leading-6 ${isActive ? 'text-slate-300' : 'text-slate-500'} ${compact ? 'text-sm' : 'text-sm'}`}>
+          {tab.description}
+        </p>
+      </div>
+    </button>
+  );
+};
 
 const ProfileSettingsView: React.FC = () => {
   const {
@@ -104,15 +157,97 @@ const ProfileSettingsView: React.FC = () => {
   const [isChangePasswordModalOpen, setIsChangePasswordModalOpen] = useState(false);
   const [isAdminInviteModalOpen, setIsAdminInviteModalOpen] = useState(false);
   const [isMigrationPanelOpen, setIsMigrationPanelOpen] = useState(false);
-  const [isFixingAccess, setIsFixingAccess] = useState(false);
   const [isConstituencyManagerOpen, setIsConstituencyManagerOpen] = useState(false);
   const [isSavingCampusShepherd, setIsSavingCampusShepherd] = useState(false);
   // const [isSendingTestEmail, setIsSendingTestEmail] = useState(false); // Email feature on hold
 
   const isPromotedAdmin = isPromotedCampusAdmin(userProfile);
+  const hasAdminAccess = hasAdminPrivileges(userProfile);
   const canConfigureCurrencyDisplay = isCampusShepherd(userProfile);
   const canOpenAdminInviteManagement = canManageAdminInvites(userProfile);
   const liveUsdZarRateLabel = formatZarPerUsdRate(rates);
+  const tabContentRef = useRef<HTMLDivElement | null>(null);
+  const [activeSettingsTab, setActiveSettingsTab] = useState<SettingsTabId>('profile');
+
+  const settingsTabs = useMemo<SettingsTabDefinition[]>(() => {
+    const tabs: SettingsTabDefinition[] = [
+      {
+        id: 'profile',
+        label: 'Profile',
+        description: 'Photo, personal details, and account identity.',
+        icon: UserIcon,
+        gradient: 'from-blue-500 to-violet-600'
+      },
+      {
+        id: 'app',
+        label: 'App',
+        description: 'Church name, currency display, and app behaviour.',
+        icon: SunIcon,
+        gradient: 'from-orange-500 to-pink-600'
+      },
+      {
+        id: 'notifications',
+        label: 'Notifications',
+        description: 'Email, birthday, and device notification preferences.',
+        icon: BellIcon,
+        gradient: 'from-pink-500 to-purple-600'
+      }
+    ];
+
+    if (hasAdminAccess) {
+      tabs.push({
+        id: 'management',
+        label: 'Management',
+        description: 'Leader and admin tools in one place.',
+        icon: UserGroupIcon,
+        gradient: 'from-emerald-500 to-teal-600'
+      });
+    }
+
+    if (hasAdminAccess) {
+      tabs.push({
+        id: 'constituencies',
+        label: 'Constituencies',
+        description: 'Switch linked constituencies and manage external access.',
+        icon: BuildingOfficeIcon,
+        gradient: 'from-indigo-500 to-blue-600'
+      });
+    }
+
+    tabs.push({
+      id: 'security',
+      label: 'Security',
+      description: 'Email verification and password protection.',
+      icon: ShieldCheckIcon,
+      gradient: 'from-red-500 to-pink-600'
+    });
+
+    return tabs;
+  }, [hasAdminAccess]);
+
+  useEffect(() => {
+    if (!settingsTabs.some(tab => tab.id === activeSettingsTab)) {
+      setActiveSettingsTab(settingsTabs[0]?.id || 'profile');
+    }
+  }, [activeSettingsTab, settingsTabs]);
+
+  const activeSettingsTabMeta = settingsTabs.find(tab => tab.id === activeSettingsTab) || settingsTabs[0];
+
+  const handleSettingsTabChange = (tabId: SettingsTabId) => {
+    if (tabId === activeSettingsTab) return;
+    setActiveSettingsTab(tabId);
+    requestAnimationFrame(() => {
+      const contentNode = tabContentRef.current;
+      if (!contentNode) {
+        return;
+      }
+
+      const shouldScroll = window.innerWidth < 1280 || contentNode.getBoundingClientRect().top < 96;
+      if (shouldScroll) {
+        contentNode.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    });
+  };
 
   // Update state when userProfile changes
   useEffect(() => {
@@ -335,28 +470,6 @@ const ProfileSettingsView: React.FC = () => {
 
   // getInitials helper removed (unused after UI adjustments)
 
-  const handleFixAccess = async () => {
-    if (!user) return;
-
-    setIsFixingAccess(true);
-    try {
-      const result = await inviteService.fixLeaderAccess(user.uid);
-      if (result.success) {
-        showToast('success', 'Access Fixed', result.message);
-        // Refresh user profile to get updated church data
-        await refreshUserProfile();
-        // Reload the page to refresh all data with new church context
-        window.location.reload();
-      } else {
-        showToast('error', 'Fix Failed', result.message);
-      }
-    } catch (error: any) {
-      showToast('error', 'Fix Failed', error.message);
-    } finally {
-      setIsFixingAccess(false);
-    }
-  };
-
   if (!userProfile) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -365,56 +478,186 @@ const ProfileSettingsView: React.FC = () => {
     );
   }
 
+  const roleDisplayName = isPromotedAdmin ? 'Promoted Campus Admin' : (userProfile.role || 'Member');
+  const shellPanelClassName = 'rounded-[28px] border border-slate-200/80 bg-white/95 shadow-[0_24px_55px_-36px_rgba(15,23,42,0.45)] backdrop-blur-sm dark:border-dark-600 dark:bg-dark-800';
+  const contentPanelClassName = `${shellPanelClassName} p-5 sm:p-6`;
+  const settingsSummaryItems = [
+    {
+      label: 'Email',
+      value: userProfile.email || 'No email',
+      icon: EnvelopeIcon,
+      accentClassName: 'bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-300'
+    },
+    {
+      label: 'Constituency',
+      value: userProfile.churchName || 'No Constituency',
+      icon: BuildingOfficeIcon,
+      accentClassName: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-300'
+    },
+    {
+      label: 'Access',
+      value: roleDisplayName,
+      icon: ShieldCheckIcon,
+      accentClassName: 'bg-violet-50 text-violet-600 dark:bg-violet-500/10 dark:text-violet-300'
+    }
+  ];
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-dark-900 dark:via-dark-800 dark:to-dark-900">
-      <div className="max-w-5xl mx-auto p-4 sm:p-6 lg:p-8">
-        {/* Header Section */}
-        <div className="bg-white dark:bg-dark-800 rounded-3xl shadow-xl border border-gray-100 dark:border-dark-600 p-6 sm:p-8 mb-8">
-          <div className="flex flex-col lg:flex-row lg:items-center gap-6">
-            {/* Profile Picture */}
-            <div className="flex-shrink-0 mx-auto lg:mx-0">
-              <div className="text-center lg:text-left mb-4">
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">Profile Picture</h3>
-                <p className="text-sm text-gray-500">Upload and crop your profile picture</p>
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(59,130,246,0.12),_transparent_35%),radial-gradient(circle_at_right,_rgba(168,85,247,0.10),_transparent_30%),linear-gradient(180deg,#f8fbff_0%,#ffffff_52%,#f8fafc_100%)] dark:bg-dark-900">
+      <div className="mx-auto max-w-6xl px-3 pb-28 pt-3 sm:px-5 sm:pb-28 sm:pt-4 lg:px-6 lg:pb-10 lg:pt-5">
+        <div className="space-y-5">
+          <section className={`${shellPanelClassName} overflow-hidden p-5 sm:p-6`}>
+            <div className="relative flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center lg:items-start">
+                <div className="relative mx-auto shrink-0 sm:mx-0">
+                  <div className={`absolute -inset-2 rounded-[28px] bg-gradient-to-br ${activeSettingsTabMeta.gradient} opacity-20 blur-xl`} />
+                  <ImageUpload
+                    value={imagePreview || profileData.profilePicture}
+                    onChange={handleImageChange}
+                    size="md"
+                    className="relative"
+                    enableCropping={true}
+                    cropPresets={true}
+                    onError={(title, message) => showToast('error', title, message)}
+                  />
+                </div>
+
+                <div className="min-w-0 text-center sm:text-left">
+                  <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Settings</p>
+                  <h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-900 dark:text-dark-100 sm:text-3xl">
+                    Account and app preferences
+                  </h1>
+                  <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600 dark:text-dark-300">
+                    Keep your profile, church setup, notifications, leadership tools, and security in one place without the clutter.
+                  </p>
+
+                  <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                    {settingsSummaryItems.map(item => {
+                      const Icon = item.icon;
+
+                      return (
+                        <div
+                          key={item.label}
+                          className="rounded-[22px] border border-slate-200/70 bg-white/90 p-3 shadow-sm dark:border-dark-600 dark:bg-dark-700/70"
+                          title={item.value}
+                        >
+                          <div className="flex items-start gap-3">
+                            <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl ${item.accentClassName}`}>
+                              <Icon className="h-5 w-5" />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">{item.label}</p>
+                              <p className="mt-1 truncate text-sm font-semibold text-slate-900 dark:text-dark-100">{item.value}</p>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
-              <div className="flex justify-center lg:justify-start">
-                <ImageUpload
-                  value={imagePreview || profileData.profilePicture}
-                  onChange={handleImageChange}
-                  size="lg"
-                  enableCropping={true}
-                  cropPresets={true}
-                  onError={(title, message) => showToast('error', title, message)}
-                />
+
+              <div className="grid gap-3 sm:grid-cols-2 lg:min-w-[250px] lg:grid-cols-1">
+                <div className="rounded-[24px] border border-slate-200/80 bg-slate-50/90 p-4 dark:border-dark-600 dark:bg-dark-700/70">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Now editing</p>
+                  <div className="mt-3 flex items-center gap-3">
+                    <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br ${activeSettingsTabMeta.gradient} text-white shadow-sm`}>
+                      <activeSettingsTabMeta.icon className="h-5 w-5" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="font-semibold text-slate-900 dark:text-dark-100">{activeSettingsTabMeta.label}</p>
+                      <p className="mt-1 text-sm text-slate-500 dark:text-dark-300">{activeSettingsTabMeta.description}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <Button
+                  type="button"
+                  variant="primary"
+                  onClick={handleSaveSettings}
+                  disabled={isLoading}
+                  className="h-12 rounded-[20px] bg-slate-900 text-white hover:bg-slate-800"
+                >
+                  {isLoading ? 'Saving...' : 'Save Changes'}
+                </Button>
               </div>
             </div>
+          </section>
 
-            {/* User Info */}
-            <div className="flex-1 text-center lg:text-left">
-              <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 dark:text-dark-100 mb-4">
-                {userProfile.displayName || `${userProfile.firstName} ${userProfile.lastName}` || 'User Profile'}
-              </h1>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="flex items-center justify-center lg:justify-start text-gray-600 dark:text-dark-300 bg-gray-50 dark:bg-dark-700 rounded-2xl p-3">
-                  <EnvelopeIcon className="w-5 h-5 mr-3 text-blue-500" />
-                  <span className="text-sm font-medium truncate">{userProfile.email}</span>
+          <div className="grid gap-5 xl:grid-cols-[260px_minmax(0,1fr)] xl:gap-6">
+            <aside className="hidden xl:block xl:sticky xl:top-24 xl:self-start">
+              <div className={`${shellPanelClassName} p-3`}>
+                <div className="flex items-center justify-between px-2 pb-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Settings map</p>
+                    <h2 className="mt-1 text-lg font-semibold text-slate-900 dark:text-dark-100">Categories</h2>
+                  </div>
+                  <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600 dark:bg-dark-700 dark:text-dark-200">
+                    {settingsTabs.length}
+                  </span>
                 </div>
-                <div className="flex items-center justify-center lg:justify-start text-gray-600 dark:text-dark-300 bg-gray-50 dark:bg-dark-700 rounded-2xl p-3" title={userProfile.churchName ? `Constituency: ${userProfile.churchName}` : 'No constituency set'}>
-                  <BuildingOfficeIcon className="w-5 h-5 mr-3 text-green-500" />
-                  <span className="text-sm font-medium truncate">{userProfile.churchName || 'No Constituency'}</span>
+
+                <nav className="space-y-3" aria-label="Settings categories">
+                  {settingsTabs.map(tab => (
+                    <SettingsTabButton
+                      key={tab.id}
+                      tab={tab}
+                      isActive={tab.id === activeSettingsTab}
+                      onClick={() => handleSettingsTabChange(tab.id)}
+                    />
+                  ))}
+                </nav>
+              </div>
+            </aside>
+
+            <div className="min-w-0 space-y-5">
+              <div className={`${shellPanelClassName} p-3 xl:hidden`}>
+                <div className="flex items-center justify-between px-2 pb-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Quick sections</p>
+                    <h2 className="mt-1 text-lg font-semibold text-slate-900 dark:text-dark-100">Choose a category</h2>
+                  </div>
+                  <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600 dark:bg-dark-700 dark:text-dark-200">
+                    {settingsTabs.length}
+                  </span>
                 </div>
-                <div className="flex items-center justify-center lg:justify-start text-gray-600 dark:text-dark-300 bg-gray-50 dark:bg-dark-700 rounded-2xl p-3">
-                  <ShieldCheckIcon className="w-5 h-5 mr-3 text-purple-500" />
-                  <span className="text-sm font-medium capitalize">{isPromotedAdmin ? 'Promoted Campus Admin' : (userProfile.role || 'Member')}</span>
+
+                <nav className="grid grid-cols-2 gap-3 sm:grid-cols-3" aria-label="Settings categories">
+                  {settingsTabs.map(tab => (
+                    <SettingsTabButton
+                      key={tab.id}
+                      tab={tab}
+                      compact
+                      isActive={tab.id === activeSettingsTab}
+                      onClick={() => handleSettingsTabChange(tab.id)}
+                    />
+                  ))}
+                </nav>
+              </div>
+
+              <div
+                ref={tabContentRef}
+                className={`${shellPanelClassName} scroll-mt-28 p-4 sm:p-5`}
+              >
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br ${activeSettingsTabMeta.gradient} text-white shadow-sm`}>
+                      <activeSettingsTabMeta.icon className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Settings section</p>
+                      <h2 className="mt-1 text-xl font-semibold text-slate-900 dark:text-dark-100 sm:text-2xl">{activeSettingsTabMeta.label}</h2>
+                    </div>
+                  </div>
+
+                  <p className="max-w-xl text-sm leading-6 text-slate-600 dark:text-dark-300 sm:text-right">
+                    {activeSettingsTabMeta.description}
+                  </p>
                 </div>
               </div>
-            </div>
-          </div>
-        </div>
 
-        {/* Constituencies – simplified to a single CTA */}
-        {hasAdminPrivileges(userProfile) && (
-          <div id="constituencies-section" className="bg-white dark:bg-dark-800 rounded-3xl shadow-xl border border-gray-100 dark:border-dark-600 p-6 sm:p-8 mb-8">
+        {activeSettingsTab === 'constituencies' && hasAdminAccess && (
+          <div id="constituencies-section" className={contentPanelClassName}>
             <div className="flex flex-col items-center text-center gap-3">
               <div className="w-12 h-12 bg-gradient-to-br from-indigo-500 to-blue-600 rounded-2xl flex items-center justify-center">
                 <BuildingOfficeIcon className="w-6 h-6 text-white" />
@@ -450,8 +693,8 @@ const ProfileSettingsView: React.FC = () => {
           </div>
         )}
 
-        {/* Personal Information */}
-        <div className="bg-white dark:bg-dark-800 rounded-3xl shadow-xl border border-gray-100 dark:border-dark-600 p-6 sm:p-8 mb-8">
+        {activeSettingsTab === 'profile' && (
+        <div className={contentPanelClassName}>
           <div className="flex items-center mb-8">
             <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center mr-4">
               <UserIcon className="w-6 h-6 text-white" />
@@ -504,10 +747,11 @@ const ProfileSettingsView: React.FC = () => {
             </div>
           </div>
         </div>
+        )}
 
 
-        {/* App Preferences */}
-        <div className="bg-white dark:bg-dark-800 rounded-3xl shadow-xl border border-gray-100 dark:border-dark-600 p-6 sm:p-8 mb-8">
+        {activeSettingsTab === 'app' && (
+        <div className={contentPanelClassName}>
           <div className="flex items-center mb-8">
             <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-pink-600 rounded-2xl flex items-center justify-center mr-4">
               <SunIcon className="w-6 h-6 text-white" />
@@ -588,10 +832,10 @@ const ProfileSettingsView: React.FC = () => {
             )}
           </div>
         </div>
+        )}
 
-        {/* Admin Features */}
-        {hasAdminPrivileges(userProfile) && (
-          <div className="bg-white rounded-3xl shadow-xl border border-gray-100 p-6 sm:p-8 mb-8">
+        {activeSettingsTab === 'management' && hasAdminAccess && (
+          <div className={contentPanelClassName}>
             <div className="flex items-center mb-8">
               <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-teal-600 rounded-2xl flex items-center justify-center mr-4">
                 <UserGroupIcon className="w-6 h-6 text-white" />
@@ -696,8 +940,9 @@ const ProfileSettingsView: React.FC = () => {
           </div>
         )}
 
-        {/* Notification Preferences */}
-        <div className="bg-white rounded-3xl shadow-xl border border-gray-100 p-6 sm:p-8 mb-8">
+        {activeSettingsTab === 'notifications' && (
+          <>
+        <div className={contentPanelClassName}>
           <div className="flex items-center mb-8">
             <div className="w-12 h-12 bg-gradient-to-br from-pink-500 to-purple-600 rounded-2xl flex items-center justify-center mr-4">
               <BellIcon className="w-6 h-6 text-white" />
@@ -812,80 +1057,12 @@ const ProfileSettingsView: React.FC = () => {
           </div>
         </div>
 
-        {/* Push Notification Settings */}
-        <PushNotificationSettings className="mb-8" />
-
-        {/* Leader Features - Show for both admin and leader roles */}
-        {hasLeaderPrivileges(userProfile) && (
-          <div className="bg-white rounded-3xl shadow-xl border border-gray-100 p-6 sm:p-8 mb-8">
-            <div className="flex items-center mb-8">
-              <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-2xl flex items-center justify-center mr-4">
-                <UserIcon className="w-6 h-6 text-white" />
-              </div>
-              <h2 className="text-2xl font-bold text-gray-900">
-                {userProfile?.role === 'leader' ? 'Leader Features' : 'Leader Management'}
-              </h2>
-            </div>
-
-            <div className="space-y-6">
-              <div className="bg-gradient-to-r from-purple-50 to-indigo-50 rounded-2xl p-6 border border-purple-100">
-                <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
-                  <div className="flex-1">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-2">Role Information</h3>
-                    <p className="text-gray-600">
-                      {isPromotedAdmin
-                        ? 'You have campus admin privileges for operations. Inviting leaders and deleting members are restricted to the main leader.'
-                        : userProfile?.role === 'leader'
-                        ? 'You have leader privileges to manage all church data and attendance records'
-                        : 'You have full admin privileges including role management and system administration'}
-                    </p>
-                  </div>
-                  <div className="flex-shrink-0">
-                    <Badge color={isPromotedAdmin || userProfile?.role === 'admin' ? 'blue' : 'purple'} size="md">
-                      {isPromotedAdmin ? 'Promoted Campus Admin' : userProfile?.role === 'admin' ? 'Administrator' : 'Leader'}
-                    </Badge>
-                  </div>
-                </div>
-              </div>
-
-              {/* Fix Access Button for Leaders */}
-              {userProfile?.role === 'leader' && (
-                <div className="bg-gradient-to-r from-yellow-50 to-orange-50 rounded-2xl p-6 border border-yellow-100">
-                  <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
-                    <div className="flex-1">
-                      <h3 className="text-lg font-semibold text-gray-900 mb-2">Data Access</h3>
-                      <p className="text-gray-600">
-                        If you can't see church data or attendance records, click here to fix your access permissions
-                      </p>
-                    </div>
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      onClick={handleFixAccess}
-                      disabled={isFixingAccess}
-                      className="h-12 px-6 bg-gradient-to-r from-yellow-600 to-orange-600 hover:from-yellow-700 hover:to-orange-700 text-white rounded-2xl font-medium transition-all duration-200 flex items-center justify-center space-x-2 min-w-[140px]"
-                    >
-                      {isFixingAccess ? (
-                        <>
-                          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                          <span>Fixing...</span>
-                        </>
-                      ) : (
-                        <>
-                          <RefreshIcon className="w-5 h-5" />
-                          <span>Fix Access</span>
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
+        <PushNotificationSettings className="mt-5" />
+          </>
         )}
 
-        {/* Security Settings */}
-        <div className="bg-white rounded-3xl shadow-xl border border-gray-100 p-6 sm:p-8 mb-8">
+        {activeSettingsTab === 'security' && (
+        <div className={contentPanelClassName}>
           <div className="flex items-center mb-8">
             <div className="w-12 h-12 bg-gradient-to-br from-red-500 to-pink-600 rounded-2xl flex items-center justify-center mr-4">
               <ShieldCheckIcon className="w-6 h-6 text-white" />
@@ -913,26 +1090,30 @@ const ProfileSettingsView: React.FC = () => {
             </div>
           </div>
         </div>
+        )}
 
-        {/* Save Button */}
-        <div className="flex justify-center pb-8">
-          <Button
-            type="button"
-            variant="primary"
-            onClick={handleSaveSettings}
-            disabled={isLoading}
-            className="h-14 px-12 bg-gradient-to-r from-blue-600 via-purple-600 to-indigo-600 hover:from-blue-700 hover:via-purple-700 hover:to-indigo-700 text-white rounded-2xl font-semibold text-lg transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105 min-w-[200px]"
-          >
-            {isLoading ? (
-              <>
-                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white mr-3"></div>
-                Saving...
-              </>
-            ) : (
-              'Save Changes'
-            )}
-          </Button>
+            <div className="sticky bottom-4 z-20 lg:hidden">
+              <div className="rounded-[24px] bg-slate-900/95 p-4 text-white shadow-[0_24px_50px_-28px_rgba(15,23,42,0.85)] backdrop-blur-sm">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold">Save changes</p>
+                    <p className="mt-1 text-xs text-slate-300">Your edits stay here while you move between tabs.</p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="primary"
+                    onClick={handleSaveSettings}
+                    disabled={isLoading}
+                    className="h-11 shrink-0 rounded-2xl bg-white px-5 text-slate-900 hover:bg-slate-100"
+                  >
+                    {isLoading ? 'Saving...' : 'Save'}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
+      </div>
       </div>
 
       {/* Change Password Modal */}
@@ -957,20 +1138,22 @@ const ProfileSettingsView: React.FC = () => {
       )}
 
       {/* Constituency Manager Overlay */}
-      <ConstituencyManagerScreen
-        isOpen={isConstituencyManagerOpen}
-        onClose={() => setIsConstituencyManagerOpen(false)}
-        links={accessibleChurchLinks || []}
-        isImpersonating={isImpersonating}
-        currentChurchId={currentChurchId || ''}
-        onSwitch={async (link) => {
-          setIsConstituencyManagerOpen(false);
-          // Always grant full access during cross-tenant impersonation
-          switchToExternalChurch({ ...link, permission: 'read-write' });
-          try { await refreshAccessibleChurchLinks?.(); } catch { }
-        }}
-        onSwitchBack={switchBackToOwnChurch}
-      />
+      {isConstituencyManagerOpen && (
+        <ConstituencyManagerScreen
+          isOpen={isConstituencyManagerOpen}
+          onClose={() => setIsConstituencyManagerOpen(false)}
+          links={accessibleChurchLinks || []}
+          isImpersonating={isImpersonating}
+          currentChurchId={currentChurchId || ''}
+          onSwitch={async (link) => {
+            setIsConstituencyManagerOpen(false);
+            // Always grant full access during cross-tenant impersonation
+            switchToExternalChurch({ ...link, permission: 'read-write' });
+            try { await refreshAccessibleChurchLinks?.(); } catch { }
+          }}
+          onSwitchBack={switchBackToOwnChurch}
+        />
+      )}
     </div>
   );
 };
@@ -1226,31 +1409,6 @@ const ConstituencyManagerScreen: React.FC<ConstituencyManagerScreenProps> = ({
       setIsInviting(false);
     }
   };
-
-  // Detect navbar height similar to AdminInviteScreen for proper fit
-  useEffect(() => {
-    const detectNavbarHeight = (): number => {
-      const selectors = ['nav', '.navbar', '[role="navigation"]', 'header'];
-      for (const s of selectors) {
-        const el = document.querySelector(s) as HTMLElement;
-        if (el && el.offsetHeight > 0) return el.offsetHeight;
-      }
-      return 0;
-    };
-    const update = () => {
-      const h = detectNavbarHeight();
-      document.documentElement.style.setProperty('--navbar-height', `${h}px`);
-    };
-    update();
-    const t = setTimeout(update, 100);
-    window.addEventListener('resize', update);
-    window.addEventListener('orientationchange', update);
-    return () => {
-      clearTimeout(t);
-      window.removeEventListener('resize', update);
-      window.removeEventListener('orientationchange', update);
-    };
-  }, []);
 
   return (isOpen ?
     <div
