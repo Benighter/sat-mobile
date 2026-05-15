@@ -54,6 +54,8 @@ class PushNotificationService {
   private nativePushConfigured = false;
   private nativeListenersRegistered = false;
   private localNotificationListenersRegistered = false;
+  private webForegroundMessageListenerRegistered = false;
+  private serviceWorkerMessageListenerRegistered = false;
   private pendingNativeRegistration: Promise<string | null> | null = null;
   private resolvePendingNativeRegistration: ((token: string | null) => void) | null = null;
   private rejectPendingNativeRegistration: ((error: unknown) => void) | null = null;
@@ -149,6 +151,63 @@ class PushNotificationService {
 
   private getBrowserBadgeUrl(payloadBadge?: string): string {
     return payloadBadge && payloadBadge.startsWith('/') ? payloadBadge : '/icon-192.png';
+  }
+
+  private normalizeDeepLink(deepLink?: string | null): string {
+    const fallback = '/notifications';
+    const rawLink = typeof deepLink === 'string' && deepLink.trim() ? deepLink.trim() : fallback;
+
+    if (rawLink.startsWith('/#')) {
+      return rawLink.slice(2) || fallback;
+    }
+
+    if (rawLink.startsWith('#')) {
+      return rawLink.slice(1) || fallback;
+    }
+
+    try {
+      const parsed = new URL(rawLink);
+      if (parsed.hash) {
+        return parsed.hash.replace(/^#/, '') || fallback;
+      }
+      return `${parsed.pathname}${parsed.search}` || fallback;
+    } catch {
+      return rawLink.startsWith('/') ? rawLink : `/${rawLink}`;
+    }
+  }
+
+  private getNotificationIdFromDeepLink(deepLink: string, data: PushNotificationPayload['data'] = {}): string | undefined {
+    if (data?.notificationId) return String(data.notificationId);
+    const match = deepLink.match(/^\/notifications\/([^/?#]+)/);
+    return match?.[1] ? decodeURIComponent(match[1]) : undefined;
+  }
+
+  private dispatchNotificationOpenEvent(notificationId?: string): void {
+    if (typeof window === 'undefined') return;
+    window.dispatchEvent(new CustomEvent('sat-open-notifications', {
+      detail: { notificationId: notificationId || null }
+    }));
+  }
+
+  private ensureServiceWorkerMessageListener(): void {
+    if (this.serviceWorkerMessageListenerRegistered || typeof navigator === 'undefined' || !('serviceWorker' in navigator)) {
+      return;
+    }
+
+    navigator.serviceWorker.addEventListener('message', (event) => {
+      const message = event.data || {};
+      if (message.type !== 'NOTIFICATION_CLICK') return;
+
+      const data = message.data || {};
+      this.handleNotificationClick({
+        data: {
+          ...data,
+          deepLink: data.deepLink || data.url || message.url
+        }
+      });
+    });
+
+    this.serviceWorkerMessageListenerRegistered = true;
   }
 
   private async ensureLocalNotificationListeners(): Promise<void> {
@@ -324,6 +383,7 @@ class PushNotificationService {
     await navigator.serviceWorker.register('/firebase-messaging-sw.js');
               console.log('✅ Firebase messaging service worker registered');
             }
+            this.ensureServiceWorkerMessageListener();
           } else {
             console.warn('Service workers not available – web push may be limited');
           }
@@ -500,11 +560,12 @@ class PushNotificationService {
       }
 
       // Set up foreground message listener for web
-      if (this.messaging && !Capacitor.isNativePlatform()) {
+      if (this.messaging && !Capacitor.isNativePlatform() && !this.webForegroundMessageListenerRegistered) {
         onMessage(this.messaging, (payload) => {
           console.log('Message received while app is in foreground:', payload);
           this.handleForegroundNotification(payload);
         });
+        this.webForegroundMessageListenerRegistered = true;
       }
 
       return token;
@@ -634,7 +695,7 @@ class PushNotificationService {
       data: {
         notificationId: notification.id,
         activityType: notification.activityType,
-        deepLink: '/notifications'
+        deepLink: notification.id ? `/notifications/${notification.id}` : '/notifications'
       },
       icon: '/icon-192.png',
       badge: '1'
@@ -666,6 +727,18 @@ class PushNotificationService {
         basePayload.title = '🗑️ Member Deleted';
         basePayload.body = `${notification.leaderName} deleted ${notification.details.memberName}`;
         break;
+      case 'member_deletion_requested':
+        basePayload.title = '🗑️ Deletion Request';
+        basePayload.body = notification.details.description;
+        break;
+      case 'member_deletion_approved':
+        basePayload.title = '✅ Deletion Approved';
+        basePayload.body = notification.details.description;
+        break;
+      case 'member_deletion_rejected':
+        basePayload.title = '⛔ Deletion Rejected';
+        basePayload.body = notification.details.description;
+        break;
       case 'attendance_updated':
         basePayload.title = '📅 Attendance Updated';
         basePayload.body = notification.details.description;
@@ -676,6 +749,14 @@ class PushNotificationService {
         break;
       case 'bacenta_assignment_changed':
         basePayload.title = '🏠 Bacenta Assignment Changed';
+        basePayload.body = notification.details.description;
+        break;
+      case 'bacenta_updated':
+        basePayload.title = '🏠 Bacenta Updated';
+        basePayload.body = notification.details.description;
+        break;
+      case 'bacenta_freeze_toggled':
+        basePayload.title = '❄️ Bacenta Status Changed';
         basePayload.body = notification.details.description;
         break;
       case 'member_freeze_toggled':
@@ -830,13 +911,14 @@ class PushNotificationService {
   // Handle notification click/tap
   private handleNotificationClick(notification: any): void {
     const data = notification.data || notification.extra || notification.notification?.data || notification.notification?.extra || {};
-    
-    if (data.deepLink) {
-      // Navigate to specific screen
-      window.location.hash = data.deepLink;
-    } else {
-      // Default to notifications screen
-      window.location.hash = '/notifications';
+
+    const deepLink = this.normalizeDeepLink(data.deepLink || data.url || '/notifications');
+    const notificationId = this.getNotificationIdFromDeepLink(deepLink, data);
+
+    window.location.hash = deepLink;
+
+    if (deepLink.startsWith('/notifications')) {
+      this.dispatchNotificationOpenEvent(notificationId);
     }
 
     // Focus the app window

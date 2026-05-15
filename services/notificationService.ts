@@ -588,6 +588,55 @@ export const createNotificationHelpers = {
     );
   },
 
+  // Member deletion request submitted for admin review
+  memberDeletionRequested: async (leaderName: string, memberName: string, reason?: string) => {
+    if (!currentUser) return;
+
+    await notificationService.create(
+      currentUser.uid,
+      leaderName,
+      'member_deletion_requested',
+      {
+        memberName,
+        description: `${leaderName} requested deletion for ${memberName}${reason ? `: ${reason}` : ''}`
+      },
+      {
+        action: 'requested',
+        reason: reason || null
+      }
+    );
+  },
+
+  // Member deletion request approved/rejected notification for requester
+  memberDeletionReviewed: async (
+    recipientId: string,
+    reviewerName: string,
+    memberName: string,
+    status: 'approved' | 'rejected',
+    adminNotes?: string
+  ) => {
+    if (!currentUser || !recipientId) return;
+
+    const approved = status === 'approved';
+    await notificationService.createForRecipients(
+      [recipientId],
+      approved ? 'member_deletion_approved' : 'member_deletion_rejected',
+      `${reviewerName} ${approved ? 'approved' : 'rejected'} your deletion request for ${memberName}${adminNotes ? `: ${adminNotes}` : ''}`,
+      {
+        memberName,
+        description: `${reviewerName} ${approved ? 'approved' : 'rejected'} your deletion request for ${memberName}${adminNotes ? `: ${adminNotes}` : ''}`
+      },
+      {
+        action: status,
+        adminNotes: adminNotes || null
+      },
+      {
+        id: currentUser.uid,
+        name: reviewerName
+      }
+    );
+  },
+
   // Attendance confirmed notification
   attendanceConfirmed: async (leaderName: string, attendanceDate: string, attendanceCount: number) => {
     if (!currentUser) return;
@@ -679,6 +728,42 @@ export const createNotificationHelpers = {
       {
         previousValue: previousBacenta || undefined,
         newValue: newBacenta || undefined
+      }
+    );
+  },
+
+  // Bacenta details changed
+  bacentaUpdated: async (leaderName: string, bacentaName: string, changes: string[]) => {
+    if (!currentUser) return;
+
+    await notificationService.create(
+      currentUser.uid,
+      leaderName,
+      'bacenta_updated',
+      {
+        bacentaName,
+        description: `${leaderName} updated bacenta: ${bacentaName}${changes.length ? ` (${changes.join(', ')})` : ''}`
+      },
+      {
+        changes
+      }
+    );
+  },
+
+  // Bacenta freeze/unfreeze toggled
+  bacentaFreezeToggled: async (leaderName: string, bacentaName: string, frozen: boolean) => {
+    if (!currentUser) return;
+
+    await notificationService.create(
+      currentUser.uid,
+      leaderName,
+      'bacenta_freeze_toggled',
+      {
+        bacentaName,
+        description: `${leaderName} ${frozen ? 'froze' : 'unfroze'} bacenta: ${bacentaName}`
+      },
+      {
+        newValue: frozen ? 'frozen' : 'active'
       }
     );
   },

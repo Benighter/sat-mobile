@@ -7,9 +7,10 @@ import { useAppContext } from '../../contexts/FirebaseAppContext';
 interface NotificationCenterProps {
   isOpen: boolean;
   onClose: () => void;
+  focusedNotificationId?: string | null;
 }
 
-const NotificationCenter: React.FC<NotificationCenterProps> = ({ isOpen, onClose }) => {
+const NotificationCenter: React.FC<NotificationCenterProps> = ({ isOpen, onClose, focusedNotificationId }) => {
   const [notifications, setNotifications] = useState<AdminNotification[]>([]);
   const [loading, setLoading] = useState(false);
   const [clearingAll, setClearingAll] = useState(false);
@@ -76,6 +77,23 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({ isOpen, onClose
     }
   };
 
+  useEffect(() => {
+    if (!isOpen || loading || !focusedNotificationId) return;
+
+    const target = notifications.find(notification => notification.id === focusedNotificationId);
+    if (!target) return;
+
+    window.setTimeout(() => {
+      document
+        .getElementById(`notification-${focusedNotificationId}`)
+        ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 80);
+
+    if (!target.isRead) {
+      void markAsRead(target.id);
+    }
+  }, [isOpen, loading, focusedNotificationId, notifications]);
+
   const markAllAsRead = async () => {
     if (!userProfile?.uid) return;
     
@@ -120,6 +138,14 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({ isOpen, onClose
             <User className="w-5 h-5 text-white" />
           </div>
         );
+      case 'member_deletion_requested':
+      case 'member_deletion_approved':
+      case 'member_deletion_rejected':
+        return (
+          <div className="w-10 h-10 bg-gradient-to-br from-red-400 to-rose-600 rounded-full flex items-center justify-center shadow-lg">
+            <Trash2 className="w-5 h-5 text-white" />
+          </div>
+        );
       case 'attendance_confirmed':
         return (
           <div className="w-10 h-10 bg-gradient-to-br from-purple-400 to-purple-600 rounded-full flex items-center justify-center shadow-lg">
@@ -151,11 +177,13 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({ isOpen, onClose
           </div>
         );
       case 'bacenta_assignment_changed':
+      case 'bacenta_updated':
         return (
           <div className="w-10 h-10 bg-gradient-to-br from-teal-400 to-teal-600 rounded-full flex items-center justify-center shadow-lg">
             <Home className="w-5 h-5 text-white" />
           </div>
         );
+      case 'bacenta_freeze_toggled':
       case 'member_freeze_toggled':
         return (
           <div className="w-10 h-10 bg-gradient-to-br from-sky-400 to-sky-600 rounded-full flex items-center justify-center shadow-lg">
@@ -324,8 +352,11 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({ isOpen, onClose
               {notifications.map((notification, index) => (
                 <div
                   key={notification.id}
+                  id={`notification-${notification.id}`}
                   className={`relative bg-white rounded-xl shadow-sm border transition-all duration-300 hover:shadow-md hover:scale-[1.02] group ${
-                    !notification.isRead
+                    focusedNotificationId === notification.id
+                      ? 'border-blue-400 ring-2 ring-blue-400 bg-gradient-to-r from-blue-50 to-cyan-50'
+                      : !notification.isRead
                       ? 'border-blue-200 bg-gradient-to-r from-blue-50 to-purple-50'
                       : 'border-gray-200 hover:border-gray-300'
                   }`}

@@ -44,10 +44,10 @@ exports.sendPushNotification = functions
         body: payload.body,
         icon: payload.icon || '/icon-192.png'
       },
-      data: {
+      data: stringifyFcmData({
         ...payload.data,
         click_action: 'FLUTTER_NOTIFICATION_CLICK', // For mobile apps
-      },
+      }),
       webpush: {
         headers: {
           'TTL': '86400' // 24 hours
@@ -58,6 +58,10 @@ exports.sendPushNotification = functions
           icon: payload.icon || '/icon-192.png',
           badge: payload.badge || '/icon-192.png',
           requireInteraction: true,
+          data: {
+            ...(payload.data || {}),
+            url: getWebDeepLink(payload.data?.deepLink || '/notifications')
+          },
           actions: [
             {
               action: 'open',
@@ -65,8 +69,8 @@ exports.sendPushNotification = functions
             }
           ]
         },
-        fcm_options: {
-          link: payload.data?.deepLink || '/'
+        fcmOptions: {
+          link: getWebDeepLink(payload.data?.deepLink || '/notifications')
         }
       },
       android: {
@@ -76,7 +80,7 @@ exports.sendPushNotification = functions
           icon: 'ic_notification',
           color: '#334155',
           sound: 'default',
-          channel_id: 'sat_mobile_notifications'
+          channelId: 'sat_mobile_notifications'
         },
         priority: 'high'
       },
@@ -582,23 +586,276 @@ async function cleanupInvalidTokens(failedTokens, churchId) {
   try {
     const db = admin.firestore();
     const batch = db.batch();
+    let updates = 0;
 
     for (const failed of failedTokens) {
+      const message = (failed.error || failed.code || '').toString();
       // Check if it's a token registration error (invalid token)
-      if (failed.error.includes('registration-token-not-registered') ||
-          failed.error.includes('invalid-registration-token')) {
+      if (message.includes('registration-token-not-registered') ||
+          message.includes('invalid-registration-token')) {
 
         const tokenRef = db.doc(`churches/${churchId}/deviceTokens/${failed.token}`);
         batch.update(tokenRef, {
           isActive: false,
-          lastError: failed.error,
+          lastError: message,
           lastErrorAt: admin.firestore.FieldValue.serverTimestamp()
         });
+        updates += 1;
       }
+    }
+
+    if (updates > 0) {
+      await batch.commit();
+      console.log(`Marked ${updates} invalid device token(s) inactive for church ${churchId}`);
     }
   } catch (error) {
     console.error('Failed to cleanup invalid tokens:', error);
   }
+}
+
+function asString(value, fallback = '') {
+  if (value === undefined || value === null) return fallback;
+  return String(value);
+}
+
+function truncateText(value, maxLength) {
+  const text = asString(value).trim();
+  if (text.length <= maxLength) return text;
+  return `${text.slice(0, Math.max(0, maxLength - 1))}...`;
+}
+
+function stringifyFcmData(data) {
+  const result = {};
+  Object.entries(data || {}).forEach(([key, value]) => {
+    if (value === undefined || value === null) return;
+    result[key] = typeof value === 'string' ? value : JSON.stringify(value);
+  });
+  return result;
+}
+
+function getWebDeepLink(deepLink) {
+  if (!deepLink) return '/#/notifications';
+  if (deepLink.startsWith('/#')) return deepLink;
+  if (deepLink.startsWith('#')) return `/${deepLink}`;
+  if (deepLink.startsWith('/')) return `/#${deepLink}`;
+  return `/#/${deepLink}`;
+}
+
+function createAdminNotificationPushPayload(notification, notificationId, churchId) {
+  const details = notification.details || {};
+  const activityType = asString(notification.activityType, 'system_message');
+  const leaderName = asString(notification.leaderName, 'SAT Mobile');
+  const description = truncateText(details.description || 'New SAT Mobile notification', 180);
+  const memberName = asString(details.memberName, 'a member');
+  const date = asString(details.attendanceDate, 'this week');
+  const deepLink = `/notifications/${notificationId}`;
+
+  let title = 'SAT Mobile';
+  let body = description;
+
+  switch (activityType) {
+    case 'member_added':
+      title = 'New Member Added';
+      body = `${leaderName} added ${memberName}`;
+      break;
+    case 'member_updated':
+      title = 'Member Updated';
+      body = `${leaderName} updated ${memberName}`;
+      break;
+    case 'member_deleted':
+      title = 'Member Deleted';
+      body = `${leaderName} deleted ${memberName}`;
+      break;
+    case 'member_deletion_requested':
+      title = 'Member Deletion Request';
+      body = description;
+      break;
+    case 'member_deletion_approved':
+      title = 'Deletion Request Approved';
+      body = description;
+      break;
+    case 'member_deletion_rejected':
+      title = 'Deletion Request Rejected';
+      body = description;
+      break;
+    case 'attendance_confirmed':
+      title = 'Attendance Confirmed';
+      body = `${leaderName} confirmed attendance for ${date}`;
+      break;
+    case 'attendance_updated':
+      title = 'Attendance Updated';
+      body = description;
+      break;
+    case 'new_believer_added':
+      title = 'New Believer Added';
+      body = description;
+      break;
+    case 'new_believer_updated':
+      title = 'New Believer Updated';
+      body = description;
+      break;
+    case 'guest_added':
+      title = 'New Guest Added';
+      body = description;
+      break;
+    case 'bacenta_assignment_changed':
+      title = 'Bacenta Assignment Changed';
+      body = description;
+      break;
+    case 'bacenta_updated':
+      title = 'Bacenta Updated';
+      body = description;
+      break;
+    case 'bacenta_freeze_toggled':
+      title = 'Bacenta Status Changed';
+      body = description;
+      break;
+    case 'member_freeze_toggled':
+      title = 'Member Status Changed';
+      body = description;
+      break;
+    case 'member_converted':
+      title = 'Outreach Member Converted';
+      body = description;
+      break;
+    case 'birthday_reminder':
+      title = 'Birthday Reminder';
+      body = description;
+      break;
+    case 'meeting_record_added':
+      title = 'Meeting Record Added';
+      body = description;
+      break;
+    case 'meeting_record_updated':
+      title = 'Meeting Record Updated';
+      body = description;
+      break;
+    case 'meeting_record_deleted':
+      title = 'Meeting Record Deleted';
+      body = description;
+      break;
+    default:
+      title = 'SAT Mobile Notification';
+      body = description;
+  }
+
+  return {
+    title: truncateText(title, 80),
+    body: truncateText(body, 180),
+    data: stringifyFcmData({
+      notificationId,
+      activityType,
+      churchId,
+      deepLink,
+      click_action: 'FLUTTER_NOTIFICATION_CLICK'
+    }),
+    deepLink,
+    webDeepLink: getWebDeepLink(deepLink)
+  };
+}
+
+async function sendAdminNotificationPush(db, churchId, notificationId, notification) {
+  const adminId = notification.adminId;
+  if (!adminId) {
+    console.warn('Notification missing adminId; skipping push', { churchId, notificationId });
+    return { successCount: 0, failureCount: 0, tokenCount: 0 };
+  }
+
+  const tokensSnap = await db
+    .collection(`churches/${churchId}/deviceTokens`)
+    .where('userId', '==', adminId)
+    .where('isActive', '==', true)
+    .get();
+
+  const tokens = tokensSnap.docs
+    .map((docSnap) => (docSnap.data() || {}).id || docSnap.id)
+    .filter(Boolean);
+
+  if (tokens.length === 0) {
+    console.log('No active device tokens for notification recipient', { churchId, adminId, notificationId });
+    return { successCount: 0, failureCount: 0, tokenCount: 0 };
+  }
+
+  const payload = createAdminNotificationPushPayload(notification, notificationId, churchId);
+  const response = await admin.messaging().sendEachForMulticast({
+    tokens,
+    notification: {
+      title: payload.title,
+      body: payload.body
+    },
+    data: payload.data,
+    webpush: {
+      headers: {
+        TTL: '86400'
+      },
+      notification: {
+        title: payload.title,
+        body: payload.body,
+        icon: '/icon-192.png',
+        badge: '/icon-192.png',
+        requireInteraction: true,
+        tag: notificationId,
+        data: {
+          ...payload.data,
+          url: payload.webDeepLink
+        },
+        actions: [
+          {
+            action: 'open',
+            title: 'Open App'
+          }
+        ]
+      },
+      fcmOptions: {
+        link: payload.webDeepLink
+      }
+    },
+    android: {
+      priority: 'high',
+      notification: {
+        title: payload.title,
+        body: payload.body,
+        channelId: 'sat_mobile_notifications',
+        sound: 'default',
+        icon: 'ic_notification',
+        color: '#334155',
+        tag: notificationId,
+        clickAction: 'FLUTTER_NOTIFICATION_CLICK'
+      }
+    },
+    apns: {
+      payload: {
+        aps: {
+          alert: {
+            title: payload.title,
+            body: payload.body
+          },
+          badge: 1,
+          sound: 'default'
+        }
+      }
+    }
+  });
+
+  const failedTokens = [];
+  response.responses.forEach((sendResponse, index) => {
+    if (!sendResponse.success) {
+      failedTokens.push({
+        token: tokens[index],
+        error: sendResponse.error?.code || sendResponse.error?.message || 'unknown-error'
+      });
+    }
+  });
+
+  if (failedTokens.length > 0) {
+    await cleanupInvalidTokens(failedTokens, churchId);
+  }
+
+  return {
+    successCount: response.successCount,
+    failureCount: response.failureCount,
+    tokenCount: tokens.length
+  };
 }
 
 // DISABLED: Helper functions for ministry sync removed for ministry independence
@@ -1745,6 +2002,36 @@ exports.searchAdminUserByEmailHttp = functions.https.onRequest(async (req, res) 
     return res.status(500).json({ success: false, error: e?.message || 'Search failed' });
   }
 });
+
+
+
+// Admin notification trigger: every in-app notification also becomes a real FCM push.
+exports.onAdminNotificationCreated = functions.firestore
+  .document('churches/{churchId}/notifications/{notificationId}')
+  .onCreate(async (snap, context) => {
+    const { churchId, notificationId } = context.params;
+    const notification = snap.data() || {};
+    const db = admin.firestore();
+
+    try {
+      const result = await sendAdminNotificationPush(db, churchId, notificationId, notification);
+      await snap.ref.set({
+        pushSentAt: admin.firestore.FieldValue.serverTimestamp(),
+        pushSuccessCount: result.successCount,
+        pushFailureCount: result.failureCount,
+        pushTokenCount: result.tokenCount
+      }, { merge: true });
+      console.log('Admin notification push processed', { churchId, notificationId, ...result });
+    } catch (error) {
+      console.error('Admin notification push failed', { churchId, notificationId, error });
+      await snap.ref.set({
+        pushError: error?.message || 'Push failed',
+        pushErrorAt: admin.firestore.FieldValue.serverTimestamp()
+      }, { merge: true }).catch((writeError) => {
+        console.error('Failed to record notification push error', writeError);
+      });
+    }
+  });
 
 
 

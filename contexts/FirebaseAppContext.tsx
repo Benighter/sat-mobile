@@ -1600,7 +1600,23 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     if (!ensureCanWrite()) throw new Error('Read-only access');
     try {
       setIsLoading(true);
+      const original = bacentas.find(b => b.id === bacentaData.id);
       await bacentasFirebaseService.update(bacentaData.id, bacentaData);
+
+      try {
+        const { createNotificationHelpers } = await import('../services/notificationService');
+        const leaderName = userProfile?.displayName || `${userProfile?.firstName || ''} ${userProfile?.lastName || ''}`.trim() || 'Unknown Leader';
+        const changes: string[] = [];
+        if (original) {
+          if ((original.name || '') !== (bacentaData.name || '')) changes.push('Name');
+          if ((original.meetingDay || '') !== (bacentaData.meetingDay || '')) changes.push('Meeting day');
+          if ((original.meetingTime || '') !== (bacentaData.meetingTime || '')) changes.push('Meeting time');
+        }
+        await createNotificationHelpers.bacentaUpdated(leaderName, bacentaData.name || original?.name || 'Bacenta', changes);
+      } catch (notifyErr) {
+        console.warn('⚠️ Failed to send bacenta update notification:', notifyErr);
+      }
+
       showToast('success', 'Bacenta updated successfully');
     } catch (error: any) {
       setError(error.message);
@@ -1609,7 +1625,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     } finally {
       setIsLoading(false);
     }
-  }, [showToast]);
+  }, [showToast, bacentas, userProfile]);
 
   const deleteBacentaHandler = useCallback(async (bacentaId: string) => {
     if (!ensureCanWrite()) throw new Error('Read-only access');
@@ -1631,6 +1647,14 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     try {
       setIsLoading(true);
       await bacentasFirebaseService.freeze(bacentaId);
+      try {
+        const { createNotificationHelpers } = await import('../services/notificationService');
+        const leaderName = userProfile?.displayName || `${userProfile?.firstName || ''} ${userProfile?.lastName || ''}`.trim() || 'Unknown Leader';
+        const bacentaName = bacentas.find(b => b.id === bacentaId)?.name || 'Bacenta';
+        await createNotificationHelpers.bacentaFreezeToggled(leaderName, bacentaName, true);
+      } catch (notifyErr) {
+        console.warn('⚠️ Failed to send bacenta freeze notification:', notifyErr);
+      }
       showToast('success', 'Bacenta frozen successfully');
     } catch (error: any) {
       setError(error.message);
@@ -1639,13 +1663,21 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     } finally {
       setIsLoading(false);
     }
-  }, [showToast]);
+  }, [showToast, bacentas, userProfile]);
 
   const unfreezeBacentaHandler = useCallback(async (bacentaId: string) => {
     if (!ensureCanWrite()) throw new Error('Read-only access');
     try {
       setIsLoading(true);
       await bacentasFirebaseService.unfreeze(bacentaId);
+      try {
+        const { createNotificationHelpers } = await import('../services/notificationService');
+        const leaderName = userProfile?.displayName || `${userProfile?.firstName || ''} ${userProfile?.lastName || ''}`.trim() || 'Unknown Leader';
+        const bacentaName = bacentas.find(b => b.id === bacentaId)?.name || 'Bacenta';
+        await createNotificationHelpers.bacentaFreezeToggled(leaderName, bacentaName, false);
+      } catch (notifyErr) {
+        console.warn('⚠️ Failed to send bacenta unfreeze notification:', notifyErr);
+      }
       showToast('success', 'Bacenta unfrozen successfully');
     } catch (error: any) {
       setError(error.message);
@@ -1654,7 +1686,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     } finally {
       setIsLoading(false);
     }
-  }, [showToast]);
+  }, [showToast, bacentas, userProfile]);
 
   // New Believer handlers
   const addNewBelieverHandler = useCallback(async (newBelieverData: Omit<NewBeliever, 'id' | 'createdDate' | 'lastUpdated'>) => {
@@ -2210,6 +2242,14 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
           // custom flag so approval knows to delete outreach entity
           target: 'outreach'
         } as any);
+
+        try {
+          const { createNotificationHelpers } = await import('../services/notificationService');
+          const leaderName = userProfile?.displayName || `${userProfile?.firstName || ''} ${userProfile?.lastName || ''}`.trim() || 'Unknown Leader';
+          await createNotificationHelpers.memberDeletionRequested(leaderName, om.name, 'Outreach deletion requested by leader');
+        } catch (notifyErr) {
+          console.warn('⚠️ Failed to send deletion request notification:', notifyErr);
+        }
 
         // Keep behavior consistent with member deletion requests: no immediate "deleted" notifications
         showToast('success', 'Deletion Request Submitted', `Your request to delete ${om.name} has been submitted for admin approval.`);
@@ -3439,6 +3479,18 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
         churchId: userProfile.churchId || ''
       });
 
+      try {
+        const { createNotificationHelpers } = await import('../services/notificationService');
+        const leaderName = userProfile.displayName || `${userProfile.firstName || ''} ${userProfile.lastName || ''}`.trim() || 'Unknown Leader';
+        await createNotificationHelpers.memberDeletionRequested(
+          leaderName,
+          `${member.firstName} ${member.lastName || ''}`.trim(),
+          reason || ''
+        );
+      } catch (notifyErr) {
+        console.warn('⚠️ Failed to send deletion request notification:', notifyErr);
+      }
+
       showToast('success', 'Deletion Request Submitted',
         `Your request to delete ${member.firstName} ${member.lastName || ''} has been submitted for admin approval.`);
     } catch (error: any) {
@@ -3497,6 +3549,14 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
         console.warn('Approve requested for non-existent target; marking approved without deletion', request.memberId);
       }
 
+      try {
+        const { createNotificationHelpers } = await import('../services/notificationService');
+        const reviewerName = userProfile.displayName || `${userProfile.firstName || ''} ${userProfile.lastName || ''}`.trim() || 'Administrator';
+        await createNotificationHelpers.memberDeletionReviewed(request.requestedBy, reviewerName, request.memberName, 'approved');
+      } catch (notifyErr) {
+        console.warn('⚠️ Failed to send deletion approval notification:', notifyErr);
+      }
+
       showToast('success', 'Request Approved',
         `Deletion request for ${request.memberName} has been approved and the member has been deleted.`);
     } catch (error: any) {
@@ -3537,6 +3597,20 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
         reviewedAt: new Date().toISOString(),
         adminNotes: adminNotes || 'Request rejected by administrator'
       });
+
+      try {
+        const { createNotificationHelpers } = await import('../services/notificationService');
+        const reviewerName = userProfile.displayName || `${userProfile.firstName || ''} ${userProfile.lastName || ''}`.trim() || 'Administrator';
+        await createNotificationHelpers.memberDeletionReviewed(
+          request.requestedBy,
+          reviewerName,
+          request.memberName,
+          'rejected',
+          adminNotes || 'Request rejected by administrator'
+        );
+      } catch (notifyErr) {
+        console.warn('⚠️ Failed to send deletion rejection notification:', notifyErr);
+      }
 
       showToast('success', 'Request Rejected',
         `Deletion request for ${request.memberName} has been rejected.`);

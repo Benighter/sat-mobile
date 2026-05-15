@@ -6,9 +6,18 @@ import { useAppContext } from '../../contexts/FirebaseAppContext';
 import { hasLeaderPrivileges } from '../../utils/permissionUtils';
 import NotificationCenter from './NotificationCenter';
 
+const parseNotificationHash = (): string | null | undefined => {
+  if (typeof window === 'undefined') return undefined;
+  const hash = window.location.hash || '';
+  const match = hash.match(/^#\/?notifications(?:\/([^/?#]+))?/);
+  if (!match) return undefined;
+  return match[1] ? decodeURIComponent(match[1]) : null;
+};
+
 const NotificationBadge: React.FC = () => {
   const [unreadCount, setUnreadCount] = useState(0);
   const [isNotificationCenterOpen, setIsNotificationCenterOpen] = useState(false);
+  const [focusedNotificationId, setFocusedNotificationId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const { userProfile, currentChurchId } = useAppContext();
   const hasHydratedNotificationsRef = useRef(false);
@@ -75,6 +84,32 @@ const NotificationBadge: React.FC = () => {
     };
   }, [isLeader, userProfile?.uid, currentChurchId]);
 
+  useEffect(() => {
+    if (!isLeader) return;
+
+    const openFromHash = () => {
+      const notificationId = parseNotificationHash();
+      if (notificationId === undefined) return;
+      setFocusedNotificationId(notificationId);
+      setIsNotificationCenterOpen(true);
+    };
+
+    const openFromEvent = (event: Event) => {
+      const customEvent = event as CustomEvent<{ notificationId?: string | null }>;
+      setFocusedNotificationId(customEvent.detail?.notificationId || null);
+      setIsNotificationCenterOpen(true);
+    };
+
+    window.addEventListener('hashchange', openFromHash);
+    window.addEventListener('sat-open-notifications', openFromEvent as EventListener);
+    openFromHash();
+
+    return () => {
+      window.removeEventListener('hashchange', openFromHash);
+      window.removeEventListener('sat-open-notifications', openFromEvent as EventListener);
+    };
+  }, [isLeader]);
+
   const loadUnreadCount = async () => {
   if (!userProfile?.uid || !currentChurchId) return;
 
@@ -91,6 +126,7 @@ const NotificationBadge: React.FC = () => {
   };
 
   const handleBadgeClick = () => {
+    setFocusedNotificationId(null);
     setIsNotificationCenterOpen(true);
   };
 
@@ -131,7 +167,11 @@ const NotificationBadge: React.FC = () => {
       {/* Notification Center Modal */}
       <NotificationCenter
         isOpen={isNotificationCenterOpen}
-        onClose={() => setIsNotificationCenterOpen(false)}
+        focusedNotificationId={focusedNotificationId}
+        onClose={() => {
+          setIsNotificationCenterOpen(false);
+          setFocusedNotificationId(null);
+        }}
       />
     </>
   );

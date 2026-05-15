@@ -18,6 +18,14 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const messaging = firebase.messaging();
 
+function normalizeDeepLinkForApp(deepLink) {
+  if (!deepLink || typeof deepLink !== 'string') return '/#/notifications';
+  if (deepLink.startsWith('/#')) return deepLink;
+  if (deepLink.startsWith('#')) return `/${deepLink}`;
+  if (deepLink.startsWith('/')) return `/#${deepLink}`;
+  return `/#/${deepLink}`;
+}
+
 // Handle background messages
 messaging.onBackgroundMessage(function(payload) {
   console.log('[firebase-messaging-sw.js] Received background message ', payload);
@@ -31,7 +39,7 @@ messaging.onBackgroundMessage(function(payload) {
     tag: 'sat-mobile-notification',
     data: {
       ...payload.data,
-      url: payload.data?.deepLink || '/#/notifications'
+      url: normalizeDeepLinkForApp(payload.data?.deepLink)
     },
     requireInteraction: true,
     actions: [
@@ -62,7 +70,7 @@ self.addEventListener('notificationclick', function(event) {
   }
 
   // Default action or 'open' action
-  const urlToOpen = event.notification.data?.url || '/#/notifications';
+  const urlToOpen = normalizeDeepLinkForApp(event.notification.data?.url || event.notification.data?.deepLink);
 
   event.waitUntil(
     clients.matchAll({
