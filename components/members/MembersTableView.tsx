@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useAppContext } from '../../contexts/FirebaseAppContext';
-import { Member, ConfirmationStatus, Bacenta } from '../../types';
+import { Member, ConfirmationStatus, Bacenta, MemberDeletionRequest } from '../../types';
 import { formatDisplayDate, getMonthName, getUpcomingSunday } from '../../utils/dateUtils';
 import { isDateEditable } from '../../utils/attendanceUtils';
 import { canDeleteMemberWithRole, hasAdminPrivileges } from '../../utils/permissionUtils';
@@ -45,6 +45,7 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
     members,
     bacentas,
     sundayConfirmations,
+    memberDeletionRequests,
     openMemberForm,
     openBacentaForm,
     deleteMemberHandler,
@@ -79,6 +80,15 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
   const allowEditPreviousSundays = userProfile?.preferences?.allowEditPreviousSundays ?? false;
   const isAdmin = hasAdminPrivileges(userProfile);
   const { formatIncomeAmount } = useCurrencyFormatter();
+  const pendingDeletionRequestsByMemberId = useMemo(() => {
+    const pending = new Map<string, MemberDeletionRequest>();
+    for (const request of memberDeletionRequests || []) {
+      if (request.status === 'pending' && request.memberId) {
+        pending.set(request.memberId, request);
+      }
+    }
+    return pending;
+  }, [memberDeletionRequests]);
 
   const [isCleaningDuplicates, setIsCleaningDuplicates] = useState(false);
   const handleCleanupDuplicates = async () => {
@@ -497,7 +507,7 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
             displayMembers.map((member, idx) => (
               <div
                 key={member.id}
-                className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 cursor-pointer transition-colors group"
+                className={`flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors group ${pendingDeletionRequestsByMemberId.has(member.id) ? 'bg-red-50 hover:bg-red-100/70' : 'hover:bg-gray-50'}`}
                 onClick={() => openMemberForm(member)}
                 title="Open member"
               >
@@ -508,6 +518,11 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
                   <div className="text-base font-semibold text-gray-900 truncate">
                     {member.firstName} {member.lastName || ''}
                   </div>
+                  {pendingDeletionRequestsByMemberId.has(member.id) && (
+                    <div className="mt-1 inline-flex items-center rounded-full border border-red-200 bg-red-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-red-700">
+                      Pending delete
+                    </div>
+                  )}
                   <div className="text-xs text-gray-500 truncate">
                     {(member.role || 'Member')}{member.ministry ? ` • ${member.ministry}` : ''}
                   </div>
@@ -575,6 +590,7 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
 
         // Check if member is confirmed for upcoming Sunday
         const isConfirmedForSunday = getConfirmationStatus(member.id, upcomingSunday) === 'Confirmed';
+        const pendingDeletionRequest = pendingDeletionRequestsByMemberId.get(member.id);
 
         return (
           <div
@@ -638,6 +654,14 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
                     )}
 
                   </div>
+                  {pendingDeletionRequest && (
+                    <p
+                      className="mt-1 inline-flex max-w-full items-center rounded-full border border-red-200 bg-red-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-red-700"
+                      title={`Deletion requested by ${pendingDeletionRequest.requestedByName || 'a leader'}`}
+                    >
+                      Pending delete
+                    </p>
+                  )}
                   {member.ministry && member.ministry.trim() !== '' && (
                     <p className="text-xs text-gray-500 truncate mt-0.5">{member.ministry}</p>
                   )}
@@ -648,7 +672,7 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
         );
       },
     }
-  ], [openMemberForm, isTithe, upcomingSunday, getConfirmationStatus]);
+  ], [openMemberForm, isTithe, upcomingSunday, getConfirmationStatus, pendingDeletionRequestsByMemberId]);
 
   // Define scrollable columns (phone, role, born again, attendance dates, remove)
   const scrollableColumns = useMemo(() => {
@@ -912,6 +936,7 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
             updateMemberHandler={updateMemberHandler}
             isMinistryContext={isMinistryContext}
             transferMemberToConstituencyHandler={transferMemberToConstituencyHandler}
+            pendingDeletionRequest={pendingDeletionRequestsByMemberId.get(member.id)}
           />
         );
       },
@@ -920,7 +945,7 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
     const cols = [...baseScrollableColumns, ...attendanceColumns];
     if (!isTithe) cols.push(actionsColumn);
     return cols;
-  }, [currentMonthSundays, attendanceRecords, sundayConfirmations, deleteMemberHandler, createDeletionRequestHandler, getAttendanceStatus, getConfirmationStatus, handleAttendanceToggle, upcomingSunday, markConfirmationHandler, isTithe, titheByMember, bussingByMember, markTitheHandler, markTransportHandler]);
+  }, [currentMonthSundays, attendanceRecords, sundayConfirmations, deleteMemberHandler, createDeletionRequestHandler, getAttendanceStatus, getConfirmationStatus, handleAttendanceToggle, upcomingSunday, markConfirmationHandler, isTithe, titheByMember, bussingByMember, markTitheHandler, markTransportHandler, pendingDeletionRequestsByMemberId]);
 
   // Get displayed month name
   const currentMonthName = getMonthName(displayedDate.getMonth());
@@ -1362,13 +1387,14 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
                   const rowRole = determineRoleCategory(member);
                   const isAnchorRow = roleAnchorIndexMap[rowRole] === rowIndex;
                   const isHighlighted = highlightState?.role === rowRole;
+                  const isPendingDeletion = pendingDeletionRequestsByMemberId.has(member.id);
                   return (
                     <tr
                       key={rowIndex}
                       ref={isAnchorRow ? (el) => { roleRowRefs.current[rowRole] = el; } : undefined}
                       className={`
-                        ${rowIndex % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}
-                        hover:bg-blue-50/50 transition-colors duration-200
+                        ${isPendingDeletion ? 'bg-red-50' : rowIndex % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}
+                        ${isPendingDeletion ? 'hover:bg-red-100/70' : 'hover:bg-blue-50/50'} transition-colors duration-200
                         ${isHighlighted ? `ring-2 ring-indigo-400 ring-offset-2 ${rowIndex % 2 === 0 ? 'ring-offset-white' : 'ring-offset-gray-50'}` : ''}
                       `}
                     >
@@ -1383,7 +1409,7 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
                           left: colIndex === 0 ? '0px' : '50px',
                           width: column.width,
                           minWidth: column.width,
-                          backgroundColor: rowIndex % 2 === 0 ? 'white' : 'rgb(249 250 251)',
+                          backgroundColor: isPendingDeletion ? 'rgb(254 242 242)' : rowIndex % 2 === 0 ? 'white' : 'rgb(249 250 251)',
                           boxShadow: colIndex === fixedColumns.length - 1 ? '2px 0 4px rgba(0, 0, 0, 0.1)' : 'none'
                         }}
                       >
@@ -1439,6 +1465,7 @@ interface MemberActionsDropdownProps {
   updateMemberHandler: (member: Member) => Promise<void>;
   isMinistryContext: boolean;
   transferMemberToConstituencyHandler: (memberId: string, targetConstituencyId: string) => Promise<void>;
+  pendingDeletionRequest?: MemberDeletionRequest;
 }
 
 const MemberActionsDropdown: React.FC<MemberActionsDropdownProps> = ({
@@ -1455,6 +1482,7 @@ const MemberActionsDropdown: React.FC<MemberActionsDropdownProps> = ({
   showToast,
   updateMemberHandler,
   isMinistryContext,
+  pendingDeletionRequest,
   // transferMemberToConstituencyHandler
 }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -1503,6 +1531,8 @@ const MemberActionsDropdown: React.FC<MemberActionsDropdownProps> = ({
   const confirmationStatus = getConfirmationStatus(member.id, upcomingSunday);
   const isConfirmed = confirmationStatus === 'Confirmed';
   const canDelete = canDeleteMemberWithRole(userProfile, member.role);
+  const isAdmin = hasAdminPrivileges(userProfile);
+  const isDeletionPending = pendingDeletionRequest?.status === 'pending';
   const memberWentHome = isMemberWentHome(member);
   const memberFrozen = Boolean(member.frozen);
   const memberBacenta = member.bacentaId ? bacentas.find(b => b.id === member.bacentaId) : undefined;
@@ -1533,8 +1563,6 @@ const MemberActionsDropdown: React.FC<MemberActionsDropdownProps> = ({
   const handleRemove = async () => {
     setIsOpen(false);
 
-    const isAdmin = hasAdminPrivileges(userProfile);
-
     if (isAdmin) {
       // Admins can delete directly
       showConfirmation(
@@ -1545,6 +1573,12 @@ const MemberActionsDropdown: React.FC<MemberActionsDropdownProps> = ({
     } else {
       // Leaders must create deletion requests
       try {
+        if (isDeletionPending) {
+          showToast('warning', 'Request Already Exists',
+            `A deletion request for ${member.firstName} ${member.lastName || ''} is already pending admin approval.`);
+          return;
+        }
+
         // Check if there's already a pending request for this member
         const hasPending = await memberDeletionRequestService.hasPendingRequest(member.id);
 
@@ -1699,6 +1733,11 @@ const MemberActionsDropdown: React.FC<MemberActionsDropdownProps> = ({
                       <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-sky-100 text-sky-700 border border-sky-200" title="Frozen – excluded from counts and absentees">Frozen</span>
                     )
                   )}
+                  {isDeletionPending && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-red-100 text-red-700 border border-red-200" title={`Deletion requested by ${pendingDeletionRequest?.requestedByName || 'a leader'}`}>
+                      Pending delete
+                    </span>
+                  )}
                 </div>
                 {member.phoneNumber && member.phoneNumber !== '-' && (
                   <div className="text-xs text-gray-500 truncate">{member.phoneNumber}</div>
@@ -1784,7 +1823,18 @@ const MemberActionsDropdown: React.FC<MemberActionsDropdownProps> = ({
 
             {/* Danger zone */}
             <div className="my-1 border-t border-gray-100"></div>
-            {canDelete ? (
+            {isDeletionPending && !isAdmin ? (
+              <div
+                className="w-full px-3 py-2.5 flex items-start gap-3 text-red-400 cursor-not-allowed"
+                title={`Deletion request already pending${pendingDeletionRequest?.requestedByName ? ` from ${pendingDeletionRequest.requestedByName}` : ''}`}
+              >
+                <TrashIcon className="w-4 h-4 mt-0.5 text-red-300" />
+                <div>
+                  <div className="text-sm font-medium">Deletion Pending</div>
+                  <div className="text-xs text-red-400">Waiting for admin review</div>
+                </div>
+              </div>
+            ) : canDelete ? (
               <button
                 onClick={handleRemove}
                 className="w-full px-3 py-2.5 text-left hover:bg-red-50 rounded-lg transition-colors duration-150 flex items-start gap-3 text-red-700"

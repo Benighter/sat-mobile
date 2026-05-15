@@ -858,6 +858,83 @@ async function sendAdminNotificationPush(db, churchId, notificationId, notificat
   };
 }
 
+async function resolveActiveAdmin(db, uid, churchId) {
+  if (!uid) return null;
+  try {
+    const adminSnap = await db.doc(`users/${uid}`).get();
+    if (!adminSnap.exists) return null;
+    const adminUser = adminSnap.data() || {};
+    if (adminUser.role !== 'admin' || adminUser.isActive === false) return null;
+    if (churchId && adminUser.churchId && adminUser.churchId !== churchId) return null;
+    return uid;
+  } catch (error) {
+    console.warn('Failed to resolve active admin', { uid, churchId, error });
+    return null;
+  }
+}
+
+async function findChurchAdmins(db, churchId) {
+  if (!churchId) return [];
+  try {
+    const adminsSnap = await db
+      .collection('users')
+      .where('churchId', '==', churchId)
+      .where('role', '==', 'admin')
+      .get();
+
+    return adminsSnap.docs
+      .filter(docSnap => (docSnap.data() || {}).isActive !== false)
+      .map(docSnap => docSnap.id);
+  } catch (error) {
+    console.warn('Failed to find church admins', { churchId, error });
+    return [];
+  }
+}
+
+async function getDeletionRequestAdminRecipients(db, churchId, requesterId) {
+  const adminIds = new Set();
+
+  if (requesterId) {
+    try {
+      const requesterSnap = await db.doc(`users/${requesterId}`).get();
+      if (requesterSnap.exists) {
+        const requester = requesterSnap.data() || {};
+        const linkedAdminId = requester.invitedByAdminId || null;
+        const verifiedAdminId = await resolveActiveAdmin(db, linkedAdminId, churchId);
+        if (verifiedAdminId) adminIds.add(verifiedAdminId);
+      }
+    } catch (error) {
+      console.warn('Primary deletion-request admin lookup failed', { churchId, requesterId, error });
+    }
+
+    if (adminIds.size === 0) {
+      try {
+        const invitesSnap = await db
+          .collection('adminInvites')
+          .where('invitedUserId', '==', requesterId)
+          .where('status', '==', 'accepted')
+          .where('churchId', '==', churchId)
+          .get();
+
+        for (const inviteDoc of invitesSnap.docs) {
+          const invite = inviteDoc.data() || {};
+          const verifiedAdminId = await resolveActiveAdmin(db, invite.createdBy, churchId);
+          if (verifiedAdminId) adminIds.add(verifiedAdminId);
+        }
+      } catch (error) {
+        console.warn('Fallback deletion-request admin lookup failed', { churchId, requesterId, error });
+      }
+    }
+  }
+
+  if (adminIds.size === 0) {
+    const churchAdmins = await findChurchAdmins(db, churchId);
+    churchAdmins.forEach(adminId => adminIds.add(adminId));
+  }
+
+  return [...adminIds];
+}
+
 // DISABLED: Helper functions for ministry sync removed for ministry independence
 //
 // Helper: resolve owner mapping and ministry church for a given church
@@ -2029,6 +2106,81 @@ exports.onAdminNotificationCreated = functions.firestore
         pushErrorAt: admin.firestore.FieldValue.serverTimestamp()
       }, { merge: true }).catch((writeError) => {
         console.error('Failed to record notification push error', writeError);
+      });
+    }
+  });
+
+// Deletion requests are their own Firestore records, so create the normal admin
+// notification server-side when a request is created. The notification trigger
+// above then sends the real FCM push for closed-app delivery.
+exports.onMemberDeletionRequestCreated = functions.firestore
+  .document('churches/{churchId}/memberDeletionRequests/{requestId}')
+  .onCreate(async (snap, context) => {
+    const { churchId, requestId } = context.params;
+    const request = snap.data() || {};
+
+    if (request.status && request.status !== 'pending') {
+      console.log('Skipping non-pending deletion request notification', { churchId, requestId, status: request.status });
+      return;
+    }
+
+    const db = admin.firestore();
+    const requesterId = request.requestedBy || request.requesterId || null;
+    const requesterName = request.requestedByName || request.leaderName || 'Unknown Leader';
+    const memberName = request.memberName || 'a member';
+    const reason = request.reason || '';
+    const description = `${requesterName} requested deletion for ${memberName}${reason ? `: ${reason}` : ''}`;
+
+    try {
+      const adminIds = await getDeletionRequestAdminRecipients(db, churchId, requesterId);
+      if (adminIds.length === 0) {
+        console.warn('No admins found for deletion request notification', { churchId, requestId, requesterId });
+        await snap.ref.set({ notificationError: 'No admin recipients found' }, { merge: true });
+        return;
+      }
+
+      const batch = db.batch();
+      const nowIso = new Date().toISOString();
+      const notificationsRef = db.collection(`churches/${churchId}/notifications`);
+
+      adminIds.forEach(adminId => {
+        const notificationRef = notificationsRef.doc(`memberDeletionRequest_${requestId}_${adminId}`);
+        batch.set(notificationRef, {
+          leaderId: requesterId || 'system',
+          leaderName: requesterName,
+          adminId,
+          activityType: 'member_deletion_requested',
+          timestamp: nowIso,
+          isRead: false,
+          churchId,
+          details: {
+            memberName,
+            description
+          },
+          metadata: {
+            action: 'requested',
+            reason: reason || null,
+            deletionRequestId: requestId,
+            memberId: request.memberId || null,
+            target: request.target || 'member'
+          }
+        }, { merge: true });
+      });
+
+      batch.set(snap.ref, {
+        notificationCreatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        notificationRecipientCount: adminIds.length
+      }, { merge: true });
+
+      await batch.commit();
+      console.log('Deletion request notifications created', { churchId, requestId, adminIds });
+    } catch (error) {
+      console.error('Failed to create deletion request notifications', { churchId, requestId, error });
+      await snap.ref.set({
+        notificationError: error?.message || 'Failed to create admin notification',
+        notificationErrorAt: admin.firestore.FieldValue.serverTimestamp()
+      }, { merge: true }).catch(writeError => {
+        console.error('Failed to record deletion request notification error', writeError);
       });
     }
   });

@@ -305,14 +305,6 @@ const EnhancedProfileDropdown: React.FC<EnhancedProfileDropdownProps> = ({
         aria-label="Open profile menu"
       >
         <ProfileAvatar size="sm" />
-        <div className="hidden sm:block text-left min-w-0">
-          <p className="text-gray-700 font-medium text-sm truncate max-w-[80px] md:max-w-[100px] lg:max-w-[120px]">
-            {displayNameSafe}
-          </p>
-          <p className="text-gray-500 text-xs truncate max-w-[80px] md:max-w-[100px] lg:max-w-[120px]">
-            {roleLabel}
-          </p>
-        </div>
         <ChevronDownIcon className={`w-3 h-3 xs:w-4 xs:h-4 text-gray-500 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
       </button>
 
@@ -403,14 +395,14 @@ const EnhancedProfileDropdown: React.FC<EnhancedProfileDropdownProps> = ({
                 className="flex items-center space-x-2 p-3 rounded-lg bg-orange-50 hover:bg-orange-100 transition-colors duration-200 group touch-manipulation mobile-dropdown-item"
               >
                 <CogIcon className="w-4 h-4 text-orange-600" />
-                <span className="text-sm font-medium text-orange-700">Settings</span>
+                <span className="text-sm font-medium text-orange-700">Export Reports</span>
               </button>
             </div>
           </div>
 
           {/* Menu Items */}
           <div className="p-2">
-            {/* Cross-tenant context switching moved to Profile Settings → Constituencies */}
+            {/* Cross-tenant context switching moved to Settings → Constituencies */}
             {accessibleChurchLinks && accessibleChurchLinks.length > 0 && (
               <div className="mb-2 px-4 py-3 rounded-lg bg-indigo-50 border border-indigo-100">
                 <div className="flex items-center justify-between">
@@ -421,7 +413,7 @@ const EnhancedProfileDropdown: React.FC<EnhancedProfileDropdownProps> = ({
                 </div>
                 <button
                   onClick={() => {
-                    switchTab({ id: TabKeys.PROFILE_SETTINGS, name: 'Profile Settings' });
+                    switchTab({ id: TabKeys.PROFILE_SETTINGS, name: 'Settings' });
                     setIsOpen(false);
                     // Attempt to scroll to the section after navigation
                     setTimeout(() => {
@@ -430,19 +422,19 @@ const EnhancedProfileDropdown: React.FC<EnhancedProfileDropdownProps> = ({
                   }}
                   className="mt-2 w-full text-left text-sm px-2 py-2 rounded bg-white hover:bg-indigo-100 text-indigo-800 border border-indigo-100 touch-manipulation mobile-dropdown-item"
                 >
-                  Manage constituencies in Profile Settings
+                  Manage constituencies in Settings
                 </button>
               </div>
             )}
             <button
               onClick={() => {
-                switchTab({ id: TabKeys.PROFILE_SETTINGS, name: 'Profile Settings' });
+                switchTab({ id: TabKeys.PROFILE_SETTINGS, name: 'Settings' });
                 setIsOpen(false);
               }}
               className="w-full flex items-center space-x-3 px-4 py-3 rounded-lg hover:bg-gray-50 transition-colors duration-200 group touch-manipulation mobile-dropdown-item"
             >
               <UserIcon className="w-5 h-5 text-gray-500 group-hover:text-gray-700" />
-              <span className="text-sm font-medium text-gray-700 group-hover:text-gray-900">Profile Settings</span>
+              <span className="text-sm font-medium text-gray-700 group-hover:text-gray-900">Settings</span>
             </button>
 
             <button

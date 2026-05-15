@@ -2243,14 +2243,6 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
           target: 'outreach'
         } as any);
 
-        try {
-          const { createNotificationHelpers } = await import('../services/notificationService');
-          const leaderName = userProfile?.displayName || `${userProfile?.firstName || ''} ${userProfile?.lastName || ''}`.trim() || 'Unknown Leader';
-          await createNotificationHelpers.memberDeletionRequested(leaderName, om.name, 'Outreach deletion requested by leader');
-        } catch (notifyErr) {
-          console.warn('⚠️ Failed to send deletion request notification:', notifyErr);
-        }
-
         // Keep behavior consistent with member deletion requests: no immediate "deleted" notifications
         showToast('success', 'Deletion Request Submitted', `Your request to delete ${om.name} has been submitted for admin approval.`);
         return;
@@ -3478,18 +3470,6 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
         reason: reason || '',
         churchId: userProfile.churchId || ''
       });
-
-      try {
-        const { createNotificationHelpers } = await import('../services/notificationService');
-        const leaderName = userProfile.displayName || `${userProfile.firstName || ''} ${userProfile.lastName || ''}`.trim() || 'Unknown Leader';
-        await createNotificationHelpers.memberDeletionRequested(
-          leaderName,
-          `${member.firstName} ${member.lastName || ''}`.trim(),
-          reason || ''
-        );
-      } catch (notifyErr) {
-        console.warn('⚠️ Failed to send deletion request notification:', notifyErr);
-      }
 
       showToast('success', 'Deletion Request Submitted',
         `Your request to delete ${member.firstName} ${member.lastName || ''} has been submitted for admin approval.`);

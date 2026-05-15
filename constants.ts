@@ -36,7 +36,7 @@ export const FIXED_TABS: TabOption[] = [
   { id: TabKeys.OUTREACH, name: 'Outreach' },
   { id: TabKeys.BACENTA_MEETINGS, name: 'Bacenta Meetings' },
   { id: TabKeys.BIRTHDAYS, name: 'Birthdays' },
-  { id: TabKeys.PROFILE_SETTINGS, name: 'Profile Settings' },
+  { id: TabKeys.PROFILE_SETTINGS, name: 'Settings' },
   { id: TabKeys.MINISTRIES, name: 'Ministries' },
   { id: TabKeys.BIDIRECTIONAL_SYNC_TEST, name: 'Bidirectional Sync Test' },
   { id: TabKeys.CONTACT, name: 'Contact' },
