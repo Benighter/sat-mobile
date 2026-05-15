@@ -10,6 +10,7 @@ const { randomUUID } = require('crypto');
 
 // Secret for Resend API Key (configure via: firebase functions:secrets:set RESEND_API_KEY)
 const RESEND_API_KEY = defineSecret('RESEND_API_KEY');
+const DEFAULT_EMAIL_FROM = 'SAT Mobile <notifications@sat-mobile.app>';
 
 // Initialize Firebase Admin SDK
 if (!admin.apps.length) {
@@ -287,7 +288,7 @@ exports.relayPersistImage = functions.https.onCall(async (data, context) => {
 
 // Shared provider-based email sender
 async function sendEmailWithProviders({ to, subject, html, text, from }) {
-  const fromAddress = from || 'SAT Mobile <onboarding@resend.dev>';
+  const fromAddress = from || process.env.SAT_MOBILE_EMAIL_FROM || process.env.EMAIL_FROM || DEFAULT_EMAIL_FROM;
   const resendKey = RESEND_API_KEY.value();
   if (!resendKey) {
     throw new Error('RESEND_API_KEY is not configured');
@@ -314,7 +315,7 @@ function getEmailProviderFailure(err) {
     return {
       status: 412,
       code: 'failed-precondition',
-      message: `${message} Verify sat-mobile.app in Resend before sending birthday emails to other recipients.`
+      message: `${message} Verify sat-mobile.app in Resend and use a sender on that domain, such as ${DEFAULT_EMAIL_FROM}, before sending birthday emails to other recipients.`
     };
   }
   if (err?.code === 403 || /permission|forbidden/i.test(message)) {
