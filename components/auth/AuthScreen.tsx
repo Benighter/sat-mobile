@@ -66,10 +66,12 @@ interface RememberedLoginDetails {
 
 const REMEMBERED_LOGIN_KEY = 'sat_mobile_remembered_login';
 const VERIFICATION_SENT_KEY_PREFIX = 'sat-email-verification-last-sent-';
+const SIGNUP_VERIFICATION_GATE_KEY_PREFIX = 'sat-signup-email-verification-required-';
 const RESEND_COOLDOWN_MS = 60 * 1000;
 const VERIFICATION_RECHECK_INTERVAL_MS = 10 * 1000;
 
 const getVerificationSentKey = (uid: string) => `${VERIFICATION_SENT_KEY_PREFIX}${uid}`;
+const getSignupVerificationGateKey = (uid: string) => `${SIGNUP_VERIFICATION_GATE_KEY_PREFIX}${uid}`;
 
 const readVerificationSentAt = (uid?: string | null): number | null => {
   if (!uid || typeof window === 'undefined') {
@@ -89,6 +91,32 @@ const writeVerificationSentAt = (uid: string, value: number) => {
   if (typeof window === 'undefined') return;
   try {
     window.localStorage.setItem(getVerificationSentKey(uid), String(value));
+  } catch {}
+};
+
+const readSignupVerificationGate = (uid?: string | null): boolean => {
+  if (!uid || typeof window === 'undefined') {
+    return false;
+  }
+
+  try {
+    return window.localStorage.getItem(getSignupVerificationGateKey(uid)) === 'true';
+  } catch {
+    return false;
+  }
+};
+
+const writeSignupVerificationGate = (uid: string) => {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(getSignupVerificationGateKey(uid), 'true');
+  } catch {}
+};
+
+const clearSignupVerificationGate = (uid: string) => {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.removeItem(getSignupVerificationGateKey(uid));
   } catch {}
 };
 
@@ -351,6 +379,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ children, showToast }) =
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   const [ministryMode, setMinistryMode] = useState<boolean>(false);
   const [rememberedLogin, setRememberedLogin] = useState<RememberedLoginDetails | null>(null);
+  const [signupVerificationGateUid, setSignupVerificationGateUid] = useState<string | null>(null);
   // Super Admin prototype state (bypasses firebase auth when using hardcoded credentials)
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   // Must come before any conditional return (Rules of Hooks)
@@ -429,6 +458,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ children, showToast }) =
         console.log('🔄 [Ministry Mode] User switched to ministry mode - will use cross-church aggregation');
         // The FirebaseAppContext will automatically handle cross-church data fetching
       }
+      setSignupVerificationGateUid(user && readSignupVerificationGate(user.uid) ? user.uid : null);
       setUser(user);
       setLoading(false);
     });
@@ -514,6 +544,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ children, showToast }) =
         setRememberedLogin(null);
       }
 
+      setSignupVerificationGateUid(readSignupVerificationGate(user.uid) ? user.uid : null);
       setUser(user);
       if (user.emailVerified) {
         showToast('success', 'Welcome Back!', `Signed in as ${user.displayName || user.email}`);
@@ -552,6 +583,11 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ children, showToast }) =
 
   const handleRegisterSuccess = () => {
     setError(null);
+  };
+
+  const handleSignupVerificationRequired = (uid: string) => {
+    writeSignupVerificationGate(uid);
+    setSignupVerificationGateUid(uid);
   };
 
   const switchToRegister = () => {
@@ -598,14 +634,23 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ children, showToast }) =
     );
   }
 
-  if (user && !user.emailVerified) {
+  const shouldGateUnverifiedSignup = Boolean(
+    user &&
+    !user.emailVerified &&
+    (authMode === 'register' || signupVerificationGateUid === user.uid || readSignupVerificationGate(user.uid))
+  );
+
+  if (user && shouldGateUnverifiedSignup) {
     return (
       <EmailVerificationGate
         user={user}
         ministryMode={ministryMode}
         showToast={showToast}
         onVerified={(verifiedUser) => {
+          clearSignupVerificationGate(verifiedUser.uid);
+          setSignupVerificationGateUid(null);
           setUser(verifiedUser);
+          setAuthMode('login');
           if (ministryMode) {
             try {
               switchTab({ id: 'ministries', name: 'Ministries' });
@@ -788,6 +833,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ children, showToast }) =
 
                 <RegisterForm
                   onSuccess={() => handleRegisterSuccess()}
+                  onVerificationRequired={handleSignupVerificationRequired}
                   onSwitchToLogin={switchToLogin}
                   showToast={showToast}
                   ministryMode={ministryMode}

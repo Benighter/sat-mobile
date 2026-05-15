@@ -9,11 +9,19 @@ import { EyeIcon, EyeSlashIcon } from '../icons/index';
 import { MINISTRY_OPTIONS } from '../../constants';
 
 const VERIFICATION_SENT_KEY_PREFIX = 'sat-email-verification-last-sent-';
+const SIGNUP_VERIFICATION_GATE_KEY_PREFIX = 'sat-signup-email-verification-required-';
 
 const rememberVerificationSentAt = (uid: string) => {
   if (typeof window === 'undefined') return;
   try {
     window.localStorage.setItem(`${VERIFICATION_SENT_KEY_PREFIX}${uid}`, String(Date.now()));
+  } catch {}
+};
+
+const rememberSignupVerificationRequired = (uid: string) => {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(`${SIGNUP_VERIFICATION_GATE_KEY_PREFIX}${uid}`, 'true');
   } catch {}
 };
 
@@ -52,6 +60,7 @@ const getErrorMessage = (error: string, ministryMode: boolean): string => {
 
 interface RegisterFormProps {
   onSuccess: () => void;
+  onVerificationRequired?: (uid: string) => void;
   onSwitchToLogin: () => void;
   showToast: (type: 'success' | 'error' | 'warning' | 'info', title: string, message?: string) => void;
   ministryMode?: boolean;
@@ -68,7 +77,7 @@ interface RegisterFormData {
   ministry?: string;
 }
 
-const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, onSwitchToLogin: _onSwitchToLogin, showToast, ministryMode = false }) => {
+const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, onVerificationRequired, onSwitchToLogin: _onSwitchToLogin, showToast, ministryMode = false }) => {
   const [formData, setFormData] = useState<RegisterFormData>({
     firstName: '',
     lastName: '',
@@ -471,6 +480,9 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, onSwitchToLogin:
 
       const firebaseUser = auth.currentUser;
       if (firebaseUser?.email && !firebaseUser.emailVerified) {
+        rememberSignupVerificationRequired(firebaseUser.uid);
+        onVerificationRequired?.(firebaseUser.uid);
+
         try {
           await sendEmailVerification(firebaseUser);
           rememberVerificationSentAt(firebaseUser.uid);

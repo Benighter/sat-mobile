@@ -10,6 +10,7 @@ type EmailVerificationPromptMode = 'banner' | 'settings';
 interface EmailVerificationPromptProps {
   mode?: EmailVerificationPromptMode;
   className?: string;
+  dismissible?: boolean;
 }
 
 const RESEND_COOLDOWN_MS = 60 * 1000;
@@ -69,7 +70,7 @@ const getFirebaseErrorToast = (error: any) => {
   }
 };
 
-const EmailVerificationPrompt: React.FC<EmailVerificationPromptProps> = ({ mode = 'banner', className = '' }) => {
+const EmailVerificationPrompt: React.FC<EmailVerificationPromptProps> = ({ mode = 'banner', className = '', dismissible = false }) => {
   const { user, showToast, refreshUserProfile } = useAppContext();
   const [dismissed, setDismissed] = useState(false);
   const [email, setEmail] = useState<string | null>(null);
@@ -237,7 +238,7 @@ const EmailVerificationPrompt: React.FC<EmailVerificationPromptProps> = ({ mode 
     return null;
   }
 
-  if (mode === 'banner' && (dismissed || (email && isVerified))) {
+  if (mode === 'banner' && ((dismissible && dismissed) || (email && isVerified))) {
     return null;
   }
 
@@ -335,15 +336,17 @@ const EmailVerificationPrompt: React.FC<EmailVerificationPromptProps> = ({ mode 
           {email && <p className="mt-1 break-all text-xs font-medium text-amber-800 dark:text-amber-100/80">{email}</p>}
           <div className="mt-4">{actions}</div>
         </div>
-        <button
-          type="button"
-          className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-amber-800 transition hover:bg-amber-100 dark:text-amber-100 dark:hover:bg-amber-800/50"
-          onClick={() => setDismissed(true)}
-          aria-label="Dismiss email verification reminder"
-          title="Dismiss"
-        >
-          <XMarkIcon className="h-4 w-4" />
-        </button>
+        {dismissible && (
+          <button
+            type="button"
+            className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-amber-800 transition hover:bg-amber-100 dark:text-amber-100 dark:hover:bg-amber-800/50"
+            onClick={() => setDismissed(true)}
+            aria-label="Dismiss email verification reminder"
+            title="Dismiss"
+          >
+            <XMarkIcon className="h-4 w-4" />
+          </button>
+        )}
       </div>
     </div>
   );
