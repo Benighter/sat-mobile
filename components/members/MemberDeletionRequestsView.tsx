@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useAppContext } from '../../contexts/FirebaseAppContext';
 import { MemberDeletionRequest, DeletionRequestStatus } from '../../types';
 import { memberDeletionRequestService } from '../../services/firebaseService';
-import { hasAdminPrivileges } from '../../utils/permissionUtils';
+import { hasAdminPrivileges, isScopedAdmin } from '../../utils/permissionUtils';
 import { formatISODate } from '../../utils/dateUtils';
 import Button from '../ui/Button';
 import Badge from '../ui/Badge';
@@ -24,9 +24,15 @@ interface MemberDeletionRequestsViewProps {
 }
 
 const MemberDeletionRequestsView: React.FC<MemberDeletionRequestsViewProps> = () => {
-  const { userProfile, showToast, showConfirmation, approveDeletionRequestHandler, rejectDeletionRequestHandler } = useAppContext();
-  const [deletionRequests, setDeletionRequests] = useState<MemberDeletionRequest[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const {
+    userProfile,
+    memberDeletionRequests,
+    isLoading,
+    showToast,
+    showConfirmation,
+    approveDeletionRequestHandler,
+    rejectDeletionRequestHandler
+  } = useAppContext();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | DeletionRequestStatus>('all');
   const [processingRequestId, setProcessingRequestId] = useState<string | null>(null);
@@ -35,34 +41,8 @@ const MemberDeletionRequestsView: React.FC<MemberDeletionRequestsViewProps> = ()
 
   // Check if current user is admin
   const isAdmin = hasAdminPrivileges(userProfile);
-
-  // Load deletion requests
-  useEffect(() => {
-    if (!isAdmin) return;
-
-    const loadRequests = async () => {
-      try {
-        setIsLoading(true);
-        const requests = await memberDeletionRequestService.getAll();
-        setDeletionRequests(requests);
-      } catch (error: any) {
-        console.error('Error loading deletion requests:', error);
-        showToast('error', 'Error', 'Failed to load deletion requests');
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    loadRequests();
-
-    // Set up real-time listener
-    const unsubscribe = memberDeletionRequestService.onSnapshot((requests) => {
-      setDeletionRequests(requests);
-      setIsLoading(false);
-    });
-
-    return () => unsubscribe();
-  }, [isAdmin, showToast]);
+  const scopedAdmin = isScopedAdmin(userProfile);
+  const deletionRequests = memberDeletionRequests;
 
   // Filter requests based on search and status
   const filteredRequests = useMemo(() => {
@@ -138,15 +118,24 @@ const MemberDeletionRequestsView: React.FC<MemberDeletionRequestsViewProps> = ()
 
     try {
       setIsClearingCompleted(true);
-      const clearedCount = await memberDeletionRequestService.clearCompletedRequests();
+      const completedRequests = deletionRequests.filter(request => (
+        request.status === 'approved' || request.status === 'rejected'
+      ));
+
+      let clearedCount = 0;
+
+      if (scopedAdmin) {
+        for (const request of completedRequests) {
+          await memberDeletionRequestService.delete(request.id);
+          clearedCount += 1;
+        }
+      } else {
+        clearedCount = await memberDeletionRequestService.clearCompletedRequests();
+      }
 
       if (clearedCount > 0) {
         showToast('success', 'Completed Requests Cleared',
           `Successfully cleared ${clearedCount} completed deletion request${clearedCount !== 1 ? 's' : ''}`);
-
-        // Refresh the deletion requests list
-        const updatedRequests = await memberDeletionRequestService.getAll();
-        setDeletionRequests(updatedRequests);
       } else {
         showToast('info', 'No Requests to Clear', 'There are no completed deletion requests to clear');
       }

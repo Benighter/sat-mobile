@@ -1,46 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { useAppContext } from '../../contexts/FirebaseAppContext';
-import { MemberDeletionRequest } from '../../types';
-import { memberDeletionRequestService } from '../../services/firebaseService';
 import { hasAdminPrivileges } from '../../utils/permissionUtils';
 import { TabKeys } from '../../types';
 import { ExclamationTriangleIcon } from '../icons';
 
 const DeletionRequestNotificationBadge: React.FC = () => {
-  const { userProfile, switchTab } = useAppContext();
-  const [pendingRequests, setPendingRequests] = useState<MemberDeletionRequest[]>([]);
+  const { userProfile, memberDeletionRequests, switchTab } = useAppContext();
 
   // Check if current user is admin
   const isAdmin = hasAdminPrivileges(userProfile);
-
-  // Load pending deletion requests
-  useEffect(() => {
-    if (!isAdmin) return;
-
-    const loadPendingRequests = async () => {
-      try {
-        const requests = await memberDeletionRequestService.getAll();
-        const pending = requests.filter(r => r.status === 'pending');
-        setPendingRequests(pending);
-      } catch (error: any) {
-        console.error('Error loading pending deletion requests:', error);
-        // Don't show toast for this error as it's background loading
-      } finally {
-        // no-op
-      }
-    };
-
-    loadPendingRequests();
-
-    // Set up real-time listener for pending requests
-    const unsubscribe = memberDeletionRequestService.onSnapshot((requests) => {
-      const pending = requests.filter(r => r.status === 'pending');
-      setPendingRequests(pending);
-  // no-op
-    });
-
-    return () => unsubscribe();
-  }, [isAdmin]);
+  const pendingRequests = memberDeletionRequests.filter(request => request.status === 'pending');
 
   // Don't render if not admin or no pending requests
   if (!isAdmin || pendingRequests.length === 0) {
