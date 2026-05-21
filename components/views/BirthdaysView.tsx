@@ -6,6 +6,7 @@ import { CheckIcon } from '../icons';
 import Modal from '../ui/Modal';
 import Button from '../ui/Button';
 import { BirthdayNotificationService } from '../../services/birthdayNotificationService';
+import { EmailNotificationService } from '../../services/emailNotificationService';
 import { userService } from '../../services/userService';
 import { hasAdminPrivileges } from '../../utils/permissionUtils';
 
@@ -243,10 +244,27 @@ const BirthdaysView: React.FC = () => {
                     { force: true, actorAdminId: userProfile?.uid }
                   );
                   setTriggeredNow(true);
-                  const toastType = results.failed > 0 ? (results.sent > 0 ? 'warning' : 'error') : 'success';
-                  const toastTitle = results.failed > 0 ? 'Notifications Failed' : 'Notifications Sent';
-                  const firstError = results.errors?.[0];
-                  showToast(toastType, toastTitle, firstError || `Processed ${results.processed}, sent ${results.sent}, failed ${results.failed}`);
+
+                  const deliveryMethod = typeof window !== 'undefined'
+                    ? window.localStorage.getItem('sat-mobile-email-delivery-method') || 'brevo'
+                    : 'brevo';
+
+                  if (deliveryMethod === 'mailto') {
+                    // Open the native mail app with a consolidated digest
+                    const svcDigest = EmailNotificationService.getInstance();
+                    const digest = svcDigest.generateUpcomingBirthdaysDigest(membersWithBirthdays, bacentas);
+                    const plainText = (digest.textContent || digest.htmlContent || '').replace(/<[^>]*>/g, '');
+                    const mailtoUrl = `mailto:${encodeURIComponent(userProfile?.email || '')}?subject=${encodeURIComponent(digest.subject)}&body=${encodeURIComponent(plainText)}`;
+                    if (typeof window !== 'undefined') {
+                      window.location.href = mailtoUrl;
+                    }
+                    showToast('success', 'In-App Alerts Created & Mail Client Opened', 'In-app notifications were created successfully, and the consolidated upcoming birthdays digest has been loaded into your native mail client');
+                  } else {
+                    const toastType = results.failed > 0 ? (results.sent > 0 ? 'warning' : 'error') : 'success';
+                    const toastTitle = results.failed > 0 ? 'Notifications Failed' : 'Notifications Sent';
+                    const firstError = results.errors?.[0];
+                    showToast(toastType, toastTitle, firstError || `Processed ${results.processed}, sent ${results.sent}, failed ${results.failed}`);
+                  }
                   setTimeout(() => setTriggeredNow(false), 5000);
                 } catch (error: any) {
                   showToast('error', 'Trigger Failed', error?.message || 'Failed to trigger processing');

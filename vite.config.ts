@@ -54,6 +54,13 @@ export default defineConfig(({ mode }) => {
             changeOrigin: true,
             secure: true,
             rewrite: (p) => p.replace(/^\/api\/search-admin/, '/searchAdminUserByEmailHttp'),
+          },
+          // Local dev proxy to Brevo SMTP API to bypass CORS
+          '/api-brevo': {
+            target: 'https://api.brevo.com',
+            changeOrigin: true,
+            secure: true,
+            rewrite: (p) => p.replace(/^\/api-brevo/, ''),
           }
         }
       },

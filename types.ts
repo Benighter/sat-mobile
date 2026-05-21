@@ -457,6 +457,7 @@ export interface NotificationPreferences {
   };
   emailNotifications: boolean;
   pushNotifications: boolean;
+  emailDeliveryMethod?: 'api' | 'mailto' | 'brevo';
 }
 
 export interface User {

@@ -6,10 +6,12 @@ const admin = require('firebase-admin');
 const sgMail = require('@sendgrid/mail');
 const { defineSecret } = require('firebase-functions/params');
 const { Resend } = require('resend');
+const nodemailer = require('nodemailer');
 const { randomUUID } = require('crypto');
 
 // Secret for Resend API Key (configure via: firebase functions:secrets:set RESEND_API_KEY)
 const RESEND_API_KEY = defineSecret('RESEND_API_KEY');
+const BREVO_API_KEY = defineSecret('BREVO_API_KEY');
 const DEFAULT_EMAIL_FROM = 'SAT Mobile <notifications@sat-mobile.app>';
 
 // Initialize Firebase Admin SDK
@@ -294,26 +296,200 @@ exports.relayPersistImage = functions.https.onCall(async (data, context) => {
   }
 });
 
+// Helper to parse sender name and email from "Name <email@domain.com>" or just "email@domain.com"
+function parseSender(fromStr, fallbackEmail = 'mehlo.nkolele@gmail.com') {
+  if (!fromStr || typeof fromStr !== 'string') {
+    return { name: 'SAT Mobile', email: fallbackEmail };
+  }
+  
+  // Format: "Display Name <email@domain.com>"
+  const match = fromStr.match(/^(?:"?([^"<]+)"?\s*)?<([^>]+)>$/);
+  if (match) {
+    const name = (match[1] || '').trim();
+    const email = (match[2] || '').trim();
+    return { name: name || 'SAT Mobile', email };
+  }
+  
+  // Format: just "email@domain.com"
+  if (fromStr.includes('@')) {
+    return { name: 'SAT Mobile', email: fromStr.trim() };
+  }
+  
+  return { name: fromStr.trim(), email: fallbackEmail };
+}
+
 // Shared provider-based email sender
 async function sendEmailWithProviders({ to, subject, html, text, from }) {
-  const fromAddress = from || process.env.SAT_MOBILE_EMAIL_FROM || process.env.EMAIL_FROM || DEFAULT_EMAIL_FROM;
-  const resendKey = RESEND_API_KEY.value();
-  if (!resendKey) {
-    throw new Error('RESEND_API_KEY is not configured');
-  }
+  // Parse the incoming dynamic sender
+  const parsed = parseSender(from, 'mehlo.nkolele@gmail.com');
 
-  const resend = new Resend(resendKey);
-  const result = await resend.emails.send({
-    to,
-    from: fromAddress,
-    subject,
-    html: html || undefined,
-    text: text || undefined
-  });
-  if (result?.error) {
-    throw new Error(result.error?.message || 'Resend error');
+  let brevoApiKey = '';
+  try {
+    brevoApiKey = BREVO_API_KEY.value();
+  } catch (e) {
+    // Secret not set or not loaded
   }
-  return { success: true, messageId: result?.data?.id || null };
+  if (!brevoApiKey) {
+    brevoApiKey = process.env.BREVO_API_KEY || process.env.BREVO_SMTP_KEY || '';
+  }
+  const isRestKey = brevoApiKey.startsWith('xkeysib-');
+
+  if (isRestKey) {
+    // 1a. Route via Brevo REST HTTP API (V3)
+    try {
+      console.log('Detected REST API Key. Attempting email delivery via Brevo Transactional REST API...');
+      const brevoVerifiedEmail = 'mehlo.nkolele@gmail.com';
+      let brevoSender = {};
+      let brevoReplyTo = {};
+
+      if (parsed.email.toLowerCase() === brevoVerifiedEmail.toLowerCase()) {
+        brevoSender = { name: parsed.name, email: brevoVerifiedEmail };
+        brevoReplyTo = { name: parsed.name, email: brevoVerifiedEmail };
+      } else {
+        brevoSender = { name: `${parsed.name} (via SAT Mobile)`, email: brevoVerifiedEmail };
+        brevoReplyTo = { name: parsed.name, email: parsed.email };
+      }
+
+      console.log(`Routing Brevo HTTP API: Sender=${JSON.stringify(brevoSender)}, Reply-To=${JSON.stringify(brevoReplyTo)}`);
+
+      const brevoPayload = {
+        sender: brevoSender,
+        to: [{ email: to }],
+        replyTo: brevoReplyTo,
+        subject,
+        htmlContent: html || undefined,
+        textContent: text || undefined
+      };
+
+      const apiResponse = await fetch('https://api.brevo.com/v3/smtp/email', {
+        method: 'POST',
+        headers: {
+          'accept': 'application/json',
+          'api-key': brevoApiKey,
+          'content-type': 'application/json'
+        },
+        body: JSON.stringify(brevoPayload)
+      });
+
+      const responseText = await apiResponse.text();
+      console.log(`Brevo HTTP API raw response: ${responseText}`);
+
+      let responseData = {};
+      try {
+        responseData = JSON.parse(responseText);
+      } catch (pe) {
+        // ignore
+      }
+
+      if (!apiResponse.ok) {
+        throw new Error(responseData?.message || responseData?.error || `HTTP ${apiResponse.status}: ${responseText}`);
+      }
+
+      console.log('Email successfully sent via Brevo HTTP API:', responseData.messageId);
+      return { success: true, messageId: responseData.messageId || 'brevo-api-success' };
+    } catch (brevoErr) {
+      console.error('Brevo HTTP API backend delivery failed:', brevoErr);
+      throw brevoErr;
+    }
+  } else {
+    // 1b. Route via nodemailer SMTP (required for SMTP keys starting with xsmtpsib-)
+    try {
+      console.log('Detected SMTP Key. Attempting email delivery via Brevo SMTP backend relay...');
+      const transporter = nodemailer.createTransport({
+        host: 'smtp-relay.brevo.com',
+        port: 587,
+        auth: {
+          user: process.env.BREVO_SMTP_USER || 'ac22aa001@smtp-brevo.com',
+          pass: brevoApiKey
+        }
+      });
+
+      // Brevo verified sender constraint: The physical sending email MUST be 'mehlo.nkolele@gmail.com'
+      const brevoVerifiedEmail = 'mehlo.nkolele@gmail.com';
+      let brevoFrom = '';
+      let brevoReplyTo = '';
+
+      if (parsed.email.toLowerCase() === brevoVerifiedEmail.toLowerCase()) {
+        brevoFrom = `"${parsed.name}" <${brevoVerifiedEmail}>`;
+        brevoReplyTo = `"${parsed.name}" <${brevoVerifiedEmail}>`;
+      } else {
+        // Rewrite sender to the verified email, but keep the display name and set replyTo
+        brevoFrom = `"${parsed.name} (via SAT Mobile)" <${brevoVerifiedEmail}>`;
+        brevoReplyTo = `"${parsed.name}" <${parsed.email}>`;
+      }
+
+      console.log(`Routing Brevo SMTP: From="${brevoFrom}", Reply-To="${brevoReplyTo}"`);
+
+      const info = await transporter.sendMail({
+        from: brevoFrom,
+        replyTo: brevoReplyTo,
+        to,
+        subject,
+        html: html || undefined,
+        text: text || undefined
+      });
+
+      console.log('Email successfully sent via Brevo SMTP backend:', info.messageId);
+      return { success: true, messageId: info.messageId || 'brevo-smtp-success' };
+    } catch (brevoErr) {
+      console.error('Brevo SMTP backend delivery failed:', brevoErr);
+      
+      let customError = brevoErr;
+      if (brevoErr.message && brevoErr.message.includes('525 5.7.1')) {
+        customError = new Error(`Brevo SMTP Relay error: "525 5.7.1 Unauthorized IP address". To fix this, please log into your Brevo dashboard -> settings -> security -> Authorized IPs, and make sure the "Block unknown IP addresses" or whitelisting restriction is toggled OFF (or add your server's public IP to the allowed list). Alternatively, generate a standard V3 API Key (starts with "xkeysib-") in Brevo and configure it in the app to route via standard REST.`);
+      }
+
+      // 2. Fallback to Resend if configured
+      try {
+        console.log('Attempting fallback delivery via Resend...');
+        let resendKey = null;
+        try {
+          resendKey = RESEND_API_KEY.value();
+        } catch (e) {
+          resendKey = process.env.RESEND_API_KEY || null;
+        }
+
+        if (!resendKey) {
+          throw new Error('RESEND_API_KEY is not configured');
+        }
+
+        // Resend verified domain constraint: The physical sending email must be on '@sat-mobile.app'
+        const resendVerifiedEmail = 'notifications@sat-mobile.app';
+        let resendFrom = '';
+        let resendReplyTo = '';
+
+        if (parsed.email.toLowerCase().endsWith('@sat-mobile.app')) {
+          resendFrom = `"${parsed.name}" <${parsed.email}>`;
+          resendReplyTo = `"${parsed.name}" <${parsed.email}>`;
+        } else {
+          // Rewrite sender to the verified domain, but keep the display name and set replyTo
+          resendFrom = `"${parsed.name} (via SAT Mobile)" <${resendVerifiedEmail}>`;
+          resendReplyTo = `"${parsed.name}" <${parsed.email}>`;
+        }
+
+        console.log(`Routing Resend Email: From="${resendFrom}", Reply-To="${resendReplyTo}"`);
+
+        const resend = new Resend(resendKey);
+        const result = await resend.emails.send({
+          to,
+          from: resendFrom,
+          replyTo: resendReplyTo,
+          subject,
+          html: html || undefined,
+          text: text || undefined
+        });
+        
+        if (result?.error) {
+          throw new Error(result.error?.message || 'Resend error');
+        }
+        console.log('Email successfully sent via Resend backend fallback:', result?.data?.id);
+        return { success: true, messageId: result?.data?.id || null };
+      } catch (resendErr) {
+        console.error('Resend fallback delivery failed:', resendErr);
+        throw new Error(`Email delivery failed. Brevo error: ${customError.message || customError}. Resend error: ${resendErr.message || resendErr}`);
+      }
+    }
+  }
 }
 
 // Callable: send birthday email using provider(s) — admin only
@@ -333,7 +509,7 @@ function getEmailProviderFailure(err) {
 }
 
 exports.sendBirthdayEmail = functions
-  .runWith({ secrets: [RESEND_API_KEY], invoker: 'public' })
+  .runWith({ secrets: [RESEND_API_KEY, BREVO_API_KEY], invoker: 'public' })
   .https.onCall(async (data, context) => {
     if (!context.auth) {
       throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
@@ -386,7 +562,7 @@ function setCors(req, res) {
 
 // HTTP (CORS-enabled) fallback for sending birthday email (for local dev or non-callable clients)
 exports.sendBirthdayEmailHttp = functions
-  .runWith({ secrets: [RESEND_API_KEY], invoker: 'public' })
+  .runWith({ secrets: [RESEND_API_KEY, BREVO_API_KEY], invoker: 'public' })
   .https.onRequest(async (req, res) => {
     setCors(req, res);
     if (req.method === 'OPTIONS') {

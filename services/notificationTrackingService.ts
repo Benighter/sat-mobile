@@ -45,6 +45,8 @@ export class NotificationTrackingService {
       userId?: string;
       timestamp?: string;
       metadata?: Record<string, any>;
+      processingTime?: number;
+      retryCount?: number;
     }
   ): Promise<string> {
     try {

@@ -6,7 +6,7 @@ import { inviteService } from '../../services/inviteService';
 import useCurrencyFormatter from '../../hooks/useCurrencyFormatter';
 import { formatIncomeDisplay, formatZarPerUsdRate } from '../../utils/currency';
 import { getDefaultNotificationPreferences } from '../../utils/notificationUtils';
-// import { emailServiceClient } from '../../services/emailServiceClient'; // Email feature on hold
+import { emailServiceClient } from '../../services/emailServiceClient';
 // Ministry feature removed – no MINISTRY_OPTIONS import
 import { NotificationPreferences, CrossTenantInvite, UserPreferences, TabKeys } from '../../types';
 import Button from '../ui/Button';
@@ -136,6 +136,7 @@ const ProfileSettingsView: React.FC = () => {
       const base = userProfile?.notificationPreferences || getDefaultNotificationPreferences();
       return {
         ...base,
+        emailDeliveryMethod: base.emailDeliveryMethod || (typeof window !== 'undefined' ? window.localStorage.getItem('sat-mobile-email-delivery-method') : 'brevo') || 'brevo',
         birthdayNotifications: {
           ...base.birthdayNotifications,
           ...forcedBirthdayDefaults
@@ -157,7 +158,12 @@ const ProfileSettingsView: React.FC = () => {
 
   const [isConstituencyManagerOpen, setIsConstituencyManagerOpen] = useState(false);
   const [isSavingCampusShepherd, setIsSavingCampusShepherd] = useState(false);
-  // const [isSendingTestEmail, setIsSendingTestEmail] = useState(false); // Email feature on hold
+  const [isSendingTestEmail, setIsSendingTestEmail] = useState(false);
+  const [debugLogs, setDebugLogs] = useState<string[] | null>(null);
+  const [showDebugConsole, setShowDebugConsole] = useState(false);
+
+  const [brevoSenderEmail, setBrevoSenderEmail] = useState(() => (typeof window !== 'undefined' ? window.localStorage.getItem('sat-mobile-brevo-sender-email') || 'notifications@sat-mobile.app' : 'notifications@sat-mobile.app'));
+  const [brevoSenderName, setBrevoSenderName] = useState(() => (typeof window !== 'undefined' ? window.localStorage.getItem('sat-mobile-brevo-sender-name') || 'SAT Mobile' : 'SAT Mobile'));
 
   const isPromotedAdmin = isPromotedCampusAdmin(userProfile);
   const hasAdminAccess = hasAdminPrivileges(userProfile);
@@ -261,8 +267,10 @@ const ProfileSettingsView: React.FC = () => {
 
       // Always start from a safe base to avoid spreading undefined and to keep all keys defined
       const basePrefs = (userProfile.notificationPreferences || getDefaultNotificationPreferences()) as NotificationPreferences;
+      const localDeliveryMethod = (typeof window !== 'undefined' ? window.localStorage.getItem('sat-mobile-email-delivery-method') : 'brevo') as 'api' | 'mailto' | 'brevo';
       setNotificationPreferences({
         ...basePrefs,
+        emailDeliveryMethod: basePrefs.emailDeliveryMethod || localDeliveryMethod || 'brevo',
         birthdayNotifications: {
           ...basePrefs.birthdayNotifications,
           ...forcedBirthdayDefaults
@@ -277,8 +285,31 @@ const ProfileSettingsView: React.FC = () => {
       });
 
       setImagePreview(userProfile.profilePicture || '');
+
+      // Dynamically override default sender settings with currently logged in user details if not customized
+      const storedEmail = typeof window !== 'undefined' ? window.localStorage.getItem('sat-mobile-brevo-sender-email') : null;
+      if (!storedEmail || storedEmail === 'notifications@sat-mobile.app') {
+        const userEmail = userProfile.email || user?.email || '';
+        if (userEmail) {
+          setBrevoSenderEmail(userEmail);
+          if (typeof window !== 'undefined') {
+            window.localStorage.setItem('sat-mobile-brevo-sender-email', userEmail);
+          }
+        }
+      }
+
+      const storedName = typeof window !== 'undefined' ? window.localStorage.getItem('sat-mobile-brevo-sender-name') : null;
+      if (!storedName || storedName === 'SAT Mobile') {
+        const userName = `${userProfile.firstName || ''} ${userProfile.lastName || ''}`.trim() || user?.displayName || '';
+        if (userName) {
+          setBrevoSenderName(userName);
+          if (typeof window !== 'undefined') {
+            window.localStorage.setItem('sat-mobile-brevo-sender-name', userName);
+          }
+        }
+      }
     }
-  }, [userProfile]);
+  }, [userProfile, user]);
 
   // const handlePreferenceChange = (key: keyof UserPreferences, value: any) => {
   //   setPreferences(prev => ({ ...prev, [key]: value }));
@@ -326,36 +357,43 @@ const ProfileSettingsView: React.FC = () => {
     }
   };
 
-  // const handleSendTestEmail = async () => {
-  //   if (!user || !user.email) {
-  //     showToast('error', 'Not Signed In', 'You must be signed in with an email to send a test email');
-  //     return;
-  //   }
-  //   if (!hasAdminPrivileges(userProfile)) {
-  //     showToast('error', 'Admin Only', 'Only admins can send the test email');
-  //     return;
-  //   }
-  //   try {
-  //     setIsSendingTestEmail(true);
-  //     const displayName = `${userProfile?.firstName || user.displayName || 'Admin'} ${userProfile?.lastName || ''}`.trim();
-  //     const res = await emailServiceClient.sendTestBirthdayEmail({
-  //       uid: user.uid,
-  //       email: user.email,
-  //       displayName,
-  //       role: (userProfile as any)?.role || 'admin'
-  //     });
-  //     if ((res as any)?.success) {
-  //       showToast('success', 'Test Email Sent', 'Please check your inbox for the birthday test email');
-  //     } else {
-  //       const msg = (res as any)?.error || 'Unknown failure while sending the test email';
-  //       showToast('error', 'Test Email Failed', msg);
-  //     }
-  //   } catch (e: any) {
-  //     showToast('error', 'Test Email Failed', e?.message || 'An error occurred while sending the test email');
-  //   } finally {
-  //     setIsSendingTestEmail(false);
-  //   }
-  // };
+  const handleSendTestEmail = async () => {
+    if (!user || !user.email) {
+      showToast('error', 'Not Signed In', 'You must be signed in with an email to send a test email');
+      return;
+    }
+    if (!hasAdminPrivileges(userProfile)) {
+      showToast('error', 'Admin Only', 'Only admins can send the test email');
+      return;
+    }
+    try {
+      setIsSendingTestEmail(true);
+      setDebugLogs([]);
+      setShowDebugConsole(true);
+      const displayName = `${userProfile?.firstName || user.displayName || 'Admin'} ${userProfile?.lastName || ''}`.trim();
+      const res = await emailServiceClient.sendTestBirthdayEmail({
+        uid: user.uid,
+        email: user.email,
+        displayName,
+        role: (userProfile as any)?.role || 'admin'
+      });
+      
+      if (res.debugLogs) {
+        setDebugLogs(res.debugLogs);
+      }
+      
+      if ((res as any)?.success) {
+        showToast('success', 'Test Email Sent', 'Please check your inbox or native mail app to review the test email');
+      } else {
+        const msg = (res as any)?.error || 'Unknown failure while sending the test email';
+        showToast('error', 'Test Email Failed', msg);
+      }
+    } catch (e: any) {
+      showToast('error', 'Test Email Failed', e?.message || 'An error occurred while sending the test email');
+    } finally {
+      setIsSendingTestEmail(false);
+    }
+  };
 
   // Note: Birthday notification timing is admin-managed; UI controls are disabled.
 
@@ -946,6 +984,209 @@ const ProfileSettingsView: React.FC = () => {
                               <p className="text-xs text-slate-500 dark:text-dark-400 mt-0.5 leading-relaxed">Receive all email notifications from the church management system</p>
                             </div>
                           </label>
+
+                          {/* Premium Email Delivery Method Picker */}
+                          {notificationPreferences?.emailNotifications && (
+                            <div className="mt-5 pt-4 border-t border-slate-200/60 dark:border-dark-700/60 space-y-3">
+                              <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-dark-400">
+                                Email Delivery Method
+                              </label>
+                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    handleNotificationPreferenceChange('emailDeliveryMethod', 'api');
+                                    if (typeof window !== 'undefined') {
+                                      window.localStorage.setItem('sat-mobile-email-delivery-method', 'api');
+                                    }
+                                  }}
+                                  className={`flex flex-col text-left p-4 rounded-2xl border transition-all duration-200 ${
+                                    (notificationPreferences.emailDeliveryMethod || 'api') === 'api'
+                                      ? 'border-slate-900 bg-slate-900 text-white shadow-[0_8px_16px_-6px_rgba(15,23,42,0.3)] dark:border-white/20 dark:bg-dark-600 dark:text-dark-100'
+                                      : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-700 dark:border-dark-700 dark:bg-dark-800 dark:hover:bg-dark-750 dark:text-dark-300'
+                                  }`}
+                                >
+                                  <span className="font-bold text-xs uppercase tracking-wider">API Gateway</span>
+                                  <span className={`text-[10px] mt-1 leading-normal ${
+                                    (notificationPreferences.emailDeliveryMethod || 'api') === 'api'
+                                      ? 'text-slate-300'
+                                      : 'text-slate-500 dark:text-dark-400'
+                                  }`}>
+                                    Backend cloud server.
+                                  </span>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    handleNotificationPreferenceChange('emailDeliveryMethod', 'brevo');
+                                    if (typeof window !== 'undefined') {
+                                      window.localStorage.setItem('sat-mobile-email-delivery-method', 'brevo');
+                                    }
+                                  }}
+                                  className={`flex flex-col text-left p-4 rounded-2xl border transition-all duration-200 ${
+                                    notificationPreferences.emailDeliveryMethod === 'brevo'
+                                      ? 'border-slate-900 bg-slate-900 text-white shadow-[0_8px_16px_-6px_rgba(15,23,42,0.3)] dark:border-white/20 dark:bg-dark-600 dark:text-dark-100'
+                                      : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-700 dark:border-dark-700 dark:bg-dark-800 dark:hover:bg-dark-750 dark:text-dark-300'
+                                  }`}
+                                >
+                                  <span className="font-bold text-xs uppercase tracking-wider">Brevo SMTP API</span>
+                                  <span className={`text-[10px] mt-1 leading-normal ${
+                                    notificationPreferences.emailDeliveryMethod === 'brevo'
+                                      ? 'text-slate-300'
+                                      : 'text-slate-500 dark:text-dark-400'
+                                  }`}>
+                                    Direct inbox API (Free).
+                                  </span>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    handleNotificationPreferenceChange('emailDeliveryMethod', 'mailto');
+                                    if (typeof window !== 'undefined') {
+                                      window.localStorage.setItem('sat-mobile-email-delivery-method', 'mailto');
+                                    }
+                                  }}
+                                  className={`flex flex-col text-left p-4 rounded-2xl border transition-all duration-200 ${
+                                    notificationPreferences.emailDeliveryMethod === 'mailto'
+                                      ? 'border-slate-900 bg-slate-900 text-white shadow-[0_8px_16px_-6px_rgba(15,23,42,0.3)] dark:border-white/20 dark:bg-dark-600 dark:text-dark-100'
+                                      : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-700 dark:border-dark-700 dark:bg-dark-800 dark:hover:bg-dark-750 dark:text-dark-300'
+                                  }`}
+                                >
+                                  <span className="font-bold text-xs uppercase tracking-wider">Native Mail App</span>
+                                  <span className={`text-[10px] mt-1 leading-normal ${
+                                    notificationPreferences.emailDeliveryMethod === 'mailto'
+                                      ? 'text-slate-300'
+                                      : 'text-slate-500 dark:text-dark-400'
+                                  }`}>
+                                    Device mail app draft.
+                                  </span>
+                                </button>
+                              </div>
+
+                              {notificationPreferences.emailDeliveryMethod === 'brevo' && (
+                                <div className="mt-4 p-4 rounded-2xl border border-slate-200 dark:border-dark-700 bg-slate-50/50 dark:bg-dark-850/50 space-y-4">
+                                  <div className="flex flex-col gap-1">
+                                    <span className="text-xs font-bold text-slate-700 dark:text-dark-200 uppercase tracking-wider block">
+                                      Brevo Sender Configuration
+                                    </span>
+                                    <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">
+                                      ✓ Secure background routing active. No API Key required.
+                                    </span>
+                                  </div>
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <div className="space-y-1.5">
+                                      <label className="block text-[10px] font-bold text-slate-500 dark:text-dark-400 uppercase">
+                                        Sender Name
+                                      </label>
+                                      <Input
+                                        type="text"
+                                        name="brevoSenderName"
+                                        value={brevoSenderName}
+                                        onChange={(val) => {
+                                          setBrevoSenderName(val);
+                                          if (typeof window !== 'undefined') {
+                                            window.localStorage.setItem('sat-mobile-brevo-sender-name', val);
+                                          }
+                                        }}
+                                        placeholder="SAT Mobile"
+                                        className="h-10 text-xs border border-slate-200 dark:border-dark-600 rounded-xl px-3 bg-white dark:bg-dark-700"
+                                      />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                      <label className="block text-[10px] font-bold text-slate-500 dark:text-dark-400 uppercase">
+                                        Sender Email <span className="text-red-500">*</span>
+                                      </label>
+                                      <Input
+                                        type="email"
+                                        name="brevoSenderEmail"
+                                        value={brevoSenderEmail}
+                                        onChange={(val) => {
+                                          setBrevoSenderEmail(val);
+                                          if (typeof window !== 'undefined') {
+                                            window.localStorage.setItem('sat-mobile-brevo-sender-email', val);
+                                          }
+                                        }}
+                                        placeholder="notifications@sat-mobile.app"
+                                        className="h-10 text-xs border border-slate-200 dark:border-dark-600 rounded-xl px-3 bg-white dark:bg-dark-700"
+                                      />
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+
+                              <p className="text-[10px] text-slate-400 dark:text-dark-500 mt-1 leading-normal">
+                                * The Native Mail App option acts as a complete workaround if the server API credentials (Resend/SendGrid) are not configured.
+                              </p>
+                            </div>
+                          )}
+
+                          {/* Send Test Email Button */}
+                          {notificationPreferences?.emailNotifications && (
+                            <div className="mt-4 pt-4 border-t border-slate-200/60 dark:border-dark-700/60 space-y-4">
+                              <div className="flex items-center justify-between gap-4">
+                                <div className="min-w-0">
+                                  <span className="text-xs font-semibold text-slate-700 dark:text-dark-300">Test Your Email Notifications</span>
+                                  <p className="text-[10px] text-slate-400 dark:text-dark-500">Trigger a sample birthday notification sent to {userProfile?.email || user?.email || 'your email'}</p>
+                                </div>
+                                <Button
+                                  type="button"
+                                  variant="secondary"
+                                  onClick={handleSendTestEmail}
+                                  disabled={isSendingTestEmail}
+                                  className="h-10 px-4 rounded-xl border border-slate-200 dark:border-dark-600 bg-white hover:bg-slate-50 dark:bg-dark-700 dark:hover:bg-dark-600 text-slate-700 dark:text-dark-200 text-xs font-bold shrink-0 active:scale-95 transition-all"
+                                >
+                                  {isSendingTestEmail ? 'Sending...' : 'Send Test Email'}
+                                </Button>
+                              </div>
+
+                              {showDebugConsole && (
+                                <div className="mt-4 p-4 rounded-xl border border-slate-800 bg-slate-950 text-emerald-400 font-mono text-[10px] space-y-2 shadow-inner">
+                                  <div className="flex items-center justify-between border-b border-slate-800 pb-2 mb-2">
+                                    <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Email Transaction Diagnostic Terminal</span>
+                                    <div className="flex items-center gap-2">
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          if (debugLogs) {
+                                            navigator.clipboard.writeText(debugLogs.join('\n'));
+                                            showToast('success', 'Copied to Clipboard', 'Debug logs copied successfully');
+                                          }
+                                        }}
+                                        className="text-[9px] px-2 py-0.5 rounded border border-slate-700 bg-slate-900 hover:bg-slate-800 text-slate-300 font-semibold"
+                                      >
+                                        Copy Logs
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setShowDebugConsole(false);
+                                          setDebugLogs(null);
+                                        }}
+                                        className="text-[9px] px-2 py-0.5 rounded border border-slate-700 bg-slate-900 hover:bg-slate-800 text-slate-300 font-semibold"
+                                      >
+                                        Close
+                                      </button>
+                                    </div>
+                                  </div>
+                                  <div className="max-h-48 overflow-y-auto space-y-1.5 scrollbar-thin scrollbar-thumb-slate-800">
+                                    {debugLogs && debugLogs.length > 0 ? (
+                                      debugLogs.map((logLine, idx) => (
+                                        <div key={idx} className="leading-relaxed break-all">
+                                          {logLine}
+                                        </div>
+                                      ))
+                                    ) : (
+                                      <div className="animate-pulse text-slate-500">
+                                        [SYSTEM] Awaiting diagnostic data from email server connection...
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
                         </div>
                       </div>
 

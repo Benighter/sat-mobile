@@ -4,6 +4,7 @@ import { NotificationPreferences } from '../../types';
 import { getDefaultNotificationPreferences } from '../../utils/notificationUtils';
 import { BellIcon, CakeIcon, ClockIcon, EnvelopeIcon, CheckIcon, XMarkIcon, CalendarIcon } from '../icons';
 import Button from '../ui/Button';
+import Input from '../ui/Input';
 import { emailServiceClient } from '../../services/emailServiceClient';
 import { EmailNotificationService } from '../../services/emailNotificationService';
 import { userService } from '../../services/userService';
@@ -27,8 +28,10 @@ const BirthdayNotificationSettings: React.FC<BirthdayNotificationSettingsProps> 
   const [settings, setSettings] = useState<NotificationPreferences>(
     (() => {
       const base = userProfile?.notificationPreferences || getDefaultNotificationPreferences();
+      const localDeliveryMethod = (typeof window !== 'undefined' ? window.localStorage.getItem('sat-mobile-email-delivery-method') : 'brevo') as 'api' | 'mailto' | 'brevo';
       return {
         ...base,
+        emailDeliveryMethod: base.emailDeliveryMethod || localDeliveryMethod || 'brevo',
         birthdayNotifications: {
           ...base.birthdayNotifications,
           ...forcedBirthdayDefaults
@@ -43,12 +46,19 @@ const BirthdayNotificationSettings: React.FC<BirthdayNotificationSettingsProps> 
   const [groupDigestSent, setGroupDigestSent] = useState(false);
   const [triggeredNow, setTriggeredNow] = useState(false);
 
+  const [brevoApiKey, setBrevoApiKey] = useState(() => (typeof window !== 'undefined' ? window.localStorage.getItem('sat-mobile-brevo-api-key') || '' : ''));
+  const [brevoSenderEmail, setBrevoSenderEmail] = useState(() => (typeof window !== 'undefined' ? window.localStorage.getItem('sat-mobile-brevo-sender-email') || 'notifications@sat-mobile.app' : 'notifications@sat-mobile.app'));
+  const [brevoSenderName, setBrevoSenderName] = useState(() => (typeof window !== 'undefined' ? window.localStorage.getItem('sat-mobile-brevo-sender-name') || 'SAT Mobile' : 'SAT Mobile'));
+
   useEffect(() => {
     if (userProfile?.notificationPreferences) {
+      const base = userProfile.notificationPreferences;
+      const localDeliveryMethod = (typeof window !== 'undefined' ? window.localStorage.getItem('sat-mobile-email-delivery-method') : 'brevo') as 'api' | 'mailto' | 'brevo';
       setSettings({
-        ...userProfile.notificationPreferences,
+        ...base,
+        emailDeliveryMethod: base.emailDeliveryMethod || localDeliveryMethod || 'brevo',
         birthdayNotifications: {
-          ...userProfile.notificationPreferences.birthdayNotifications,
+          ...base.birthdayNotifications,
           ...forcedBirthdayDefaults
         }
       } as NotificationPreferences);
@@ -64,6 +74,13 @@ const BirthdayNotificationSettings: React.FC<BirthdayNotificationSettingsProps> 
     }));
   };
 
+  const handleDeliveryMethodChange = (method: 'api' | 'mailto' | 'brevo') => {
+    handleSettingChange('emailDeliveryMethod', method);
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('sat-mobile-email-delivery-method', method);
+    }
+  };
+
   // Birthday notification handlers removed - settings are locked in UI
 
   const handleSaveSettings = async () => {
@@ -71,11 +88,12 @@ const BirthdayNotificationSettings: React.FC<BirthdayNotificationSettingsProps> 
 
     setIsLoading(true);
     try {
-      // TODO: Implement user service update for notification preferences
-      // await userService.updateNotificationPreferences(user.uid, settings);
-
-      // For now, simulate the save
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await userService.updateUserProfile(user.uid, {
+        notificationPreferences: settings
+      });
+      if (typeof window !== 'undefined' && settings.emailDeliveryMethod) {
+        window.localStorage.setItem('sat-mobile-email-delivery-method', settings.emailDeliveryMethod);
+      }
 
       showToast('success', 'Settings Saved', 'Your notification preferences have been updated successfully');
       onClose?.();
@@ -166,6 +184,25 @@ const BirthdayNotificationSettings: React.FC<BirthdayNotificationSettingsProps> 
         return;
       }
 
+      const deliveryMethod = typeof window !== 'undefined'
+        ? window.localStorage.getItem('sat-mobile-email-delivery-method') || 'brevo'
+        : 'brevo';
+
+      if (deliveryMethod === 'mailto') {
+        const emails = recipients.map(r => r.email!).join(',');
+        const toEmail = user?.email || '';
+        const plainText = (digest.textContent || digest.htmlContent || '').replace(/<[^>]*>/g, '');
+        const mailtoUrl = `mailto:${encodeURIComponent(toEmail)}?bcc=${encodeURIComponent(emails)}&subject=${encodeURIComponent(digest.subject)}&body=${encodeURIComponent(plainText)}`;
+        if (typeof window !== 'undefined') {
+          window.location.href = mailtoUrl;
+        }
+        setGroupDigestSent(true);
+        showToast('success', 'Mail Client Opened', `Opening native mail client with ${recipients.length} recipients in BCC`);
+        setTimeout(() => setGroupDigestSent(false), 5000);
+        setIsLoading(false);
+        return;
+      }
+
       let success = 0, failed = 0;
       for (const r of recipients) {
         const res = await emailServiceClient.sendBirthdayEmail(
@@ -223,10 +260,27 @@ const BirthdayNotificationSettings: React.FC<BirthdayNotificationSettingsProps> 
         { force: true, actorAdminId: userProfile?.uid }
       );
       setTriggeredNow(true);
-      const toastType = results.failed > 0 ? (results.sent > 0 ? 'warning' : 'error') : 'success';
-      const toastTitle = results.failed > 0 ? 'Notifications Failed' : 'Notifications Sent';
-      const firstError = results.errors?.[0];
-      showToast(toastType, toastTitle, firstError || `Processed ${results.processed}, sent ${results.sent}, failed ${results.failed}`);
+
+      const deliveryMethod = typeof window !== 'undefined'
+        ? window.localStorage.getItem('sat-mobile-email-delivery-method') || 'brevo'
+        : 'brevo';
+
+      if (deliveryMethod === 'mailto') {
+        // Open the native mail app with a consolidated digest
+        const svcDigest = EmailNotificationService.getInstance();
+        const digest = svcDigest.generateUpcomingBirthdaysDigest(membersWithBirthdays, bacentas);
+        const plainText = (digest.textContent || digest.htmlContent || '').replace(/<[^>]*>/g, '');
+        const mailtoUrl = `mailto:${encodeURIComponent(user?.email || '')}?subject=${encodeURIComponent(digest.subject)}&body=${encodeURIComponent(plainText)}`;
+        if (typeof window !== 'undefined') {
+          window.location.href = mailtoUrl;
+        }
+        showToast('success', 'In-App Alerts Created & Mail Client Opened', 'In-app notifications were created successfully, and the consolidated upcoming birthdays digest has been loaded into your native mail client');
+      } else {
+        const toastType = results.failed > 0 ? (results.sent > 0 ? 'warning' : 'error') : 'success';
+        const toastTitle = results.failed > 0 ? 'Notifications Failed' : 'Notifications Sent';
+        const firstError = results.errors?.[0];
+        showToast(toastType, toastTitle, firstError || `Processed ${results.processed}, sent ${results.sent}, failed ${results.failed}`);
+      }
       setTimeout(() => setTriggeredNow(false), 5000);
     } catch (error: any) {
       showToast('error', 'Trigger Failed', error.message || 'Failed to trigger processing');
@@ -288,6 +342,128 @@ const BirthdayNotificationSettings: React.FC<BirthdayNotificationSettingsProps> 
                 <p className="text-xs text-gray-500">Receive all email notifications from the church management system</p>
               </div>
             </label>
+
+            {/* Email Delivery Method Picker */}
+            {settings.emailNotifications && (
+              <div className="mt-5 pt-4 border-t border-gray-200 space-y-3">
+                <label className="block text-xs font-bold uppercase tracking-wider text-gray-500">
+                  Email Delivery Method
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => handleDeliveryMethodChange('api')}
+                    className={`flex flex-col text-left p-4 rounded-xl border transition-all duration-200 ${
+                      (settings.emailDeliveryMethod || 'api') === 'api'
+                        ? 'border-blue-600 bg-blue-50 text-blue-900 shadow-sm'
+                        : 'border-gray-200 bg-white hover:bg-gray-50 text-gray-700'
+                    }`}
+                  >
+                    <span className="font-bold text-xs uppercase tracking-wider">API Gateway</span>
+                    <span className={`text-[10px] mt-1 leading-normal ${
+                      (settings.emailDeliveryMethod || 'api') === 'api'
+                        ? 'text-blue-700'
+                        : 'text-gray-500'
+                    }`}>
+                      Backend cloud server.
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleDeliveryMethodChange('brevo')}
+                    className={`flex flex-col text-left p-4 rounded-xl border transition-all duration-200 ${
+                      settings.emailDeliveryMethod === 'brevo'
+                        ? 'border-blue-600 bg-blue-50 text-blue-900 shadow-sm'
+                        : 'border-gray-200 bg-white hover:bg-gray-50 text-gray-700'
+                    }`}
+                  >
+                    <span className="font-bold text-xs uppercase tracking-wider">Brevo SMTP API</span>
+                    <span className={`text-[10px] mt-1 leading-normal ${
+                      settings.emailDeliveryMethod === 'brevo'
+                        ? 'text-blue-700'
+                        : 'text-gray-500'
+                    }`}>
+                      Direct inbox API (Free).
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleDeliveryMethodChange('mailto')}
+                    className={`flex flex-col text-left p-4 rounded-xl border transition-all duration-200 ${
+                      settings.emailDeliveryMethod === 'mailto'
+                        ? 'border-blue-600 bg-blue-50 text-blue-900 shadow-sm'
+                        : 'border-gray-200 bg-white hover:bg-gray-50 text-gray-700'
+                    }`}
+                  >
+                    <span className="font-bold text-xs uppercase tracking-wider">Native Mail App</span>
+                    <span className={`text-[10px] mt-1 leading-normal ${
+                      settings.emailDeliveryMethod === 'mailto'
+                        ? 'text-blue-700'
+                        : 'text-gray-500'
+                    }`}>
+                      Device mail app draft.
+                    </span>
+                  </button>
+                </div>
+
+                {settings.emailDeliveryMethod === 'brevo' && (
+                  <div className="mt-4 p-4 rounded-xl border border-gray-200 bg-gray-50 space-y-4">
+                    <div className="flex flex-col gap-1">
+                      <span className="text-xs font-bold text-gray-700 uppercase tracking-wider block">
+                        Brevo Sender Configuration
+                      </span>
+                      <span className="text-[10px] text-emerald-600 font-medium">
+                        ✓ Secure background routing active. No API Key required.
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <label className="block text-[10px] font-bold text-gray-500 uppercase">
+                          Sender Name
+                        </label>
+                        <Input
+                          type="text"
+                          name="brevoSenderName"
+                          value={brevoSenderName}
+                          onChange={(val) => {
+                            setBrevoSenderName(val);
+                            if (typeof window !== 'undefined') {
+                              window.localStorage.setItem('sat-mobile-brevo-sender-name', val);
+                            }
+                          }}
+                          placeholder="SAT Mobile"
+                          className="h-10 text-xs border border-gray-300 rounded-lg px-3 bg-white"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="block text-[10px] font-bold text-gray-500 uppercase">
+                          Sender Email <span className="text-red-500">*</span>
+                        </label>
+                        <Input
+                          type="email"
+                          name="brevoSenderEmail"
+                          value={brevoSenderEmail}
+                          onChange={(val) => {
+                            setBrevoSenderEmail(val);
+                            if (typeof window !== 'undefined') {
+                              window.localStorage.setItem('sat-mobile-brevo-sender-email', val);
+                            }
+                          }}
+                          placeholder="notifications@sat-mobile.app"
+                          className="h-10 text-xs border border-gray-300 rounded-lg px-3 bg-white"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <p className="text-[10px] text-gray-400 mt-1 leading-normal">
+                  * The Native Mail App option acts as a complete workaround if the server API credentials (Resend/SendGrid) are not configured.
+                </p>
+              </div>
+            )}
 
             <label className="flex items-center space-x-3 cursor-pointer">
               <input
