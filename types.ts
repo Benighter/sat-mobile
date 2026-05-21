@@ -410,6 +410,7 @@ export enum TabKeys {
   BACENTA_MEETINGS = 'bacenta_meetings',
   BIRTHDAYS = 'birthdays',
   PROFILE_SETTINGS = 'profile_settings',
+  ADMIN_INVITES = 'admin_invites',
   MY_DELETION_REQUESTS = 'my_deletion_requests',
   ADMIN_DELETION_REQUESTS = 'admin_deletion_requests',
   COPY_MEMBERS = 'copy_members',
@@ -496,6 +497,9 @@ export interface User {
   isInvitedAdminLeader?: boolean; // True if this user became a leader through an admin invite
   invitedByAdminId?: string; // UID of the admin who invited this user to become a leader
   isPromotedCampusAdmin?: boolean; // True if an invited leader has been promoted to campus admin privileges
+  isMigrationPromotedAdmin?: boolean; // True for scoped migration promotion admins
+  isScopedAdmin?: boolean; // Restricts admin data access to assigned bacentas
+  assignedBacentaIds?: string[]; // Bacenta IDs this scoped admin can manage
   promotedByAdminId?: string; // UID of the main admin who promoted this user
   promotedByAdminName?: string;
   promotedAt?: string;
@@ -600,6 +604,9 @@ export interface AdminInvite {
   handledAs?: 'cross-tenant-link' | 'leader-role-change'; // Invite handling mode
   isMinistryInvite?: boolean; // True if this is a ministry mode invitation
   promotedToCampusAdmin?: boolean;
+  isMigrationPromotion?: boolean;
+  isScopedAdmin?: boolean;
+  assignedBacentaIds?: string[];
   promotedAt?: string;
   promotedBy?: string;
   promotedByName?: string;

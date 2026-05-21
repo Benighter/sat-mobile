@@ -45,6 +45,62 @@ export function selectUserByMode<T extends { isMinistryAccount?: boolean }>(
   return unique[0];
 }
 
+const normalizeBacentaScope = (bacentaIds: string[] = []): string[] => (
+  [...new Set(bacentaIds.map(id => (id || '').trim()).filter(Boolean))]
+);
+
+type InviteManagerActor = string | {
+  uid: string;
+  displayName?: string;
+  churchId?: string;
+  role?: User['role'];
+  isPromotedCampusAdmin?: boolean;
+};
+
+const resolveInviteManagerActor = async (actor: InviteManagerActor): Promise<{
+  uid: string;
+  displayName: string;
+  churchId?: string;
+  role?: User['role'];
+  isPromotedCampusAdmin?: boolean;
+}> => {
+  const partial = typeof actor === 'string' ? { uid: actor } : actor;
+  let profile: Partial<User> | null = null;
+
+  if (!partial.role || !partial.churchId || typeof partial.isPromotedCampusAdmin !== 'boolean' || !partial.displayName) {
+    const userSnap = await getDoc(doc(db, 'users', partial.uid));
+    if (userSnap.exists()) {
+      profile = userSnap.data() as User;
+    }
+  }
+
+  const firstLastName = [profile?.firstName, profile?.lastName].filter(Boolean).join(' ').trim();
+  return {
+    uid: partial.uid,
+    displayName: partial.displayName || profile?.displayName || firstLastName || 'Admin',
+    churchId: partial.churchId || profile?.churchId,
+    role: partial.role || profile?.role,
+    isPromotedCampusAdmin: typeof partial.isPromotedCampusAdmin === 'boolean'
+      ? partial.isPromotedCampusAdmin
+      : profile?.isPromotedCampusAdmin
+  };
+};
+
+const assertCanManageInviteAsCurrentLeader = async (invite: AdminInvite, actor: InviteManagerActor) => {
+  const manager = await resolveInviteManagerActor(actor);
+  const isOriginalInviteOwner = invite.createdBy === manager.uid;
+  const isCurrentChurchAdmin = manager.role === 'admin'
+    && manager.isPromotedCampusAdmin !== true
+    && !!manager.churchId
+    && manager.churchId === invite.churchId;
+
+  if (!isOriginalInviteOwner && !isCurrentChurchAdmin) {
+    throw new Error('Only the current main leader for this church can manage this invite');
+  }
+
+  return manager;
+};
+
 export const inviteService = {
   // Search directly in Firestore to avoid any Cloud Functions/CORS dependency
   searchUserByEmail: async (email: string, opts?: { inviterIsMinistry?: boolean }): Promise<User | null> => {
@@ -491,6 +547,9 @@ export const inviteService = {
         isInvitedAdminLeader: false,
         invitedByAdminId: null,
         isPromotedCampusAdmin: false,
+        isMigrationPromotedAdmin: false,
+        isScopedAdmin: false,
+        assignedBacentaIds: [],
         promotedByAdminId: null,
         promotedByAdminName: null,
         promotedAt: null,
@@ -518,9 +577,15 @@ export const inviteService = {
 
   promoteInvitedLeaderToCampusAdmin: async (
     inviteId: string,
-    promoter: Pick<User, 'uid' | 'displayName' | 'churchId'>
+    promoter: InviteManagerActor,
+    assignedBacentaIds: string[] = []
   ): Promise<void> => {
     try {
+      const normalizedBacentaIds = normalizeBacentaScope(assignedBacentaIds);
+      if (normalizedBacentaIds.length === 0) {
+        throw new Error('Choose at least one Bacenta before promoting this admin');
+      }
+
       const inviteRef = doc(db, 'adminInvites', inviteId);
       const inviteSnap = await getDoc(inviteRef);
       if (!inviteSnap.exists()) {
@@ -534,9 +599,7 @@ export const inviteService = {
       if (invite.handledAs === 'cross-tenant-link') {
         throw new Error('Read-only cross-tenant links cannot be promoted');
       }
-      if (invite.createdBy !== promoter.uid) {
-        throw new Error('Only the main leader who sent this invite can promote this person');
-      }
+      const manager = await assertCanManageInviteAsCurrentLeader(invite, promoter);
       if (invite.promotedToCampusAdmin === true) {
         return;
       }
@@ -557,10 +620,13 @@ export const inviteService = {
         role: 'admin',
         churchId: invite.churchId,
         isInvitedAdminLeader: true,
-        invitedByAdminId: invite.createdBy,
+        invitedByAdminId: manager.uid,
         isPromotedCampusAdmin: true,
-        promotedByAdminId: promoter.uid,
-        promotedByAdminName: promoter.displayName,
+        isMigrationPromotedAdmin: true,
+        isScopedAdmin: true,
+        assignedBacentaIds: normalizedBacentaIds,
+        promotedByAdminId: manager.uid,
+        promotedByAdminName: manager.displayName,
         promotedAt: nowIso,
         preferences: {
           ...(userData.preferences || {}),
@@ -570,10 +636,15 @@ export const inviteService = {
       });
 
       await updateDoc(inviteRef, {
+        createdBy: manager.uid,
+        createdByName: manager.displayName,
         promotedToCampusAdmin: true,
+        isMigrationPromotion: true,
+        isScopedAdmin: true,
+        assignedBacentaIds: normalizedBacentaIds,
         promotedAt: nowIso,
-        promotedBy: promoter.uid,
-        promotedByName: promoter.displayName,
+        promotedBy: manager.uid,
+        promotedByName: manager.displayName,
         promotedPreviousCampusShepherdPreference: previousCampusShepherdPreference,
         unpromotedAt: null
       });
@@ -584,7 +655,7 @@ export const inviteService = {
 
   unpromoteCampusAdminToLeader: async (
     inviteId: string,
-    promoterUid: string
+    promoter: InviteManagerActor
   ): Promise<void> => {
     try {
       const inviteRef = doc(db, 'adminInvites', inviteId);
@@ -594,9 +665,7 @@ export const inviteService = {
       }
 
       const invite = { id: inviteSnap.id, ...inviteSnap.data() } as AdminInvite;
-      if (invite.createdBy !== promoterUid) {
-        throw new Error('Only the main leader who promoted this person can unpromote them');
-      }
+      const manager = await assertCanManageInviteAsCurrentLeader(invite, promoter);
       if (invite.promotedToCampusAdmin !== true) {
         return;
       }
@@ -615,8 +684,11 @@ export const inviteService = {
         role: 'leader',
         churchId: invite.churchId,
         isInvitedAdminLeader: true,
-        invitedByAdminId: invite.createdBy,
+        invitedByAdminId: manager.uid,
         isPromotedCampusAdmin: false,
+        isMigrationPromotedAdmin: false,
+        isScopedAdmin: false,
+        assignedBacentaIds: [],
         promotedByAdminId: null,
         promotedByAdminName: null,
         promotedAt: null,
@@ -628,11 +700,61 @@ export const inviteService = {
       });
 
       await updateDoc(inviteRef, {
+        createdBy: manager.uid,
+        createdByName: manager.displayName,
         promotedToCampusAdmin: false,
+        isMigrationPromotion: false,
+        isScopedAdmin: false,
+        assignedBacentaIds: [],
         unpromotedAt: nowIso
       });
     } catch (error: any) {
       throw new Error(`Failed to unpromote campus admin: ${error.message}`);
+    }
+  },
+
+  updateMigrationPromotionBacentaAssignments: async (
+    inviteId: string,
+    promoter: InviteManagerActor,
+    assignedBacentaIds: string[]
+  ): Promise<void> => {
+    try {
+      const normalizedBacentaIds = normalizeBacentaScope(assignedBacentaIds);
+      if (normalizedBacentaIds.length === 0) {
+        throw new Error('Choose at least one Bacenta for this migration promotion');
+      }
+
+      const inviteRef = doc(db, 'adminInvites', inviteId);
+      const inviteSnap = await getDoc(inviteRef);
+      if (!inviteSnap.exists()) {
+        throw new Error('Invite not found');
+      }
+
+      const invite = { id: inviteSnap.id, ...inviteSnap.data() } as AdminInvite;
+      const manager = await assertCanManageInviteAsCurrentLeader(invite, promoter);
+      if (invite.status !== 'accepted' || invite.promotedToCampusAdmin !== true) {
+        throw new Error('Only promoted migration admins can have Bacenta assignments updated');
+      }
+
+      const nowIso = new Date().toISOString();
+      await updateDoc(doc(db, 'users', invite.invitedUserId), {
+        invitedByAdminId: manager.uid,
+        isMigrationPromotedAdmin: true,
+        isScopedAdmin: true,
+        assignedBacentaIds: normalizedBacentaIds,
+        lastUpdated: nowIso
+      });
+
+      await updateDoc(inviteRef, {
+        createdBy: manager.uid,
+        createdByName: manager.displayName,
+        isMigrationPromotion: true,
+        isScopedAdmin: true,
+        assignedBacentaIds: normalizedBacentaIds,
+        lastUpdated: nowIso
+      });
+    } catch (error: any) {
+      throw new Error(`Failed to update migration promotion assignments: ${error.message}`);
     }
   },
 

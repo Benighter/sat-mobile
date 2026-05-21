@@ -8,6 +8,7 @@ import EmailVerificationPrompt from './components/auth/EmailVerificationPrompt';
 import DashboardView from './components/views/DashboardView';
 import LazyWrapper, { LazyMemberListView, LazyAttendanceAnalyticsView, LazyWeeklyAttendanceView, LazySundayConfirmationsView, LazyNewBelieversView, LazySonsOfGodView, LazyOutreachView, LazyBacentaOutreachView, LazyPrayerView, LazyPrayerMemberDetailsView, LazyMinistriesView, LazyBacentaLeadersView, LazyMyDeletionRequestsView, LazyMemberDeletionRequestsView, LazyBacentaMeetingsView, LazySundayHeadCountsView, LazySundayHeadCountSectionView, LazyContactView, LazyChatView } from './components/common/LazyWrapper';
 import ProfileSettingsView from './components/views/ProfileSettingsView';
+import AdminInviteManager from './components/admin/AdminInviteManager';
 import CopyMembersView from './components/views/CopyMembersView';
 import AssignmentManagementView from './components/assignments/AssignmentManagementView';
 import LeaderHierarchyView from './components/assignments/LeaderHierarchyView';
@@ -625,6 +626,18 @@ const AppContent: React.FC = memo(() => {
         return <BirthdaysView />;
       case TabKeys.PROFILE_SETTINGS:
         return <ProfileSettingsView />;
+      case TabKeys.ADMIN_INVITES:
+        return (
+          <AdminInviteManager
+            isOpen={true}
+            onClose={() => {
+              if (!navigateBack()) {
+                switchTab({ id: TabKeys.PROFILE_SETTINGS, name: 'Settings' });
+              }
+            }}
+            displayMode="page"
+          />
+        );
       case TabKeys.MY_DELETION_REQUESTS:
         return (
           <LazyWrapper>

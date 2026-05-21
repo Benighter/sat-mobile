@@ -13,16 +13,18 @@ import {
   EnvelopeIcon,
   ArrowLeftIcon,
   SearchIcon,
-  PlusIcon
+  PlusIcon,
+  ChevronDownIcon
 } from '../icons';
 
 interface AdminInviteScreenProps {
   isOpen: boolean;
   onClose: () => void;
+  displayMode?: 'overlay' | 'page';
 }
 
-const AdminInviteScreen: React.FC<AdminInviteScreenProps> = ({ isOpen, onClose }) => {
-  const { userProfile, showToast, refreshAccessibleChurchLinks, isImpersonating, impersonatedAdminId, switchBackToOwnChurch } = useAppContext();
+const AdminInviteScreen: React.FC<AdminInviteScreenProps> = ({ isOpen, onClose, displayMode = 'overlay' }) => {
+  const { userProfile, showToast, refreshAccessibleChurchLinks, isImpersonating, impersonatedAdminId, switchBackToOwnChurch, bacentas } = useAppContext();
   const [invites, setInvites] = useState<AdminInvite[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [searchEmail, setSearchEmail] = useState('');
@@ -30,10 +32,13 @@ const AdminInviteScreen: React.FC<AdminInviteScreenProps> = ({ isOpen, onClose }
   const [isSearching, setIsSearching] = useState(false);
   const [isSendingInvite, setIsSendingInvite] = useState(false);
   const [updatingInviteIds, setUpdatingInviteIds] = useState<Set<string>>(new Set());
+  const [scopeDrafts, setScopeDrafts] = useState<Record<string, string[]>>({});
+  const [expandedScopeInviteIds, setExpandedScopeInviteIds] = useState<Set<string>>(new Set());
   const [activeTab, setActiveTab] = useState<'search' | 'invites'>('search');
+  const isPageMode = displayMode === 'page';
   const isCampusShepherdMode = isCampusShepherd(userProfile);
   const isPromotedMode = isPromotedCampusAdmin(userProfile);
-  const canPromoteInvitedAdmins = isCampusShepherdMode && !isPromotedMode;
+  const canPromoteInvitedAdmins = canManageAdminInvites(userProfile);
 
   const modeLabel = isPromotedMode
     ? 'Promoted Campus Admin Mode'
@@ -42,14 +47,14 @@ const AdminInviteScreen: React.FC<AdminInviteScreenProps> = ({ isOpen, onClose }
       : 'Admin Mode';
 
   const modeDescription = isPromotedMode
-    ? 'You can manage campus operations, but leader invites and member deletion are restricted.'
+    ? 'You can manage the bacentas assigned to your migration promotion.'
     : isCampusShepherdMode
-      ? 'You can invite leaders and promote accepted invitees into restricted campus admins.'
-      : 'Leadership invite management is active.';
+      ? 'You can invite leaders and promote accepted invitees with a Bacenta migration scope.'
+      : 'You can invite leaders and use migration promotion to give them scoped admin control.';
 
   // Detect navbar height for proper positioning
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen || isPageMode) return;
 
     const detectNavbarHeight = (): number => {
       const selectors = [
@@ -100,7 +105,7 @@ const AdminInviteScreen: React.FC<AdminInviteScreenProps> = ({ isOpen, onClose }
       window.removeEventListener('resize', handleResize);
       window.removeEventListener('orientationchange', handleResize);
     };
-  }, [isOpen]);
+  }, [isOpen, isPageMode]);
 
   // Load invites when screen opens
   useEffect(() => {
@@ -116,6 +121,15 @@ const AdminInviteScreen: React.FC<AdminInviteScreenProps> = ({ isOpen, onClose }
     try {
       const userInvites = await inviteService.getAdminInvites(userProfile.uid, userProfile.churchId);
       setInvites(userInvites);
+      setScopeDrafts(prev => {
+        const next = { ...prev };
+        userInvites.forEach(invite => {
+          if (!next[invite.id]) {
+            next[invite.id] = Array.isArray(invite.assignedBacentaIds) ? invite.assignedBacentaIds : [];
+          }
+        });
+        return next;
+      });
     } catch (error: any) {
       console.error('Error loading invites:', error);
       showToast('error', 'Failed to load invites', error.message);
@@ -214,21 +228,74 @@ const AdminInviteScreen: React.FC<AdminInviteScreenProps> = ({ isOpen, onClose }
     }
   };
 
+  const getScopeDraft = (invite: AdminInvite): string[] => (
+    scopeDrafts[invite.id] || invite.assignedBacentaIds || []
+  );
+
+  const toggleScopePanel = (inviteId: string) => {
+    setExpandedScopeInviteIds(prev => {
+      const next = new Set(prev);
+      if (next.has(inviteId)) {
+        next.delete(inviteId);
+      } else {
+        next.add(inviteId);
+      }
+      return next;
+    });
+  };
+
+  const toggleScopeBacenta = (inviteId: string, bacentaId: string) => {
+    setScopeDrafts(prev => {
+      const current = prev[inviteId] || [];
+      const next = current.includes(bacentaId)
+        ? current.filter(id => id !== bacentaId)
+        : [...current, bacentaId];
+      return { ...prev, [inviteId]: next };
+    });
+  };
+
+  const setAllScopeBacentas = (inviteId: string, selected: boolean) => {
+    setScopeDrafts(prev => ({
+      ...prev,
+      [inviteId]: selected ? bacentas.map(bacenta => bacenta.id) : []
+    }));
+  };
+
   const handlePromoteToCampusAdmin = async (invite: AdminInvite) => {
     if (!userProfile) return;
+    const assignedBacentaIds = getScopeDraft(invite);
+    if (assignedBacentaIds.length === 0) {
+      showToast('warning', 'Choose bacentas', 'Select at least one Bacenta for this migration promotion.');
+      return;
+    }
 
     try {
       await runInviteUpdate(invite.id, async () => {
-        await inviteService.promoteInvitedLeaderToCampusAdmin(invite.id, {
-          uid: userProfile.uid,
-          displayName: userProfile.displayName,
-          churchId: userProfile.churchId
-        });
+        await inviteService.promoteInvitedLeaderToCampusAdmin(invite.id, userProfile, assignedBacentaIds);
       });
-      showToast('success', `${invite.invitedUserName} promoted to campus admin`);
+      showToast('success', `${invite.invitedUserName} migration promoted`);
     } catch (error: any) {
       console.error('Error promoting campus admin:', error);
       showToast('error', 'Failed to promote admin', error.message);
+    }
+  };
+
+  const handleUpdateMigrationScope = async (invite: AdminInvite) => {
+    if (!userProfile) return;
+    const assignedBacentaIds = getScopeDraft(invite);
+    if (assignedBacentaIds.length === 0) {
+      showToast('warning', 'Choose bacentas', 'Select at least one Bacenta for this migration promotion.');
+      return;
+    }
+
+    try {
+      await runInviteUpdate(invite.id, async () => {
+        await inviteService.updateMigrationPromotionBacentaAssignments(invite.id, userProfile, assignedBacentaIds);
+      });
+      showToast('success', `${invite.invitedUserName}'s Bacenta scope updated`);
+    } catch (error: any) {
+      console.error('Error updating migration scope:', error);
+      showToast('error', 'Failed to update scope', error.message);
     }
   };
 
@@ -237,7 +304,7 @@ const AdminInviteScreen: React.FC<AdminInviteScreenProps> = ({ isOpen, onClose }
 
     try {
       await runInviteUpdate(invite.id, async () => {
-        await inviteService.unpromoteCampusAdminToLeader(invite.id, userProfile.uid);
+        await inviteService.unpromoteCampusAdminToLeader(invite.id, userProfile);
       });
       showToast('success', `${invite.invitedUserName} reverted to leader access`);
     } catch (error: any) {
@@ -293,8 +360,11 @@ const AdminInviteScreen: React.FC<AdminInviteScreenProps> = ({ isOpen, onClose }
 
   return (
     <div 
-      className="fixed bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 z-50 admin-invite-screen"
-      style={{
+      className={`${isPageMode ? 'relative rounded-[28px] border border-white/70 shadow-[0_24px_70px_-40px_rgba(15,23,42,0.55)]' : 'fixed z-50'} bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 admin-invite-screen`}
+      style={isPageMode ? {
+        height: 'calc(100dvh - var(--navbar-height, 64px) - 3rem)',
+        minHeight: '620px'
+      } : {
         top: 'calc(var(--navbar-height, 0px) + env(safe-area-inset-top, 0px))',
         left: 'env(safe-area-inset-left, 0px)',
         right: 'env(safe-area-inset-right, 0px)',
@@ -318,7 +388,7 @@ const AdminInviteScreen: React.FC<AdminInviteScreenProps> = ({ isOpen, onClose }
           {/* Title */}
           <div className="text-center">
             <h1 className="text-3xl sm:text-4xl font-extrabold text-gray-900 tracking-tight">Leadership Management</h1>
-            <p className="text-sm sm:text-base text-gray-600">Invite admins to become leaders</p>
+            <p className="text-sm sm:text-base text-gray-600">Invite leaders and manage migration promotion</p>
             <div className="mt-3 inline-flex max-w-full flex-col items-center gap-1 rounded-2xl border border-indigo-100 bg-white/75 px-4 py-2 shadow-sm sm:flex-row sm:gap-2">
               <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
                 isCampusShepherdMode
@@ -521,11 +591,16 @@ const AdminInviteScreen: React.FC<AdminInviteScreenProps> = ({ isOpen, onClose }
               <div className="space-y-6">
                 <div className="bg-white/60 backdrop-blur-sm rounded-2xl p-6">
                   <h2 className="text-xl font-bold text-gray-900 mb-2">Sent Leadership Invites</h2>
-                  <p className="text-gray-600">Track and manage your invitation history</p>
+                    <p className="text-gray-600">Track invites and assign migration promotion bacentas</p>
                 </div>
 
                 <div className="space-y-4">
-                  {invites.map((invite) => (
+                  {invites.map((invite) => {
+                    const selectedScopeIds = getScopeDraft(invite);
+                    const selectedScopeCount = selectedScopeIds.length;
+                    const isScopeExpanded = expandedScopeInviteIds.has(invite.id);
+
+                    return (
                   <div
                     key={invite.id}
                     className="bg-white/90 backdrop-blur-sm rounded-2xl p-4 shadow-sm border border-white/60 hover:shadow-md transition-all duration-200 w-full relative group"
@@ -584,7 +659,7 @@ const AdminInviteScreen: React.FC<AdminInviteScreenProps> = ({ isOpen, onClose }
                               </span>
                               {invite.promotedToCampusAdmin === true && (
                                 <span className="inline-flex items-center justify-center rounded-full bg-purple-100 px-2 py-1 text-[11px] font-semibold text-purple-700">
-                                  Campus Admin
+                                  Migration Admin
                                 </span>
                               )}
                             </div>
@@ -604,6 +679,95 @@ const AdminInviteScreen: React.FC<AdminInviteScreenProps> = ({ isOpen, onClose }
                             </div>
                           )}
                         </div>
+
+                        {invite.status === 'accepted' && canPromoteInvitedAdmins && invite.handledAs !== 'cross-tenant-link' && (
+                          <div className={`mb-3 overflow-hidden rounded-2xl border transition-colors duration-200 ${
+                            isScopeExpanded ? 'border-purple-200 bg-purple-50/80' : 'border-purple-100 bg-white/70 hover:border-purple-200 hover:bg-purple-50/50'
+                          }`}>
+                            <button
+                              type="button"
+                              onClick={() => toggleScopePanel(invite.id)}
+                              aria-expanded={isScopeExpanded}
+                              className="flex w-full items-center justify-between gap-3 px-3 py-3 text-left transition-colors"
+                            >
+                              <div className="min-w-0">
+                                <p className="text-xs font-semibold uppercase tracking-wide text-purple-700">Migration Promotion</p>
+                                <p className="mt-0.5 text-xs text-purple-900/75">
+                                  {selectedScopeCount > 0
+                                    ? `${selectedScopeCount} of ${bacentas.length} bacentas assigned`
+                                    : 'No bacentas assigned yet'}
+                                </p>
+                              </div>
+                              <div className="flex shrink-0 items-center gap-2">
+                                <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+                                  selectedScopeCount > 0 ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-600'
+                                }`}>
+                                  {selectedScopeCount}/{bacentas.length}
+                                </span>
+                                <span className="hidden text-xs font-semibold text-purple-700 sm:inline">
+                                  {isScopeExpanded ? 'Close' : 'Open'}
+                                </span>
+                                <ChevronDownIcon className={`h-4 w-4 text-purple-700 transition-transform duration-200 ${isScopeExpanded ? 'rotate-180' : ''}`} />
+                              </div>
+                            </button>
+
+                            {isScopeExpanded && (
+                              <div className="border-t border-purple-100 px-3 pb-3 pt-3">
+                                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                                  <p className="text-xs text-purple-900/75">Assign the bacentas this admin can see and fully manage.</p>
+                                  {bacentas.length > 0 && (
+                                    <div className="flex gap-2 text-xs">
+                                  <button
+                                    type="button"
+                                    onClick={() => setAllScopeBacentas(invite.id, true)}
+                                    className="rounded-lg border border-purple-200 bg-white px-2 py-1 font-medium text-purple-700 hover:bg-purple-100"
+                                  >
+                                    Select all
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setAllScopeBacentas(invite.id, false)}
+                                    className="rounded-lg border border-purple-200 bg-white px-2 py-1 font-medium text-purple-700 hover:bg-purple-100"
+                                  >
+                                    Clear
+                                  </button>
+                                </div>
+                                  )}
+                                </div>
+
+                                {bacentas.length === 0 ? (
+                                  <p className="rounded-xl border border-purple-100 bg-white px-3 py-2 text-xs text-purple-900/70">Create at least one Bacenta before promoting this admin.</p>
+                                ) : (
+                                  <div className="max-h-64 overflow-y-auto pr-1">
+                                    <div className="grid gap-2 sm:grid-cols-2">
+                                      {bacentas.map(bacenta => {
+                                        const selected = selectedScopeIds.includes(bacenta.id);
+                                        return (
+                                          <label
+                                            key={bacenta.id}
+                                            className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium transition-colors ${
+                                              selected
+                                                ? 'border-purple-300 bg-white text-purple-800 shadow-sm'
+                                                : 'border-purple-100 bg-white/60 text-gray-700 hover:bg-white'
+                                            }`}
+                                          >
+                                            <input
+                                              type="checkbox"
+                                              checked={selected}
+                                              onChange={() => toggleScopeBacenta(invite.id, bacenta.id)}
+                                              className="h-4 w-4 rounded border-purple-300 text-purple-600 focus:ring-purple-500"
+                                            />
+                                            <span className="min-w-0 flex-1 truncate">{bacenta.name}</span>
+                                          </label>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )}
 
                         {/* Action Buttons - Consistent positioning */}
                         <div className="flex flex-wrap justify-end gap-2">
@@ -628,7 +792,7 @@ const AdminInviteScreen: React.FC<AdminInviteScreenProps> = ({ isOpen, onClose }
                                 className="h-7 px-3 bg-amber-50 hover:bg-amber-100 text-amber-700 hover:text-amber-800 border border-amber-200 rounded-lg text-xs font-medium transition-all duration-200 flex items-center disabled:cursor-not-allowed disabled:opacity-60"
                               >
                                 <XMarkIcon className="w-3 h-3 mr-1" />
-                                {updatingInviteIds.has(invite.id) ? 'Updating...' : 'Unpromote Admin'}
+                                {updatingInviteIds.has(invite.id) ? 'Updating...' : 'Unpromote'}
                               </Button>
                             ) : (
                               <Button
@@ -639,9 +803,21 @@ const AdminInviteScreen: React.FC<AdminInviteScreenProps> = ({ isOpen, onClose }
                                 className="h-7 px-3 bg-purple-50 hover:bg-purple-100 text-purple-700 hover:text-purple-800 border border-purple-200 rounded-lg text-xs font-medium transition-all duration-200 flex items-center disabled:cursor-not-allowed disabled:opacity-60"
                               >
                                 <CheckIcon className="w-3 h-3 mr-1" />
-                                {updatingInviteIds.has(invite.id) ? 'Updating...' : 'Promote to Admin'}
+                                {updatingInviteIds.has(invite.id) ? 'Updating...' : 'Promote with Scope'}
                               </Button>
                             )
+                          )}
+                          {invite.status === 'accepted' && canPromoteInvitedAdmins && invite.handledAs !== 'cross-tenant-link' && invite.promotedToCampusAdmin === true && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleUpdateMigrationScope(invite)}
+                              disabled={updatingInviteIds.has(invite.id)}
+                              className="h-7 px-3 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 hover:text-indigo-800 border border-indigo-200 rounded-lg text-xs font-medium transition-all duration-200 flex items-center disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              <CheckIcon className="w-3 h-3 mr-1" />
+                              {updatingInviteIds.has(invite.id) ? 'Updating...' : 'Update Scope'}
+                            </Button>
                           )}
                           {invite.status === 'accepted' && (
                             <Button
@@ -658,7 +834,8 @@ const AdminInviteScreen: React.FC<AdminInviteScreenProps> = ({ isOpen, onClose }
                       </div>
                     </div>
                   </div>
-                ))}
+                    );
+                  })}
                 </div>
               </div>
             )}

@@ -8,13 +8,12 @@ import { formatIncomeDisplay, formatZarPerUsdRate } from '../../utils/currency';
 import { getDefaultNotificationPreferences } from '../../utils/notificationUtils';
 // import { emailServiceClient } from '../../services/emailServiceClient'; // Email feature on hold
 // Ministry feature removed – no MINISTRY_OPTIONS import
-import { NotificationPreferences, CrossTenantInvite, UserPreferences } from '../../types';
+import { NotificationPreferences, CrossTenantInvite, UserPreferences, TabKeys } from '../../types';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
 import ImageUpload from '../ui/ImageUpload';
 import ChangePasswordModal from '../auth/ChangePasswordModal';
 import EmailVerificationPrompt from '../auth/EmailVerificationPrompt';
-import AdminInviteManager from '../admin/AdminInviteManager';
 import InviteMigrationPanel from '../admin/InviteMigrationPanel';
 import PushNotificationSettings from '../notifications/PushNotificationSettings';
 import { canManageAdminInvites, hasAdminPrivileges, isCampusShepherd, isPromotedCampusAdmin } from '../../utils/permissionUtils';
@@ -110,7 +109,8 @@ const ProfileSettingsView: React.FC = () => {
     switchToExternalChurch,
     switchBackToOwnChurch,
     isImpersonating,
-    currentChurchId
+    currentChurchId,
+    switchTab
   } = useAppContext();
   // const { theme, setTheme } = useTheme(); // Theme selection disabled
   const { currencyOptions, rates } = useCurrencyFormatter();
@@ -155,7 +155,6 @@ const ProfileSettingsView: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [imagePreview, setImagePreview] = useState<string>(userProfile?.profilePicture || '');
   const [isChangePasswordModalOpen, setIsChangePasswordModalOpen] = useState(false);
-  const [isAdminInviteModalOpen, setIsAdminInviteModalOpen] = useState(false);
   const [isMigrationPanelOpen, setIsMigrationPanelOpen] = useState(false);
   const [isConstituencyManagerOpen, setIsConstituencyManagerOpen] = useState(false);
   const [isSavingCampusShepherd, setIsSavingCampusShepherd] = useState(false);
@@ -908,7 +907,7 @@ const ProfileSettingsView: React.FC = () => {
                   <Button
                     type="button"
                     variant="primary"
-                    onClick={() => setIsAdminInviteModalOpen(true)}
+                    onClick={() => switchTab({ id: TabKeys.ADMIN_INVITES, name: 'Leadership Management' })}
                     className="h-12 px-6 bg-gradient-to-r from-green-600 to-teal-600 hover:from-green-700 hover:to-teal-700 rounded-2xl font-medium transition-all duration-200 flex items-center justify-center space-x-2 min-w-[160px]"
                   >
                     <UserGroupIcon className="w-5 h-5" />
@@ -1120,12 +1119,6 @@ const ProfileSettingsView: React.FC = () => {
       <ChangePasswordModal
         isOpen={isChangePasswordModalOpen}
         onClose={() => setIsChangePasswordModalOpen(false)}
-      />
-
-      {/* Admin Invite Manager Modal */}
-      <AdminInviteManager
-        isOpen={isAdminInviteModalOpen}
-        onClose={() => setIsAdminInviteModalOpen(false)}
       />
 
       {/* Migration Panel Modal */}

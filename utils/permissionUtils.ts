@@ -17,6 +17,27 @@ export const isPromotedCampusAdmin = (user: User | null): boolean => {
   return user.isPromotedCampusAdmin === true;
 };
 
+export const isMigrationPromotedAdmin = (user: User | null): boolean => {
+  if (!user) return false;
+  return user.isMigrationPromotedAdmin === true;
+};
+
+export const getAssignedBacentaIds = (user: User | null): string[] => {
+  if (!user || !Array.isArray(user.assignedBacentaIds)) return [];
+  return [...new Set(user.assignedBacentaIds.filter((id): id is string => typeof id === 'string' && id.trim() !== ''))];
+};
+
+export const isScopedAdmin = (user: User | null): boolean => {
+  if (!user) return false;
+  return isPromotedCampusAdmin(user) && (user.isScopedAdmin === true || isMigrationPromotedAdmin(user));
+};
+
+export const canAccessBacenta = (user: User | null, bacentaId?: string): boolean => {
+  if (!isScopedAdmin(user)) return true;
+  if (!bacentaId) return false;
+  return getAssignedBacentaIds(user).includes(bacentaId);
+};
+
 /**
  * Check whether an admin has answered the Campus Shepherd question.
  */
@@ -162,7 +183,8 @@ export const isInvitedAdminLeader = (user: User | null): boolean => {
  */
 export const canDeleteLeaders = (user: User | null): boolean => {
   if (!user) return false;
-  if (isPromotedCampusAdmin(user)) return false;
+  if (isPromotedCampusAdmin(user) && !isMigrationPromotedAdmin(user)) return false;
+  if (isMigrationPromotedAdmin(user)) return true;
 
   // Only original admins can delete leaders
   // Invited admin leaders (who became leaders through invites) cannot delete leaders
@@ -177,7 +199,7 @@ export const canDeleteLeaders = (user: User | null): boolean => {
  */
 export const canDeleteMemberWithRole = (user: User | null, memberRole: string): boolean => {
   if (!user) return false;
-  if (isPromotedCampusAdmin(user)) return false;
+  if (isPromotedCampusAdmin(user) && !isMigrationPromotedAdmin(user)) return false;
 
   // If the member is a regular member, any leader or admin can delete them
   if (memberRole === 'Member') {

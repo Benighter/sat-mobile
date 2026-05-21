@@ -4,10 +4,11 @@ import AdminInviteScreen from './AdminInviteScreen';
 interface AdminInviteManagerProps {
   isOpen: boolean;
   onClose: () => void;
+  displayMode?: 'overlay' | 'page';
 }
 
-const AdminInviteManager: React.FC<AdminInviteManagerProps> = ({ isOpen, onClose }) => {
-  return <AdminInviteScreen isOpen={isOpen} onClose={onClose} />;
+const AdminInviteManager: React.FC<AdminInviteManagerProps> = ({ isOpen, onClose, displayMode = 'overlay' }) => {
+  return <AdminInviteScreen isOpen={isOpen} onClose={onClose} displayMode={displayMode} />;
 };
 
 export default AdminInviteManager;

@@ -32,7 +32,7 @@ import { crossTenantService } from '../services/crossTenantService';
 import { dataMigrationService } from '../utils/dataMigration';
 import { buildAttendanceMemberSnapshot, buildAttendanceNewBelieverSnapshot } from '../utils/attendanceUtils';
 import { withLeadershipFirstTimerRule } from '../utils/memberStatus';
-import { isCampusShepherd, isPromotedCampusAdmin } from '../utils/permissionUtils';
+import { getAssignedBacentaIds, isCampusShepherd, isMigrationPromotedAdmin, isPromotedCampusAdmin, isScopedAdmin } from '../utils/permissionUtils';
 import { userService } from '../services/userService';
 import { isUnsavedImageValue } from '../services/imageStorageService';
 import { setNotificationContext } from '../services/notificationService';
@@ -270,6 +270,27 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
+type NormalModeDataPatch = Partial<{
+  members: Member[];
+  attendanceRecords: AttendanceRecord[];
+  prayerRecords: PrayerRecord[];
+  customPrayers: CustomPrayer[];
+  customPrayerRecords: CustomPrayerRecord[];
+  bacentas: Bacenta[];
+  newBelievers: NewBeliever[];
+  sundayConfirmations: SundayConfirmation[];
+  guests: Guest[];
+  memberDeletionRequests: MemberDeletionRequest[];
+  meetingRecords: MeetingRecord[];
+  sundayOfferingRecords: SundayOfferingRecord[];
+  titheRecords: TitheRecord[];
+  transportRecords: TransportRecord[];
+  outreachBacentas: OutreachBacenta[];
+  outreachMembers: OutreachMember[];
+  allOutreachMembers: OutreachMember[];
+  sonsOfGod: SonOfGod[];
+}>;
+
 export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   // Core data state
   const [members, setMembers] = useState<Member[]>([]);
@@ -343,18 +364,21 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
   // Firebase-specific state
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [userProfile, setUserProfile] = useState<any>(null);
+  const userProfileRef = useRef<any>(null);
   const [currentChurchId, setCurrentChurchId] = useState<string | null>(null);
   const [isOnline, setIsOnline] = useState<boolean>(true);
   const [needsMigration, setNeedsMigration] = useState<boolean>(false);
 
   // Optimistic update tracking to prevent listener conflicts
   const optimisticUpdatesRef = useRef<Set<string>>(new Set());
+  const rawNormalModeDataRef = useRef<NormalModeDataPatch>({});
   // Optimistic removal of members in ministry mode to avoid brief reappearance
   const optimisticDeletedMemberIdsRef = useRef<Set<string>>(new Set());
   // Ref so the closed-over onSnapshot watcher can always call the latest refreshUserProfile
   const refreshUserProfileRef = useRef<(() => Promise<void>) | null>(null);
   // Track the last known role to detect promotions/demotions at runtime
   const lastKnownRoleRef = useRef<string | null>(null);
+  const lastKnownAccessSignatureRef = useRef<string | null>(null);
   // Dedicated ref for user doc watcher cleanup — kept separate from data listeners so
   // setupDataListeners tear-down doesn't accidentally kill the role-change detector.
   const userDocWatcherCleanupRef = useRef<(() => void) | null>(null);
@@ -406,6 +430,10 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     const ministryName = (userProfile?.preferences?.ministryName as string) || '';
     console.log('🔍 [Debug] Active ministry name:', ministryName, 'from userProfile:', userProfile);
     return ministryName;
+  }, [userProfile]);
+
+  useEffect(() => {
+    userProfileRef.current = userProfile;
   }, [userProfile]);
 
   // Navigation state (stack of previously visited tabs)
@@ -467,6 +495,85 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     return `${y}-${m}`;
   }, [displayedDate]);
 
+  const applyNormalModeData = useCallback((patch: NormalModeDataPatch) => {
+    const activeUserProfile = userProfileRef.current || userProfile;
+    rawNormalModeDataRef.current = {
+      ...rawNormalModeDataRef.current,
+      ...patch
+    };
+
+    if (!isScopedAdmin(activeUserProfile)) {
+      if (patch.members !== undefined) setMembers(patch.members);
+      if (patch.bacentas !== undefined) setBacentas(patch.bacentas);
+      if (patch.attendanceRecords !== undefined) setAttendanceRecords(patch.attendanceRecords);
+      if (patch.prayerRecords !== undefined) setPrayerRecords(patch.prayerRecords);
+      if (patch.customPrayers !== undefined) setCustomPrayers(patch.customPrayers);
+      if (patch.customPrayerRecords !== undefined) setCustomPrayerRecords(patch.customPrayerRecords);
+      if (patch.newBelievers !== undefined) setNewBelievers(patch.newBelievers);
+      if (patch.sundayConfirmations !== undefined) setSundayConfirmations(patch.sundayConfirmations);
+      if (patch.guests !== undefined) setGuests(patch.guests);
+      if (patch.memberDeletionRequests !== undefined) setMemberDeletionRequests(patch.memberDeletionRequests);
+      if (patch.meetingRecords !== undefined) setMeetingRecords(patch.meetingRecords);
+      if (patch.sundayOfferingRecords !== undefined) setSundayOfferingRecords(patch.sundayOfferingRecords);
+      if (patch.titheRecords !== undefined) setTitheRecords(patch.titheRecords);
+      if (patch.transportRecords !== undefined) setTransportRecords(patch.transportRecords);
+      if (patch.outreachBacentas !== undefined) setOutreachBacentas(patch.outreachBacentas);
+      if (patch.outreachMembers !== undefined) setOutreachMembers(patch.outreachMembers);
+      if (patch.allOutreachMembers !== undefined) setAllOutreachMembers(patch.allOutreachMembers);
+      if (patch.sonsOfGod !== undefined) setSonsOfGod(patch.sonsOfGod);
+      return;
+    }
+
+    const assignedBacentaIdSet = new Set(getAssignedBacentaIds(activeUserProfile));
+    const raw = rawNormalModeDataRef.current;
+    const scopedBacentas = (raw.bacentas || []).filter(bacenta => assignedBacentaIdSet.has(bacenta.id));
+    const scopedMembers = (raw.members || []).filter(member => assignedBacentaIdSet.has(member.bacentaId));
+    const scopedMemberIds = new Set(scopedMembers.map(member => member.id));
+    const scopedGuests = (raw.guests || []).filter(guest => assignedBacentaIdSet.has(guest.bacentaId));
+    const scopedGuestIds = new Set(scopedGuests.map(guest => guest.id));
+    const scopedCustomPrayerIds = new Set((raw.customPrayers || [])
+      .filter(prayer => scopedMemberIds.has(prayer.memberId))
+      .map(prayer => prayer.id));
+    const scopedOutreachMembers = (raw.outreachMembers || []).filter(item => (
+      assignedBacentaIdSet.has(item.bacentaId) ||
+      (!!item.convertedMemberId && scopedMemberIds.has(item.convertedMemberId))
+    ));
+    const scopedAllOutreachMembers = (raw.allOutreachMembers || []).filter(item => (
+      assignedBacentaIdSet.has(item.bacentaId) ||
+      (!!item.convertedMemberId && scopedMemberIds.has(item.convertedMemberId))
+    ));
+    const scopedOutreachMemberIds = new Set([...scopedOutreachMembers, ...scopedAllOutreachMembers].map(item => item.id));
+
+    setBacentas(scopedBacentas);
+    setMembers(scopedMembers);
+    setAttendanceRecords((raw.attendanceRecords || []).filter(record => {
+      if (record.memberId && scopedMemberIds.has(record.memberId)) return true;
+      return !!record.memberSnapshot?.bacentaId && assignedBacentaIdSet.has(record.memberSnapshot.bacentaId);
+    }));
+    setPrayerRecords((raw.prayerRecords || []).filter(record => scopedMemberIds.has(record.memberId)));
+    setCustomPrayers((raw.customPrayers || []).filter(prayer => scopedMemberIds.has(prayer.memberId)));
+    setCustomPrayerRecords((raw.customPrayerRecords || []).filter(record => (
+      scopedMemberIds.has(record.memberId) || scopedCustomPrayerIds.has(record.customPrayerId)
+    )));
+    setNewBelievers([]);
+    setSundayConfirmations((raw.sundayConfirmations || []).filter(confirmation => (
+      (!!confirmation.memberId && scopedMemberIds.has(confirmation.memberId)) ||
+      (!!confirmation.guestId && scopedGuestIds.has(confirmation.guestId))
+    )));
+    setGuests(scopedGuests);
+    setMemberDeletionRequests((raw.memberDeletionRequests || []).filter(request => (
+      scopedMemberIds.has(request.memberId) || scopedOutreachMemberIds.has(request.memberId)
+    )));
+    setMeetingRecords((raw.meetingRecords || []).filter(record => assignedBacentaIdSet.has(record.bacentaId)));
+    setSundayOfferingRecords([]);
+    setTitheRecords((raw.titheRecords || []).filter(record => scopedMemberIds.has(record.memberId)));
+    setTransportRecords((raw.transportRecords || []).filter(record => scopedMemberIds.has(record.memberId)));
+    setOutreachBacentas((raw.outreachBacentas || []).filter(bacenta => assignedBacentaIdSet.has(bacenta.id)));
+    setOutreachMembers(scopedOutreachMembers);
+    setAllOutreachMembers(scopedAllOutreachMembers);
+    setSonsOfGod((raw.sonsOfGod || []).filter(item => assignedBacentaIdSet.has(item.bacentaId)));
+  }, [userProfile]);
+
   // Initialize Firebase listeners and check for migration
   useEffect(() => {
     const initializeApp = async () => {
@@ -484,6 +591,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
             // User is authenticated, load profile first
             try {
               const profile = await userService.getUserProfile(user.uid);
+              userProfileRef.current = profile;
               setUserProfile(profile);
               // REMOVED: Ministry access request - ministry app now operates independently
               // try {
@@ -568,14 +676,30 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
                 }
                 // Detect role changes at runtime (e.g. SuperAdmin promotion)
                 const newRole = data.role || null;
+                const accessSignature = JSON.stringify({
+                  role: newRole,
+                  isPromotedCampusAdmin: data.isPromotedCampusAdmin === true,
+                  isMigrationPromotedAdmin: data.isMigrationPromotedAdmin === true,
+                  isScopedAdmin: data.isScopedAdmin === true,
+                  assignedBacentaIds: Array.isArray(data.assignedBacentaIds) ? [...data.assignedBacentaIds].sort() : []
+                });
                 if (lastKnownRoleRef.current !== null && newRole !== lastKnownRoleRef.current) {
                   console.log('[RoleChange] Role changed from', lastKnownRoleRef.current, '→', newRole, '— refreshing profile');
                   lastKnownRoleRef.current = newRole;
+                  lastKnownAccessSignatureRef.current = accessSignature;
                   if (refreshUserProfileRef.current) {
                     try { await refreshUserProfileRef.current(); } catch (e) { console.warn('Profile refresh after role change failed', e); }
                   }
+                } else if (lastKnownAccessSignatureRef.current !== null && accessSignature !== lastKnownAccessSignatureRef.current) {
+                  console.log('[AccessScopeChange] Migration promotion scope changed — refreshing profile');
+                  lastKnownRoleRef.current = newRole;
+                  lastKnownAccessSignatureRef.current = accessSignature;
+                  if (refreshUserProfileRef.current) {
+                    try { await refreshUserProfileRef.current(); } catch (e) { console.warn('Profile refresh after access scope change failed', e); }
+                  }
                 } else {
                   lastKnownRoleRef.current = newRole;
+                  lastKnownAccessSignatureRef.current = accessSignature;
                 }
               } catch (e) { console.warn('Auto signout watcher error', e); }
             });
@@ -638,6 +762,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     }
 
     const unsubscribers: (() => void)[] = [];
+    rawNormalModeDataRef.current = {};
 
     try {
       // REMOVED: Ministry access gate - ministry app now operates independently
@@ -726,26 +851,26 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
         // Normal mode or ministry mode without specific ministry
         // NORMAL MODE INDEPENDENCE: Only show members from the default church, not from ministry church
         const unsubscribeMembers = membersFirebaseService.onSnapshot((members) => {
-          setMembers(members);
+          applyNormalModeData({ members });
         });
         unsubscribers.push(unsubscribeMembers);
 
         // NORMAL MODE INDEPENDENCE: Do not fetch ministry members in normal mode
         // Listen to bacentas (always; in ministry mode reads from default church due to switch above)
         const unsubscribeBacentas = bacentasFirebaseService.onSnapshot((bacentas) => {
-          setBacentas(bacentas);
+          applyNormalModeData({ bacentas });
         });
         unsubscribers.push(unsubscribeBacentas);
 
         // Listen to outreach bacentas (always)
         const unsubscribeOutreachBacentas = outreachBacentasFirebaseService.onSnapshot((items) => {
-          setOutreachBacentas(items);
+          applyNormalModeData({ outreachBacentas: items });
         });
         unsubscribers.push(unsubscribeOutreachBacentas);
 
         // Listen to ALL outreach members (for overall totals)
         const unsubscribeAllOutreachMembers = outreachMembersFirebaseService.onSnapshot((items) => {
-          setAllOutreachMembers(items);
+          applyNormalModeData({ allOutreachMembers: items });
         });
         unsubscribers.push(unsubscribeAllOutreachMembers);
 
@@ -754,7 +879,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
           (async () => {
             try {
               const { sonsOfGodFirebaseService } = await import('../services/firebaseService');
-              const unsubSons = sonsOfGodFirebaseService.onSnapshot(items => setSonsOfGod(items));
+              const unsubSons = sonsOfGodFirebaseService.onSnapshot(items => applyNormalModeData({ sonsOfGod: items }));
               unsubscribers.push(unsubSons);
             } catch (inner) {
               console.warn('[Listeners] SonsOfGod listener failed inner', inner);
@@ -766,13 +891,13 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
 
         // Listen to attendance
         const unsubscribeAttendance = attendanceFirebaseService.onSnapshot((records) => {
-          setAttendanceRecords(records);
+          applyNormalModeData({ attendanceRecords: records });
         });
         unsubscribers.push(unsubscribeAttendance);
 
         // Listen to prayer
         const unsubscribePrayer = prayerFirebaseService.onSnapshot((records) => {
-          setPrayerRecords(records);
+          applyNormalModeData({ prayerRecords: records });
         });
         unsubscribers.push(unsubscribePrayer);
 
@@ -784,13 +909,13 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
 
         // Listen to custom prayers
         const unsubscribeCustomPrayers = customPrayerFirebaseService.onSnapshot((prayers) => {
-          setCustomPrayers(prayers);
+          applyNormalModeData({ customPrayers: prayers });
         });
         unsubscribers.push(unsubscribeCustomPrayers);
 
         // Listen to custom prayer records
         const unsubscribeCustomPrayerRecords = customPrayerRecordFirebaseService.onSnapshot((records) => {
-          setCustomPrayerRecords(records);
+          applyNormalModeData({ customPrayerRecords: records });
         });
         unsubscribers.push(unsubscribeCustomPrayerRecords);
 
@@ -817,14 +942,14 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
             if (isMinistryContext) {
               setNewBelievers(items.filter(n => (n.ministry || '').trim() !== ''));
             } else {
-              setNewBelievers(items);
+              applyNormalModeData({ newBelievers: items });
             }
           });
         unsubscribers.push(unsubscribeNewBelievers);
         // Listen to outreach members for current outreachMonth
         const subscribeOutreachMembers = () => outreachMembersFirebaseService.onSnapshotByMonth(
           outreachMonth,
-          (items) => setOutreachMembers(items)
+          (items) => applyNormalModeData({ outreachMembers: items })
         );
         let unsubscribeOutreachMembers = subscribeOutreachMembers();
         unsubscribers.push(() => unsubscribeOutreachMembers());
@@ -848,7 +973,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
             guestConfirmations: confirmations.filter(c => c.guestId).length,
             memberConfirmations: confirmations.filter(c => c.memberId).length
           });
-          setSundayConfirmations(confirmations);
+          applyNormalModeData({ sundayConfirmations: confirmations });
         });
         unsubscribers.push(unsubscribeConfirmations);
 
@@ -858,37 +983,37 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
             count: guests.length,
             guestIds: guests.map(g => g.id).slice(0, 5) // Log first 5 IDs for debugging
           });
-          setGuests(guests);
+          applyNormalModeData({ guests });
         });
         unsubscribers.push(unsubscribeGuests);
 
         // Listen to member deletion requests (for leader/admin UIs relying on context)
         const unsubscribeDeletionRequests = memberDeletionRequestService.onSnapshot((requests) => {
-          setMemberDeletionRequests(requests);
+          applyNormalModeData({ memberDeletionRequests: requests });
         });
         unsubscribers.push(unsubscribeDeletionRequests);
 
         // Tithe listener for current month
         const month = getCurrentMonth();
         const unsubTithes = titheFirebaseService.onSnapshotByMonth(month, (items) => {
-          setTitheRecords(items);
+          applyNormalModeData({ titheRecords: items });
         });
         unsubscribers.push(unsubTithes);
 
         // Transport listener for current month
         const unsubTransport = transportFirebaseService.onSnapshotByMonth(month, (items) => {
-          setTransportRecords(items);
+          applyNormalModeData({ transportRecords: items });
         });
         unsubscribers.push(unsubTransport);
 
         // Meeting records listener (previously missing — caused dashboard to show 0 for fresh logins)
         const unsubscribeMeetings = meetingRecordsFirebaseService.onSnapshot((records) => {
-          setMeetingRecords(records);
+          applyNormalModeData({ meetingRecords: records });
         });
         unsubscribers.push(unsubscribeMeetings);
 
         const unsubscribeSundayOfferings = sundayOfferingFirebaseService.onSnapshot((records) => {
-          setSundayOfferingRecords(records);
+          applyNormalModeData({ sundayOfferingRecords: records });
         });
         unsubscribers.push(unsubscribeSundayOfferings);
       }
@@ -903,7 +1028,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     } catch (error: any) {
       setError(error.message);
     }
-  }, [isImpersonating, isMinistryContext, activeMinistryName, outreachMonth, userProfile, displayedDate]);
+  }, [isImpersonating, isMinistryContext, activeMinistryName, outreachMonth, userProfile, displayedDate, applyNormalModeData]);
 
   // React when church or context changes to (re)attach listeners
   useEffect(() => {
@@ -923,6 +1048,24 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
       }
     };
   }, [currentChurchId, isMinistryContext, activeMinistryName, setupDataListeners]);
+
+  // Toast management
+  const showToast = useCallback((type: 'success' | 'error' | 'warning' | 'info', title: string, message?: string) => {
+    // Generate unique ID using timestamp + random number to avoid duplicates
+    const id = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+    // Clear any existing toasts and show only the new one
+    setToasts([{ id, type, title, message }]);
+
+    // Auto-remove toast after 5 seconds
+    setTimeout(() => {
+      setToasts(prev => prev.filter(toast => toast.id !== id));
+    }, 5000);
+  }, []);
+
+  const removeToast = useCallback((id: string) => {
+    setToasts(prev => prev.filter(toast => toast.id !== id));
+  }, []);
 
   // Fetch initial data (for manual refresh)
   const fetchInitialData = useCallback(async () => {
@@ -1046,15 +1189,17 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
 
         // If profile has a ministry church, merge in native ministry members
         // NORMAL MODE INDEPENDENCE: Do not fetch ministry members in normal mode
-        setMembers(membersData);
-        setBacentas(bacentasData);
-        setAttendanceRecords(attendanceData);
-        setNewBelievers(newBelieversData);
-        setSundayConfirmations(confirmationsData);
-        setPrayerRecords(prayerData);
+        applyNormalModeData({
+          members: membersData,
+          bacentas: bacentasData,
+          attendanceRecords: attendanceData,
+          newBelievers: newBelieversData,
+          sundayConfirmations: confirmationsData,
+          prayerRecords: prayerData,
+          meetingRecords: meetingData,
+          sundayOfferingRecords: sundayOfferingData
+        });
         setPrayerSchedules(prayerSchedulesData);
-        setMeetingRecords(meetingData);
-        setSundayOfferingRecords(sundayOfferingData);
       }
 
       // Restore original context after reads
@@ -1069,25 +1214,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     } finally {
       setIsLoading(false);
     }
-  }, []);
-
-  // Toast management
-  const showToast = useCallback((type: 'success' | 'error' | 'warning' | 'info', title: string, message?: string) => {
-    // Generate unique ID using timestamp + random number to avoid duplicates
-    const id = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-
-    // Clear any existing toasts and show only the new one
-    setToasts([{ id, type, title, message }]);
-
-    // Auto-remove toast after 5 seconds
-    setTimeout(() => {
-      setToasts(prev => prev.filter(toast => toast.id !== id));
-    }, 5000);
-  }, []);
-
-  const removeToast = useCallback((id: string) => {
-    setToasts(prev => prev.filter(toast => toast.id !== id));
-  }, []);
+  }, [applyNormalModeData, activeMinistryName, currentChurchId, isImpersonating, isMinistryContext, showToast, userProfile]);
 
   // Guard: block writes when impersonating in read-only external context
   const ensureCanWrite = useCallback(() => {
@@ -1097,6 +1224,39 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     }
     return true;
   }, [isImpersonating, currentExternalPermission, showToast]);
+
+  const ensureCanAccessBacenta = useCallback((bacentaId?: string, label: string = 'record') => {
+    if (!isScopedAdmin(userProfile)) return;
+    if (!bacentaId || !getAssignedBacentaIds(userProfile).includes(bacentaId)) {
+      throw new Error(`This ${label} is outside your assigned bacentas.`);
+    }
+  }, [userProfile]);
+
+  const ensureCanAccessMember = useCallback((memberId: string, label: string = 'member'): Member => {
+    const member = members.find(item => item.id === memberId);
+    if (!member) {
+      throw new Error(`${label.charAt(0).toUpperCase()}${label.slice(1)} not found`);
+    }
+    ensureCanAccessBacenta(member.bacentaId, label);
+    return member;
+  }, [members, ensureCanAccessBacenta]);
+
+  const ensureBacentaScopedGlobalFeature = useCallback((label: string) => {
+    if (isScopedAdmin(userProfile)) {
+      throw new Error(`${label} is not available in migration promotion scope because it is not tied to a Bacenta.`);
+    }
+  }, [userProfile]);
+
+  const addBacentaToScopedAdminProfile = useCallback(async (bacentaId: string) => {
+    if (!isScopedAdmin(userProfile) || !userProfile?.uid) return;
+    const assignedBacentaIds = [...new Set([...getAssignedBacentaIds(userProfile), bacentaId])];
+    await userService.updateUserProfile(userProfile.uid, { assignedBacentaIds });
+    setUserProfile((profile: any) => {
+      const nextProfile = profile ? { ...profile, assignedBacentaIds } : profile;
+      userProfileRef.current = nextProfile;
+      return nextProfile;
+    });
+  }, [userProfile]);
 
   // Confirmation modal functions
   const showConfirmation = useCallback((type: 'deleteMember' | 'deleteBacenta' | 'deleteNewBeliever' | 'clearData' | 'clearSelectedData' | 'createDeletionRequest' | 'clearAllNewBelievers', data: any, onConfirm: () => void) => {
@@ -1129,6 +1289,9 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
         const err = new Error('Select a ministry before adding members in ministry mode');
         showToast('error', 'No ministry selected', 'Please choose a ministry first.');
         throw err;
+      }
+      if (!isMinistryContext) {
+        ensureCanAccessBacenta(memberData.bacentaId, 'member');
       }
 
       // Prepare payload: in ministry mode, auto-tag ministry and allow empty bacenta
@@ -1172,7 +1335,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     } finally {
       setIsLoading(false);
     }
-  }, [showToast, isMinistryContext, activeMinistryName, userProfile]);
+  }, [showToast, isMinistryContext, activeMinistryName, userProfile, ensureCanAccessBacenta]);
 
   const addMultipleMembersHandler = useCallback(async (membersData: Omit<Member, 'id' | 'createdDate' | 'lastUpdated'>[]) => {
     if (!ensureCanWrite()) throw new Error('Read-only access');
@@ -1184,6 +1347,9 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
 
       for (const memberData of membersData) {
         try {
+          if (!isMinistryContext) {
+            ensureCanAccessBacenta(memberData.bacentaId, 'member');
+          }
           const payload: Omit<Member, 'id' | 'createdDate' | 'lastUpdated'> = isMinistryContext
             ? {
               ...memberData,
@@ -1228,7 +1394,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     } finally {
       setIsLoading(false);
     }
-  }, [showToast, isMinistryContext, activeMinistryName]);
+  }, [showToast, isMinistryContext, activeMinistryName, ensureCanAccessBacenta]);
 
   // Add: bulk outreach members handler
   const addMultipleOutreachMembersHandler = useCallback(async (items: Omit<OutreachMember, 'id' | 'createdDate' | 'lastUpdated'>[]) => {
@@ -1265,6 +1431,12 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     try {
       setIsLoading(true);
       const original = members.find(m => m.id === memberData.id);
+      if (original) {
+        ensureCanAccessBacenta(original.bacentaId, 'member');
+      }
+      if (!isMinistryContext) {
+        ensureCanAccessBacenta(memberData.bacentaId, 'member');
+      }
       const sanitizedMemberData = withLeadershipFirstTimerRule(memberData);
       const updates: Partial<Member> = original
         ? (Object.keys(sanitizedMemberData) as Array<keyof Member>).reduce((acc, key) => {
@@ -1348,7 +1520,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     } finally {
       setIsLoading(false);
     }
-  }, [showToast, members]);
+  }, [showToast, members, ensureCanAccessBacenta, isMinistryContext]);
 
   const assignAssistantOrAdminToLeaderHandler = useCallback(async (assistantOrAdminId: string, leaderId: string) => {
     if (!ensureCanWrite()) throw new Error('Read-only access');
@@ -1360,9 +1532,11 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
       if (!member) {
         throw new Error('Member not found');
       }
+      ensureCanAccessBacenta(member.bacentaId, 'member');
       if (member.role !== 'Assistant' && member.role !== 'Admin') {
         throw new Error('Only Assistants and Admins can be assigned to leaders');
       }
+      ensureCanAccessBacenta(member.bacentaId, 'member');
 
       // Validate that the leader is a Green or Red Bacenta
       const leader = members.find(m => m.id === leaderId);
@@ -1372,6 +1546,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
       if (leader.role !== 'Bacenta Leader' && leader.role !== 'Fellowship Leader') {
         throw new Error('Can only assign to Green Bacenta or Red Bacenta leaders');
       }
+      ensureCanAccessBacenta(leader.bacentaId, 'leader');
 
       // Update the member with the assigned leader
       const updates: Partial<Member> = {
@@ -1397,7 +1572,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     } finally {
       setIsLoading(false);
     }
-  }, [members, showToast, isMinistryContext, userProfile]);
+  }, [members, showToast, isMinistryContext, userProfile, ensureCanAccessBacenta]);
 
   const unassignAssistantOrAdminHandler = useCallback(async (assistantOrAdminId: string) => {
     if (!ensureCanWrite()) throw new Error('Read-only access');
@@ -1412,6 +1587,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
       if (member.role !== 'Assistant' && member.role !== 'Admin') {
         throw new Error('Only Assistants and Admins can be unassigned');
       }
+      ensureCanAccessBacenta(member.bacentaId, 'member');
 
       // Update the member to remove the assigned leader
       const updates: Partial<Member> = {
@@ -1437,7 +1613,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     } finally {
       setIsLoading(false);
     }
-  }, [members, showToast, isMinistryContext, userProfile]);
+  }, [members, showToast, isMinistryContext, userProfile, ensureCanAccessBacenta]);
 
   const persistMemberAttendanceSnapshots = useCallback(async (member: Member) => {
     const memberAttendanceRecords = attendanceRecords.filter((record) => record.memberId === member.id);
@@ -1481,6 +1657,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
       if (!memberToDelete) {
         throw new Error('Member not found');
       }
+      ensureCanAccessBacenta(memberToDelete.bacentaId, 'member');
 
       // Check if current user has permission to delete this member
       const { canDeleteMemberWithRole } = await import('../utils/permissionUtils');
@@ -1577,7 +1754,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     } finally {
       setIsLoading(false);
     }
-  }, [showToast, members, userProfile, sundayConfirmations, outreachMembers, persistMemberAttendanceSnapshots]);
+  }, [showToast, members, userProfile, sundayConfirmations, outreachMembers, persistMemberAttendanceSnapshots, ensureCanAccessBacenta]);
 
   // Bacenta handlers
   const addBacentaHandler = useCallback(async (bacentaData: Omit<Bacenta, 'id'>) => {
@@ -1585,6 +1762,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     try {
       setIsLoading(true);
       const newId = await bacentasFirebaseService.add(bacentaData);
+      await addBacentaToScopedAdminProfile(newId);
       showToast('success', 'Bacenta added successfully');
       return newId;
     } catch (error: any) {
@@ -1594,12 +1772,13 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     } finally {
       setIsLoading(false);
     }
-  }, [showToast]);
+  }, [showToast, addBacentaToScopedAdminProfile]);
 
   const updateBacentaHandler = useCallback(async (bacentaData: Bacenta) => {
     if (!ensureCanWrite()) throw new Error('Read-only access');
     try {
       setIsLoading(true);
+      ensureCanAccessBacenta(bacentaData.id, 'bacenta');
       const original = bacentas.find(b => b.id === bacentaData.id);
       await bacentasFirebaseService.update(bacentaData.id, bacentaData);
 
@@ -1625,12 +1804,13 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     } finally {
       setIsLoading(false);
     }
-  }, [showToast, bacentas, userProfile]);
+  }, [showToast, bacentas, userProfile, ensureCanAccessBacenta]);
 
   const deleteBacentaHandler = useCallback(async (bacentaId: string) => {
     if (!ensureCanWrite()) throw new Error('Read-only access');
     try {
       setIsLoading(true);
+      ensureCanAccessBacenta(bacentaId, 'bacenta');
       await bacentasFirebaseService.delete(bacentaId);
       showToast('success', 'Bacenta deleted successfully');
     } catch (error: any) {
@@ -1640,12 +1820,13 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     } finally {
       setIsLoading(false);
     }
-  }, [showToast]);
+  }, [showToast, ensureCanAccessBacenta]);
 
   const freezeBacentaHandler = useCallback(async (bacentaId: string) => {
     if (!ensureCanWrite()) throw new Error('Read-only access');
     try {
       setIsLoading(true);
+      ensureCanAccessBacenta(bacentaId, 'bacenta');
       await bacentasFirebaseService.freeze(bacentaId);
       try {
         const { createNotificationHelpers } = await import('../services/notificationService');
@@ -1663,12 +1844,13 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     } finally {
       setIsLoading(false);
     }
-  }, [showToast, bacentas, userProfile]);
+  }, [showToast, bacentas, userProfile, ensureCanAccessBacenta]);
 
   const unfreezeBacentaHandler = useCallback(async (bacentaId: string) => {
     if (!ensureCanWrite()) throw new Error('Read-only access');
     try {
       setIsLoading(true);
+      ensureCanAccessBacenta(bacentaId, 'bacenta');
       await bacentasFirebaseService.unfreeze(bacentaId);
       try {
         const { createNotificationHelpers } = await import('../services/notificationService');
@@ -1686,11 +1868,12 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     } finally {
       setIsLoading(false);
     }
-  }, [showToast, bacentas, userProfile]);
+  }, [showToast, bacentas, userProfile, ensureCanAccessBacenta]);
 
   // New Believer handlers
   const addNewBelieverHandler = useCallback(async (newBelieverData: Omit<NewBeliever, 'id' | 'createdDate' | 'lastUpdated'>) => {
     if (!ensureCanWrite()) throw new Error('Read-only access');
+    ensureBacentaScopedGlobalFeature('New believers');
     try {
       setIsLoading(true);
       // Use ministry service for bidirectional sync in ministry mode
@@ -1708,10 +1891,11 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     } finally {
       setIsLoading(false);
     }
-  }, [showToast]);
+  }, [showToast, ensureBacentaScopedGlobalFeature]);
 
   const addMultipleNewBelieversHandler = useCallback(async (newBelieversData: Omit<NewBeliever, 'id' | 'createdDate' | 'lastUpdated'>[]) => {
     if (!ensureCanWrite()) throw new Error('Read-only access');
+    ensureBacentaScopedGlobalFeature('New believers');
     const successful: NewBeliever[] = [];
     const failed: { data: Omit<NewBeliever, 'id' | 'createdDate' | 'lastUpdated'>, error: string }[] = [];
 
@@ -1742,10 +1926,11 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     } finally {
       setIsLoading(false);
     }
-  }, [showToast]);
+  }, [showToast, ensureBacentaScopedGlobalFeature]);
 
   const updateNewBelieverHandler = useCallback(async (newBelieverData: NewBeliever) => {
     if (!ensureCanWrite()) throw new Error('Read-only access');
+    ensureBacentaScopedGlobalFeature('New believers');
     try {
       setIsLoading(true);
       await newBelieversFirebaseService.update(newBelieverData.id, newBelieverData);
@@ -1757,11 +1942,12 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     } finally {
       setIsLoading(false);
     }
-  }, [showToast]);
+  }, [showToast, ensureBacentaScopedGlobalFeature]);
 
   const deleteNewBelieverHandler = useCallback(async (newBelieverId: string) => {
     if (!ensureCanWrite()) throw new Error('Read-only access');
-    if (isPromotedCampusAdmin(userProfile)) throw new Error('Promoted campus admins cannot delete members');
+    ensureBacentaScopedGlobalFeature('New believers');
+    if (isPromotedCampusAdmin(userProfile) && !isMigrationPromotedAdmin(userProfile)) throw new Error('Promoted campus admins cannot delete members');
     try {
       setIsLoading(true);
       const newBelieverToDelete = newBelievers.find((newBeliever) => newBeliever.id === newBelieverId);
@@ -1779,7 +1965,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     } finally {
       setIsLoading(false);
     }
-  }, [showToast, newBelievers, persistNewBelieverAttendanceSnapshots, userProfile]);
+  }, [showToast, newBelievers, persistNewBelieverAttendanceSnapshots, userProfile, ensureBacentaScopedGlobalFeature]);
 
   // Outreach handlers
   const setOutreachMonth = useCallback((yyyymm: string) => {
@@ -1791,6 +1977,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
 
   const addOutreachBacentaHandler = useCallback(async (data: Omit<OutreachBacenta, 'id'>) => {
     if (!ensureCanWrite()) throw new Error('Read-only access');
+    ensureBacentaScopedGlobalFeature('Outreach bacentas');
     try {
       setIsLoading(true);
       const id = await outreachBacentasFirebaseService.add(data);
@@ -1803,10 +1990,11 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     } finally {
       setIsLoading(false);
     }
-  }, [showToast]);
+  }, [showToast, ensureBacentaScopedGlobalFeature]);
 
   const updateOutreachBacentaHandler = useCallback(async (data: OutreachBacenta) => {
     if (!ensureCanWrite()) throw new Error('Read-only access');
+    ensureBacentaScopedGlobalFeature('Outreach bacentas');
     try {
       setIsLoading(true);
       await outreachBacentasFirebaseService.update(data.id, data);
@@ -1818,10 +2006,11 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     } finally {
       setIsLoading(false);
     }
-  }, [showToast]);
+  }, [showToast, ensureBacentaScopedGlobalFeature]);
 
   const deleteOutreachBacentaHandler = useCallback(async (id: string) => {
     if (!ensureCanWrite()) throw new Error('Read-only access');
+    ensureBacentaScopedGlobalFeature('Outreach bacentas');
     try {
       setIsLoading(true);
       await outreachBacentasFirebaseService.delete(id);
@@ -1833,10 +2022,11 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     } finally {
       setIsLoading(false);
     }
-  }, [showToast]);
+  }, [showToast, ensureBacentaScopedGlobalFeature]);
 
   // Helper function to find or create guest with deduplication
   const findOrCreateGuest = useCallback(async (guestData: Omit<Guest, 'id' | 'createdDate' | 'lastUpdated' | 'createdBy'>): Promise<string> => {
+    ensureCanAccessBacenta(guestData.bacentaId, 'guest');
     console.log('🔍 [Guest] Finding or creating guest:', {
       firstName: guestData.firstName,
       lastName: guestData.lastName,
@@ -1867,7 +2057,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
       console.log(`✅ [Guest] Created new guest: ${guestData.firstName} ${guestData.lastName || ''} (ID: ${guestId})`);
       return guestId;
     }
-  }, [guests, userProfile]);
+  }, [guests, userProfile, ensureCanAccessBacenta]);
 
   // Debug function to track guest-confirmation relationships
   const debugGuestConfirmationState = useCallback(() => {
@@ -2060,6 +2250,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
 
   const addOutreachMemberHandler = useCallback(async (data: Omit<OutreachMember, 'id' | 'createdDate' | 'lastUpdated'>): Promise<string> => {
     if (!ensureCanWrite()) throw new Error('Read-only access');
+    ensureCanAccessBacenta(data.bacentaId, 'outreach member');
     try {
       setIsLoading(true);
       const outreachMemberId = await outreachMembersFirebaseService.add(data);
@@ -2113,7 +2304,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     } finally {
       setIsLoading(false);
     }
-  }, [findOrCreateGuest, showToast, userProfile]);
+  }, [findOrCreateGuest, showToast, userProfile, ensureCanAccessBacenta]);
 
   const updateOutreachMemberHandler = useCallback(async (id: string, updates: Partial<OutreachMember>) => {
     if (!ensureCanWrite()) throw new Error('Read-only access');
@@ -2122,6 +2313,12 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
 
       // Find existing state to compute deltas
       const existing = outreachMembers.find(o => o.id === id);
+      if (existing) {
+        ensureCanAccessBacenta(existing.bacentaId, 'outreach member');
+      }
+      if (updates.bacentaId) {
+        ensureCanAccessBacenta(updates.bacentaId, 'outreach member');
+      }
 
       // Apply primary update
       await outreachMembersFirebaseService.update(id, updates);
@@ -2212,14 +2409,18 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     } finally {
       setIsLoading(false);
     }
-  }, [findOrCreateGuest, showToast, outreachMembers, userProfile]);
+  }, [findOrCreateGuest, showToast, outreachMembers, userProfile, ensureCanAccessBacenta]);
 
   const deleteOutreachMemberHandler = useCallback(async (id: string) => {
     if (!ensureCanWrite()) throw new Error('Read-only access');
-    if (isPromotedCampusAdmin(userProfile)) throw new Error('Promoted campus admins cannot delete members');
+    if (isPromotedCampusAdmin(userProfile) && !isMigrationPromotedAdmin(userProfile)) throw new Error('Promoted campus admins cannot delete members');
     try {
       setIsLoading(true);
       const { hasAdminPrivileges } = await import('../utils/permissionUtils');
+      const scopedOutreachMember = outreachMembers.find(o => o.id === id);
+      if (scopedOutreachMember) {
+        ensureCanAccessBacenta(scopedOutreachMember.bacentaId, 'outreach member');
+      }
 
       // If not admin, do NOT delete now — create a deletion request for admin approval
       if (!hasAdminPrivileges(userProfile)) {
@@ -2295,7 +2496,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     } finally {
       setIsLoading(false);
     }
-  }, [showToast, outreachMembers, sundayConfirmations, deleteMemberHandler, members, userProfile]);
+  }, [showToast, outreachMembers, sundayConfirmations, deleteMemberHandler, members, userProfile, ensureCanAccessBacenta]);
 
   const convertOutreachMemberToPermanentHandler = useCallback(async (outreachMemberId: string) => {
     if (!ensureCanWrite()) throw new Error('Read-only access');
@@ -2303,6 +2504,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
       setIsLoading(true);
       const om = outreachMembers.find(o => o.id === outreachMemberId);
       if (!om) throw new Error('Outreach member not found');
+      ensureCanAccessBacenta(om.bacentaId, 'outreach member');
 
       let newMemberId: string | undefined = undefined;
 
@@ -2414,11 +2616,12 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     } finally {
       setIsLoading(false);
     }
-  }, [outreachMembers, sundayConfirmations, showToast]);
+  }, [outreachMembers, sundayConfirmations, showToast, ensureCanAccessBacenta]);
 
   // Meeting Record handlers
   const saveMeetingRecordHandler = useCallback(async (record: MeetingRecord) => {
     if (!ensureCanWrite()) throw new Error('Read-only access');
+    ensureCanAccessBacenta(record.bacentaId, 'meeting record');
     try {
       setIsLoading(true);
       const persistedRecord = await meetingRecordsFirebaseService.addOrUpdate(record);
@@ -2461,10 +2664,11 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     } finally {
       setIsLoading(false);
     }
-  }, [showToast, userProfile, bacentas]);
+  }, [showToast, userProfile, bacentas, ensureCanAccessBacenta]);
 
   const updateMeetingRecordHandler = useCallback(async (record: MeetingRecord) => {
     if (!ensureCanWrite()) throw new Error('Read-only access');
+    ensureCanAccessBacenta(record.bacentaId, 'meeting record');
     try {
       setIsLoading(true);
       const original = meetingRecords.find(r => r.id === record.id);
@@ -2518,13 +2722,16 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     } finally {
       setIsLoading(false);
     }
-  }, [showToast, meetingRecords, userProfile, bacentas]);
+  }, [showToast, meetingRecords, userProfile, bacentas, ensureCanAccessBacenta]);
 
   const deleteMeetingRecordHandler = useCallback(async (id: string) => {
     if (!ensureCanWrite()) throw new Error('Read-only access');
     try {
       setIsLoading(true);
       const original = meetingRecords.find(r => r.id === id) || null;
+      if (original) {
+        ensureCanAccessBacenta(original.bacentaId, 'meeting record');
+      }
       await meetingRecordsFirebaseService.delete(id);
 
       // Update local state
@@ -2559,19 +2766,21 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     } finally {
       setIsLoading(false);
     }
-  }, [showToast, meetingRecords, userProfile, bacentas]);
+  }, [showToast, meetingRecords, userProfile, bacentas, ensureCanAccessBacenta]);
 
   const getMeetingRecordHandler = useCallback(async (bacentaId: string, date: string): Promise<MeetingRecord | null> => {
     try {
+      ensureCanAccessBacenta(bacentaId, 'meeting record');
       return await meetingRecordsFirebaseService.getByBacentaAndDate(bacentaId, date);
     } catch (error: any) {
       console.error('Failed to get meeting record:', error.message);
       return null;
     }
-  }, []);
+  }, [ensureCanAccessBacenta]);
 
   const saveSundayOfferingHandler = useCallback(async (record: SundayOfferingRecord) => {
     if (!ensureCanWrite()) throw new Error('Read-only access');
+    ensureBacentaScopedGlobalFeature('Sunday offerings');
     if (!isCampusShepherd(userProfile)) throw new Error('Only Campus Shepherd admins can manage Sunday offerings');
     try {
       setIsLoading(true);
@@ -2595,11 +2804,12 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     } finally {
       setIsLoading(false);
     }
-  }, [showToast, userProfile]);
+  }, [showToast, userProfile, ensureBacentaScopedGlobalFeature]);
 
   // Tithe handlers
   const markTitheHandler = useCallback(async (memberId: string, paid: boolean, amount: number) => {
     if (!ensureCanWrite()) throw new Error('Read-only access');
+    ensureCanAccessMember(memberId, 'member');
     try {
       const y = displayedDate.getFullYear();
       const m = String(displayedDate.getMonth() + 1).padStart(2, '0');
@@ -2628,11 +2838,12 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
       showToast('error', 'Failed to update tithe', error.message);
       throw error;
     }
-  }, [displayedDate, showToast]);
+  }, [displayedDate, showToast, ensureCanAccessMember]);
 
   // Transport handlers
   const markTransportHandler = useCallback(async (memberId: string, paid: boolean, amount: number) => {
     if (!ensureCanWrite()) throw new Error('Read-only access');
+    ensureCanAccessMember(memberId, 'member');
     try {
       const y = displayedDate.getFullYear();
       const m = String(displayedDate.getMonth() + 1).padStart(2, '0');
@@ -2660,7 +2871,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
       showToast('error', 'Failed to update transport', error.message);
       throw error;
     }
-  }, [displayedDate, showToast]);
+  }, [displayedDate, showToast, ensureCanAccessMember]);
 
   // Attendance handlers
   const markAttendanceHandler = useCallback(async (memberId: string, date: string, status: AttendanceStatus) => {
@@ -2670,6 +2881,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
       if (!member) {
         throw new Error('Member not found');
       }
+      ensureCanAccessBacenta(member.bacentaId, 'member');
 
       const recordId = `${memberId}_${date}`;
       const record: AttendanceRecord = {
@@ -2744,10 +2956,11 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
       showToast('error', 'Failed to mark attendance', error.message);
       throw error;
     }
-  }, [showToast, isMinistryContext, userProfile, members, bacentas]);
+  }, [showToast, isMinistryContext, userProfile, members, bacentas, ensureCanAccessBacenta]);
 
   const markNewBelieverAttendanceHandler = useCallback(async (newBelieverId: string, date: string, status: AttendanceStatus) => {
     if (!ensureCanWrite()) throw new Error('Read-only access');
+    ensureBacentaScopedGlobalFeature('New believer attendance');
     try {
       const newBeliever = newBelievers.find((item) => item.id === newBelieverId);
       if (!newBeliever) {
@@ -2770,10 +2983,11 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
       showToast('error', 'Failed to mark new believer attendance', error.message);
       throw error;
     }
-  }, [showToast, newBelievers]);
+  }, [showToast, newBelievers, ensureBacentaScopedGlobalFeature]);
 
   const clearAttendanceHandler = useCallback(async (memberId: string, date: string) => {
     if (!ensureCanWrite()) throw new Error('Read-only access');
+    ensureCanAccessMember(memberId, 'member');
     try {
       const recordId = `${memberId}_${date}`;
       console.log('🗑️ Clearing attendance record:', recordId);
@@ -2842,7 +3056,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
       showToast('error', 'Failed to clear attendance', error.message);
       throw error;
     }
-  }, [showToast, isMinistryContext, userProfile, members]);
+  }, [showToast, isMinistryContext, userProfile, members, ensureCanAccessMember]);
 
   // Transfer member to constituency handler
   const transferMemberToConstituencyHandler = useCallback(async (memberId: string, targetConstituencyId: string) => {
@@ -2879,6 +3093,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
   // Prayer handlers
   const markPrayerHandler = useCallback(async (memberId: string, date: string, status: PrayerStatus) => {
     if (!ensureCanWrite()) throw new Error('Read-only access');
+    ensureCanAccessMember(memberId, 'member');
     try {
       const recordId = `${memberId}_${date}`;
       const record: PrayerRecord = { id: recordId, memberId, date, status };
@@ -2889,10 +3104,11 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
       showToast('error', 'Failed to mark prayer', error.message);
       throw error;
     }
-  }, [showToast]);
+  }, [showToast, ensureCanAccessMember]);
 
   const clearPrayerHandler = useCallback(async (memberId: string, date: string) => {
     if (!ensureCanWrite()) throw new Error('Read-only access');
+    ensureCanAccessMember(memberId, 'member');
     try {
       const recordId = `${memberId}_${date}`;
       await prayerFirebaseService.delete(recordId);
@@ -2902,11 +3118,12 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
       showToast('error', 'Failed to clear prayer', error.message);
       throw error;
     }
-  }, [showToast]);
+  }, [showToast, ensureCanAccessMember]);
 
   // Prayer Schedule handlers
   const savePrayerScheduleHandler = useCallback(async (schedule: Omit<PrayerSchedule, 'createdAt' | 'createdBy' | 'updatedAt' | 'updatedBy'>) => {
     if (!ensureCanWrite()) throw new Error('Read-only access');
+    ensureBacentaScopedGlobalFeature('Prayer schedules');
     try {
       await prayerScheduleFirebaseService.addOrUpdate(schedule);
       showToast('success', 'Prayer schedule saved successfully',
@@ -2916,10 +3133,11 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
       showToast('error', 'Failed to save prayer schedule', error.message);
       throw error;
     }
-  }, [showToast]);
+  }, [showToast, ensureBacentaScopedGlobalFeature]);
 
   const deletePrayerScheduleHandler = useCallback(async (scheduleId: string) => {
     if (!ensureCanWrite()) throw new Error('Read-only access');
+    ensureBacentaScopedGlobalFeature('Prayer schedules');
     try {
       await prayerScheduleFirebaseService.delete(scheduleId);
       showToast('success', 'Prayer schedule deleted successfully');
@@ -2928,12 +3146,13 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
       showToast('error', 'Failed to delete prayer schedule', error.message);
       throw error;
     }
-  }, [showToast]);
+  }, [showToast, ensureBacentaScopedGlobalFeature]);
 
   // Custom Prayer handlers
   const saveCustomPrayerHandler = useCallback(async (prayer: Omit<CustomPrayer, 'createdAt' | 'createdBy' | 'updatedAt' | 'updatedBy'>) => {
     console.log('🔍 [Context] saveCustomPrayerHandler called with:', prayer);
     if (!ensureCanWrite()) throw new Error('Read-only access');
+    ensureCanAccessMember(prayer.memberId, 'member');
     try {
       console.log('🔍 [Context] Calling customPrayerFirebaseService.addOrUpdate');
       await customPrayerFirebaseService.addOrUpdate(prayer);
@@ -2945,10 +3164,14 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
       showToast('error', 'Failed to save custom prayer', error.message);
       throw error;
     }
-  }, [showToast]);
+  }, [showToast, ensureCanAccessMember]);
 
   const deleteCustomPrayerHandler = useCallback(async (prayerId: string) => {
     if (!ensureCanWrite()) throw new Error('Read-only access');
+    const prayer = customPrayers.find(item => item.id === prayerId);
+    if (prayer) {
+      ensureCanAccessMember(prayer.memberId, 'member');
+    }
     try {
       await customPrayerFirebaseService.delete(prayerId);
       showToast('success', 'Custom prayer deleted successfully');
@@ -2957,10 +3180,11 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
       showToast('error', 'Failed to delete custom prayer', error.message);
       throw error;
     }
-  }, [showToast]);
+  }, [showToast, customPrayers, ensureCanAccessMember]);
 
   const markCustomPrayerAttendanceHandler = useCallback(async (customPrayerId: string, memberId: string, date: string, status: 'Prayed' | 'Missed') => {
     if (!ensureCanWrite()) throw new Error('Read-only access');
+    ensureCanAccessMember(memberId, 'member');
     try {
       await customPrayerRecordFirebaseService.markAttendance(customPrayerId, memberId, date, status);
     } catch (error: any) {
@@ -2968,11 +3192,12 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
       showToast('error', 'Failed to mark attendance', error.message);
       throw error;
     }
-  }, [showToast]);
+  }, [showToast, ensureCanAccessMember]);
 
   // Confirmation handlers
   const markConfirmationHandler = useCallback(async (memberId: string, date: string, status: ConfirmationStatus) => {
     if (!ensureCanWrite()) throw new Error('Read-only access');
+    ensureCanAccessMember(memberId, 'member');
     try {
       const recordId = `${memberId}_${date}`;
       const record: SundayConfirmation = {
@@ -3008,7 +3233,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
       showToast('error', 'Failed to update confirmation', error.message);
       throw error;
     }
-  }, [showToast, outreachMembers, userProfile]);
+  }, [showToast, outreachMembers, userProfile, ensureCanAccessMember]);
 
   // Remove confirmation handler
   const removeConfirmationHandler = useCallback(async (confirmationId: string) => {
@@ -3023,6 +3248,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
       if (parts.length >= 2) {
         const memberId = parts[0];
         const date = parts[1];
+        ensureCanAccessMember(memberId, 'member');
 
         // Use notification-enabled remove operation
         await confirmationOperationsWithNotifications.remove(memberId, date);
@@ -3059,7 +3285,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
       showToast('error', 'Failed to remove confirmation', error.message);
       throw error;
     }
-  }, [showToast, userProfile, members, outreachMembers]);
+  }, [showToast, userProfile, members, outreachMembers, ensureCanAccessMember]);
 
   // Clean up orphaned confirmation records
   const cleanupOrphanedConfirmations = useCallback(async (forceRun = false) => {
@@ -3149,6 +3375,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
   // Guest handlers
   const addGuestHandler = useCallback(async (guestData: Omit<Guest, 'id' | 'createdDate' | 'lastUpdated' | 'createdBy'>) => {
     if (!ensureCanWrite()) throw new Error('Read-only access');
+    ensureCanAccessBacenta(guestData.bacentaId, 'guest');
     try {
       setIsLoading(true);
 
@@ -3190,10 +3417,11 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     } finally {
       setIsLoading(false);
     }
-  }, [findOrCreateGuest, guests, showToast, userProfile]);
+  }, [findOrCreateGuest, guests, showToast, userProfile, ensureCanAccessBacenta]);
 
   const updateGuestHandler = useCallback(async (guestData: Guest) => {
     if (!ensureCanWrite()) throw new Error('Read-only access');
+    ensureCanAccessBacenta(guestData.bacentaId, 'guest');
     try {
       setIsLoading(true);
       await guestFirebaseService.update(guestData.id, guestData);
@@ -3205,12 +3433,16 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     } finally {
       setIsLoading(false);
     }
-  }, [showToast]);
+  }, [showToast, ensureCanAccessBacenta]);
 
   const deleteGuestHandler = useCallback(async (guestId: string) => {
     if (!ensureCanWrite()) throw new Error('Read-only access');
     try {
       setIsLoading(true);
+      const guest = guests.find(item => item.id === guestId);
+      if (guest) {
+        ensureCanAccessBacenta(guest.bacentaId, 'guest');
+      }
 
       // Clean up confirmation records for this guest
       const guestConfirmations = sundayConfirmations.filter(conf => conf.guestId === guestId);
@@ -3233,10 +3465,14 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     } finally {
       setIsLoading(false);
     }
-  }, [showToast, sundayConfirmations]);
+  }, [showToast, sundayConfirmations, guests, ensureCanAccessBacenta]);
 
   const markGuestConfirmationHandler = useCallback(async (guestId: string, date: string, status: ConfirmationStatus) => {
     if (!ensureCanWrite()) throw new Error('Read-only access');
+    const guest = guests.find(item => item.id === guestId);
+    if (guest) {
+      ensureCanAccessBacenta(guest.bacentaId, 'guest');
+    }
     try {
       const recordId = `guest_${guestId}_${date}`;
       const record: SundayConfirmation = {
@@ -3273,10 +3509,14 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
       showToast('error', 'Failed to update guest confirmation', error.message);
       throw error;
     }
-  }, [showToast, userProfile]);
+  }, [showToast, userProfile, guests, ensureCanAccessBacenta]);
 
   const removeGuestConfirmationHandler = useCallback(async (guestId: string, date: string) => {
     if (!ensureCanWrite()) throw new Error('Read-only access');
+    const guest = guests.find(item => item.id === guestId);
+    if (guest) {
+      ensureCanAccessBacenta(guest.bacentaId, 'guest');
+    }
     try {
       const recordId = `guest_${guestId}_${date}`;
       console.log('✅ Removing guest confirmation:', recordId);
@@ -3303,7 +3543,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
       showToast('error', 'Error', `Failed to remove guest confirmation: ${error.message}`);
       throw error;
     }
-  }, [showToast, outreachMembers, userProfile]);
+  }, [showToast, outreachMembers, userProfile, guests, ensureCanAccessBacenta]);
 
   const convertGuestToMemberHandler = useCallback(async (guestId: string) => {
     if (!ensureCanWrite()) throw new Error('Read-only access');
@@ -3318,6 +3558,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
       if (!guest) {
         throw new Error('Guest not found');
       }
+      ensureCanAccessBacenta(guest.bacentaId, 'guest');
 
       // Validate guest data
       if (!guest.firstName.trim()) {
@@ -3438,7 +3679,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     } finally {
       setIsLoading(false);
     }
-  }, [guests, sundayConfirmations, members, bacentas, showToast]);
+  }, [guests, sundayConfirmations, members, bacentas, showToast, ensureCanAccessBacenta]);
 
   // Member Deletion Request handlers
   const createDeletionRequestHandler = useCallback(async (memberId: string, reason?: string) => {
@@ -3479,7 +3720,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
       showToast('error', 'Failed to create deletion request', error.message);
       throw error;
     }
-  }, [members, userProfile, showToast]);
+  }, [members, userProfile, showToast, ensureCanAccessBacenta]);
 
   const approveDeletionRequestHandler = useCallback(async (requestId: string) => {
     if (!ensureCanWrite()) throw new Error('Read-only access');
@@ -3503,6 +3744,10 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
       }
       if (!request) {
         throw new Error('Deletion request not found');
+      }
+      const requestedMember = members.find(m => m.id === request.memberId);
+      if (requestedMember) {
+        ensureCanAccessBacenta(requestedMember.bacentaId, 'member');
       }
 
       // Update the request status
@@ -3545,7 +3790,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
       showToast('error', 'Failed to approve deletion request', error.message);
       throw error;
     }
-  }, [memberDeletionRequests, userProfile, showToast, deleteMemberHandler, deleteOutreachMemberHandler, outreachMembers, members]);
+  }, [memberDeletionRequests, userProfile, showToast, deleteMemberHandler, deleteOutreachMemberHandler, outreachMembers, members, ensureCanAccessBacenta]);
 
   const rejectDeletionRequestHandler = useCallback(async (requestId: string, adminNotes?: string) => {
     if (!ensureCanWrite()) throw new Error('Read-only access');
@@ -3568,6 +3813,10 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
       }
       if (!request) {
         throw new Error('Deletion request not found');
+      }
+      const requestedMember = members.find(m => m.id === request.memberId);
+      if (requestedMember) {
+        ensureCanAccessBacenta(requestedMember.bacentaId, 'member');
       }
 
       await memberDeletionRequestService.update(requestId, {
@@ -3600,7 +3849,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
       showToast('error', 'Failed to reject deletion request', error.message);
       throw error;
     }
-  }, [memberDeletionRequests, userProfile, showToast]);
+  }, [memberDeletionRequests, userProfile, showToast, members, ensureCanAccessBacenta]);
 
   // Cleanup old deletion requests (run periodically)
   const cleanupOldDeletionRequests = useCallback(async () => {
@@ -3841,6 +4090,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
             console.warn('Unable to sync constituency name from church doc', e);
           }
         }
+        userProfileRef.current = profile;
         setUserProfile(profile);
 
         // After refreshing profile, ensure data listeners are (re)set up.
@@ -3966,10 +4216,12 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
         refreshUserProfile();
       } catch (err) {
         console.warn('Failed handling constituencyUpdated event', err);
+              userProfileRef.current = null;
       }
     };
     window.addEventListener('constituencyUpdated', handler as EventListener);
     return () => window.removeEventListener('constituencyUpdated', handler as EventListener);
+            userProfileRef.current = null;
   }, [user, refreshUserProfile]);
 
   // Data export/import (for backup purposes)
@@ -4029,6 +4281,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
     try {
       const impersonatedProfile = await userService.getUserProfile(adminUserId);
       if (impersonatedProfile) {
+        userProfileRef.current = impersonatedProfile;
         setUserProfile(impersonatedProfile);
         // Reconfigure notification contexts to mimic that admin (best-effort; they may depend on auth rules)
         try {
@@ -4077,6 +4330,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
       firebaseUtils.setChurchContext(null);
     }
     if (restoreProfile) {
+      userProfileRef.current = restoreProfile;
       setUserProfile(restoreProfile);
       try {
         setNotificationContext(restoreProfile, restoreChurch || null);
