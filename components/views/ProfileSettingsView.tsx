@@ -14,7 +14,7 @@ import Input from '../ui/Input';
 import ImageUpload from '../ui/ImageUpload';
 import ChangePasswordModal from '../auth/ChangePasswordModal';
 import EmailVerificationPrompt from '../auth/EmailVerificationPrompt';
-import InviteMigrationPanel from '../admin/InviteMigrationPanel';
+
 import PushNotificationSettings from '../notifications/PushNotificationSettings';
 import { canManageAdminInvites, hasAdminPrivileges, isCampusShepherd, isPromotedCampusAdmin } from '../../utils/permissionUtils';
 import {
@@ -26,7 +26,6 @@ import {
   KeyIcon,
   UserGroupIcon,
   CurrencyDollarIcon,
-  RefreshIcon,
   BellIcon,
   CakeIcon,
   ArrowLeftIcon,
@@ -155,7 +154,7 @@ const ProfileSettingsView: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [imagePreview, setImagePreview] = useState<string>(userProfile?.profilePicture || '');
   const [isChangePasswordModalOpen, setIsChangePasswordModalOpen] = useState(false);
-  const [isMigrationPanelOpen, setIsMigrationPanelOpen] = useState(false);
+
   const [isConstituencyManagerOpen, setIsConstituencyManagerOpen] = useState(false);
   const [isSavingCampusShepherd, setIsSavingCampusShepherd] = useState(false);
   // const [isSendingTestEmail, setIsSendingTestEmail] = useState(false); // Email feature on hold
@@ -479,7 +478,6 @@ const ProfileSettingsView: React.FC = () => {
 
   const roleDisplayName = isPromotedAdmin ? 'Promoted Campus Admin' : (userProfile.role || 'Member');
   const shellPanelClassName = 'rounded-[28px] border border-slate-200/80 bg-white/95 shadow-[0_24px_55px_-36px_rgba(15,23,42,0.45)] backdrop-blur-sm dark:border-dark-600 dark:bg-dark-800';
-  const contentPanelClassName = `${shellPanelClassName} p-5 sm:p-6`;
   const settingsSummaryItems = [
     {
       label: 'Email',
@@ -501,53 +499,78 @@ const ProfileSettingsView: React.FC = () => {
     }
   ];
 
+  const userFullName = `${profileData.firstName || userProfile.firstName || ''} ${profileData.lastName || userProfile.lastName || ''}`.trim() || userProfile.displayName || user?.displayName || 'User';
+
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(59,130,246,0.12),_transparent_35%),radial-gradient(circle_at_right,_rgba(168,85,247,0.10),_transparent_30%),linear-gradient(180deg,#f8fbff_0%,#ffffff_52%,#f8fafc_100%)] dark:bg-dark-900">
-      <div className="mx-auto max-w-6xl px-3 pb-28 pt-3 sm:px-5 sm:pb-28 sm:pt-4 lg:px-6 lg:pb-10 lg:pt-5">
-        <div className="space-y-5">
-          <section className={`${shellPanelClassName} overflow-hidden p-5 sm:p-6`}>
-            <div className="relative flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-center lg:items-start">
-                <div className="relative mx-auto shrink-0 sm:mx-0">
-                  <div className={`absolute -inset-2 rounded-[28px] bg-gradient-to-br ${activeSettingsTabMeta.gradient} opacity-20 blur-xl`} />
-                  <ImageUpload
-                    value={imagePreview || profileData.profilePicture}
-                    onChange={handleImageChange}
-                    size="md"
-                    className="relative"
-                    enableCropping={true}
-                    cropPresets={true}
-                    onError={(title, message) => showToast('error', title, message)}
-                  />
+    <div className="mx-auto max-w-6xl space-y-5 pb-28 pt-0 lg:pb-10">
+          {/* Redesigned Premium Header Card */}
+          <section className={`${shellPanelClassName} overflow-hidden p-6 sm:p-8 relative`}>
+            {/* Subtle premium background glow accents */}
+            <div className="absolute top-0 right-0 -mt-10 -mr-10 w-40 h-40 bg-gradient-to-br from-blue-500/10 to-purple-500/10 rounded-full blur-3xl pointer-events-none" />
+            <div className="absolute bottom-0 left-0 -mb-10 -ml-10 w-40 h-40 bg-gradient-to-tr from-emerald-500/5 to-cyan-500/5 rounded-full blur-3xl pointer-events-none" />
+
+            <div className="relative flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+              
+              {/* Left Column: Avatar & User Info */}
+              <div className="flex flex-col gap-5 sm:flex-row sm:items-start lg:gap-6 flex-1 min-w-0">
+                {/* Profile Image with subtle ring glow */}
+                <div className="relative mx-auto shrink-0 sm:mx-0 self-center sm:self-start">
+                  <div className={`absolute -inset-1.5 rounded-[24px] bg-gradient-to-br ${activeSettingsTabMeta.gradient} opacity-25 blur-md transition-all duration-300 group-hover:opacity-40`} />
+                  <div className="relative p-0.5 rounded-[22px] bg-white dark:bg-dark-800 ring-2 ring-slate-100 dark:ring-dark-700 shadow-md">
+                    <ImageUpload
+                      value={imagePreview || profileData.profilePicture}
+                      onChange={handleImageChange}
+                      size="md"
+                      className="relative"
+                      enableCropping={true}
+                      cropPresets={true}
+                      onError={(title, message) => showToast('error', title, message)}
+                    />
+                  </div>
                 </div>
 
-                <div className="min-w-0 text-center sm:text-left">
-                  <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Settings</p>
-                  <h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-900 dark:text-dark-100 sm:text-3xl">
-                    Account and app preferences
-                  </h1>
-                  <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600 dark:text-dark-300">
-                    Keep your profile, church setup, notifications, leadership tools, and security in one place without the clutter.
+                {/* Header Text & Badges */}
+                <div className="min-w-0 flex-1 text-center sm:text-left space-y-3">
+                  <div>
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-slate-600 dark:bg-dark-700 dark:text-dark-300">
+                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                      Settings & Preferences
+                    </span>
+                  </div>
+                  
+                  <div className="space-y-1">
+                    <h1 className="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-dark-100 sm:text-3xl lg:text-4xl">
+                      Account & app preferences
+                    </h1>
+                    <p className="text-sm font-medium text-slate-500 dark:text-dark-400">
+                      Welcome back, <span className="font-bold text-slate-800 dark:text-dark-100">{userFullName}</span>
+                    </p>
+                  </div>
+                  
+                  <p className="max-w-2xl text-sm leading-relaxed text-slate-600 dark:text-dark-300">
+                    Keep your profile, constituency setup, notifications, leadership tools, and security in one place without the clutter.
                   </p>
 
-                  <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                  {/* Redesigned sleek metadata horizontal pills */}
+                  <div className="flex flex-wrap justify-center sm:justify-start gap-2 pt-2">
                     {settingsSummaryItems.map(item => {
                       const Icon = item.icon;
-
                       return (
                         <div
                           key={item.label}
-                          className="rounded-[22px] border border-slate-200/70 bg-white/90 p-3 shadow-sm dark:border-dark-600 dark:bg-dark-700/70"
-                          title={item.value}
+                          className="flex items-center gap-2 rounded-full border border-slate-200/70 bg-white/70 px-3 py-1.5 shadow-sm backdrop-blur-xs transition-all duration-200 hover:border-slate-300 hover:bg-white dark:border-dark-600 dark:bg-dark-700/50 dark:hover:border-dark-500"
+                          title={`${item.label}: ${item.value}`}
                         >
-                          <div className="flex items-start gap-3">
-                            <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl ${item.accentClassName}`}>
-                              <Icon className="h-5 w-5" />
-                            </div>
-                            <div className="min-w-0">
-                              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">{item.label}</p>
-                              <p className="mt-1 truncate text-sm font-semibold text-slate-900 dark:text-dark-100">{item.value}</p>
-                            </div>
+                          <div className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full ${item.accentClassName}`}>
+                            <Icon className="h-3.5 w-3.5" />
+                          </div>
+                          <div className="flex items-center text-xs">
+                            <span className="font-bold uppercase tracking-wider text-slate-400 dark:text-dark-400 mr-1 text-[10px]">
+                              {item.label}:
+                            </span>
+                            <span className="font-semibold text-slate-700 dark:text-dark-200 max-w-[120px] sm:max-w-[180px] truncate">
+                              {item.value}
+                            </span>
                           </div>
                         </div>
                       );
@@ -556,30 +579,32 @@ const ProfileSettingsView: React.FC = () => {
                 </div>
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-2 lg:min-w-[250px] lg:grid-cols-1">
-                <div className="rounded-[24px] border border-slate-200/80 bg-slate-50/90 p-4 dark:border-dark-600 dark:bg-dark-700/70">
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Now editing</p>
-                  <div className="mt-3 flex items-center gap-3">
-                    <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br ${activeSettingsTabMeta.gradient} text-white shadow-sm`}>
-                      <activeSettingsTabMeta.icon className="h-5 w-5" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="font-semibold text-slate-900 dark:text-dark-100">{activeSettingsTabMeta.label}</p>
-                      <p className="mt-1 text-sm text-slate-500 dark:text-dark-300">{activeSettingsTabMeta.description}</p>
-                    </div>
-                  </div>
-                </div>
-
+              {/* Right Column: Actions (Save changes placed elegantly) */}
+              <div className="flex flex-col sm:flex-row lg:flex-col items-center justify-center gap-3 shrink-0 self-center lg:self-center">
                 <Button
                   type="button"
                   variant="primary"
                   onClick={handleSaveSettings}
                   disabled={isLoading}
-                  className="h-12 rounded-[20px] bg-slate-900 text-white hover:bg-slate-800"
+                  className="h-12 px-6 rounded-2xl bg-gradient-to-r from-slate-900 to-slate-800 text-white hover:from-slate-800 hover:to-slate-700 shadow-md hover:shadow-lg transition-all duration-200 flex items-center justify-center gap-2 font-semibold tracking-wide w-full sm:w-auto min-w-[160px] active:scale-95"
                 >
-                  {isLoading ? 'Saving...' : 'Save Changes'}
+                  {isLoading ? (
+                    <>
+                      <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                      </svg>
+                      <span>Saving...</span>
+                    </>
+                  ) : (
+                    <>
+                      <ShieldCheckIcon className="w-5 h-5 text-emerald-400" />
+                      <span>Save Changes</span>
+                    </>
+                  )}
                 </Button>
               </div>
+
             </div>
           </section>
 
@@ -634,462 +659,408 @@ const ProfileSettingsView: React.FC = () => {
                 </nav>
               </div>
 
+              {/* Unified Settings Workspace Panel */}
               <div
                 ref={tabContentRef}
-                className={`${shellPanelClassName} scroll-mt-28 p-4 sm:p-5`}
+                className={`${shellPanelClassName} scroll-mt-28 overflow-hidden`}
               >
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br ${activeSettingsTabMeta.gradient} text-white shadow-sm`}>
-                      <activeSettingsTabMeta.icon className="h-5 w-5" />
-                    </div>
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Settings section</p>
-                      <h2 className="mt-1 text-xl font-semibold text-slate-900 dark:text-dark-100 sm:text-2xl">{activeSettingsTabMeta.label}</h2>
-                    </div>
-                  </div>
-
-                  <p className="max-w-xl text-sm leading-6 text-slate-600 dark:text-dark-300 sm:text-right">
-                    {activeSettingsTabMeta.description}
-                  </p>
-                </div>
-              </div>
-
-        {activeSettingsTab === 'constituencies' && hasAdminAccess && (
-          <div id="constituencies-section" className={contentPanelClassName}>
-            <div className="flex flex-col items-center text-center gap-3">
-              <div className="w-12 h-12 bg-gradient-to-br from-indigo-500 to-blue-600 rounded-2xl flex items-center justify-center">
-                <BuildingOfficeIcon className="w-6 h-6 text-white" />
-              </div>
-              <h2 className="text-2xl font-bold text-gray-900 dark:text-dark-100">Constituencies</h2>
-              <p className="text-sm text-gray-600 dark:text-dark-300">Switch between constituencies you are linked to</p>
-              <Button
-                type="button"
-                variant="primary"
-                onClick={() => setIsConstituencyManagerOpen(true)}
-                className="mt-2 h-12 px-5 rounded-2xl bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 w-full sm:w-auto max-w-xs mx-auto"
-              >
-                Manage Constituencies
-              </Button>
-            </div>
-
-            {isImpersonating && (
-              <div className="mt-6 p-4 rounded-xl bg-indigo-50 border border-indigo-100 text-sm text-indigo-800">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <span className="font-medium">Currently viewing an external constituency</span>
-
-                  </div>
-                  <button
-                    onClick={() => switchBackToOwnChurch()}
-                    className="px-3 py-1.5 rounded-lg bg-white border border-indigo-200 text-indigo-700 hover:bg-indigo-100"
-                  >
-                    Switch back
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {activeSettingsTab === 'profile' && (
-        <div className={contentPanelClassName}>
-          <div className="flex items-center mb-8">
-            <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center mr-4">
-              <UserIcon className="w-6 h-6 text-white" />
-            </div>
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-dark-100">Personal Information</h2>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="space-y-2">
-              <label className="block text-sm font-semibold text-gray-700 dark:text-dark-200">
-                First Name *
-              </label>
-              <Input
-                type="text"
-                name="firstName"
-                value={profileData.firstName}
-                onChange={(val) => setProfileData(p => ({ ...p, firstName: val }))}
-                placeholder="Enter first name"
-                required
-                className="h-14 text-base border-2 border-gray-200 dark:border-dark-600 focus:border-blue-500 dark:focus:border-blue-400 rounded-2xl px-4 transition-all duration-200 bg-white dark:bg-dark-700 text-gray-900 dark:text-dark-100"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label className="block text-sm font-semibold text-gray-700 dark:text-dark-200">
-                Last Name
-              </label>
-              <Input
-                type="text"
-                name="lastName"
-                value={profileData.lastName}
-                onChange={(val) => setProfileData(p => ({ ...p, lastName: val }))}
-                placeholder="Enter last name"
-                className="h-14 text-base border-2 border-gray-200 dark:border-dark-600 focus:border-blue-500 dark:focus:border-blue-400 rounded-2xl px-4 transition-all duration-200 bg-white dark:bg-dark-700 text-gray-900 dark:text-dark-100"
-              />
-            </div>
-
-            <div className="lg:col-span-2 space-y-2">
-              <label className="block text-sm font-semibold text-gray-700 dark:text-dark-200">
-                Phone Number
-              </label>
-              <Input
-                type="tel"
-                name="phoneNumber"
-                value={profileData.phoneNumber}
-                onChange={(val) => setProfileData(p => ({ ...p, phoneNumber: val }))}
-                placeholder="Enter phone number"
-                className="h-14 text-base border-2 border-gray-200 dark:border-dark-600 focus:border-blue-500 dark:focus:border-blue-400 rounded-2xl px-4 transition-all duration-200 bg-white dark:bg-dark-700 text-gray-900 dark:text-dark-100"
-              />
-            </div>
-          </div>
-        </div>
-        )}
-
-
-        {activeSettingsTab === 'app' && (
-        <div className={contentPanelClassName}>
-          <div className="flex items-center mb-8">
-            <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-pink-600 rounded-2xl flex items-center justify-center mr-4">
-              <SunIcon className="w-6 h-6 text-white" />
-            </div>
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-dark-100">App Preferences</h2>
-          </div>
-
-          <div className="space-y-6">
-            {/* Constituency Name (linked to Super Admin) */}
-            <div className="bg-gradient-to-r from-indigo-50 to-blue-50 dark:from-indigo-900/20 dark:to-blue-900/20 rounded-2xl p-6 border border-indigo-100 dark:border-indigo-800">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <div className="flex-1">
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-dark-100 mb-2">Constituency Name</h3>
-                  <p className="text-gray-600 dark:text-dark-300">This updates the name shown at the top of the app and syncs with Super Admin</p>
-                </div>
-                <Input
-                  type="text"
-                  name="constituencyName"
-                  value={constituencyName}
-                  onChange={(val) => setConstituencyName(val)}
-                  placeholder="Enter constituency name"
-                  className="h-12 text-base border-2 border-gray-200 dark:border-dark-600 focus:border-indigo-500 dark:focus:border-indigo-400 rounded-2xl px-4 transition-all duration-200 bg-white dark:bg-dark-700 text-gray-900 dark:text-dark-100 min-w-[220px]"
-                />
-              </div>
-            </div>
-
-            {/* Theme selection temporarily disabled */}
-
-            {/* Edit Previous Sundays control temporarily disabled; default remains enabled */}
-
-            {canConfigureCurrencyDisplay && (
-              <div className="mt-6 rounded-2xl border border-emerald-100 bg-gradient-to-r from-emerald-50 to-cyan-50 p-6">
-                <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-600 text-white shadow-sm">
-                        <CurrencyDollarIcon className="h-5 w-5" />
+                {/* Unified Card Header */}
+                <div className="border-b border-slate-100 dark:border-dark-700/60 bg-slate-50/50 dark:bg-dark-800/40 p-5 sm:p-6">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex items-center gap-3.5">
+                      <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br ${activeSettingsTabMeta.gradient} text-white shadow-sm ring-1 ring-white/10`}>
+                        <activeSettingsTabMeta.icon className="h-5.5 w-5.5" />
                       </div>
                       <div>
-                        <h3 className="text-lg font-semibold text-gray-900">Currency Display</h3>
-                        <p className="text-sm text-gray-600">
-                          Campus Shepherd income uses your selected currency, with live USD shown in brackets unless USD is selected.
-                        </p>
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-dark-500">Settings Section</span>
+                        <h2 className="text-xl font-extrabold text-slate-900 dark:text-dark-100 sm:text-2xl tracking-tight">{activeSettingsTabMeta.label}</h2>
                       </div>
                     </div>
 
-                    <div className="mt-4">
-                      <label className="mb-2 block text-sm font-medium text-gray-700" htmlFor="preferredCurrency">
-                        Preferred currency
-                      </label>
-                      <select
-                        id="preferredCurrency"
-                        value={preferences.preferredCurrency || 'ZAR'}
-                        onChange={(event) => setPreferences(prev => ({ ...prev, preferredCurrency: event.target.value }))}
-                        className="h-12 w-full rounded-2xl border-2 border-gray-200 bg-white px-4 text-base text-gray-900 transition-all duration-200 focus:border-emerald-500 focus:outline-none"
-                      >
-                        {currencyOptions.map(option => (
-                          <option key={option.code} value={option.code}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
+                    <p className="max-w-xl text-sm font-medium text-slate-500 dark:text-dark-400 sm:text-right leading-relaxed">
+                      {activeSettingsTabMeta.description}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Unified Card Content Area */}
+                <div className="p-5 sm:p-6 lg:p-8">
+                  {activeSettingsTab === 'constituencies' && hasAdminAccess && (
+                    <div id="constituencies-section" className="space-y-6 text-center py-6">
+                      <div className="max-w-md mx-auto space-y-4">
+                        <p className="text-sm text-slate-500 dark:text-dark-400 leading-relaxed">
+                          You can switch between external constituencies that have granted you permission, or manage access links under your authority.
+                        </p>
+                        <Button
+                          type="button"
+                          variant="primary"
+                          onClick={() => setIsConstituencyManagerOpen(true)}
+                          className="h-12 px-6 rounded-2xl bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 w-full sm:w-auto font-semibold shadow-md shrink-0 border-none"
+                        >
+                          Manage Constituencies
+                        </Button>
+                      </div>
+
+                      {isImpersonating && (
+                        <div className="mt-8 p-4 rounded-2xl bg-indigo-50 border border-indigo-100 text-sm text-indigo-800 dark:bg-indigo-950/20 dark:border-indigo-900/40 dark:text-indigo-300 max-w-xl mx-auto">
+                          <div className="flex items-center justify-between gap-4">
+                            <div className="text-left">
+                              <span className="font-bold">Active Impersonation</span>
+                              <p className="text-xs text-indigo-600/80 dark:text-indigo-400/80 mt-0.5">Currently viewing an external constituency</p>
+                            </div>
+                            <button
+                              onClick={() => switchBackToOwnChurch()}
+                              className="px-3.5 py-1.5 rounded-xl bg-white dark:bg-dark-750 dark:hover:bg-dark-700 border border-indigo-200 dark:border-indigo-900 text-indigo-700 dark:text-indigo-300 font-semibold hover:bg-indigo-50 transition-colors shadow-xs cursor-pointer"
+                            >
+                              Switch back
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  </div>
+                  )}
 
-                  <div className="rounded-2xl border border-white/70 bg-white/90 p-5 shadow-sm lg:min-w-[280px]">
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">Preview</p>
-                    <p className="mt-2 text-2xl font-bold text-gray-900">
-                      {formatIncomeDisplay(1250, preferences.preferredCurrency || 'ZAR', rates, { showUsdComparison: true })}
-                    </p>
-                    <p className="mt-2 text-sm text-gray-600">Stored internally in South African Rand.</p>
-                    <p className="mt-1 text-xs font-medium text-emerald-700">
-                      {liveUsdZarRateLabel ? `Live rate: 1 USD = ZAR ${liveUsdZarRateLabel}` : 'Updating live USD/ZAR rate...'}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-        )}
+                  {activeSettingsTab === 'profile' && (
+                    <div className="space-y-6">
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div className="space-y-2">
+                          <label className="block text-sm font-bold text-slate-700 dark:text-dark-200">
+                            First Name <span className="text-red-500">*</span>
+                          </label>
+                          <Input
+                            type="text"
+                            name="firstName"
+                            value={profileData.firstName}
+                            onChange={(val) => setProfileData(p => ({ ...p, firstName: val }))}
+                            placeholder="Enter first name"
+                            required
+                            className="h-12 text-base border border-slate-200 dark:border-dark-600 focus:border-blue-500 dark:focus:border-blue-400 rounded-2xl px-4 transition-all duration-200 bg-white dark:bg-dark-700 text-slate-900 dark:text-dark-100 placeholder-slate-400 shadow-xs"
+                          />
+                        </div>
 
-        {activeSettingsTab === 'management' && hasAdminAccess && (
-          <div className={contentPanelClassName}>
-            <div className="flex items-center mb-8">
-              <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-teal-600 rounded-2xl flex items-center justify-center mr-4">
-                <UserGroupIcon className="w-6 h-6 text-white" />
-              </div>
-              <h2 className="text-2xl font-bold text-gray-900">Admin Features</h2>
-            </div>
+                        <div className="space-y-2">
+                          <label className="block text-sm font-bold text-slate-700 dark:text-dark-200">
+                            Last Name
+                          </label>
+                          <Input
+                            type="text"
+                            name="lastName"
+                            value={profileData.lastName}
+                            onChange={(val) => setProfileData(p => ({ ...p, lastName: val }))}
+                            placeholder="Enter last name"
+                            className="h-12 text-base border border-slate-200 dark:border-dark-600 focus:border-blue-500 dark:focus:border-blue-400 rounded-2xl px-4 transition-all duration-200 bg-white dark:bg-dark-700 text-slate-900 dark:text-dark-100 placeholder-slate-400 shadow-xs"
+                          />
+                        </div>
 
-            <div className="space-y-4">
-              <div className="bg-gradient-to-r from-sky-50 to-indigo-50 rounded-2xl p-6 border border-sky-100">
-                <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
-                  <div className="flex-1">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-2">Campus Shepherd Mode</h3>
-                    <p className="text-gray-600">
-                      Controls whether this admin can view and manage Sunday income inside Weekly Attendance.
-                    </p>
-                    {isPromotedAdmin && (
-                      <p className="mt-2 text-sm font-medium text-purple-700">
-                        Your Campus Shepherd access is managed by the main leader.
-                      </p>
-                    )}
-                    <p className="mt-3 text-sm font-medium text-gray-800">
-                      Current status:{' '}
-                      <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${
-                        preferences.isCampusShepherd === true
-                          ? 'bg-emerald-100 text-emerald-800'
-                          : preferences.isCampusShepherd === false
-                            ? 'bg-slate-200 text-slate-700'
-                            : 'bg-amber-100 text-amber-800'
-                      }`}>
-                        {preferences.isCampusShepherd === true
-                          ? 'Campus Shepherd'
-                          : preferences.isCampusShepherd === false
-                            ? 'Not Campus Shepherd'
-                            : 'Not answered yet'}
-                      </span>
-                    </p>
-                  </div>
+                        <div className="lg:col-span-2 space-y-2">
+                          <label className="block text-sm font-bold text-slate-700 dark:text-dark-200">
+                            Phone Number
+                          </label>
+                          <Input
+                            type="tel"
+                            name="phoneNumber"
+                            value={profileData.phoneNumber}
+                            onChange={(val) => setProfileData(p => ({ ...p, phoneNumber: val }))}
+                            placeholder="Enter phone number"
+                            className="h-12 text-base border border-slate-200 dark:border-dark-600 focus:border-blue-500 dark:focus:border-blue-400 rounded-2xl px-4 transition-all duration-200 bg-white dark:bg-dark-700 text-slate-900 dark:text-dark-100 placeholder-slate-400 shadow-xs"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
-                  <div className="flex flex-col sm:flex-row gap-3 sm:min-w-[280px]">
-                    <Button
-                      type="button"
-                      variant="primary"
-                      disabled={isPromotedAdmin || isSavingCampusShepherd || preferences.isCampusShepherd === true}
-                      onClick={() => handleCampusShepherdPreferenceUpdate(true)}
-                      className="h-12 px-6 rounded-2xl font-medium transition-all duration-200 flex items-center justify-center min-w-[130px]"
-                    >
-                      {isSavingCampusShepherd && preferences.isCampusShepherd === true ? 'Saving...' : 'Yes'}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      disabled={isPromotedAdmin || isSavingCampusShepherd || preferences.isCampusShepherd === false}
-                      onClick={() => handleCampusShepherdPreferenceUpdate(false)}
-                      className="h-12 px-6 rounded-2xl font-medium transition-all duration-200 flex items-center justify-center min-w-[130px]"
-                    >
-                      {isSavingCampusShepherd && preferences.isCampusShepherd === false ? 'Saving...' : 'No'}
-                    </Button>
-                  </div>
-                </div>
-              </div>
+                  {activeSettingsTab === 'app' && (
+                    <div className="space-y-6">
+                      {/* Constituency Name (linked to Super Admin) */}
+                      <div className="bg-gradient-to-r from-indigo-50/50 to-blue-50/50 dark:from-indigo-950/10 dark:to-blue-950/10 rounded-2xl p-6 border border-slate-100 dark:border-dark-700/60 shadow-xs">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                          <div className="flex-1 min-w-0">
+                            <h3 className="text-base font-bold text-slate-900 dark:text-dark-100">Constituency Name</h3>
+                            <p className="text-sm text-slate-500 dark:text-dark-400 mt-1 leading-relaxed">This updates the name shown at the top of the app and syncs with Super Admin</p>
+                          </div>
+                          <Input
+                            type="text"
+                            name="constituencyName"
+                            value={constituencyName}
+                            onChange={(val) => setConstituencyName(val)}
+                            placeholder="Enter constituency name"
+                            wrapperClassName="mb-0 sm:mb-0 flex-shrink-0"
+                            className="h-12 text-base border border-slate-200 dark:border-dark-600 focus:border-indigo-500 dark:focus:border-indigo-400 rounded-2xl px-4 transition-all duration-200 bg-white dark:bg-dark-700 text-slate-900 dark:text-dark-100 min-w-[240px] placeholder-slate-400 shadow-xs"
+                          />
+                        </div>
+                      </div>
 
-              {/* Admin Invite Management */}
-              {canOpenAdminInviteManagement && (
-              <div className="bg-gradient-to-r from-green-50 to-teal-50 rounded-2xl p-6 border border-green-100">
-                <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
-                  <div className="flex-1">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-2">Admin Invite Management</h3>
-                    <p className="text-gray-600">Generate invites and promote accepted leaders under your authority</p>
-                  </div>
-                  <Button
-                    type="button"
-                    variant="primary"
-                    onClick={() => switchTab({ id: TabKeys.ADMIN_INVITES, name: 'Leadership Management' })}
-                    className="h-12 px-6 bg-gradient-to-r from-green-600 to-teal-600 hover:from-green-700 hover:to-teal-700 rounded-2xl font-medium transition-all duration-200 flex items-center justify-center space-x-2 min-w-[160px]"
-                  >
-                    <UserGroupIcon className="w-5 h-5" />
-                    <span>Manage Invites</span>
-                  </Button>
-                </div>
-              </div>
-              )}
+                      {canConfigureCurrencyDisplay && (
+                        <div className="rounded-2xl border border-slate-100 bg-gradient-to-r from-emerald-50/50 to-cyan-50/50 p-6 dark:border-dark-700/60 dark:from-emerald-950/10 dark:to-cyan-950/10 shadow-xs">
+                          <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-3">
+                                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-cyan-600 text-white shadow-sm ring-1 ring-white/10">
+                                  <CurrencyDollarIcon className="h-5 w-5" />
+                                </div>
+                                <div>
+                                  <h3 className="text-base font-bold text-slate-900 dark:text-dark-100">Currency Display</h3>
+                                  <p className="text-sm text-slate-500 dark:text-dark-400 mt-1 leading-relaxed">
+                                    Campus Shepherd income uses your selected currency, with live USD shown in brackets unless USD is selected.
+                                  </p>
+                                </div>
+                              </div>
 
-              {/* Data Migration Tool */}
-              <div className="bg-gradient-to-r from-orange-50 to-amber-50 rounded-2xl p-6 border border-orange-100">
-                <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
-                  <div className="flex-1">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-2">Ministry Invitation Data Fix</h3>
-                    <p className="text-gray-600">Fix data inconsistencies from ministry invitations accepted before the recent bug fix</p>
-                  </div>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    onClick={() => setIsMigrationPanelOpen(true)}
-                    className="h-12 px-6 bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 text-white rounded-2xl font-medium transition-all duration-200 flex items-center justify-center space-x-2 min-w-[160px]"
-                  >
-                    <RefreshIcon className="w-5 h-5" />
-                    <span>Run Migration</span>
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
+                              <div className="mt-5 max-w-sm">
+                                <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-dark-400" htmlFor="preferredCurrency">
+                                  Preferred currency
+                                </label>
+                                <select
+                                  id="preferredCurrency"
+                                  value={preferences.preferredCurrency || 'ZAR'}
+                                  onChange={(event) => setPreferences(prev => ({ ...prev, preferredCurrency: event.target.value }))}
+                                  className="h-12 w-full rounded-2xl border border-slate-200 bg-white dark:border-dark-600 dark:bg-dark-700 px-4 text-base text-slate-900 dark:text-dark-100 transition-all duration-200 focus:border-emerald-500 focus:outline-none shadow-xs font-medium cursor-pointer"
+                                >
+                                  {currencyOptions.map(option => (
+                                    <option key={option.code} value={option.code} className="dark:bg-dark-800">
+                                      {option.label}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                            </div>
 
-        {activeSettingsTab === 'notifications' && (
-          <>
-        <div className={contentPanelClassName}>
-          <div className="flex items-center mb-8">
-            <div className="w-12 h-12 bg-gradient-to-br from-pink-500 to-purple-600 rounded-2xl flex items-center justify-center mr-4">
-              <BellIcon className="w-6 h-6 text-white" />
-            </div>
-            <h2 className="text-2xl font-bold text-gray-900">Notification Preferences</h2>
-          </div>
+                            <div className="rounded-2xl border border-slate-100 bg-white dark:border-dark-600/70 dark:bg-dark-700/80 p-5 shadow-sm lg:min-w-[280px]">
+                              <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">Preview</p>
+                              <p className="mt-2 text-2xl font-black text-slate-900 dark:text-dark-100 tracking-tight">
+                                {formatIncomeDisplay(1250, preferences.preferredCurrency || 'ZAR', rates, { showUsdComparison: true })}
+                              </p>
+                              <p className="mt-2 text-xs text-slate-500 dark:text-dark-400 font-medium">Stored internally in South African Rand.</p>
+                              <p className="mt-1.5 text-xs font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+                                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                {liveUsdZarRateLabel ? `Live rate: 1 USD = ZAR ${liveUsdZarRateLabel}` : 'Updating live USD/ZAR rate...'}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
-          <div className="space-y-6">
-            {/* General Email Settings */}
-            <div className="bg-gray-50 rounded-2xl p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                <EnvelopeIcon className="w-5 h-5 mr-2 text-blue-600" />
-                General Email Settings
-              </h3>
+                  {activeSettingsTab === 'management' && hasAdminAccess && (
+                    <div className="space-y-6">
+                      <div className="space-y-4">
+                        <div className="bg-gradient-to-r from-sky-50/50 to-indigo-50/50 dark:from-sky-950/10 dark:to-indigo-950/10 rounded-2xl p-6 border border-slate-100 dark:border-dark-700/60 shadow-xs">
+                          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+                            <div className="flex-1 min-w-0">
+                              <h3 className="text-base font-bold text-slate-900 dark:text-dark-100">Campus Shepherd Mode</h3>
+                              <p className="text-sm text-slate-500 dark:text-dark-400 mt-1 leading-relaxed">
+                                Controls whether this admin can view and manage Sunday income inside Weekly Attendance.
+                              </p>
+                              {isPromotedAdmin && (
+                                <p className="mt-2 text-xs font-bold text-purple-600 dark:text-purple-400">
+                                  Your Campus Shepherd access is managed by the main leader.
+                                </p>
+                              )}
+                              <p className="mt-3.5 text-xs font-bold text-slate-700 dark:text-dark-300 flex items-center gap-2">
+                                <span>Status:</span>
+                                <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                                  preferences.isCampusShepherd === true
+                                    ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400 border border-emerald-100/50 dark:border-emerald-900/30'
+                                    : preferences.isCampusShepherd === false
+                                      ? 'bg-slate-100 text-slate-700 dark:bg-dark-700 dark:text-dark-300 border border-slate-200/50 dark:border-dark-600/50'
+                                      : 'bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400 border border-amber-100/50 dark:border-amber-900/30'
+                                }`}>
+                                  {preferences.isCampusShepherd === true
+                                    ? 'Campus Shepherd'
+                                    : preferences.isCampusShepherd === false
+                                      ? 'Not Campus Shepherd'
+                                      : 'Not answered yet'}
+                                </span>
+                              </p>
+                            </div>
 
-              <div className="space-y-4">
-                <label className="flex items-center space-x-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={!!notificationPreferences?.emailNotifications}
-                    onChange={(e) => handleNotificationPreferenceChange('emailNotifications', e.target.checked)}
-                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                  />
-                  <div>
-                    <span className="text-sm font-medium text-gray-700">Enable Email Notifications</span>
-                    <p className="text-xs text-gray-500">Receive all email notifications from the church management system</p>
-                  </div>
-                </label>
+                            <div className="flex flex-col sm:flex-row gap-3 sm:min-w-[280px] shrink-0">
+                              <Button
+                                type="button"
+                                variant="primary"
+                                disabled={isPromotedAdmin || isSavingCampusShepherd || preferences.isCampusShepherd === true}
+                                onClick={() => handleCampusShepherdPreferenceUpdate(true)}
+                                className="h-11 px-6 rounded-2xl font-bold transition-all duration-200 flex items-center justify-center min-w-[130px] border-none"
+                              >
+                                {isSavingCampusShepherd && preferences.isCampusShepherd === true ? 'Saving...' : 'Yes'}
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="secondary"
+                                disabled={isPromotedAdmin || isSavingCampusShepherd || preferences.isCampusShepherd === false}
+                                onClick={() => handleCampusShepherdPreferenceUpdate(false)}
+                                className="h-11 px-6 rounded-2xl font-bold transition-all duration-200 flex items-center justify-center min-w-[130px] border border-slate-200 dark:border-dark-600 bg-white hover:bg-slate-50 dark:bg-dark-700 dark:hover:bg-dark-600 text-slate-700 dark:text-dark-200"
+                              >
+                                {isSavingCampusShepherd && preferences.isCampusShepherd === false ? 'Saving...' : 'No'}
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
 
-                {/* Email test button temporarily disabled */}
-              </div>
-            </div>
+                        {/* Admin Invite Management */}
+                        {canOpenAdminInviteManagement && (
+                          <div className="bg-gradient-to-r from-emerald-50/50 to-teal-50/50 dark:from-emerald-950/10 dark:to-teal-950/10 rounded-2xl p-6 border border-slate-100 dark:border-dark-700/60 shadow-xs">
+                            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+                              <div className="flex-1 min-w-0">
+                                <h3 className="text-base font-bold text-slate-900 dark:text-dark-100">Admin Invite Management</h3>
+                                <p className="text-sm text-slate-500 dark:text-dark-400 mt-1 leading-relaxed">Generate invites and promote accepted leaders under your authority</p>
+                              </div>
+                              <Button
+                                type="button"
+                                variant="primary"
+                                onClick={() => switchTab({ id: TabKeys.ADMIN_INVITES, name: 'Leadership Management' })}
+                                className="h-12 px-6 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 rounded-2xl font-semibold transition-all duration-200 flex items-center justify-center gap-2 min-w-[180px] shadow-sm shrink-0 border-none"
+                              >
+                                <UserGroupIcon className="w-5 h-5 text-emerald-100" />
+                                <span>Manage Invites</span>
+                              </Button>
+                            </div>
+                          </div>
+                        )}
 
-            {/* Birthday Notification Settings */}
-            <div className="bg-gradient-to-r from-pink-50 to-purple-50 rounded-2xl p-6 border border-pink-200">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                <CakeIcon className="w-5 h-5 mr-2 text-pink-600" />
-                Birthday Notification Settings
-              </h3>
 
-              <div className="space-y-6">
-                {/* Enable Birthday Notifications */}
-                <label className="flex items-center space-x-3">
-                  <input
-                    type="checkbox"
-                    checked={true}
-                    disabled
-                    className="w-4 h-4 text-pink-600 border-gray-300 rounded"
-                  />
-                  <div>
-                    <span className="text-sm font-medium text-gray-700">Birthday Notifications (managed by admin)</span>
-                    <p className="text-xs text-gray-500">These settings are controlled by the organisation and cannot be changed here</p>
-                  </div>
-                </label>
+                      </div>
+                    </div>
+                  )}
 
-                {notificationPreferences.birthdayNotifications.enabled && (
-                  <>
-                    {/* Notification Timing */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-3">
-                        When to send notifications:
-                      </label>
-                      <div className="grid grid-cols-2 gap-3">
-                        {[
-                          { days: 7, label: '7 days before' },
-                          { days: 3, label: '3 days before' },
-                          { days: 1, label: '1 day before' },
-                          { days: 0, label: 'On the day' }
-                        ].map(option => (
-                          <label key={option.days} className="flex items-center space-x-2">
+                  {activeSettingsTab === 'notifications' && (
+                    <div className="space-y-6">
+                      {/* General Email Settings */}
+                      <div className="bg-slate-50/50 dark:bg-dark-750/30 rounded-2xl p-6 border border-slate-100 dark:border-dark-750/50 shadow-xs">
+                        <h3 className="text-base font-bold text-slate-900 dark:text-dark-100 mb-4 flex items-center gap-2">
+                          <EnvelopeIcon className="w-5 h-5 text-blue-500" />
+                          General Email Settings
+                        </h3>
+
+                        <div className="space-y-4">
+                          <label className="flex items-start gap-3 cursor-pointer group">
                             <input
                               type="checkbox"
-                              checked={notificationPreferences.birthdayNotifications.daysBeforeNotification.includes(option.days)}
-                              disabled
-                              className="w-4 h-4 text-pink-600 border-gray-300 rounded"
+                              checked={!!notificationPreferences?.emailNotifications}
+                              onChange={(e) => handleNotificationPreferenceChange('emailNotifications', e.target.checked)}
+                              className="w-4 h-4 mt-0.5 text-blue-600 border-slate-300 rounded focus:ring-blue-500 cursor-pointer"
                             />
-                            <span className="text-sm text-gray-700">{option.label}</span>
+                            <div className="min-w-0">
+                              <span className="text-sm font-bold text-slate-700 dark:text-dark-200 group-hover:text-slate-900 dark:group-hover:text-white transition-colors">Enable Email Notifications</span>
+                              <p className="text-xs text-slate-500 dark:text-dark-400 mt-0.5 leading-relaxed">Receive all email notifications from the church management system</p>
+                            </div>
                           </label>
-                        ))}
+                        </div>
+                      </div>
+
+                      {/* Birthday Notification Settings */}
+                      <div className="bg-gradient-to-r from-pink-50/50 to-purple-50/50 dark:from-pink-950/10 dark:to-purple-950/10 rounded-2xl p-6 border border-slate-100 dark:border-dark-700/60 shadow-xs">
+                        <h3 className="text-base font-bold text-slate-900 dark:text-dark-100 mb-4 flex items-center gap-2">
+                          <CakeIcon className="w-5 h-5 text-pink-500" />
+                          Birthday Notification Settings
+                        </h3>
+
+                        <div className="space-y-5">
+                          <label className="flex items-start gap-3">
+                            <input
+                              type="checkbox"
+                              checked={true}
+                              disabled
+                              className="w-4 h-4 mt-0.5 text-pink-600 border-slate-300 dark:border-dark-600 rounded bg-slate-100 dark:bg-dark-700 cursor-not-allowed"
+                            />
+                            <div className="min-w-0">
+                              <span className="text-sm font-bold text-slate-700 dark:text-dark-200">Birthday Notifications (managed by admin)</span>
+                              <p className="text-xs text-slate-500 dark:text-dark-400 mt-0.5 leading-relaxed">These settings are controlled by the organisation and cannot be changed here</p>
+                            </div>
+                          </label>
+
+                          {notificationPreferences.birthdayNotifications.enabled && (
+                            <div className="pl-7 space-y-5 border-l border-pink-100 dark:border-pink-900/40 mt-4">
+                              {/* Notification Timing */}
+                              <div className="space-y-2">
+                                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-dark-400">
+                                  When to send notifications:
+                                </label>
+                                <div className="grid grid-cols-2 gap-3 max-w-md">
+                                  {[
+                                    { days: 7, label: '7 days before' },
+                                    { days: 3, label: '3 days before' },
+                                    { days: 1, label: '1 day before' },
+                                    { days: 0, label: 'On the day' }
+                                  ].map(option => (
+                                    <label key={option.days} className="flex items-center gap-2 cursor-not-allowed">
+                                      <input
+                                        type="checkbox"
+                                        checked={notificationPreferences.birthdayNotifications.daysBeforeNotification.includes(option.days)}
+                                        disabled
+                                        className="w-4 h-4 text-pink-600 border-slate-300 dark:border-dark-600 rounded bg-slate-100 dark:bg-dark-700"
+                                      />
+                                      <span className="text-sm text-slate-600 dark:text-dark-300 font-medium">{option.label}</span>
+                                    </label>
+                                  ))}
+                                </div>
+                              </div>
+
+                              {/* Email Time */}
+                              <div className="space-y-2 max-w-xs">
+                                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-dark-400">
+                                  Preferred notification time:
+                                </label>
+                                <select
+                                  value={notificationPreferences.birthdayNotifications.emailTime}
+                                  disabled
+                                  className="h-10 w-full px-3 border border-slate-200 bg-slate-50 dark:border-dark-600 dark:bg-dark-700 rounded-xl text-sm font-medium text-slate-700 dark:text-dark-350 cursor-not-allowed"
+                                >
+                                  <option value="00:00">12:00 AM</option>
+                                </select>
+                                <p className="text-[10px] font-medium text-slate-400 dark:text-dark-500 mt-1">
+                                  Notifications will be sent around this time each day
+                                </p>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Privacy Notice */}
+                      <div className="bg-blue-50/50 rounded-2xl p-5 border border-slate-100 dark:bg-blue-950/10 dark:border-dark-700/60 shadow-xs">
+                        <h4 className="text-sm font-bold text-blue-900 dark:text-blue-300 mb-2 flex items-center gap-1.5">
+                          <ShieldCheckIcon className="w-4 h-4 text-blue-500" />
+                          Privacy Notice
+                        </h4>
+                        <p className="text-xs text-blue-800 dark:text-blue-300 leading-relaxed font-medium">
+                          You will only receive birthday notifications for members within your organizational responsibility.
+                          This includes members in bacentas you lead or oversee. We respect data privacy and organizational boundaries.
+                        </p>
+                      </div>
+
+                      <div className="pt-4 border-t border-slate-100 dark:border-dark-700/60">
+                        <PushNotificationSettings className="mt-2" />
                       </div>
                     </div>
+                  )}
 
-                    {/* Email Time */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Preferred notification time:
-                      </label>
-                      <select
-                        value={notificationPreferences.birthdayNotifications.emailTime}
-                        disabled
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-700"
-                      >
-                        <option value="00:00">12:00 AM</option>
-                      </select>
-                      <p className="text-xs text-gray-500 mt-1">
-                        Notifications will be sent around this time each day
-                      </p>
+                  {activeSettingsTab === 'security' && (
+                    <div className="space-y-6">
+                      <EmailVerificationPrompt mode="settings" className="mb-2" />
+
+                      <div className="bg-gradient-to-r from-red-50/50 to-pink-50/50 dark:from-red-950/10 dark:to-pink-950/10 rounded-2xl p-6 border border-slate-100 dark:border-dark-700/60 shadow-xs">
+                        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+                          <div className="flex-1 min-w-0">
+                            <h3 className="text-base font-bold text-slate-900 dark:text-dark-100">Password Management</h3>
+                            <p className="text-sm text-slate-500 dark:text-dark-400 mt-1 leading-relaxed">Update your account password to keep your account secure</p>
+                          </div>
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            onClick={() => setIsChangePasswordModalOpen(true)}
+                            className="h-12 px-6 bg-gradient-to-r from-red-600 to-pink-600 hover:from-red-700 hover:to-pink-700 text-white rounded-2xl font-semibold transition-all duration-200 flex items-center justify-center gap-2 min-w-[180px] shadow-sm shrink-0 border-none"
+                          >
+                            <KeyIcon className="w-5 h-5 text-red-100" />
+                            <span>Change Password</span>
+                          </Button>
+                        </div>
+                      </div>
                     </div>
-                  </>
-                )}
+                  )}
+                </div>
               </div>
-            </div>
-
-            {/* Privacy Notice */}
-            <div className="bg-blue-50 rounded-2xl p-4 border border-blue-200">
-              <h4 className="text-sm font-semibold text-blue-900 mb-2">Privacy Notice</h4>
-              <p className="text-xs text-blue-800">
-                You will only receive birthday notifications for members within your organizational responsibility.
-                This includes members in bacentas you lead or oversee. We respect data privacy and organizational boundaries.
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <PushNotificationSettings className="mt-5" />
-          </>
-        )}
-
-        {activeSettingsTab === 'security' && (
-        <div className={contentPanelClassName}>
-          <div className="flex items-center mb-8">
-            <div className="w-12 h-12 bg-gradient-to-br from-red-500 to-pink-600 rounded-2xl flex items-center justify-center mr-4">
-              <ShieldCheckIcon className="w-6 h-6 text-white" />
-            </div>
-            <h2 className="text-2xl font-bold text-gray-900">Security Settings</h2>
-          </div>
-
-          <EmailVerificationPrompt mode="settings" className="mb-6" />
-
-          <div className="bg-gradient-to-r from-red-50 to-pink-50 rounded-2xl p-6 border border-red-100">
-            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
-              <div className="flex-1">
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">Password Management</h3>
-                <p className="text-gray-600">Update your account password to keep your account secure</p>
-              </div>
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => setIsChangePasswordModalOpen(true)}
-                className="h-12 px-6 bg-gradient-to-r from-red-600 to-pink-600 hover:from-red-700 hover:to-pink-700 text-white rounded-2xl font-medium transition-all duration-200 flex items-center justify-center space-x-2 min-w-[180px]"
-              >
-                <KeyIcon className="w-5 h-5" />
-                <span>Change Password</span>
-              </Button>
-            </div>
-          </div>
-        </div>
-        )}
 
             <div className="sticky bottom-4 z-20 lg:hidden">
               <div className="rounded-[24px] bg-slate-900/95 p-4 text-white shadow-[0_24px_50px_-28px_rgba(15,23,42,0.85)] backdrop-blur-sm">
@@ -1112,8 +1083,6 @@ const ProfileSettingsView: React.FC = () => {
             </div>
           </div>
         </div>
-      </div>
-      </div>
 
       {/* Change Password Modal */}
       <ChangePasswordModal
@@ -1121,14 +1090,7 @@ const ProfileSettingsView: React.FC = () => {
         onClose={() => setIsChangePasswordModalOpen(false)}
       />
 
-      {/* Migration Panel Modal */}
-      {isMigrationPanelOpen && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-            <InviteMigrationPanel onClose={() => setIsMigrationPanelOpen(false)} />
-          </div>
-        </div>
-      )}
+
 
       {/* Constituency Manager Overlay */}
       {isConstituencyManagerOpen && (
