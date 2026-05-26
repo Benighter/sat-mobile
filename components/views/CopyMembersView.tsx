@@ -32,6 +32,9 @@ const CopyMembersView: React.FC = () => {
   });
   const [isCopying, setIsCopying] = useState(false);
 
+  const isFirstTimersOnly = options.memberType === 'firstTimersOnly';
+  const effectiveGroupByBacenta = isFirstTimersOnly || options.groupByBacenta;
+
   const { navigateBack } = useNavigation();
 
   // Get the current bacenta filter from navigation context
@@ -151,7 +154,7 @@ const CopyMembersView: React.FC = () => {
     const membersToProcess = getFilteredMembersByType();
     const lines: string[] = [];
 
-    if (options.groupByBacenta) {
+    if (effectiveGroupByBacenta) {
       // Build leader linkage map
       const leaders = members.filter(m => m.role === 'Bacenta Leader' || m.role === 'Fellowship Leader');
       const primaryLeaderByBacenta: Record<string, Member | undefined> = {};
@@ -357,20 +360,25 @@ const CopyMembersView: React.FC = () => {
               </p>
             </div>
             <div className="space-y-4">
-              <label className="flex items-center space-x-3 cursor-pointer">
+              <label className={`flex items-center space-x-3 ${isFirstTimersOnly ? 'opacity-70 cursor-not-allowed' : 'cursor-pointer'}`}>
                 <input
                   type="checkbox"
-                  checked={options.groupByBacenta}
+                  checked={effectiveGroupByBacenta}
+                  disabled={isFirstTimersOnly}
                   onChange={(e) => setOptions(prev => ({ ...prev, groupByBacenta: e.target.checked }))}
-                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 disabled:opacity-55"
                 />
                 <div>
                   <span className="text-sm font-medium text-gray-700">Group by Bacenta</span>
-                  <p className="text-xs text-gray-500">Organize members under their respective bacentas</p>
+                  <p className="text-xs text-gray-500">
+                    {isFirstTimersOnly
+                      ? 'Always enabled when copying First Timers (includes leaders)'
+                      : 'Organize members under their respective bacentas'}
+                  </p>
                 </div>
               </label>
 
-              {currentBacentaName && !options.groupByBacenta && (
+              {currentBacentaName && !effectiveGroupByBacenta && (
                 <label className="flex items-center space-x-3 cursor-pointer">
                   <input
                     type="checkbox"

@@ -614,13 +614,74 @@ const WeeklyAttendanceView: React.FC = () => {
       if (!presentFirstTimerMembers.length && !presentFirstTimeNewBelievers.length) {
         text += 'No first timers were recorded for this Sunday.';
       } else {
+        // Group regular members by bacenta and their leaders
         if (presentFirstTimerMembers.length > 0) {
-          text += 'Members\n';
-          presentFirstTimerMembers.forEach((member, index) => {
-            const phoneNumber = (member.phoneNumber || '').trim() || 'No contact';
-            text += `${index + 1}. ${member.firstName} ${member.lastName || ''} - ${phoneNumber}\n`;
+          const bacentaMap = new Map<string, Bacenta>();
+          bacentas.forEach(b => bacentaMap.set(b.id, b));
+
+          const leaders = members.filter(m => m.role === 'Bacenta Leader' || m.role === 'Fellowship Leader');
+          const primaryLeaderByBacenta: Record<string, Member | undefined> = {};
+          leaders.forEach(l => { if (l.bacentaId) primaryLeaderByBacenta[l.bacentaId] = l; });
+
+          // Collect bacentas that have first timers
+          const firstTimerBacentaIds = new Set<string>();
+          presentFirstTimerMembers.forEach(m => { if (m.bacentaId) firstTimerBacentaIds.add(m.bacentaId); });
+
+          // Sort bacentas alphabetically
+          const sortedBacentaIds = Array.from(firstTimerBacentaIds).sort((a, b) =>
+            (bacentaMap.get(a)?.name || 'Unknown Bacenta').localeCompare(bacentaMap.get(b)?.name || 'Unknown Bacenta')
+          );
+
+          const countedMemberIds = new Set<string>();
+
+          sortedBacentaIds.forEach((bacentaId, idx) => {
+            const bacentaName = bacentaMap.get(bacentaId)?.name || 'Unknown Bacenta';
+            const primaryLeader = primaryLeaderByBacenta[bacentaId];
+            const linkedLeader = !primaryLeader ? leaders.find(l => (l.linkedBacentaIds || []).includes(bacentaId)) : undefined;
+
+            // Write leader header
+            if (primaryLeader) {
+              const heart = primaryLeader.role === 'Bacenta Leader' ? '💚' : '❤️';
+              text += `${heart} ${primaryLeader.role === 'Bacenta Leader' ? 'Green Bacenta:' : 'Red Bacenta:'} ${primaryLeader.firstName} ${primaryLeader.lastName || ''} (${bacentaName})\n`;
+              countedMemberIds.add(primaryLeader.id);
+            } else if (linkedLeader) {
+              text += `❤ ${bacentaName}\n`;
+            } else {
+              text += `${bacentaName} Bacenta\n`;
+            }
+
+            // List first timers belonging to this bacenta
+            const bacentaFirstTimers = presentFirstTimerMembers.filter(m => m.bacentaId === bacentaId);
+            bacentaFirstTimers.forEach((member, memberIdx) => {
+              const phoneNumber = (member.phoneNumber || '').trim() || 'No contact';
+              text += `${memberIdx + 1}. ${member.firstName} ${member.lastName || ''} - ${phoneNumber}\n`;
+              countedMemberIds.add(member.id);
+            });
+
+            if (idx < sortedBacentaIds.length - 1) {
+              text += '\n';
+            }
           });
-          text += `Total: ${presentFirstTimerMembers.length}\n`;
+
+          // Unassigned members (no bacentaId)
+          const unassignedFirstTimers = presentFirstTimerMembers.filter(m => !m.bacentaId);
+          if (unassignedFirstTimers.length > 0) {
+            if (sortedBacentaIds.length > 0) {
+              text += '\n\n';
+            }
+            text += 'Unassigned First Timers\n';
+            unassignedFirstTimers.forEach((member, index) => {
+              const phoneNumber = (member.phoneNumber || '').trim() || 'No contact';
+              text += `${index + 1}. ${member.firstName} ${member.lastName || ''} - ${phoneNumber}\n`;
+            });
+            text += `Total: ${unassignedFirstTimers.length}\n`;
+          }
+
+          if (sortedBacentaIds.length > 0) {
+            text += `\n\nMembers Total: ${presentFirstTimerMembers.length}\n`;
+          } else {
+            text += `Total: ${presentFirstTimerMembers.length}\n`;
+          }
         }
 
         if (presentFirstTimeNewBelievers.length > 0) {
@@ -647,11 +708,13 @@ const WeeklyAttendanceView: React.FC = () => {
   };
 
   const buildCampusReportText = () => {
-    const campusName = constituencyName.trim() || 'No Constituency';
-    const campusShepherdName = [userProfile?.firstName, userProfile?.lastName]
-      .filter(Boolean)
-      .join(' ')
-      .trim() || userProfile?.displayName || 'Admin';
+    const campusName = constituencyName.trim() || 'No Campus';
+    const campusShepherdName = (userProfile?.isPromotedCampusAdmin && userProfile?.promotedByAdminName)
+      ? userProfile.promotedByAdminName.trim()
+      : [userProfile?.firstName, userProfile?.lastName]
+          .filter(Boolean)
+          .join(' ')
+          .trim() || userProfile?.displayName || 'Admin';
 
     const leaderTotals = groupedAttendance.groups.map(g => ({
       name: `${g.bacentaLeader.firstName} ${g.bacentaLeader.lastName || ''}`.trim(),
@@ -666,45 +729,39 @@ const WeeklyAttendanceView: React.FC = () => {
     const presentMemberNewConverts = presentNewBelieverMembers.length;
     const todaysFirstTimers = totalPresentFirstTimers;
     const todaysNewConverts = presentMemberNewConverts + presentFirstTimeNewBelievers.length;
+    const allBacentaLeaders = members.filter(m => m.role === 'Bacenta Leader');
 
-    let text = '*Gathering Service attendance*\n\n';
-    text += `*Campus Name : ${campusName}*\n\n`;
-    text += `Campus Shepherd : ${campusShepherdName}\n\n`;
-    text += `Date of service: ${formatSlashDate(selectedSunday)}\n\n`;
-    text += `*Gathering service total attendance : ${formatCount(totalAttendance)}*\n\n`;
-    text += `*TOTAL Income (week) : ${formatIncomeAmount(weeklyIncomeSummary.totalWeekIncome)}*\n\n`;
-    text += `*Gathering service Income Cash: ${formatIncomeAmount(weeklyIncomeSummary.sundayCashTotal, { compact: true })}*\n`;
-    text += `*Offering: ${formatIncomeAmount(weeklyIncomeSummary.sundayCashOffering)}*\n`;
-    text += `*Tithe: ${formatIncomeAmount(weeklyIncomeSummary.sundayCashTithe)}*\n\n`;
-    text += `*Total EFT transfers* (electronic only): ${formatIncomeAmount(weeklyIncomeSummary.sundayOnlineTotal)}\n`;
-    text += `*EFT tithes : ${formatIncomeAmount(weeklyIncomeSummary.sundayOnlineTithe)}:*\n`;
-    text += `*EFT offering : ${formatIncomeAmount(weeklyIncomeSummary.sundayOnlineOffering)}*\n\n`;
-    text += 'Breakdown Per Bacenta Leader\n';
+    let text = `*Gathering Service Report*\n\n`;
+    text += `*Date:* ${formatSlashDate(selectedSunday)}\n`;
+    text += `*Campus:* ${campusName}\n`;
+    text += `*Shepherd:* ${campusShepherdName}\n\n`;
 
+    text += `*TOTAL ATTENDANCE:* ${totalAttendance}\n`;
+    text += `\t•\t*13 Years & Above:* ${totalAttendance}\n`;
+    text += `\t•\t*Below 13 Years:* 0\n`;
+    text += `\t•\t*Existing Bacentas:* ${allBacentaLeaders.length}\n`;
+    text += `\t•\t*Bussing Attendance:* 0\n\n`;
+
+    text += `*TOTAL INCOME (WEEK):* ${formatIncomeAmount(weeklyIncomeSummary.totalWeekIncome)}\n`;
+    text += `\t•\t*Cash Offering:* ${formatIncomeAmount(weeklyIncomeSummary.sundayCashOffering)}\n`;
+    text += `\t•\t*Cash Tithe:* ${formatIncomeAmount(weeklyIncomeSummary.sundayCashTithe)}\n`;
+    text += `\t•\t*Tithe Payers:* \n`;
+    text += `\t•\t*EFT Tithes:* ${formatIncomeAmount(weeklyIncomeSummary.sundayOnlineTithe)}\n`;
+    text += `\t•\t*EFT Offering:* ${formatIncomeAmount(weeklyIncomeSummary.sundayOnlineOffering)}\n`;
+    text += `\t•\t*Fellowship Offering:* ${formatIncomeAmount(weeklyIncomeSummary.bacentaWeekOffering)}\n\n`;
+
+    text += `*Bacenta Breakdown (Per Leader)*\n`;
     if (leaderTotals.length > 0) {
-      text += '\n';
       leaderTotals.forEach((leaderTotal, index) => {
         text += `${index + 1}. ${leaderTotal.name}: ${formatCount(leaderTotal.count)}\n`;
       });
-      text += '\n';
     } else {
-      text += '\n';
+      text += `No records available\n`;
     }
 
-    if (groupedAttendance.deletedAttendees.length > 0) {
-      text += 'Historical attendees retained after removal\n';
-      groupedAttendance.deletedAttendees.forEach((attendee, index) => {
-        text += `${index + 1}. ${attendee.name}\n`;
-      });
-      text += '\n';
-    }
-    if (groupedAttendance.unnamedHistoricalCount > 0) {
-      text += `Historical attendees without names preserved: ${formatCount(groupedAttendance.unnamedHistoricalCount)}\n\n`;
-    }
-
-    text += `*New converts: ${formatCount(todaysNewConverts)}*\n`;
-    text += `*First Timers: ${formatCount(todaysFirstTimers)}*\n`;
-    text += `*Total attendance: ${formatCount(totalAttendance)}*`;
+    text += `\n*Total attendance:* ${totalAttendance}\n`;
+    text += `*New Converts:* ${todaysNewConverts}\n`;
+    text += `*First Timers:* ${todaysFirstTimers}`;
 
     return text;
   };
