@@ -482,11 +482,10 @@ export const inviteService = {
   // Remove leader access - reverts user back to admin role and removes church access
   removeLeaderAccess: async (adminUid: string, leaderUserId: string): Promise<{ success: boolean; message: string }> => {
     try {
-      // Find the accepted invite for this leader created by this admin
+      // Find all accepted invites for this leader
       const inviteQuery = query(
         collection(db, 'adminInvites'),
         where('invitedUserId', '==', leaderUserId),
-        where('createdBy', '==', adminUid),
         where('status', '==', 'accepted')
       );
 
@@ -496,15 +495,32 @@ export const inviteService = {
         throw new Error('No accepted invite found for this leader');
       }
 
-      const inviteDoc = inviteSnapshot.docs[0];
+      // Resolve the admin manager actor to check permissions
+      const manager = await resolveInviteManagerActor(adminUid);
+
+      // Find the invite that the current admin has permission to manage
+      const inviteDoc = inviteSnapshot.docs.find(doc => {
+        const data = doc.data() as AdminInvite;
+        const isOriginalInviteOwner = data.createdBy === manager.uid;
+        const isCurrentChurchAdmin = manager.role === 'admin'
+          && manager.isPromotedCampusAdmin !== true
+          && !!manager.churchId
+          && manager.churchId === data.churchId;
+        return isOriginalInviteOwner || isCurrentChurchAdmin;
+      });
+
+      if (!inviteDoc) {
+        throw new Error('No accepted invite found for this leader that you are authorized to manage');
+      }
+
       const inviteData = inviteDoc.data() as any;
 
       // If the invite was handled as a cross-tenant access link, revoke the link(s) instead of changing roles
       if (inviteData?.handledAs === 'cross-tenant-link') {
-        // Revoke any active cross-tenant links between this admin (viewer) and the target owner (leaderUserId)
+        // Revoke any active cross-tenant links between the inviting admin (viewer) and the target owner (leaderUserId)
         const linksQuery = query(
           collection(db, 'crossTenantAccessLinks'),
-          where('viewerUid', '==', adminUid),
+          where('viewerUid', '==', inviteData.createdBy),
           where('ownerUid', '==', leaderUserId)
         );
         const linksSnap = await getDocs(linksQuery);
