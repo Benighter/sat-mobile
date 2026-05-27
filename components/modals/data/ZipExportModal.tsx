@@ -194,7 +194,7 @@ const ZipExportModal: React.FC<ZipExportModalProps> = ({ isOpen, onClose }) => {
         message: 'Compiling ZIP archive...'
       });
 
-      const zipBlob = await zip.generateAsync({ type: 'blob' });
+      const zipBuffer = await zip.generateAsync({ type: 'arraybuffer' });
 
       setSaveProgress({
         percent: 95,
@@ -209,7 +209,7 @@ const ZipExportModal: React.FC<ZipExportModalProps> = ({ isOpen, onClose }) => {
       const result = await saveFileToDirectory(
         selectedDirectory,
         zipName,
-        zipBlob,
+        zipBuffer,
         'application/zip',
         setSaveProgress
       );

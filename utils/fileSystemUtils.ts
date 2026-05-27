@@ -1,5 +1,6 @@
 import { Capacitor, registerPlugin } from '@capacitor/core';
 import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
+import { LocalNotifications } from '@capacitor/local-notifications';
 
 const BASE64_CHUNK_SIZE = 0x8000;
 
@@ -102,28 +103,32 @@ export const selectDirectory = async (): Promise<DirectoryHandle | null> => {
 export const saveFileToDirectory = async (
   directory: DirectoryHandle | null,
   filename: string,
-  data: ArrayBuffer | Uint8Array | string,
+  data: ArrayBuffer | Uint8Array | string | Blob,
   mimeType: string,
   onProgress?: (progress: FileSaveProgress) => void
 ): Promise<{ success: boolean; path?: string; error?: string }> => {
   try {
+    if (data instanceof Blob) {
+      data = await data.arrayBuffer();
+    }
+
     if (!directory) {
       if (Capacitor.isNativePlatform()) {
-        return await saveFileCapacitor(filename, data, mimeType, onProgress);
+        return await saveFileCapacitor(filename, data as ArrayBuffer | Uint8Array | string, mimeType, onProgress);
       }
 
-      return downloadFileBlob(filename, data, mimeType);
+      return downloadFileBlob(filename, data as ArrayBuffer | Uint8Array | string, mimeType);
     }
 
     if (directory.type === 'mobile') {
       // Use Capacitor Filesystem for mobile
-      return await saveFileCapacitor(filename, data, mimeType, onProgress);
+      return await saveFileCapacitor(filename, data as ArrayBuffer | Uint8Array | string, mimeType, onProgress);
     } else if (directory.type === 'web' && directory.handle) {
       // Use File System Access API for web
-      return await saveFileWebAPI(directory.handle, filename, data, mimeType);
+      return await saveFileWebAPI(directory.handle, filename, data as ArrayBuffer | Uint8Array | string, mimeType);
     } else {
       // Fallback to blob download
-      return downloadFileBlob(filename, data, mimeType);
+      return downloadFileBlob(filename, data as ArrayBuffer | Uint8Array | string, mimeType);
     }
   } catch (error: any) {
     console.error('File save failed:', error);
@@ -131,6 +136,69 @@ export const saveFileToDirectory = async (
       success: false,
       error: error.message || 'Failed to save file'
     };
+  }
+};
+
+const getNotificationId = (filename: string): number => {
+  let hash = 0;
+  for (let i = 0; i < filename.length; i++) {
+    hash = (hash << 5) - hash + filename.charCodeAt(i);
+    hash |= 0;
+  }
+  return Math.abs(hash) % 1000000;
+};
+
+// Local notification helper for downloads on mobile
+const triggerDownloadNotification = async (filename: string, isStart: boolean) => {
+  if (!Capacitor.isNativePlatform() || !Capacitor.isPluginAvailable('LocalNotifications')) {
+    return;
+  }
+  try {
+    const perm = await LocalNotifications.checkPermissions();
+    if (perm.display !== 'granted') {
+      await LocalNotifications.requestPermissions();
+    }
+    
+    const notificationId = getNotificationId(filename);
+
+    if (isStart) {
+      // Schedule an ongoing notification for downloading
+      await LocalNotifications.schedule({
+        notifications: [{
+          id: notificationId,
+          title: 'Downloading file...',
+          body: `Downloading ${filename}`,
+          smallIcon: 'ic_launcher',
+          iconColor: '#334155',
+          ongoing: true,
+          autoCancel: false
+        }]
+      });
+    } else {
+      // First cancel the active downloading notification
+      try {
+        await LocalNotifications.cancel({
+          notifications: [{ id: notificationId }]
+        });
+      } catch (cancelErr) {
+        console.warn('Failed to cancel downloading notification:', cancelErr);
+      }
+
+      // Schedule a new completed notification
+      await LocalNotifications.schedule({
+        notifications: [{
+          id: notificationId + 1000000,
+          title: 'Download Complete ✅',
+          body: `Successfully saved ${filename} to Downloads.`,
+          smallIcon: 'ic_launcher',
+          iconColor: '#334155',
+          ongoing: false,
+          autoCancel: true
+        }]
+      });
+    }
+  } catch (err) {
+    console.error('Failed to trigger download local notification:', err);
   }
 };
 
@@ -142,58 +210,70 @@ const saveFileCapacitor = async (
   onProgress?: (progress: FileSaveProgress) => void
 ): Promise<{ success: boolean; path?: string; error?: string }> => {
   try {
+    // Trigger download starting notification
+    void triggerDownloadNotification(filename, true);
+
     onProgress?.({
       percent: 15,
       stage: 'preparing',
       message: 'Preparing file save...'
     });
 
+    let result: { success: boolean; path?: string; error?: string };
+
     if (Capacitor.getPlatform() === 'android' && Capacitor.isPluginAvailable('DownloadsSaver')) {
-      return await saveFileAndroidDownloads(filename, data, mimeType, onProgress);
-    }
+      result = await saveFileAndroidDownloads(filename, data, mimeType, onProgress);
+    } else {
+      if (Capacitor.getPlatform() === 'android') {
+        const permissionStatus = await Filesystem.checkPermissions();
 
-    if (Capacitor.getPlatform() === 'android') {
-      const permissionStatus = await Filesystem.checkPermissions();
+        if (permissionStatus.publicStorage !== 'granted') {
+          const requestedStatus = await Filesystem.requestPermissions();
 
-      if (permissionStatus.publicStorage !== 'granted') {
-        const requestedStatus = await Filesystem.requestPermissions();
-
-        if (requestedStatus.publicStorage !== 'granted') {
-          return {
-            success: false,
-            error: 'Storage permission is required to save exported files on Android.'
-          };
+          if (requestedStatus.publicStorage !== 'granted') {
+            return {
+              success: false,
+              error: 'Storage permission is required to save exported files on Android.'
+            };
+          }
         }
       }
+
+      const writeOptions = typeof data === 'string' && isTextMimeType(mimeType)
+        ? {
+            path: filename,
+            data,
+            directory: Directory.Documents,
+            encoding: Encoding.UTF8,
+            recursive: true
+          }
+        : {
+            path: filename,
+            data: toBase64(data),
+            directory: Directory.Documents,
+            recursive: true
+          };
+
+      const writeResult = await Filesystem.writeFile(writeOptions);
+
+      onProgress?.({
+        percent: 100,
+        stage: 'completed',
+        message: 'File saved successfully.'
+      });
+
+      result = {
+        success: true,
+        path: writeResult.uri || `Documents/${filename}`
+      };
     }
 
-    const writeOptions = typeof data === 'string' && isTextMimeType(mimeType)
-      ? {
-          path: filename,
-          data,
-          directory: Directory.Documents,
-          encoding: Encoding.UTF8,
-          recursive: true
-        }
-      : {
-          path: filename,
-          data: toBase64(data),
-          directory: Directory.Documents,
-          recursive: true
-        };
+    if (result.success) {
+      // Trigger download success notification
+      void triggerDownloadNotification(filename, false);
+    }
 
-    const result = await Filesystem.writeFile(writeOptions);
-
-    onProgress?.({
-      percent: 100,
-      stage: 'completed',
-      message: 'File saved successfully.'
-    });
-
-    return {
-      success: true,
-      path: result.uri || `Documents/${filename}`
-    };
+    return result;
   } catch (error: any) {
     console.error('Capacitor file save failed:', error);
     return {

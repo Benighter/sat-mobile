@@ -834,7 +834,7 @@ class PushNotificationService {
             title,
             body,
             channelId: PushNotificationService.ANDROID_CHANNEL_ID,
-            smallIcon: 'ic_notification',
+            smallIcon: 'ic_launcher',
             iconColor: '#334155',
             sound: payload.sound || 'default',
             extra: {

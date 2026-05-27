@@ -1094,7 +1094,7 @@ const AppContent: React.FC = memo(() => {
     {toasts.map((toast) => (
         <div
           key={toast.id}
-      className="toast-container fixed left-1/2 transform -translate-x-1/2 z-50 max-w-xs sm:max-w-sm w-full px-4"
+      className="toast-container fixed left-1/2 transform -translate-x-1/2 z-[99999] max-w-xs sm:max-w-sm w-full px-4"
           onClick={() => removeToast(toast.id)}
       style={{ top: 'calc(var(--navbar-height, 64px) + 0.5rem)' }}
         >
