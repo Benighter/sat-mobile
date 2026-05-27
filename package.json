@@ -43,6 +43,7 @@
     "firebase": "^11.9.1",
     "framer-motion": "^12.18.1",
     "html2canvas": "^1.4.1",
+    "jszip": "^3.10.1",
     "lucide-react": "^0.515.0",
     "pdfjs-dist": "^5.7.284",
     "pptxgenjs": "^4.0.1",

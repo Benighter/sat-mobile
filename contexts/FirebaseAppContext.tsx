@@ -565,7 +565,11 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
       scopedMemberIds.has(request.memberId) || scopedOutreachMemberIds.has(request.memberId)
     )));
     setMeetingRecords((raw.meetingRecords || []).filter(record => assignedBacentaIdSet.has(record.bacentaId)));
-    setSundayOfferingRecords([]);
+    if (isCampusShepherd(activeUserProfile)) {
+      if (raw.sundayOfferingRecords !== undefined) setSundayOfferingRecords(raw.sundayOfferingRecords);
+    } else {
+      setSundayOfferingRecords([]);
+    }
     setTitheRecords((raw.titheRecords || []).filter(record => scopedMemberIds.has(record.memberId)));
     setTransportRecords((raw.transportRecords || []).filter(record => scopedMemberIds.has(record.memberId)));
     setOutreachBacentas((raw.outreachBacentas || []).filter(bacenta => assignedBacentaIdSet.has(bacenta.id)));
