@@ -367,7 +367,11 @@ const AppContent: React.FC = memo(() => {
     const updateNavbarHeight = () => {
       const headerEl = getHeader();
       if (!headerEl) return;
-      const h = Math.ceil(headerEl.getBoundingClientRect().height);
+      let h = Math.ceil(headerEl.getBoundingClientRect().height);
+      // Cap height on mobile viewports to standard 60px (or 88px if impersonating) to bypass empty safe-area / wrapping measurements
+      if (window.innerWidth < 640 && h > 75) {
+        h = isImpersonating ? 88 : 60;
+      }
       document.documentElement.style.setProperty('--navbar-height', `${h}px`);
     };
 
