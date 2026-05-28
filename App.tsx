@@ -44,6 +44,7 @@ import ConfirmationModal from './components/modals/confirmations/ConfirmationMod
 import Modal from './components/ui/Modal';
 import { addNativeBackButtonListener, dispatchBackIntercept, exitNativeApp } from './utils/mobileBack';
 import { userService } from './services/userService';
+import { appLogoUrl } from './utils/publicAssets';
 
 import { DeleteMemberModal, DeleteBacentaModal, DeleteNewBelieverModal, ClearAllDataModal, ClearSelectedDataModal, CreateDeletionRequestModal, ClearAllNewBelieversModal } from './components/modals/confirmations/ConfirmationModal';
 import ErrorBoundary from './components/common/ErrorBoundary';
@@ -329,6 +330,33 @@ const AppContent: React.FC = memo(() => {
       setIsExitAppModalOpen(false);
     }
   }, [currentTab.id, isExitAppModalOpen]);
+
+  // Prevent page body scrolling when Chat is active to lock the viewport in place
+  useEffect(() => {
+    if (currentTab.id === TabKeys.CHAT) {
+      document.body.style.overflow = 'hidden';
+      document.documentElement.style.overflow = 'hidden';
+      document.body.style.height = '100vh';
+      document.documentElement.style.height = '100vh';
+      document.body.style.position = 'fixed';
+      document.body.style.width = '100%';
+    } else {
+      document.body.style.overflow = '';
+      document.documentElement.style.overflow = '';
+      document.body.style.height = '';
+      document.documentElement.style.height = '';
+      document.body.style.position = '';
+      document.body.style.width = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+      document.documentElement.style.overflow = '';
+      document.body.style.height = '';
+      document.documentElement.style.height = '';
+      document.body.style.position = '';
+      document.body.style.width = '';
+    };
+  }, [currentTab.id]);
 
 
   // Ensure main content clears the fixed header (and impersonation banner) height
@@ -702,7 +730,7 @@ const AppContent: React.FC = memo(() => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col relative">
+    <div className={`min-h-screen flex flex-col relative ${currentTab.id === TabKeys.CHAT ? 'h-screen max-h-screen overflow-hidden' : ''}`}>
       {/* Offline Indicator */}
       <OfflineIndicator />
 
@@ -754,7 +782,7 @@ const AppContent: React.FC = memo(() => {
                 title="Go to Dashboard"
               >
                 <div className="w-6 h-6 xs:w-8 xs:h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 desktop:w-12 desktop:h-12 desktop-lg:w-14 desktop-lg:h-14 bg-white dark:bg-dark-700 rounded-lg sm:rounded-xl desktop:rounded-xl desktop-lg:rounded-2xl flex items-center justify-center shadow-lg group-hover:shadow-xl desktop:group-hover:shadow-2xl transition-all duration-300 ring-2 ring-blue-100 dark:ring-dark-600 p-0.5">
-                  <img src="/logo.png" alt={DEFAULT_CHURCH.NAME} className="w-full h-full object-contain" />
+                  <img src={appLogoUrl} alt={DEFAULT_CHURCH.NAME} className="w-full h-full object-contain" />
                 </div>
                 <div className="hidden sm:block desktop:block">
                   <h1 className="text-lg sm:text-xl desktop:text-xl desktop-lg:text-2xl font-bold gradient-text font-serif group-hover:text-gray-700 dark:group-hover:text-dark-200 transition-colors duration-300">
@@ -861,17 +889,24 @@ const AppContent: React.FC = memo(() => {
 
       {/* Scrollable Main Content */}
       <main
-        className="flex-1 pb-4 sm:pb-6 desktop:pb-8 relative z-10"
+        className={`flex-1 relative z-10 ${currentTab.id === TabKeys.CHAT ? 'pb-0 overflow-hidden flex flex-col' : 'pb-4 sm:pb-6 desktop:pb-8'}`}
         style={{
-          // Pad top by the actual measured header height (includes impersonation banner)
-          paddingTop: 'calc(var(--navbar-height, 64px) + 8px)',
-          minHeight: 'calc(100vh - 3rem)',
+          // Lock content container's layout height to strictly viewport height minus header height
+          marginTop: currentTab.id === TabKeys.CHAT ? 'var(--navbar-height, 64px)' : undefined,
+          paddingTop: currentTab.id === TabKeys.CHAT ? 0 : 'calc(var(--navbar-height, 64px) + 8px)',
+          minHeight: currentTab.id === TabKeys.CHAT ? 'calc(100vh - var(--navbar-height, 64px))' : 'calc(100vh - 3rem)',
+          height: currentTab.id === TabKeys.CHAT ? 'calc(100vh - var(--navbar-height, 64px))' : undefined,
+          maxHeight: currentTab.id === TabKeys.CHAT ? 'calc(100vh - var(--navbar-height, 64px))' : undefined,
+          boxSizing: 'border-box'
         }}
       >
-        <GestureWrapper>
-          <div className="container mx-auto px-2 sm:px-4 desktop:px-8 desktop-lg:px-12 py-2 sm:py-3 md:py-4 desktop:py-6 desktop-lg:py-8 compact-layout desktop:desktop-dense-layout">
-            <EmailVerificationPrompt />
-            <div className="animate-fade-in">
+        <GestureWrapper className={currentTab.id === TabKeys.CHAT ? "w-full h-full flex flex-col flex-1" : ""}>
+          <div className={currentTab.id === TabKeys.CHAT
+            ? "w-full h-full max-w-full p-0 flex flex-col flex-1"
+            : "container mx-auto px-2 sm:px-4 desktop:px-8 desktop-lg:px-12 py-2 sm:py-3 md:py-4 desktop:py-6 desktop-lg:py-8 compact-layout desktop:desktop-dense-layout"
+          }>
+            {currentTab.id !== TabKeys.CHAT && <EmailVerificationPrompt />}
+            <div className={currentTab.id === TabKeys.CHAT ? "w-full h-full flex flex-col flex-1" : "animate-fade-in"}>
               {renderView()}
             </div>
           </div>
