@@ -928,7 +928,7 @@ const ChatView: React.FC = () => {
 
             {/* Premium Floating Typing Console */}
             <div className="p-3 sm:p-4 bg-[#f0f2f5] border-t border-slate-200/60 sticky bottom-0 z-10">
-              <div className="max-w-4xl mx-auto flex items-end gap-2 relative">
+              <div className="w-full max-w-4xl mx-auto flex items-center gap-2 relative">
                 {/* Emoji Popover */}
                 {isEmojiOpen && (
                   <div 
