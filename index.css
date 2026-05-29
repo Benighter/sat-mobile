@@ -51,6 +51,26 @@ main[data-scrollable="true"] {
   touch-action: auto;
 }
 
+.chat-composer-shell {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+  padding-top: 0.5rem;
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom, 0px));
+  padding-left: max(0.625rem, env(safe-area-inset-left, 0px));
+  padding-right: max(0.625rem, env(safe-area-inset-right, 0px));
+}
+
+@media (min-width: 640px) {
+  .chat-composer-shell {
+    padding-top: 1rem;
+    padding-bottom: max(1rem, env(safe-area-inset-bottom, 0px));
+    padding-left: max(1rem, env(safe-area-inset-left, 0px));
+    padding-right: max(1rem, env(safe-area-inset-right, 0px));
+  }
+}
+
 /* Global Animations */
 @keyframes slideInFromLeft {
   0% {

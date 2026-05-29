@@ -299,9 +299,9 @@ const ChatView: React.FC = () => {
   const activeThread = threads.find(t => t.id === activeThreadId) || null;
 
   return (
-    <div className="flex h-full min-h-full max-h-full w-full overflow-hidden bg-slate-50">
+    <div className="flex h-full min-h-full max-h-full w-full min-w-0 overflow-hidden bg-slate-50">
       {/* Left: thread list (WhatsApp-like) */}
-      <div className={`md:w-[34%] md:min-w-[320px] md:max-w-[400px] w-full border-r border-slate-200 bg-white flex flex-col ${activeThread ? 'hidden md:flex' : 'flex'} h-full overflow-hidden`} >
+      <div className={`md:w-[34%] md:min-w-[320px] md:max-w-[400px] w-full min-w-0 border-r border-slate-200 bg-white flex flex-col ${activeThread ? 'hidden md:flex' : 'flex'} h-full overflow-hidden`} >
         {!isCreating ? (
           <>
             {/* Thread List Header */}
@@ -564,8 +564,8 @@ const ChatView: React.FC = () => {
           </>
         ) : (
           /* Start New Chat / Directory Panel */
-          <div className="h-full flex flex-col bg-white">
-            <div className="px-4 py-4 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
+          <div className="h-full min-h-0 flex flex-col bg-white overflow-hidden">
+            <div className="shrink-0 px-4 py-4 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <button 
                   className="p-1.5 rounded-full hover:bg-slate-200 text-slate-600 transition shrink-0" 
@@ -584,7 +584,7 @@ const ChatView: React.FC = () => {
               </button>
             </div>
 
-            <div className="p-3 bg-white border-b border-slate-100">
+            <div className="shrink-0 p-3 bg-white border-b border-slate-100">
               <div className="relative">
                 <input 
                   value={userSearch} 
@@ -596,7 +596,7 @@ const ChatView: React.FC = () => {
               </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-3 space-y-2">
+            <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-2">
               {isLoadingUsers ? (
                 <div className="h-40 flex flex-col items-center justify-center text-sm text-slate-400 gap-2">
                   <div className="animate-spin rounded-full h-5 w-5 border-2 border-indigo-500 border-t-transparent"></div>
@@ -674,7 +674,7 @@ const ChatView: React.FC = () => {
             </div>
 
             {/* Group Creator Panel */}
-            <div className="p-4 border-t border-slate-100 bg-slate-50">
+            <div className="shrink-0 p-3 sm:p-4 border-t border-slate-100 bg-slate-50">
               <div className="flex items-center gap-2 mb-2">
                 <input 
                   value={groupName} 
@@ -700,7 +700,7 @@ const ChatView: React.FC = () => {
       </div>
 
       {/* Right: conversation pane */}
-      <div className={`flex-1 flex flex-col bg-white ${activeThread ? 'flex' : 'hidden md:flex'} h-full overflow-hidden`} >
+      <div className={`flex-1 min-w-0 flex flex-col bg-white ${activeThread ? 'flex' : 'hidden md:flex'} h-full overflow-hidden`} >
         {activeThread ? (
           <>
             {/* Active Thread Header */}
@@ -829,7 +829,7 @@ const ChatView: React.FC = () => {
 
             {/* Conversation Canvas Wallpaper */}
             <div 
-              className="flex-1 overflow-y-auto px-4 py-4 sm:px-6 relative bg-[#efeae2]" 
+              className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-4 sm:px-6 relative bg-[#efeae2]" 
               style={{
                 minHeight: 0,
                 backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80' viewBox='0 0 80 80'%3E%3Cg fill='%239C92AC' fill-opacity='0.08'%3E%3Cpath d='M50 50c0-5.523 4.477-10 10-10s10 4.477 10 10-4.477 10-10 10c0 5.523-4.477 10-10 10s-10-4.477-10-10 4.477-10 10-10zM10 10c0-5.523 4.477-10 10-10s10 4.477 10 10-4.477 10-10 10c0 5.523-4.477 10-10 10S0 25.523 0 20s4.477-10 10-10zm10 8c4.418 0 8-3.582 8-8s-3.582-8-8-8-8 3.582-8 8 3.582 8 8 8zm40 40c4.418 0 8-3.582 8-8s-3.582-8-8-8-8 3.582-8 8 3.582 8 8 8z'/%3E%3C/g%3E%3C/svg%3E")`
@@ -927,8 +927,8 @@ const ChatView: React.FC = () => {
             </div>
 
             {/* Premium Floating Typing Console */}
-            <div className="p-3 sm:p-4 bg-[#f0f2f5] border-t border-slate-200/60 sticky bottom-0 z-10">
-              <div className="w-full max-w-4xl mx-auto flex items-center gap-2 relative">
+            <div className="chat-composer-shell bg-[#f0f2f5] border-t border-slate-200/60 sticky bottom-0 z-10">
+              <div className="w-full max-w-4xl mx-auto flex items-end gap-2 relative min-w-0">
                 {/* Emoji Popover */}
                 {isEmojiOpen && (
                   <div 
@@ -976,7 +976,7 @@ const ChatView: React.FC = () => {
                 )}
 
                 {/* Main Pill Input Container */}
-                <div className="flex-1 flex items-end gap-2 bg-white px-3.5 py-2 rounded-xl shadow-sm border border-slate-200">
+                <div className="flex-1 min-w-0 min-h-12 flex items-end gap-1.5 xs:gap-2 bg-white px-2.5 xs:px-3.5 py-2 rounded-xl shadow-sm border border-slate-200">
                   {/* Emoji Toggle */}
                   <button
                     type="button"
@@ -1016,7 +1016,7 @@ const ChatView: React.FC = () => {
                     }}
                     placeholder="Type a message..."
                     rows={1}
-                    className="flex-1 bg-transparent border-none text-sm text-slate-900 placeholder-slate-400 focus:ring-0 outline-none resize-none max-h-40 py-1"
+                    className="flex-1 min-w-0 bg-transparent border-none text-sm text-slate-900 placeholder-slate-400 focus:ring-0 outline-none resize-none max-h-40 py-1"
                     style={{ height: 'auto' }}
                     onInput={() => {
                       const el = textAreaRef.current;
@@ -1033,7 +1033,7 @@ const ChatView: React.FC = () => {
                 <button 
                   onClick={pendingImage ? sendImage : send} 
                   disabled={uploading || (!messageText.trim() && !pendingImage)} 
-                  className="h-11 w-11 shrink-0 rounded-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:hover:bg-indigo-600 active:scale-90 text-white shadow-md flex items-center justify-center transition-all duration-150"
+                  className="h-12 w-12 shrink-0 rounded-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:hover:bg-indigo-600 active:scale-90 text-white shadow-md flex items-center justify-center transition-all duration-150"
                   title="Send Message"
                 >
                   {uploading ? (

@@ -6,11 +6,16 @@
   "description": "SAT Mobile - A mobile-first church membership management application",
   "author": "SAT Mobile Team",
   "homepage": ".",
+  "main": "electron/main.cjs",
   "scripts": {
     "dev": "vite",
     "dev:3001": "vite --port 3001",
     "build": "vite build && node scripts/optimize-build.js",
     "build:fast": "vite build",
+    "build:desktop": "vite build --mode desktop",
+    "prepare:desktop": "node scripts/generate-desktop-icon.cjs",
+    "dist:win": "node scripts/package-windows.cjs",
+    "release:win": "pnpm run dist:win",
     "preview": "vite preview",
     "build:mobile": "vite build --mode production && node scripts/optimize-build.js",
     "serve": "vite preview --host 0.0.0.0 --port 3000",
@@ -60,10 +65,57 @@
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
     "autoprefixer": "^10.4.21",
+    "electron": "^42.3.0",
+    "electron-builder": "^26.8.1",
     "firebase-admin": "^13.0.1",
+    "png-to-ico": "^3.0.1",
     "tailwindcss": "^4.1.11",
     "terser": "^5.42.0",
     "typescript": "~5.7.2",
     "vite": "^6.2.0"
+  },
+  "build": {
+    "appId": "com.benighter.satmobile.desktop",
+    "productName": "SAT Mobile",
+    "artifactName": "SAT-Mobile-Setup-${version}.${ext}",
+    "asar": true,
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "build/icon.ico",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "SAT Mobile",
+      "uninstallDisplayName": "SAT Mobile",
+      "deleteAppDataOnUninstall": false
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "Benighter",
+        "repo": "sat-mobile",
+        "releaseType": "release"
+      }
+    ]
   }
 }

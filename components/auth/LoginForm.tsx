@@ -2,6 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
 import ForgotPasswordModal from './ForgotPasswordModal';
+import { appLogoUrl } from '../../utils/publicAssets';
 
 interface LoginFormProps {
   onSignIn: (email: string, password: string, rememberLogin: boolean) => Promise<void>;
@@ -243,7 +244,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({
         {/* Single Logo Header */}
         <div className="text-center mb-8">
           <div className={`mx-auto w-20 h-20 rounded-2xl flex items-center justify-center mb-4 shadow-lg transform hover:scale-105 transition-transform duration-200 p-1 ${ministryMode ? 'bg-rose-50 ring-2 ring-rose-100' : 'bg-white'}`}>
-            <img src="/logo.png" alt="First Love Church" className="w-full h-full object-contain" />
+            <img src={appLogoUrl} alt="First Love Church" className="w-full h-full object-contain" />
           </div>
           <h1 className={`text-2xl font-bold bg-clip-text text-transparent mb-1 ${ministryMode ? 'bg-gradient-to-r from-rose-600 to-fuchsia-600' : 'bg-gradient-to-r from-blue-600 to-indigo-600'}`}>
             SAT Mobile

@@ -15,6 +15,7 @@ import { CheckIcon, EnvelopeIcon, RefreshIcon } from '../icons';
 import Button from '../ui/Button';
 import Modal from '../ui/Modal';
 import ContactView from '../views/ContactView';
+import { appLogoUrl } from '../../utils/publicAssets';
 
 // Utility function to convert Firebase errors to user-friendly messages
 const getErrorMessage = (error: string): string => {
@@ -825,7 +826,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ children, showToast }) =
                 {/* Header */}
                 <div className="text-center mb-8">
                   <div className={`mx-auto w-20 h-20 rounded-2xl flex items-center justify-center mb-4 shadow-lg transform hover:scale-105 transition-transform duration-200 p-1 ${ministryMode ? 'bg-rose-50 ring-2 ring-rose-100' : 'bg-white'}`}>
-                    <img src="/logo.png" alt="First Love Church" className="w-full h-full object-contain" />
+                    <img src={appLogoUrl} alt="First Love Church" className="w-full h-full object-contain" />
                   </div>
                   <h1 className={`text-2xl font-bold bg-clip-text text-transparent mb-1 ${ministryMode ? 'bg-gradient-to-r from-rose-600 to-fuchsia-600' : 'bg-gradient-to-r from-green-600 to-emerald-600'}`}>Join {getAppDisplayName('SAT Mobile')}</h1>
                   <p className="text-gray-500 text-sm">{ministryMode ? 'You are creating a ministry account' : 'Join First Love Church'}</p>
