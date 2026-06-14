@@ -1,7 +1,7 @@
 {
   "name": "sat-mobile",
   "private": true,
-  "version": "2.0.0",
+  "version": "2.0.1",
   "type": "module",
   "description": "SAT Mobile - A mobile-first church membership management application",
   "author": "SAT Mobile Team",
@@ -89,6 +89,7 @@
       "package.json"
     ],
     "win": {
+      "signAndEditExecutable": false,
       "target": [
         {
           "target": "nsis",
