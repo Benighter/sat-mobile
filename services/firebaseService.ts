@@ -3131,6 +3131,17 @@ export const sundayOfferingFirebaseService = {
 
 // Tithe Service
 export const titheFirebaseService = {
+  // Get all tithe records for export/reporting
+  getAll: async (): Promise<TitheRecord[]> => {
+    try {
+      const ref = collection(db, getChurchCollectionPath('tithes'));
+      const snap = await getDocs(ref);
+      return (snap.docs.map(d => ({ id: d.id, ...(d.data() as any) })) as TitheRecord[])
+        .sort((a, b) => (a.month || '').localeCompare(b.month || '') || (a.memberId || '').localeCompare(b.memberId || ''));
+    } catch (error: any) {
+      throw new Error(`Failed to fetch tithes: ${error.message}`);
+    }
+  },
   // Get all tithes for a month
   getAllByMonth: async (yyyymm: string): Promise<TitheRecord[]> => {
     try {
@@ -3172,6 +3183,32 @@ export const titheFirebaseService = {
 
 // Transport Service (parallel to Tithes) with backward-compat support for legacy 'bussing' collection
 export const transportFirebaseService = {
+  // Get all transport payment records for export/reporting, including legacy bussing data.
+  getAll: async (): Promise<TransportRecord[]> => {
+    try {
+      const merged = new Map<string, TransportRecord>();
+      const refLegacy = collection(db, getChurchCollectionPath('bussing'));
+      const snapLegacy = await getDocs(refLegacy);
+      snapLegacy.docs.forEach(d => {
+        const record = { id: d.id, ...(d.data() as any) } as TransportRecord;
+        const key = record.id || `${record.memberId}_${record.month}`;
+        merged.set(key, record);
+      });
+
+      const refTransport = collection(db, getChurchCollectionPath('transport'));
+      const snapTransport = await getDocs(refTransport);
+      snapTransport.docs.forEach(d => {
+        const record = { id: d.id, ...(d.data() as any) } as TransportRecord;
+        const key = record.id || `${record.memberId}_${record.month}`;
+        merged.set(key, record);
+      });
+
+      return Array.from(merged.values())
+        .sort((a, b) => (a.month || '').localeCompare(b.month || '') || (a.memberId || '').localeCompare(b.memberId || ''));
+    } catch (error: any) {
+      throw new Error(`Failed to fetch transport records: ${error.message}`);
+    }
+  },
   // Get all transport payments for a month (read from 'transport'; fallback to 'bussing')
   getAllByMonth: async (yyyymm: string): Promise<TransportRecord[]> => {
     try {

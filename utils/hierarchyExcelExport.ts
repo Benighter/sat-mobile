@@ -1,5 +1,5 @@
 import ExcelJS from 'exceljs';
-import { Member, Bacenta, AttendanceRecord, SundayOfferingRecord, MeetingRecord } from '../types';
+import { Member, Bacenta, AttendanceRecord, SundayOfferingRecord, MeetingRecord, TitheRecord, TransportRecord } from '../types';
 import { DirectoryHandle, FileSaveProgress, saveFileToDirectory } from './fileSystemUtils';
 import { formatDateDayMonthYear } from './dateUtils';
 import { DEFAULT_CHURCH, MINISTRY_OPTIONS } from '../constants';
@@ -31,6 +31,8 @@ export interface HierarchyExcelData {
   attendanceRecords: AttendanceRecord[];
   meetingRecords?: MeetingRecord[];
   sundayOfferingRecords?: SundayOfferingRecord[];
+  titheRecords?: TitheRecord[];
+  transportRecords?: TransportRecord[];
   options: HierarchyExcelExportOptions;
 }
 
@@ -170,6 +172,57 @@ const isMemberFirstTimerInRange = (
 
 const getCurrencyNumberFormat = (): string => '"R"#,##0.00';
 
+type FinancialPaymentRecord = TitheRecord | TransportRecord;
+
+const getMonthStartDate = (month: string): string => /^\d{4}-\d{2}$/.test(month) ? `${month}-01` : '';
+
+const formatMonthLabel = (month: string): string => {
+  const startDate = getMonthStartDate(month);
+  if (!startDate) return month || 'Unknown month';
+
+  return new Date(`${startDate}T00:00:00`).toLocaleDateString('en-ZA', {
+    year: 'numeric',
+    month: 'long'
+  });
+};
+
+const getPaymentDateInfo = (record: FinancialPaymentRecord): { date: string; source: string } => {
+  const rawDate = record.lastUpdated || record.recordedAt || getMonthStartDate(record.month);
+  const date = rawDate ? rawDate.slice(0, 10) : '';
+
+  if (record.lastUpdated) return { date, source: 'Last updated' };
+  if (record.recordedAt) return { date, source: 'Recorded at' };
+  if (date) return { date, source: 'Payment month fallback' };
+  return { date: '', source: 'Unknown' };
+};
+
+const getMemberById = (members: Member[]): Map<string, Member> => {
+  return new Map(members.map(member => [member.id, member]));
+};
+
+const getPaidFinancialRecords = (
+  records: FinancialPaymentRecord[],
+  memberIds: Set<string>,
+  startDate?: string,
+  endDate?: string
+): FinancialPaymentRecord[] => {
+  return records
+    .filter(record => {
+      if (!record.memberId || !memberIds.has(record.memberId)) return false;
+      if (record.paid !== true) return false;
+
+      const { date } = getPaymentDateInfo(record);
+      if (startDate && date && date < startDate) return false;
+      if (endDate && date && date > endDate) return false;
+      return true;
+    })
+    .sort((a, b) => {
+      const aDate = getPaymentDateInfo(a).date;
+      const bDate = getPaymentDateInfo(b).date;
+      return a.month.localeCompare(b.month) || aDate.localeCompare(bDate) || a.memberId.localeCompare(b.memberId);
+    });
+};
+
 const getSundayOfferingRecordsInRange = (
   sundayOfferingRecords: SundayOfferingRecord[],
   startDate?: string,
@@ -228,9 +281,10 @@ export const getHierarchyExportPreview = (data: HierarchyExcelData): HierarchyEx
   const newBelieversCount = activeMembers.filter(m => m.isNewBeliever === true).length;
   const ministriesCount = new Set(activeMembers.filter(m => m.ministry).map(m => m.ministry!.trim().toLowerCase())).size;
   const shouldIncludeIncomeSheet = Boolean(data.options?.isCampusShepherd) && !Boolean(data.options?.isMinistryContext);
+  const shouldIncludeTitheTransportSheets = !Boolean(data.options?.isCampusShepherd) && !Boolean(data.options?.isMinistryContext);
 
   return {
-    totalTabs: shouldIncludeIncomeSheet ? 8 : 7,
+    totalTabs: 7 + (shouldIncludeIncomeSheet ? 1 : 0) + (shouldIncludeTitheTransportSheets ? 2 : 0),
     bacentaCount: uniqueBacentas.size,
     memberCount: activeMembers.length,
     servicesCount: dates.length,
@@ -246,6 +300,10 @@ export const getHierarchyExportPreview = (data: HierarchyExcelData): HierarchyEx
       `Tab 6 — New Believers: ${newBelieversCount} member${newBelieversCount !== 1 ? 's' : ''} (grouped by leader)`,
       `Tab 7 — First Timers: ${firstTimersCount} member${firstTimersCount !== 1 ? 's' : ''} (grouped by leader)`,
       ...(shouldIncludeIncomeSheet ? ['Tab 8 — Income & Tithe: Sunday offering, tithe, channel totals, and weekly summary'] : []),
+      ...(shouldIncludeTitheTransportSheets ? [
+        'Tithe tab: paid people, amounts, monthly totals, and overall totals',
+        'Transport tab: paid people, amounts, monthly totals, and overall totals'
+      ] : []),
       'Color-coded rows by role',
       'Attendance history for the selected date range (or full history)'
     ]
@@ -398,7 +456,7 @@ export const exportHierarchyExcel = async (
     // Auto-width columns
     worksheet.columns.forEach(column => {
       let maxLength = 10;
-      column.eachCell({ includeEmpty: true }, cell => {
+      column.eachCell?.({ includeEmpty: true }, cell => {
         const v = cell.value ? cell.value.toString() : '';
         maxLength = Math.max(maxLength, v.length + 2);
       });
@@ -543,6 +601,196 @@ export const exportHierarchyExcel = async (
       ];
       ws.views = [{ state: 'frozen', xSplit: 0, ySplit: 4 }];
     })();
+
+    const createFinancialPaymentSheet = (sheetName: 'Tithe' | 'Transport', records: FinancialPaymentRecord[]) => {
+      const ws = workbook.addWorksheet(sheetName);
+      const currencyFormat = getCurrencyNumberFormat();
+      const paidRecords = getPaidFinancialRecords(records, memberIds, startDate, endDate);
+      const memberMap = getMemberById(activeMembers);
+      const totalAmount = paidRecords.reduce((sum, record) => sum + Math.max(0, Number(record.amount) || 0), 0);
+      const uniquePayerIds = new Set(paidRecords.map(record => record.memberId));
+      const uniqueMonths = new Set(paidRecords.map(record => record.month).filter(Boolean));
+      const thinB = {
+        top: { style: 'thin' as const },
+        left: { style: 'thin' as const },
+        bottom: { style: 'thin' as const },
+        right: { style: 'thin' as const }
+      };
+
+      const applyHeaderCell = (cell: ExcelJS.Cell) => {
+        cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+        cell.alignment = { horizontal: 'center' };
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF111827' } };
+        cell.border = thinB;
+      };
+
+      const applyRowBorders = (row: ExcelJS.Row, columns: number, fillColor?: string) => {
+        for (let columnNumber = 1; columnNumber <= columns; columnNumber++) {
+          const cell = row.getCell(columnNumber);
+          cell.border = thinB;
+          if (fillColor) {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: fillColor } };
+          }
+        }
+      };
+
+      const monthlySummary = new Map<string, { payerIds: Set<string>; paymentCount: number; total: number }>();
+
+      paidRecords.forEach(record => {
+        const amount = Math.max(0, Number(record.amount) || 0);
+        const monthEntry = monthlySummary.get(record.month) || { payerIds: new Set<string>(), paymentCount: 0, total: 0 };
+        monthEntry.payerIds.add(record.memberId);
+        monthEntry.paymentCount += 1;
+        monthEntry.total += amount;
+        monthlySummary.set(record.month, monthEntry);
+      });
+
+      let currentRow = 1;
+      ws.mergeCells(currentRow, 1, currentRow, 9);
+      const titleCell = ws.getCell(currentRow, 1);
+      titleCell.value = `${reportName} - ${sheetName} Payments`;
+      titleCell.font = { bold: true, size: 16 };
+      titleCell.alignment = { horizontal: 'center' };
+      currentRow++;
+
+      ws.mergeCells(currentRow, 1, currentRow, 9);
+      const subtitleCell = ws.getCell(currentRow, 1);
+      const rangeLabel = startDate || endDate
+        ? `Date filtered${startDate ? ` from ${formatDateDayMonthYear(startDate)}` : ''}${endDate ? ` to ${formatDateDayMonthYear(endDate)}` : ''}`
+        : 'All recorded payment dates';
+      subtitleCell.value = `${rangeLabel}. Payer counts are based on members marked as paid.`;
+      subtitleCell.alignment = { horizontal: 'center' };
+      currentRow += 2;
+
+      const summaryBlocks = [
+        { label: 'Grand Total', value: totalAmount, isCurrency: true, color: 'FF1F2937', textColor: 'FFFFFFFF' },
+        { label: 'Paid People', value: uniquePayerIds.size, isCurrency: false, color: 'FFD1FAE5', textColor: 'FF065F46' },
+        { label: 'Paid Records', value: paidRecords.length, isCurrency: false, color: 'FFDBEAFE', textColor: 'FF1E3A8A' },
+        { label: 'Months', value: uniqueMonths.size, isCurrency: false, color: 'FFFEF3C7', textColor: 'FF92400E' }
+      ];
+
+      summaryBlocks.forEach((block, index) => {
+        const startColumn = 1 + (index * 2);
+        const endColumn = startColumn + 1;
+        ws.mergeCells(currentRow, startColumn, currentRow, endColumn);
+        const labelCell = ws.getCell(currentRow, startColumn);
+        labelCell.value = block.label;
+        labelCell.font = { bold: true, size: 11, color: { argb: block.textColor } };
+        labelCell.alignment = { horizontal: 'center' };
+        labelCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: block.color } };
+        labelCell.border = thinB;
+
+        ws.mergeCells(currentRow + 1, startColumn, currentRow + 1, endColumn);
+        const valueCell = ws.getCell(currentRow + 1, startColumn);
+        valueCell.value = block.value;
+        if (block.isCurrency) valueCell.numFmt = currencyFormat;
+        valueCell.font = { bold: true, size: 13, color: { argb: block.textColor } };
+        valueCell.alignment = { horizontal: 'center' };
+        valueCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: block.color } };
+        valueCell.border = thinB;
+      });
+
+      currentRow += 4;
+
+      ws.mergeCells(currentRow, 1, currentRow, 4);
+      const monthlyTitle = ws.getCell(currentRow, 1);
+      monthlyTitle.value = 'Monthly Totals';
+      monthlyTitle.font = { bold: true, size: 13 };
+      monthlyTitle.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE5E7EB' } };
+      currentRow++;
+
+      ['Month', 'Paid People', 'Paid Records', 'Grand Total'].forEach((label, index) => {
+        const cell = ws.getCell(currentRow, index + 1);
+        cell.value = label;
+        applyHeaderCell(cell);
+      });
+      currentRow++;
+
+      if (monthlySummary.size === 0) {
+        ws.mergeCells(currentRow, 1, currentRow, 4);
+        const emptyCell = ws.getCell(currentRow, 1);
+        emptyCell.value = `No paid ${sheetName.toLowerCase()} records were found.`;
+        emptyCell.alignment = { horizontal: 'center' };
+        emptyCell.font = { italic: true, color: { argb: 'FF6B7280' } };
+        emptyCell.border = thinB;
+        currentRow++;
+      } else {
+        Array.from(monthlySummary.entries()).sort(([a], [b]) => a.localeCompare(b)).forEach(([month, entry], index) => {
+          const row = ws.getRow(currentRow++);
+          row.getCell(1).value = formatMonthLabel(month);
+          row.getCell(2).value = entry.payerIds.size;
+          row.getCell(3).value = entry.paymentCount;
+          row.getCell(4).value = entry.total;
+          row.getCell(4).numFmt = currencyFormat;
+          applyRowBorders(row, 4, index % 2 === 0 ? 'FFF8FAFC' : 'FFFFFFFF');
+        });
+      }
+
+      currentRow += 2;
+
+      ws.mergeCells(currentRow, 1, currentRow, 9);
+      const ledgerTitle = ws.getCell(currentRow, 1);
+      ledgerTitle.value = 'Paid People Ledger';
+      ledgerTitle.font = { bold: true, size: 13 };
+      ledgerTitle.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE5E7EB' } };
+      currentRow++;
+
+      const ledgerHeaderRow = currentRow;
+      ['#', 'Payment Month', 'Recorded Date', 'Member', 'Bacenta', 'Role', 'Amount', 'Date Source', 'Last Updated'].forEach((label, index) => {
+        const cell = ws.getCell(currentRow, index + 1);
+        cell.value = label;
+        applyHeaderCell(cell);
+      });
+      currentRow++;
+
+      if (paidRecords.length === 0) {
+        ws.mergeCells(currentRow, 1, currentRow, 9);
+        const emptyCell = ws.getCell(currentRow, 1);
+        emptyCell.value = `No paid ${sheetName.toLowerCase()} records were found.`;
+        emptyCell.alignment = { horizontal: 'center' };
+        emptyCell.font = { italic: true, color: { argb: 'FF6B7280' } };
+        emptyCell.border = thinB;
+      } else {
+        paidRecords.forEach((record, index) => {
+          const member = memberMap.get(record.memberId);
+          const paymentDateInfo = getPaymentDateInfo(record);
+          const row = ws.getRow(currentRow++);
+          row.getCell(1).value = index + 1;
+          row.getCell(2).value = formatMonthLabel(record.month);
+          row.getCell(3).value = paymentDateInfo.date ? formatDateDayMonthYear(paymentDateInfo.date) : '';
+          row.getCell(4).value = member ? getFullName(member) : record.memberId;
+          row.getCell(5).value = member ? getBacentaName(bacentas, member.bacentaId) : '';
+          row.getCell(6).value = member?.role || '';
+          row.getCell(7).value = Math.max(0, Number(record.amount) || 0);
+          row.getCell(7).numFmt = currencyFormat;
+          row.getCell(8).value = paymentDateInfo.source;
+          row.getCell(9).value = record.lastUpdated ? record.lastUpdated.slice(0, 10) : '';
+          applyRowBorders(row, 9, index % 2 === 0 ? 'FFF8FAFC' : 'FFFFFFFF');
+        });
+      }
+
+      ws.columns = [
+        { width: 6 },
+        { width: 18 },
+        { width: 18 },
+        { width: 26 },
+        { width: 24 },
+        { width: 18 },
+        { width: 14 },
+        { width: 24 },
+        { width: 16 }
+      ];
+      ws.views = [{ state: 'frozen', xSplit: 0, ySplit: 5 }];
+      ws.autoFilter = {
+        from: { row: ledgerHeaderRow, column: 1 },
+        to: { row: Math.max(ledgerHeaderRow, currentRow - 1), column: 9 }
+      };
+    };
+
+    if (!options?.isCampusShepherd && !options?.isMinistryContext) {
+      createFinancialPaymentSheet('Tithe', data.titheRecords || []);
+      createFinancialPaymentSheet('Transport', data.transportRecords || []);
+    }
 
     // Income & Tithe tab (campus shepherd only)
     if (options?.isCampusShepherd && !options?.isMinistryContext) {
@@ -752,7 +1000,7 @@ export const exportHierarchyExcel = async (
       // Auto-width
       ws.columns.forEach(column => {
         let maxLength = 10;
-        column.eachCell({ includeEmpty: true }, cell => {
+        column.eachCell?.({ includeEmpty: true }, cell => {
           const v = cell.value ? cell.value.toString() : '';
           maxLength = Math.max(maxLength, v.length + 2);
         });
@@ -861,7 +1109,7 @@ export const exportHierarchyExcel = async (
       // Auto-width
       ws.columns.forEach(column => {
         let maxLength = 10;
-        column.eachCell({ includeEmpty: true }, cell => {
+        column.eachCell?.({ includeEmpty: true }, cell => {
           const v = cell.value ? cell.value.toString() : '';
           maxLength = Math.max(maxLength, v.length + 2);
         });
@@ -975,7 +1223,7 @@ export const exportHierarchyExcel = async (
 
       ws.columns.forEach(column => {
         let maxLength = 10;
-        column.eachCell({ includeEmpty: true }, cell => {
+        column.eachCell?.({ includeEmpty: true }, cell => {
           const v = cell.value ? cell.value.toString() : '';
           maxLength = Math.max(maxLength, v.length + 2);
         });
@@ -1080,7 +1328,7 @@ export const exportHierarchyExcel = async (
 
       ws.columns.forEach(column => {
         let maxLength = 10;
-        column.eachCell({ includeEmpty: true }, cell => {
+        column.eachCell?.({ includeEmpty: true }, cell => {
           const v = cell.value ? cell.value.toString() : '';
           maxLength = Math.max(maxLength, v.length + 2);
         });

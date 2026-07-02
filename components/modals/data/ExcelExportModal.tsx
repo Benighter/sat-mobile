@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useAppContext } from '../../../contexts/FirebaseAppContext';
 import { exportHierarchyExcel, getHierarchyExportPreview } from '../../../utils/hierarchyExcelExport';
+import { titheFirebaseService, transportFirebaseService } from '../../../services/firebaseService';
 import {
   selectDirectory,
   canSelectDirectory,
@@ -31,6 +32,8 @@ const ExcelExportModal: React.FC<ExcelExportModalProps> = ({ isOpen, onClose }) 
     attendanceRecords,
     meetingRecords,
     sundayOfferingRecords,
+    titheRecords,
+    transportRecords,
     showToast,
     userProfile,
     isMinistryContext,
@@ -69,6 +72,7 @@ const ExcelExportModal: React.FC<ExcelExportModalProps> = ({ isOpen, onClose }) 
   };
 
   const canIncludeIncomeSheet = isCampusShepherd(userProfile) && !isMinistryContext;
+  const canIncludeTitheTransportSheets = userProfile?.role === 'admin' && !isCampusShepherd(userProfile) && !isMinistryContext;
 
   const handleExport = async () => {
     setIsExporting(true);
@@ -80,12 +84,21 @@ const ExcelExportModal: React.FC<ExcelExportModalProps> = ({ isOpen, onClose }) 
 
     try {
       const constituencyName = getConstituencyName();
+      const [exportTitheRecords, exportTransportRecords] = canIncludeTitheTransportSheets
+        ? await Promise.all([
+          titheFirebaseService.getAll(),
+          transportFirebaseService.getAll()
+        ])
+        : [titheRecords, transportRecords];
+
       const result = await exportHierarchyExcel({
         members,
         bacentas,
         attendanceRecords,
         meetingRecords,
         sundayOfferingRecords,
+        titheRecords: exportTitheRecords,
+        transportRecords: exportTransportRecords,
         options: {
           directory: selectedDirectory,
           onSaveProgress: setSaveProgress,
@@ -128,6 +141,8 @@ const ExcelExportModal: React.FC<ExcelExportModalProps> = ({ isOpen, onClose }) 
       attendanceRecords,
       meetingRecords,
       sundayOfferingRecords,
+      titheRecords,
+      transportRecords,
       options: {
         directory: selectedDirectory,
         startDate: dateRange.startDate || undefined,
