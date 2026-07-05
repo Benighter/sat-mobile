@@ -32,7 +32,7 @@ export default defineConfig(({ mode }) => {
             manualChunks: {
               vendor: ['react', 'react-dom'],
               charts: ['chart.js', 'react-chartjs-2'],
-              utils: ['xlsx', 'framer-motion'],
+              utils: ['exceljs', 'framer-motion'],
               icons: ['lucide-react']
             }
           }
@@ -73,7 +73,7 @@ export default defineConfig(({ mode }) => {
         strictPort: true
       },
       optimizeDeps: {
-        include: ['react', 'react-dom', 'chart.js', 'react-chartjs-2', 'xlsx', 'framer-motion', 'lucide-react'],
+        include: ['react', 'react-dom', 'chart.js', 'react-chartjs-2', 'exceljs', 'framer-motion', 'lucide-react'],
         force: true
       },
       esbuild: {

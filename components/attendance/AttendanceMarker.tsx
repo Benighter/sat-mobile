@@ -1,7 +1,6 @@
 import React from 'react';
 import { AttendanceStatus } from '../../types';
 import { CheckIcon, XMarkIcon } from '../icons';
-import { formatDateToYYYYMMDD } from '../../utils/dateUtils';
 import { isDateEditable, getAttendanceTooltipMessage } from '../../utils/attendanceUtils';
 import { useAppContext } from '../../contexts/FirebaseAppContext';
 import { hasAdminPrivileges } from '../../utils/permissionUtils';
@@ -22,9 +21,7 @@ const AttendanceMarker: React.FC<AttendanceMarkerProps> = ({ memberId, date, cur
 
   const isEditable = !disabled && isDateEditable(date, canEditPreviousSundays);
   const today = new Date();
-  const todayStr = formatDateToYYYYMMDD(today);
   const targetDate = new Date(date + 'T00:00:00');
-  const isFuture = date > todayStr;
   const isPastMonth = targetDate.getFullYear() < today.getFullYear() ||
                     (targetDate.getFullYear() === today.getFullYear() && targetDate.getMonth() < today.getMonth());
 
@@ -34,17 +31,6 @@ const AttendanceMarker: React.FC<AttendanceMarkerProps> = ({ memberId, date, cur
 
   const handleAbsent = () => {
     if(isEditable) onMarkAttendance(memberId, date, 'Absent');
-  };
-  
-  const handleToggle = () => {
-    if (!isEditable) return;
-    if (currentStatus === 'Present') {
-      onMarkAttendance(memberId, date, 'Absent');
-    } else if (currentStatus === 'Absent') {
-      onMarkAttendance(memberId, date, 'Present'); // Or clear it, depends on desired UX
-    } else {
-      onMarkAttendance(memberId, date, 'Present'); // Default to Present if no status
-    }
   };
 
   // Get tooltip message for disabled states

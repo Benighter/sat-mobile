@@ -27,6 +27,15 @@ const determineRoleCategory = (member: Member): RoleCategory => {
   return 'member';
 };
 
+const getCompactMemberName = (member: Member): string => {
+  const firstVisibleName = (member.firstName || '').trim().split(/\s+/)[0];
+  return firstVisibleName || (member.lastName || '').trim().split(/\s+/)[0] || 'Member';
+};
+
+const getFullMemberName = (member: Member): string => {
+  return `${member.firstName || ''} ${member.lastName || ''}`.trim() || 'Member';
+};
+
 const createRoleRowRefMap = (): Record<RoleCategory, HTMLTableRowElement | null> => ({
   head: null,
   leader: null,
@@ -508,14 +517,14 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
                 key={member.id}
                 className={`flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors group ${pendingDeletionRequestsByMemberId.has(member.id) ? 'bg-red-50 hover:bg-red-100/70' : 'hover:bg-gray-50'}`}
                 onClick={() => openMemberForm(member)}
-                title="Open member"
+                title={getFullMemberName(member)}
               >
                 <div className="w-8 h-8 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center text-xs font-semibold">
                   {idx + 1}
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="text-base font-semibold text-gray-900 truncate">
-                    {member.firstName} {member.lastName || ''}
+                    {getCompactMemberName(member)}
                   </div>
                   {pendingDeletionRequestsByMemberId.has(member.id) && (
                     <div className="mt-1 inline-flex items-center rounded-full border border-red-200 bg-red-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-red-700">
@@ -620,8 +629,8 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
                   <div className="flex items-center space-x-1">
                     <span className={`font-semibold text-sm truncate ${
                       member.bornAgainStatus ? 'text-green-900' : 'text-gray-900'
-                    }`}>
-                      {member.firstName}
+                    }`} title={getFullMemberName(member)}>
+                      {getCompactMemberName(member)}
                     </span>
                     <span className="text-xs flex-shrink-0" title={member.role || 'Member'}>
                       {roleIcon}
@@ -1632,7 +1641,7 @@ const MemberActionsDropdown: React.FC<MemberActionsDropdownProps> = ({
       await updateMemberHandler({
         ...member,
         memberStatus: nextStatus,
-        wentHomeDate: nextStatus === 'went_home' ? (member.wentHomeDate || nowIso) : null,
+        wentHomeDate: nextStatus === 'went_home' ? (member.wentHomeDate || nowIso) : undefined,
         frozen: nextStatus === 'went_home' ? true : Boolean(memberBacenta?.frozen),
         lastUpdated: nowIso
       });

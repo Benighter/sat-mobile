@@ -1,4 +1,4 @@
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 import { Member, Bacenta, AttendanceRecord } from '../types';
 import { getUniquePresentAttendanceCount } from './attendanceUtils';
 import { formatDateToYYYYMMDD } from './dateUtils';
@@ -22,6 +22,8 @@ export interface ExcelData {
   attendanceRecords: AttendanceRecord[];
   options: ExcelExportOptions;
 }
+
+type WorksheetData = Array<Array<string | number>>;
 
 // Helper function to calculate attendance statistics
 const calculateAttendanceStats = (
@@ -70,7 +72,7 @@ const getSundaysInRange = (startDate: Date, endDate: Date): Date[] => {
 };
 
 // Create summary worksheet with all members and leaders
-const createSummaryWorksheet = (data: ExcelData) => {
+const createSummaryWorksheet = (data: ExcelData): WorksheetData => {
   const { members, bacentas, attendanceRecords, options } = data;
   const stats = calculateAttendanceStats(members, attendanceRecords, options.dateRange);
   const sundays = getSundaysInRange(options.dateRange.startDate, options.dateRange.endDate);
@@ -184,11 +186,11 @@ const createSummaryWorksheet = (data: ExcelData) => {
     ]);
   });
 
-  return XLSX.utils.aoa_to_sheet(summaryData);
+  return summaryData;
 };
 
 // Create individual bacenta worksheet
-const createBacentaWorksheet = (bacenta: Bacenta, data: ExcelData) => {
+const createBacentaWorksheet = (bacenta: Bacenta, data: ExcelData): WorksheetData => {
   const { members, attendanceRecords, options } = data;
   const bacentaMembers = members.filter(m => m.bacentaId === bacenta.id);
   const sundays = getSundaysInRange(options.dateRange.startDate, options.dateRange.endDate);
@@ -233,11 +235,11 @@ const createBacentaWorksheet = (bacenta: Bacenta, data: ExcelData) => {
     worksheetData.push(memberRow);
   });
   
-  return XLSX.utils.aoa_to_sheet(worksheetData);
+  return worksheetData;
 };
 
 // Create all members worksheet
-const createAllMembersWorksheet = (data: ExcelData) => {
+const createAllMembersWorksheet = (data: ExcelData): WorksheetData => {
   const { members, bacentas, options } = data;
   
   const worksheetData = [
@@ -263,11 +265,11 @@ const createAllMembersWorksheet = (data: ExcelData) => {
     ]);
   });
   
-  return XLSX.utils.aoa_to_sheet(worksheetData);
+  return worksheetData;
 };
 
 // Create attendance analytics worksheet
-const createAttendanceAnalyticsWorksheet = (data: ExcelData) => {
+const createAttendanceAnalyticsWorksheet = (data: ExcelData): WorksheetData => {
   const { members, attendanceRecords, options } = data;
   const sundays = getSundaysInRange(options.dateRange.startDate, options.dateRange.endDate);
 
@@ -327,11 +329,11 @@ const createAttendanceAnalyticsWorksheet = (data: ExcelData) => {
     ]);
   });
 
-  return XLSX.utils.aoa_to_sheet(worksheetData);
+  return worksheetData;
 };
 
 // Create monthly trends worksheet
-const createMonthlyTrendsWorksheet = (data: ExcelData) => {
+const createMonthlyTrendsWorksheet = (data: ExcelData): WorksheetData => {
   const { attendanceRecords, options } = data;
 
   // Group data by month
@@ -393,24 +395,37 @@ const createMonthlyTrendsWorksheet = (data: ExcelData) => {
     previousRate = rate;
   });
 
-  return XLSX.utils.aoa_to_sheet(worksheetData);
+  return worksheetData;
 };
 
 // Apply styling to worksheets
-const applyWorksheetStyling = (worksheet: XLSX.WorkSheet) => {
-  const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1');
+const applyWorksheetStyling = (worksheet: ExcelJS.Worksheet) => {
+  worksheet.getRow(1).font = { bold: true, size: 14 };
+  worksheet.eachRow((row, rowNumber) => {
+    if (rowNumber === 1) return;
+    const firstCellValue = row.getCell(1).value;
+    if (typeof firstCellValue === 'string' && firstCellValue === firstCellValue.toUpperCase() && firstCellValue.trim() !== '') {
+      row.font = { bold: true };
+    }
+  });
 
   // Set column widths
-  worksheet['!cols'] = [];
-  for (let col = 0; col <= range.e.c; col++) {
-    worksheet['!cols'][col] = { width: 15 };
+  const columnCount = worksheet.columnCount || 1;
+  for (let col = 1; col <= columnCount; col++) {
+    worksheet.getColumn(col).width = 15;
   }
 
   // Make first few columns wider for names
-  if (worksheet['!cols'][0]) worksheet['!cols'][0].width = 25;
-  if (worksheet['!cols'][1]) worksheet['!cols'][1].width = 20;
+  worksheet.getColumn(1).width = 25;
+  worksheet.getColumn(2).width = 20;
 
   return worksheet;
+};
+
+const addWorksheetFromRows = (workbook: ExcelJS.Workbook, name: string, rows: WorksheetData) => {
+  const worksheet = workbook.addWorksheet(name);
+  rows.forEach(row => worksheet.addRow(row));
+  return applyWorksheetStyling(worksheet);
 };
 
 // Main export function
@@ -424,31 +439,29 @@ export const exportToExcel = async (data: ExcelData): Promise<{ success: boolean
       : bacentas;
 
     // Create workbook
-    const workbook = XLSX.utils.book_new();
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = 'SAT Mobile';
+    workbook.created = new Date();
+    workbook.modified = new Date();
 
     // Add Summary worksheet
-    const summaryWs = applyWorksheetStyling(createSummaryWorksheet(data));
-    XLSX.utils.book_append_sheet(workbook, summaryWs, 'Summary');
+    addWorksheetFromRows(workbook, 'Summary', createSummaryWorksheet(data));
 
     // Add individual Bacenta worksheets
     targetBacentas.forEach(bacenta => {
-      const bacentaWs = applyWorksheetStyling(createBacentaWorksheet(bacenta, data));
       // Truncate sheet name to Excel's 31 character limit
       const sheetName = bacenta.name.length > 31 ? bacenta.name.substring(0, 28) + '...' : bacenta.name;
-      XLSX.utils.book_append_sheet(workbook, bacentaWs, sheetName);
+      addWorksheetFromRows(workbook, sheetName, createBacentaWorksheet(bacenta, data));
     });
 
     // Add All Members worksheet
-    const allMembersWs = applyWorksheetStyling(createAllMembersWorksheet(data));
-    XLSX.utils.book_append_sheet(workbook, allMembersWs, 'All Members');
+    addWorksheetFromRows(workbook, 'All Members', createAllMembersWorksheet(data));
 
     // Add Attendance Analytics worksheet
-    const analyticsWs = applyWorksheetStyling(createAttendanceAnalyticsWorksheet(data));
-    XLSX.utils.book_append_sheet(workbook, analyticsWs, 'Analytics');
+    addWorksheetFromRows(workbook, 'Analytics', createAttendanceAnalyticsWorksheet(data));
 
     // Add Monthly Trends worksheet
-    const trendsWs = applyWorksheetStyling(createMonthlyTrendsWorksheet(data));
-    XLSX.utils.book_append_sheet(workbook, trendsWs, 'Monthly Trends');
+    addWorksheetFromRows(workbook, 'Monthly Trends', createMonthlyTrendsWorksheet(data));
 
     // Generate filename
     const startDate = options.dateRange.startDate.toISOString().split('T')[0];
@@ -456,7 +469,7 @@ export const exportToExcel = async (data: ExcelData): Promise<{ success: boolean
     const filename = `church-connect-report-${startDate}-to-${endDate}.xlsx`;
 
     // Convert workbook to buffer for file system utility
-    const buffer = XLSX.write(workbook, { type: 'array', bookType: 'xlsx' });
+    const buffer = await workbook.xlsx.writeBuffer();
 
     // Save file using the new file system utility
     const result = await saveFileToDirectory(

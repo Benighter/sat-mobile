@@ -3,6 +3,31 @@ allowBuilds:
   electron-winstaller: true
   esbuild: true
   protobufjs: true
+overrides:
+  axios@>=1.0.0 <1.16.0: 1.16.0
+  '@tootallnate/once@<2.0.1': 2.0.1
+  '@grpc/grpc-js@<1.14.4': 1.14.4
+  '@xmldom/xmldom@<0.8.13': 0.8.13
+  brace-expansion@<1.1.13: 1.1.13
+  brace-expansion@>=2.0.0 <2.0.3: 2.0.3
+  fast-xml-parser@>=5.0.0 <5.7.0: 5.7.0
+  form-data@>=4.0.0 <4.0.6: 4.0.6
+  form-data@<2.5.6: 2.5.6
+  js-yaml@>=4.0.0 <=4.1.1: 4.3.0
+  minimatch@<3.1.4: 3.1.4
+  minimatch@>=5.0.0 <5.1.8: 5.1.8
+  minimatch@>=10.0.0 <10.2.3: 10.2.3
+  node-forge@<1.4.0: 1.4.0
+  picomatch@>=4.0.0 <4.0.4: 4.0.4
+  postcss@<8.5.10: 8.5.10
+  protobufjs@<7.6.3: 7.6.3
+  rollup@>=4.0.0 <4.59.0: 4.59.0
+  tar@<7.5.16: 7.5.16
+  tmp@<0.2.7: 0.2.7
+  undici@<6.27.0: 6.27.0
+  undici@>=7.0.0 <7.28.0: 7.28.0
+  uuid@<11.1.1: 11.1.1
+  vite@<=6.4.2: 6.4.3
 onlyBuiltDependencies:
   - '@firebase/util'
   - esbuild

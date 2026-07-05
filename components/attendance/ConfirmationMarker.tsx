@@ -1,6 +1,6 @@
 import React from 'react';
-import { ConfirmationStatus } from '../types';
-import { CheckIcon, ClockIcon } from './icons';
+import { ConfirmationStatus } from '../../types';
+import { CheckIcon, ClockIcon } from '../icons';
 
 interface ConfirmationMarkerProps {
   memberId: string;
