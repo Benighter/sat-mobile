@@ -6,7 +6,7 @@ import AttendanceMarker from '../attendance/AttendanceMarker';
 import ConfirmationMarker from '../attendance/ConfirmationMarker';
 import { formatDisplayDate, formatDateToYYYYMMDD, getUpcomingSunday } from '../../utils/dateUtils';
 import { isDateEditable } from '../../utils/attendanceUtils';
-import { canDeleteMemberWithRole } from '../../utils/permissionUtils';
+import { canDeleteMemberWithRole, hasAdminPrivileges } from '../../utils/permissionUtils';
 import { SmartTextParser } from '../../utils/smartTextParser';
 import { calculateAge, formatBirthdayDisplay, isBirthdayToday } from '../../utils/birthdayUtils';
 import { isMemberWentHome } from '../../utils/memberStatus';
@@ -19,8 +19,8 @@ interface MemberCardProps {
 const MemberCard: React.FC<MemberCardProps> = ({ member }) => {
   const { displayedSundays, attendanceRecords, sundayConfirmations, markAttendanceHandler, markConfirmationHandler, deleteMemberHandler, openMemberForm, bacentas, userProfile, showConfirmation, showToast } = useAppContext();
 
-  // Get user preference for editing previous Sundays
-  const allowEditPreviousSundays = userProfile?.preferences?.allowEditPreviousSundays ?? false;
+  const canEditPreviousSundays =
+    hasAdminPrivileges(userProfile) || (userProfile?.preferences?.allowEditPreviousSundays ?? false);
 
   const getAttendanceStatus = (date: string) => {
     const record = attendanceRecords.find(ar => ar.memberId === member.id && ar.date === date);
@@ -327,7 +327,7 @@ const MemberCard: React.FC<MemberCardProps> = ({ member }) => {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {displayedSundays.map((sundayDate, index) => {
                 const status = getAttendanceStatus(sundayDate);
-                const isEditable = isDateEditable(sundayDate, allowEditPreviousSundays);
+                const isEditable = isDateEditable(sundayDate, canEditPreviousSundays);
                 const today = new Date();
                 const todayStr = formatDateToYYYYMMDD(today);
                 const targetDate = new Date(sundayDate + 'T00:00:00');

@@ -4,6 +4,7 @@ import { CheckIcon, XMarkIcon } from '../icons';
 import { formatDateToYYYYMMDD } from '../../utils/dateUtils';
 import { isDateEditable, getAttendanceTooltipMessage } from '../../utils/attendanceUtils';
 import { useAppContext } from '../../contexts/FirebaseAppContext';
+import { hasAdminPrivileges } from '../../utils/permissionUtils';
 
 interface AttendanceMarkerProps {
   memberId: string;
@@ -16,10 +17,10 @@ interface AttendanceMarkerProps {
 const AttendanceMarker: React.FC<AttendanceMarkerProps> = ({ memberId, date, currentStatus, onMarkAttendance, disabled }) => {
   const { userProfile } = useAppContext();
 
-  // Get user preference for editing previous Sundays
-  const allowEditPreviousSundays = userProfile?.preferences?.allowEditPreviousSundays ?? false;
+  const canEditPreviousSundays =
+    hasAdminPrivileges(userProfile) || (userProfile?.preferences?.allowEditPreviousSundays ?? false);
 
-  const isEditable = !disabled && isDateEditable(date, allowEditPreviousSundays);
+  const isEditable = !disabled && isDateEditable(date, canEditPreviousSundays);
   const today = new Date();
   const todayStr = formatDateToYYYYMMDD(today);
   const targetDate = new Date(date + 'T00:00:00');
@@ -49,7 +50,7 @@ const AttendanceMarker: React.FC<AttendanceMarkerProps> = ({ memberId, date, cur
   // Get tooltip message for disabled states
   const getTooltipMessage = (action: 'Present' | 'Absent') => {
     if (!isEditable) {
-      return getAttendanceTooltipMessage(date, action, allowEditPreviousSundays);
+      return getAttendanceTooltipMessage(date, action, canEditPreviousSundays);
     }
     return action;
   };

@@ -76,9 +76,8 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
   cleanupDuplicateMembers,
   } = useAppContext();
 
-  // Get user preference for editing previous Sundays
-  const allowEditPreviousSundays = userProfile?.preferences?.allowEditPreviousSundays ?? false;
   const isAdmin = hasAdminPrivileges(userProfile);
+  const canEditPreviousSundays = isAdmin || (userProfile?.preferences?.allowEditPreviousSundays ?? false);
   const { formatIncomeAmount } = useCurrencyFormatter();
   const pendingDeletionRequestsByMemberId = useMemo(() => {
     const pending = new Map<string, MemberDeletionRequest>();
@@ -186,7 +185,7 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
 
   // Handle attendance toggle with three states: empty -> Present -> Absent -> empty
   const handleAttendanceToggle = async (memberId: string, date: string) => {
-    if (!isDateEditable(date, allowEditPreviousSundays)) {
+    if (!isDateEditable(date, canEditPreviousSundays)) {
       return; // Don't allow editing
     }
 
@@ -841,7 +840,7 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
 
     // Add attendance columns for each Sunday
   const attendanceColumns = isTithe ? [] : currentMonthSundays.map((sundayDate) => {
-      const isEditable = isDateEditable(sundayDate, allowEditPreviousSundays);
+      const isEditable = isDateEditable(sundayDate, canEditPreviousSundays);
 
       return {
         key: `attendance_${sundayDate}`,
@@ -858,7 +857,7 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
         const status = getAttendanceStatus(member.id, sundayDate);
         const wentHome = isMemberWentHome(member);
         const isPresent = status === 'Present';
-        const isEditable = isDateEditable(sundayDate, allowEditPreviousSundays);
+        const isEditable = isDateEditable(sundayDate, canEditPreviousSundays);
         const today = new Date();
         const targetDate = new Date(sundayDate + 'T00:00:00');
         const isPastMonth = targetDate.getFullYear() < today.getFullYear() ||
@@ -945,7 +944,7 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
     const cols = [...baseScrollableColumns, ...attendanceColumns];
     if (!isTithe) cols.push(actionsColumn);
     return cols;
-  }, [currentMonthSundays, attendanceRecords, sundayConfirmations, deleteMemberHandler, createDeletionRequestHandler, getAttendanceStatus, getConfirmationStatus, handleAttendanceToggle, upcomingSunday, markConfirmationHandler, isTithe, titheByMember, bussingByMember, markTitheHandler, markTransportHandler, pendingDeletionRequestsByMemberId]);
+  }, [currentMonthSundays, attendanceRecords, sundayConfirmations, deleteMemberHandler, createDeletionRequestHandler, getAttendanceStatus, getConfirmationStatus, handleAttendanceToggle, upcomingSunday, markConfirmationHandler, isTithe, titheByMember, bussingByMember, markTitheHandler, markTransportHandler, pendingDeletionRequestsByMemberId, canEditPreviousSundays]);
 
   // Get displayed month name
   const currentMonthName = getMonthName(displayedDate.getMonth());
