@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useMemo } from 'react';
 import { NewBeliever, AttendanceStatus } from '../../types';
 import { useAppContext } from '../../contexts/FirebaseAppContext';
 import { formatDateToDisplay, formatDisplayDate } from '../../utils/dateUtils';
@@ -55,14 +55,13 @@ const NewBelieverDetailModal: React.FC<NewBelieverDetailModalProps> = ({
 
   // Calculate attendance statistics
   const attendanceStats = useMemo(() => {
-    if (displayedSundays.length === 0) return { present: 0, absent: 0, late: 0, rate: 0 };
+    if (displayedSundays.length === 0) return { present: 0, absent: 0, rate: 0 };
     
     const present = displayedSundays.filter(date => getAttendanceStatus(date) === 'Present').length;
     const absent = displayedSundays.filter(date => getAttendanceStatus(date) === 'Absent').length;
-    const late = displayedSundays.filter(date => getAttendanceStatus(date) === 'Late').length;
     const rate = Math.round((present / displayedSundays.length) * 100);
     
-    return { present, absent, late, rate };
+    return { present, absent, rate };
   }, [displayedSundays, attendanceRecords, newBeliever.id]);
 
   const getDisplayName = () => {
@@ -102,10 +101,10 @@ const NewBelieverDetailModal: React.FC<NewBelieverDetailModalProps> = ({
               <h2 className="text-2xl font-bold text-gray-900">{getDisplayName()}</h2>
               <div className="flex items-center space-x-2 mt-1">
                 {newBeliever.isFirstTime && (
-                  <Badge variant="success">First Time Visitor</Badge>
+                  <Badge color="green">First Time Visitor</Badge>
                 )}
                 {newBeliever.ministry && (
-                  <Badge variant="info">{newBeliever.ministry}</Badge>
+                  <Badge color="blue">{newBeliever.ministry}</Badge>
                 )}
               </div>
             </div>
@@ -231,7 +230,7 @@ const NewBelieverDetailModal: React.FC<NewBelieverDetailModalProps> = ({
             <CalendarIcon className="w-5 h-5 mr-2 text-purple-600" />
             Attendance Summary
           </h3>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
             <div className="text-center">
               <div className="text-2xl font-bold text-green-600">{attendanceStats.present}</div>
               <div className="text-sm text-gray-500">Present</div>
@@ -239,10 +238,6 @@ const NewBelieverDetailModal: React.FC<NewBelieverDetailModalProps> = ({
             <div className="text-center">
               <div className="text-2xl font-bold text-red-600">{attendanceStats.absent}</div>
               <div className="text-sm text-gray-500">Absent</div>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-yellow-600">{attendanceStats.late}</div>
-              <div className="text-sm text-gray-500">Late</div>
             </div>
             <div className="text-center">
               <div className="text-2xl font-bold text-blue-600">{attendanceStats.rate}%</div>

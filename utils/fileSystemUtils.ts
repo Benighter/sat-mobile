@@ -359,7 +359,7 @@ const saveFileWebAPI = async (
   dirHandle: FileSystemDirectoryHandle,
   filename: string,
   data: ArrayBuffer | Uint8Array | string,
-  mimeType: string
+  _mimeType: string
 ): Promise<{ success: boolean; path?: string; error?: string }> => {
   try {
     const fileHandle = await dirHandle.getFileHandle(filename, { create: true });

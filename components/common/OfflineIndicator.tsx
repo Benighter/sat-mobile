@@ -20,14 +20,6 @@ const OfflineIndicator: React.FC = () => {
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
 
-    // Also listen for Firebase-specific offline events
-    const handleFirebaseOffline = () => {
-      if (navigator.onLine) {
-        // Network is available but Firebase is offline
-        setShowOfflineMessage(true);
-      }
-    };
-
     // Check initial state
     if (!navigator.onLine) {
       setShowOfflineMessage(true);

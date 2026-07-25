@@ -16,7 +16,6 @@ import {
   CakeIcon,
   BuildingOfficeIcon,
   CalendarIcon,
-  InformationCircleIcon,
   ChevronDownIcon,
 
 } from '../icons';

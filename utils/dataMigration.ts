@@ -13,7 +13,6 @@ import {
   newBelieversFirebaseService,
   firebaseUtils
 } from '../services/firebaseService';
-import { Member, Bacenta, AttendanceRecord, NewBeliever } from '../types';
 
 export interface MigrationStatus {
   step: string;

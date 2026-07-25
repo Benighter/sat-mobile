@@ -3,7 +3,6 @@ import { useAppContext } from '../../../contexts/FirebaseAppContext';
 import { Member } from '../../../types';
 import { XMarkIcon, UsersIcon, UserIcon, PhoneIcon, MapPinIcon, CheckIcon, PlusIcon } from '../../icons';
 import Button from '../../ui/Button';
-import Badge from '../../ui/Badge';
 import Input from '../../ui/Input';
 import { canManageHierarchy } from '../../../utils/permissionUtils';
 
@@ -40,13 +39,13 @@ const HierarchyModal: React.FC<HierarchyModalProps> = ({ isOpen, bacentaLeader, 
           const searchLower = searchTerm.toLowerCase();
           return (
             leader.firstName.toLowerCase().includes(searchLower) ||
-            leader.lastName.toLowerCase().includes(searchLower) ||
-            leader.phoneNumber.toLowerCase().includes(searchLower)
+            (leader.lastName || '').toLowerCase().includes(searchLower) ||
+            (leader.phoneNumber || '').toLowerCase().includes(searchLower)
           );
         }
         return true;
       })
-      .sort((a, b) => a.lastName.localeCompare(b.lastName) || a.firstName.localeCompare(b.firstName));
+      .sort((a, b) => (a.lastName || '').localeCompare(b.lastName || '') || a.firstName.localeCompare(b.firstName));
   }, [fellowshipLeaders, searchTerm]);
 
   if (!isOpen || !bacentaLeader) return null;
@@ -206,7 +205,7 @@ const HierarchyModal: React.FC<HierarchyModalProps> = ({ isOpen, bacentaLeader, 
                 <Input
                   placeholder="Search red bacentas..."
                   value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
+                  onChange={setSearchTerm}
                   className="border border-gray-300 bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-sm"
                 />
               </div>

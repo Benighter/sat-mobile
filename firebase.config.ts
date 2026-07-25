@@ -4,7 +4,7 @@ import { initializeFirestore, connectFirestoreEmulator, setLogLevel } from 'fire
 import { getStorage } from 'firebase/storage';
 import { getAuth, connectAuthEmulator, setPersistence, browserLocalPersistence } from 'firebase/auth';
 import { getMessaging, isSupported } from 'firebase/messaging';
-import { getFunctions, httpsCallable, connectFunctionsEmulator } from 'firebase/functions';
+import { getFunctions, connectFunctionsEmulator } from 'firebase/functions';
 
 // Ministry variant removed – single SAT project only
 

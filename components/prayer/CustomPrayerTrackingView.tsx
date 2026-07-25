@@ -16,7 +16,7 @@ const CustomPrayerTrackingView: React.FC<CustomPrayerTrackingViewProps> = ({
   prayers,
   records,
   memberId,
-  memberName,
+  memberName: _memberName,
   onMarkAttendance,
   canEdit
 }) => {

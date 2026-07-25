@@ -1,5 +1,17 @@
 apply plugin: 'com.android.application'
 
+def versionProperties = new Properties()
+file("$rootDir/version.properties").withInputStream { versionProperties.load(it) }
+
+def releaseStorePath = System.getenv("SAT_ANDROID_KEYSTORE_PATH")
+def releaseStorePassword = System.getenv("SAT_ANDROID_KEYSTORE_PASSWORD")
+def releaseKeyAlias = System.getenv("SAT_ANDROID_KEY_ALIAS")
+def releaseKeyPassword = System.getenv("SAT_ANDROID_KEY_PASSWORD")
+def hasReleaseSigning = [releaseStorePath, releaseStorePassword, releaseKeyAlias, releaseKeyPassword].every { it }
+
+def updateManifestUrl = project.findProperty("SAT_UPDATE_MANIFEST_URL") ?: System.getenv("SAT_UPDATE_MANIFEST_URL") ?:
+    "https://github.com/Benighter/sat-mobile/releases/download/android-updates/android-update.json"
+
 android {
     namespace "com.benighter.satmobile"
     compileSdk rootProject.ext.compileSdkVersion
@@ -13,8 +25,9 @@ android {
         applicationId "com.benighter.satmobile"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 2
-        versionName "2.0"
+        versionCode versionProperties.getProperty("VERSION_CODE").toInteger()
+        versionName versionProperties.getProperty("VERSION_NAME")
+        buildConfigField "String", "UPDATE_MANIFEST_URL", "\"${updateManifestUrl}\""
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -22,11 +35,39 @@ android {
             ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    buildFeatures {
+        buildConfig true
+    }
+    signingConfigs {
+        if (hasReleaseSigning) {
+            release {
+                storeFile file(releaseStorePath)
+                storePassword releaseStorePassword
+                keyAlias releaseKeyAlias
+                keyPassword releaseKeyPassword
+            }
+        }
+    }
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            if (hasReleaseSigning) {
+                signingConfig signingConfigs.release
+            }
         }
+    }
+}
+
+gradle.taskGraph.whenReady { graph ->
+    def buildingRelease = graph.allTasks.any { task ->
+        task.project == project && task.name.toLowerCase().contains("release")
+    }
+    if (buildingRelease && !hasReleaseSigning) {
+        throw new GradleException(
+            "Release signing is required. Set SAT_ANDROID_KEYSTORE_PATH, " +
+            "SAT_ANDROID_KEYSTORE_PASSWORD, SAT_ANDROID_KEY_ALIAS, and SAT_ANDROID_KEY_PASSWORD."
+        )
     }
 }
 

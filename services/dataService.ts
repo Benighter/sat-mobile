@@ -1,7 +1,6 @@
 
 import { Member, AttendanceRecord, AttendanceStatus, Bacenta, NewBeliever } from '../types';
 // CONGREGATION_GROUPS removed from imports
-import { formatDateToYYYYMMDD } from '../utils/dateUtils';
 
 const MEMBERS_KEY = 'church_members';
 const ATTENDANCE_KEY = 'church_attendance';

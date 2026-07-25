@@ -3,7 +3,7 @@ import React, { memo, useState, useEffect, useMemo, useRef, useCallback } from '
 import { useAppContext } from '../../contexts/FirebaseAppContext';
 // import { hasAdminPrivileges } from '../../utils/permissionUtils';
 import { PeopleIcon, AttendanceIcon, CalendarIcon, ChartBarIcon, PrayerIcon, CurrencyDollarIcon } from '../icons';
-import { getMonthName, getCurrentOrMostRecentSunday, formatFullDate, getUpcomingSunday, getCurrentMeetingWeek, getMeetingWeekRange, getCurrentWeekMonday, getWeeklyTotalsRange } from '../../utils/dateUtils';
+import { getMonthName, getCurrentOrMostRecentSunday, formatFullDate, getUpcomingSunday, getCurrentWeekMonday, getWeeklyTotalsRange } from '../../utils/dateUtils';
 import { getUniquePresentAttendanceCount } from '../../utils/attendanceUtils';
 import { db } from '../../firebase.config';
 import { doc, getDoc } from 'firebase/firestore';
@@ -105,7 +105,7 @@ const StatCard: React.FC<StatCardProps> = memo(({ title, value, icon, descriptio
 
 
 const DashboardView: React.FC = memo(() => {
-  const { members, attendanceRecords, newBelievers, displayedSundays, displayedDate, sundayConfirmations, guests, switchTab, user, userProfile, currentChurchId, allOutreachMembers, bacentas, prayerRecords, meetingRecords, isMinistryContext, titheRecords, transportRecords, activeMinistryName } = useAppContext(); // Use displayedSundays
+  const { members, attendanceRecords, displayedSundays, displayedDate, sundayConfirmations, guests, switchTab, user, userProfile, currentChurchId, allOutreachMembers, bacentas, prayerRecords, meetingRecords, isMinistryContext, titheRecords, transportRecords, activeMinistryName } = useAppContext(); // Use displayedSundays
   const { formatIncomeAmount } = useCurrencyFormatter();
 
   const activeMembers = useMemo(() => {

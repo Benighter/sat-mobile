@@ -7,7 +7,6 @@ const AssignmentManagementView: React.FC = () => {
     members, 
     assignAssistantOrAdminToLeaderHandler, 
     unassignAssistantOrAdminHandler,
-    showToast 
   } = useAppContext();
 
   const [searchTerm, setSearchTerm] = useState('');

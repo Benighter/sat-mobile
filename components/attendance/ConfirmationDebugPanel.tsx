@@ -69,7 +69,7 @@ const ConfirmationDebugPanel: React.FC = () => {
 
   const handleCleanup = async () => {
     try {
-      const cleanedCount = await cleanupOrphanedConfirmations(true); // Force run
+      const cleanedCount = await cleanupOrphanedConfirmations();
       if (cleanedCount === 0) {
         showToast('info', 'No orphaned records found', 'All confirmation records are valid');
       }

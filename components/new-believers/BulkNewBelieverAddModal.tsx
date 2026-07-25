@@ -330,7 +330,7 @@ const BulkNewBelieverAddModal: React.FC<BulkNewBelieverAddModalProps> = ({
                 const hasErrors = validated.some(v=> Object.keys(v.errors).length>0);
                 if (hasErrors) { setEditableBelievers(validated); return; }
                 if (parseResult) {
-                  parseResult.newBelievers = validated.map(v => ({ ...v.original, name: v.current.name, surname: v.current.surname, contact: v.current.contact }));
+                  parseResult.newBelievers = validated.map(v => ({ ...v.original, name: v.current.name, surname: v.current.surname, contact: v.current.contact || '' }));
                 }
                 await handleAddNewBelievers();
               }} variant="primary">

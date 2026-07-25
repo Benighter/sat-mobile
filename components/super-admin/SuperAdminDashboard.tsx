@@ -9,7 +9,6 @@ import { useAppContext } from '../../contexts/FirebaseAppContext';
 import ConfirmationModal from '../modals/confirmations/ConfirmationModal';
 // REMOVED: Ministry access service - ministry app now operates independently
 // import { ministryAccessService } from '../../services/ministryAccessService';
-import { notificationService, setNotificationContext } from '../../services/notificationService';
 import { userService } from '../../services/userService';
 
 import NotificationBadge from '../notifications/NotificationBadge';
@@ -41,13 +40,6 @@ interface SuperAdminDashboardProps {
   onSignOut: () => void;
 }
 
-// Lightweight badge using existing color utilities
-const StatusBadge: React.FC<{ active: boolean }> = ({ active }) => (
-  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold tracking-widest uppercase shadow-sm transition-colors
-    ${active ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40' : 'bg-rose-500/20 text-rose-400 border border-rose-500/40'}`}
-  >{active ? 'ACTIVE' : 'INACTIVE'}</span>
-);
-
 export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSignOut }) => {
   const { isImpersonating, startImpersonation } = useAppContext();
   // Theme toggle: light default, persisted to localStorage
@@ -62,7 +54,6 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
   // Sidebar drawer (tablet/mobile)
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const closeSidebar = () => setSidebarOpen(false);
-  const [previewAdmin, setPreviewAdmin] = useState<AdminUserRecord | null>(null);
   const [admins, setAdmins] = useState<AdminUserRecord[]>([]);
   // Leaders state and view toggle
   const [leaders, setLeaders] = useState<AdminUserRecord[]>([]);
@@ -107,7 +98,6 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
   // const [accessRequests, setAccessRequests] = useState<any[]>([]);
   // const [accessLoading, setAccessLoading] = useState(false);
   // const [accessError, setAccessError] = useState<string | null>(null);
-  const [superAdminNotifications, setSuperAdminNotifications] = useState<any[]>([]);
   // REMOVED: Ministry accounts needing (re)approval fix - no longer needed
   // const [ministryAccountsNeedingApproval, setMinistryAccountsNeedingApproval] = useState<any[]>([]);
   // const [reapproveWorkingUid, setReapproveWorkingUid] = useState<string | null>(null);
@@ -432,43 +422,6 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
   // }, [loadMinistryAccountsNeedingApproval]);
 
 
-  // Load SuperAdmin notifications (realtime)
-  useEffect(() => {
-    try {
-      const qNotifications = query(
-        collection(db, 'superAdminNotifications'),
-        limit(50)
-      );
-      const unsub = onSnapshot(qNotifications, snap => {
-        const items = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
-        // Sort by read status (unread first) then by creation date (newest first)
-        items.sort((a, b) => {
-          if (a.isRead !== b.isRead) {
-            return a.isRead ? 1 : -1; // Unread items first
-          }
-          return (b.createdAt || '').localeCompare(a.createdAt || '');
-        });
-        setSuperAdminNotifications(items);
-      }, err => {
-        console.error('Failed to load superAdmin notifications:', err);
-      });
-      return () => { try { unsub(); } catch { } };
-    } catch (e: any) {
-      console.error('Failed to setup superAdmin notifications listener:', e);
-    }
-  }, []);
-
-  const markNotificationAsRead = useCallback(async (notificationId: string) => {
-    try {
-      const notificationRef = doc(db, 'superAdminNotifications', notificationId);
-      await updateDoc(notificationRef, {
-        isRead: true,
-        readAt: new Date().toISOString()
-      });
-    } catch (e: any) {
-      console.error('Failed to mark notification as read:', e);
-    }
-  }, []);
   // REMOVED: Ministry approval functions - ministry app now operates independently
   // const reapproveMinistryUser = useCallback(async (u: any) => {
   //   try {
@@ -896,12 +849,6 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
     } catch (e: any) {
       setCampusError(e.message || 'Failed to update campus');
     } finally { setCreatingCampus(false); }
-  };
-
-  const deleteCampus = async () => {
-    if (!editingCampus) return;
-    setConfirmDeleteCampus(true);
-    return;
   };
 
   const performDeleteCampus = async () => {
@@ -1980,6 +1927,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
                 <button className="sa-btn sa-btn-ghost" onClick={loadAllMembers} style={{ padding: '9px 16px' }}>⟳ Refresh</button>
               </div>
               {allMembersLoading && <div className="sa-loading">Loading members…</div>}
+              {allMembersError && <div className="sa-error">{allMembersError}</div>}
               {!allMembersLoading && (
                 <div className="sa-table-wrap">
                   <div className="sa-table-head">
@@ -2123,6 +2071,17 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onSign
       }
 
       {/* Confirm delete campus */}
+      <ConfirmationModal
+        isOpen={!!pendingDeleteAdmin}
+        onClose={() => setPendingDeleteAdmin(null)}
+        onConfirm={performDeleteAdmin}
+        title="Delete Admin"
+        message={pendingDeleteAdmin ? `Permanently delete ${pendingDeleteAdmin.displayName || pendingDeleteAdmin.email || 'this admin'} and their account data?` : ''}
+        confirmText="Delete"
+        cancelText="Cancel"
+        type="danger"
+      />
+
       <ConfirmationModal
         isOpen={!!editingCampus && confirmDeleteCampus}
         onClose={() => setConfirmDeleteCampus(false)}

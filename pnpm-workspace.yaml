@@ -32,3 +32,5 @@ onlyBuiltDependencies:
   - '@firebase/util'
   - esbuild
   - protobufjs
+patchedDependencies:
+  '@capacitor/cli@7.4.5': patches/@capacitor__cli@7.4.5.patch
