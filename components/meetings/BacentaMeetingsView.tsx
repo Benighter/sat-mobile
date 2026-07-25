@@ -177,8 +177,6 @@ const BacentaMeetingsView: React.FC = () => {
   const copyBacentaStructure = async () => {
     try {
       // Determine the Wednesday/Thursday dates for the week of the currently selected date
-      const weekWed = getWednesdayOfWeek(currentDate);
-      const { wednesday, thursday } = getMeetingWeekDates(weekWed);
 
       // Helper to find leader for a bacenta (Green Bacenta or Red Bacenta)
       const getLeaderName = (bacentaId: string, fallback?: string) => {

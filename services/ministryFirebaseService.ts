@@ -1,138 +1,114 @@
 /**
- * Ministry Firebase Service
+ * Firebase service adapters for ministry mode.
  *
- * Simplified Firebase service for ministry mode - operates independently.
- * Ministry app now manages its own data without syncing to main church system.
+ * Ministry data is stored in the active ministry church. These adapters keep
+ * the context-facing signatures stable while delegating persistence to the
+ * standard church-scoped services.
  */
 
-import { Member, AttendanceRecord, NewBeliever, SundayConfirmation } from '../types';
-import { collection, doc, getDocs, query, updateDoc, where } from 'firebase/firestore';
-import { db } from '../firebase.config';
+import { Member, NewBeliever } from '../types';
 import {
-  membersFirebaseService,
   attendanceFirebaseService,
-  newBelieversFirebaseService,
   confirmationFirebaseService,
-  ministryExclusionsService,
-  ministryMemberOverridesService
+  firebaseUtils,
+  membersFirebaseService,
+  newBelieversFirebaseService
 } from './firebaseService';
 
-// REMOVED: Bidirectional sync imports - ministry app now operates independently
-// import {
-//   syncMemberToSourceChurch,
-//   syncAttendanceToSourceChurch,
-//   syncNewBelieverToSourceChurch,
-//   syncConfirmationToSourceChurch,
-//   determineSourceChurchForNewRecord
-// } from './bidirectionalSyncService';
+type MemberInput = Omit<Member, 'id' | 'createdDate' | 'lastUpdated'>;
+type NewBelieverInput = Omit<NewBeliever, 'id' | 'createdDate' | 'lastUpdated'>;
 
-/**
- * Simplified Members Service - Independent Operation
- * All members are created and managed within the ministry church only
- */
 export const ministryMembersService = {
-  // Read operations use the standard service
   getAll: membersFirebaseService.getAll,
   getById: membersFirebaseService.getById,
   onSnapshot: membersFirebaseService.onSnapshot,
 
-  // Write operations - simplified, no sync
-  add: async (member: Omit<Member, 'id' | 'createdDate' | 'lastUpdated'>, userProfile: any): Promise<string> => {
-    try {
-      console.log('✨ [Ministry Service] Adding new member (independent mode)');
-
-      // All members in ministry mode are native ministry members
-      const memberData = {
-        ...member,
-        isNativeMinistryMember: true // All ministry members are native
-      };
-
-      console.log('📝 [Ministry Service] Member data being added:', {
-        firstName: memberData.firstName,
-        lastName: memberData.lastName,
-        ministry: memberData.ministry,
-        isNativeMinistryMember: memberData.isNativeMinistryMember
-      });
-
-      // Add to ministry church (current context) - no sync
-      const memberId = await membersFirebaseService.add(memberData);
-      console.log('✅ [Ministry Service] Member added successfully (no sync)');
-
-      return memberId;
-    } catch (error) {
-      console.error('Failed to add member:', error);
-      throw error;
-    }
+  add: async (member: MemberInput, _userProfile: unknown): Promise<string> => {
+    return membersFirebaseService.add({
+      ...member,
+      isNativeMinistryMember: true
+    });
   },
 
-  update: async (memberId: string, updates: Partial<Member>, userProfile: any, contextMember?: Member): Promise<void> => {
-    try {
-      console.log(`✨ [Ministry Service] Updating member ${memberId} (independent mode)`);
-
-      // Simply update in ministry church - no sync
-      await membersFirebaseService.update(memberId, updates);
-      console.log('✅ [Ministry Service] Member updated successfully (no sync)');
-
-    } catch (error) {
-      console.error('Failed to update member:', error);
-      throw error;
-    }
+  update: async (
+    memberId: string,
+    updates: Partial<Member>,
+    _userProfile: unknown,
+    _contextMember?: Member
+  ): Promise<void> => {
+    await membersFirebaseService.update(memberId, updates);
   },
 
-  delete: async (memberId: string, userProfile: any): Promise<void> => {
+  delete: async (memberId: string, _userProfile: unknown): Promise<void> => {
+    await membersFirebaseService.delete(memberId);
+  },
+
+  /** Copy a ministry member into a constituency while retaining the source record. */
+  transferToConstituency: async (
+    memberId: string,
+    targetConstituencyId: string,
+    _userProfile: unknown
+  ): Promise<string> => {
+    const sourceChurchId = firebaseUtils.getCurrentChurchId();
+    if (!sourceChurchId) {
+      throw new Error('No ministry church is currently selected');
+    }
+    if (!targetConstituencyId || targetConstituencyId === sourceChurchId) {
+      throw new Error('Select a different constituency');
+    }
+
+    const member = await membersFirebaseService.getById(memberId);
+    if (!member) {
+      throw new Error('Member not found in the ministry church');
+    }
+
+    const { id: _id, createdDate: _createdDate, lastUpdated: _lastUpdated, ...memberData } = member;
+    const constituencyCopy: MemberInput = {
+      ...memberData,
+      bacentaId: '',
+      linkedBacentaIds: [],
+      bacentaLeaderId: undefined,
+      assignedLeaderId: undefined,
+      isNativeMinistryMember: false
+    };
+
     try {
-      console.log(`✨ [Ministry Service] Deleting member ${memberId} (independent mode)`);
-
-      // Simply delete from ministry church - no sync
-      await membersFirebaseService.delete(memberId);
-      console.log('✅ [Ministry Service] Member deleted successfully (no sync)');
-
-    } catch (error) {
-      console.error('Failed to delete member:', error);
-      throw error;
+      firebaseUtils.setChurchContext(targetConstituencyId);
+      return await membersFirebaseService.add(constituencyCopy);
+    } finally {
+      firebaseUtils.setChurchContext(sourceChurchId);
     }
   }
-
-  // REMOVED: transferToConstituency - ministry app operates independently
-  // Members cannot be transferred to constituencies from ministry app
 };
 
-/**
- * Simplified Attendance Service - Independent Operation
- */
 export const ministryAttendanceService = {
-  // All operations use the standard service - no sync
   getAll: attendanceFirebaseService.getAll,
   getById: attendanceFirebaseService.getById,
+  getByDate: attendanceFirebaseService.getByDate,
   onSnapshot: attendanceFirebaseService.onSnapshot,
-  add: attendanceFirebaseService.add,
   addOrUpdate: attendanceFirebaseService.addOrUpdate,
-  update: attendanceFirebaseService.update,
+  batchUpdate: attendanceFirebaseService.batchUpdate,
   delete: attendanceFirebaseService.delete
 };
 
-/**
- * Simplified New Believers Service - Independent Operation
- */
 export const ministryNewBelieversService = {
-  // All operations use the standard service - no sync
   getAll: newBelieversFirebaseService.getAll,
   getById: newBelieversFirebaseService.getById,
   onSnapshot: newBelieversFirebaseService.onSnapshot,
-  add: newBelieversFirebaseService.add,
+  add: async (newBeliever: NewBelieverInput, _userProfile: unknown): Promise<string> => {
+    return newBelieversFirebaseService.add(newBeliever);
+  },
   update: newBelieversFirebaseService.update,
   delete: newBelieversFirebaseService.delete
 };
 
-/**
- * Simplified Confirmations Service - Independent Operation
- */
 export const ministryConfirmationService = {
-  // All operations use the standard service - no sync
   getAll: confirmationFirebaseService.getAll,
   getById: confirmationFirebaseService.getById,
+  getByDate: confirmationFirebaseService.getByDate,
   onSnapshot: confirmationFirebaseService.onSnapshot,
   add: confirmationFirebaseService.add,
-  update: confirmationFirebaseService.update,
+  addOrUpdate: confirmationFirebaseService.addOrUpdate,
+  remove: confirmationFirebaseService.remove,
   delete: confirmationFirebaseService.delete
 };

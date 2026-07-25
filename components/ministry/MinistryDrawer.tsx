@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../../contexts/FirebaseAppContext';
 import { TabKeys } from '../../types';
 
@@ -8,7 +8,6 @@ import {
   ChartBarIcon,
   ChatBubbleLeftRightIcon,
   CakeIcon,
-  CalendarIcon,
 
 } from '../icons';
 import { PrayerIcon, CheckIcon, PeopleIcon, ChevronDownIcon } from '../icons';
@@ -20,7 +19,6 @@ interface MinistryDrawerProps {
 
 const MinistryDrawer: React.FC<MinistryDrawerProps> = ({ isOpen, onClose }) => {
   const {
-    members,
     currentTab,
     switchTab,
     activeMinistryName,

@@ -14,6 +14,9 @@ import Input from '../ui/Input';
 import ImageUpload from '../ui/ImageUpload';
 import ChangePasswordModal from '../auth/ChangePasswordModal';
 import EmailVerificationPrompt from '../auth/EmailVerificationPrompt';
+import AndroidUpdateSettings from '../updates/AndroidUpdateSettings';
+import { isSelfHostedAndroidApp } from '../../services/androidUpdater';
+import { CircleHelp } from 'lucide-react';
 
 import PushNotificationSettings from '../notifications/PushNotificationSettings';
 import { canManageAdminInvites, hasAdminPrivileges, isCampusShepherd, isPromotedCampusAdmin } from '../../utils/permissionUtils';
@@ -42,7 +45,7 @@ interface ProfileFormData {
   profilePicture: string;
 }
 
-type SettingsTabId = 'profile' | 'app' | 'notifications' | 'management' | 'constituencies' | 'security';
+type SettingsTabId = 'profile' | 'app' | 'notifications' | 'management' | 'constituencies' | 'security' | 'help';
 
 interface SettingsTabDefinition {
   id: SettingsTabId;
@@ -169,6 +172,7 @@ const ProfileSettingsView: React.FC = () => {
   const hasAdminAccess = hasAdminPrivileges(userProfile);
   const canConfigureCurrencyDisplay = isCampusShepherd(userProfile);
   const canOpenAdminInviteManagement = canManageAdminInvites(userProfile);
+  const isAndroidApp = isSelfHostedAndroidApp();
   const liveUsdZarRateLabel = formatZarPerUsdRate(rates);
   const tabContentRef = useRef<HTMLDivElement | null>(null);
   const [activeSettingsTab, setActiveSettingsTab] = useState<SettingsTabId>('profile');
@@ -226,8 +230,18 @@ const ProfileSettingsView: React.FC = () => {
       gradient: 'from-red-500 to-pink-600'
     });
 
+    if (isAndroidApp) {
+      tabs.push({
+        id: 'help',
+        label: 'Help & Updates',
+        description: 'Check for signed SAT Mobile app updates.',
+        icon: CircleHelp,
+        gradient: 'from-sky-500 to-indigo-600'
+      });
+    }
+
     return tabs;
-  }, [hasAdminAccess]);
+  }, [hasAdminAccess, isAndroidApp]);
 
   useEffect(() => {
     if (!settingsTabs.some(tab => tab.id === activeSettingsTab)) {
@@ -878,6 +892,10 @@ const ProfileSettingsView: React.FC = () => {
                         </div>
                       )}
                     </div>
+                  )}
+
+                  {activeSettingsTab === 'help' && isAndroidApp && (
+                    <AndroidUpdateSettings />
                   )}
 
                   {activeSettingsTab === 'management' && hasAdminAccess && (

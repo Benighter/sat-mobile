@@ -8,6 +8,8 @@ import android.os.Environment;
 import android.provider.MediaStore;
 import android.util.Base64;
 
+import androidx.annotation.RequiresApi;
+
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
@@ -53,6 +55,7 @@ public class DownloadsSaverPlugin extends Plugin {
         }).start();
     }
 
+    @RequiresApi(Build.VERSION_CODES.Q)
     private JSObject saveWithMediaStore(String filename, String mimeType, byte[] bytes) throws IOException {
         ContentResolver resolver = getContext().getContentResolver();
         ContentValues values = new ContentValues();

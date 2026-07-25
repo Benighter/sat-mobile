@@ -1,5 +1,5 @@
 import { db } from '../firebase.config';
-import { collection, query, where, getDocs, doc, getDoc, updateDoc, writeBatch, setDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, getDoc, updateDoc, setDoc } from 'firebase/firestore';
 import { AdminInvite, User } from '../types';
 
 /**

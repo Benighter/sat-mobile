@@ -48,7 +48,6 @@ import { getMinistryAggregatedData, setupMinistryDataListeners } from '../servic
 // import { ministryAccessService } from '../services/ministryAccessService';
 import {
   ministryMembersService,
-  ministryAttendanceService,
   ministryNewBelieversService
 } from '../services/ministryFirebaseService';
 import { pushNotificationService } from '../services/pushNotificationService';
@@ -384,24 +383,6 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
   const userDocWatcherCleanupRef = useRef<(() => void) | null>(null);
 
   const optimisticTimeoutsRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
-  // Keep separate references for base (default church) members and native ministry members
-  // so we can compose the visible list in normal mode for ministry accounts
-  const baseMembersRef = useRef<Member[]>([]);
-  const nativeMinistryMembersRef = useRef<Member[]>([]);
-
-  // Helper: combine members from default church and native ministry church without duplicates
-  // Combine and de-duplicate by id. Prefer base (default church) over native ministry copy if both exist.
-  const composeVisibleMembers = useCallback((base: Member[], native: Member[]): Member[] => {
-    const map = new Map<string, Member>();
-    // seed with native first, then overwrite with base so base wins
-    for (const m of native) { map.set(m.id, m); }
-    for (const m of base) { map.set(m.id, m); }
-    const result = Array.from(map.values());
-    result.sort((a, b) => (a.lastName || '').localeCompare(b.lastName || ''));
-    return result;
-  }, []);
-
-
   // Derived flags
   const isMinistryContext = useMemo(() => {
     const ministryId = userProfile?.contexts?.ministryChurchId;
@@ -1149,13 +1130,6 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
             sourceChurches: ministryData.sourceChurches.length
           });
 
-          // One-off repair: ensure native flags for members in ministry church so they appear in listeners
-          try {
-            const { ensureNativeFlagsForMinistryChurch } = await import('../services/ministryFirebaseService');
-            await ensureNativeFlagsForMinistryChurch(activeMinistryName!);
-          } catch (e) {
-            console.warn('[InitData] Failed to run native flag repair:', (e as any)?.message || String(e));
-          }
         } catch (error) {
           console.error('❌ [Ministry Mode] Failed to fetch cross-church data:', error);
           // Fallback to normal data fetching
@@ -1368,18 +1342,6 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
           successful.push({ ...memberData, id: memberId, createdDate: new Date().toISOString(), lastUpdated: new Date().toISOString() });
         } catch (error: any) {
           failed.push({ data: memberData, error: error.message });
-        }
-      }
-
-      // In ministry context, ensure any newly added ministry members in the ministry church
-      // are correctly marked as native to keep them included by listeners
-      if (isMinistryContext && (activeMinistryName || '').trim() !== '') {
-        try {
-          const { ensureNativeFlagsForMinistryChurch } = await import('../services/ministryFirebaseService');
-          await ensureNativeFlagsForMinistryChurch(activeMinistryName!);
-        } catch (e) {
-          // Non-fatal – continue; members will still exist, they just might not appear until next repair
-          console.warn('[BulkAdd] Failed to run native flag repair:', (e as any)?.message || String(e));
         }
       }
 

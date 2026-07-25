@@ -349,6 +349,7 @@ export interface SonOfGod {
   integratedMemberId?: string; // resulting member id after integration
   createdDate: string; // ISO
   lastUpdated: string; // ISO
+  notes?: string;
 }
 
 // Bacenta Meetings types

@@ -14,7 +14,6 @@ import {
 const PendingInviteNotification: React.FC = () => {
   const { user, userProfile, showToast, refreshUserProfile } = useAppContext();
   const [pendingInvites, setPendingInvites] = useState<AdminInvite[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
   const [processingInviteId, setProcessingInviteId] = useState<string | null>(null);
 
   // Check for pending invites when user logs in
@@ -27,7 +26,6 @@ const PendingInviteNotification: React.FC = () => {
   const checkPendingInvites = async () => {
     if (!user) return;
 
-    setIsLoading(true);
     try {
       const invites = await inviteService.getPendingInvitesForUser(user.uid);
       // Filter out expired invites
@@ -40,7 +38,6 @@ const PendingInviteNotification: React.FC = () => {
     } catch (error: any) {
       console.error('Failed to check pending invites:', error);
     } finally {
-      setIsLoading(false);
     }
   };
 

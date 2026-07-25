@@ -45,6 +45,7 @@ import Modal from './components/ui/Modal';
 import { addNativeBackButtonListener, dispatchBackIntercept, exitNativeApp } from './utils/mobileBack';
 import { userService } from './services/userService';
 import { appLogoUrl } from './utils/publicAssets';
+import AndroidUpdatePrompt from './components/updates/AndroidUpdatePrompt';
 
 import { DeleteMemberModal, DeleteBacentaModal, DeleteNewBelieverModal, ClearAllDataModal, ClearSelectedDataModal, CreateDeletionRequestModal, ClearAllNewBelieversModal } from './components/modals/confirmations/ConfirmationModal';
 import ErrorBoundary from './components/common/ErrorBoundary';
@@ -1217,6 +1218,9 @@ const App: React.FC = () => {
       <FirebaseAppProvider>
         <ErrorBoundary>
           <AuthenticatedApp />
+        </ErrorBoundary>
+        <ErrorBoundary>
+          <AndroidUpdatePrompt />
         </ErrorBoundary>
       </FirebaseAppProvider>
     </ThemeProvider>

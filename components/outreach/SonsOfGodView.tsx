@@ -1,13 +1,11 @@
 import React, { useState, useMemo } from 'react';
 import { useAppContext } from '../../contexts/FirebaseAppContext';
-import { SonOfGod } from '../../types';
 import Input from '../ui/Input';
-import Button from '../ui/Button';
 import { SearchIcon, UserIcon, PhoneIcon, HomeIcon, CalendarIcon } from '../icons';
 import { SmartTextParser } from '../../utils/smartTextParser';
 
 const SonsOfGodView: React.FC = () => {
-  const { sonsOfGod, bacentas, showToast } = useAppContext();
+  const { sonsOfGod = [], bacentas, showToast } = useAppContext();
   const [searchTerm, setSearchTerm] = useState('');
   const [showIntegratedOnly, setShowIntegratedOnly] = useState(false);
   const [showUnintegratedOnly, setShowUnintegratedOnly] = useState(false);

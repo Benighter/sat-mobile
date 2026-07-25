@@ -1,0 +1,160 @@
+name: Android self-hosted release
+
+on:
+  push:
+    tags:
+      - 'android-v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing android-v* tag to release
+        required: true
+        type: string
+      release_notes:
+        description: Short notes shown in the in-app update prompt
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+      SAT_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      SAT_ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      SAT_ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+
+    steps:
+      - name: Check out release tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+          fetch-depth: 0
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.34.5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+
+      - name: Validate release version and signing secrets
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+          test -n "$ANDROID_KEYSTORE_BASE64"
+          test -n "$SAT_ANDROID_KEYSTORE_PASSWORD"
+          test -n "$SAT_ANDROID_KEY_ALIAS"
+          test -n "$SAT_ANDROID_KEY_PASSWORD"
+          git show-ref --verify --quiet "refs/tags/$RELEASE_TAG"
+          node --input-type=module <<'NODE'
+          import { readFileSync } from 'node:fs';
+          const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
+          const properties = Object.fromEntries(readFileSync('android/version.properties', 'utf8')
+            .trim().split(/\r?\n/).map((line) => line.split('=')));
+          const expectedTag = `android-v${pkg.version}`;
+          if (process.env.RELEASE_TAG !== expectedTag) {
+            throw new Error(`Release tag ${process.env.RELEASE_TAG} must equal ${expectedTag}.`);
+          }
+          if (properties.VERSION_NAME !== pkg.version) {
+            throw new Error('package.json version and android/version.properties VERSION_NAME must match.');
+          }
+          if (!/^\d+$/.test(properties.VERSION_CODE) || Number(properties.VERSION_CODE) <= 0) {
+            throw new Error('Android VERSION_CODE must be a positive integer.');
+          }
+          NODE
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/sat-mobile-release.jks"
+          echo "SAT_ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/sat-mobile-release.jks" >> "$GITHUB_ENV"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build and sync Capacitor app
+        run: |
+          pnpm run build:mobile
+          pnpm exec cap sync android
+
+      - name: Build signed release APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon assembleRelease
+
+      - name: Create verified update manifest
+        env:
+          RELEASE_NOTES: ${{ inputs.release_notes }}
+        run: |
+          set -euo pipefail
+          mkdir -p release-assets
+          cp android/app/build/outputs/apk/release/app-release.apk release-assets/sat-mobile-android.apk
+          NOTES="${RELEASE_NOTES:-SAT Mobile ${RELEASE_TAG#android-v}}"
+          PUBLISHED_AT="$(git show -s --format=%cI "$RELEASE_TAG")"
+          node scripts/create-android-update-manifest.mjs \
+            --apk release-assets/sat-mobile-android.apk \
+            --output release-assets/android-update.json \
+            --apk-url "https://github.com/${GITHUB_REPOSITORY}/releases/download/${RELEASE_TAG}/sat-mobile-android.apk" \
+            --notes "$NOTES" \
+            --published-at "$PUBLISHED_AT"
+
+      - name: Publish immutable version assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            mkdir -p existing-release
+            gh release download "$RELEASE_TAG" \
+              --pattern sat-mobile-android.apk \
+              --pattern android-update.json \
+              --dir existing-release
+            cmp release-assets/sat-mobile-android.apk existing-release/sat-mobile-android.apk
+            cmp release-assets/android-update.json existing-release/android-update.json
+            echo "Existing immutable release assets match this build; continuing channel update."
+          else
+            gh release create "$RELEASE_TAG" \
+              release-assets/sat-mobile-android.apk \
+              release-assets/android-update.json \
+              --verify-tag \
+              --title "SAT Mobile Android ${RELEASE_TAG#android-v}" \
+              --generate-notes
+          fi
+
+      - name: Update rolling Android manifest
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if ! gh release view android-updates >/dev/null 2>&1; then
+            gh release create android-updates \
+              --target "$GITHUB_SHA" \
+              --title "SAT Mobile Android update channel" \
+              --notes "Machine-readable update channel used by installed SAT Mobile Android apps." \
+              --prerelease
+          fi
+          gh release upload android-updates release-assets/android-update.json --clobber
+
+      - name: Retain release outputs as workflow artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: sat-mobile-android-${{ env.RELEASE_TAG }}
+          path: release-assets/
+          if-no-files-found: error

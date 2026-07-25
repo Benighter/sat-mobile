@@ -865,7 +865,6 @@ class PushNotificationService {
         icon: payload.icon || '/icon-192.png',
         badge: this.getBrowserBadgeUrl(payload.badge),
         tag: dedupeKey,
-        renotify: true,
         data
       });
 

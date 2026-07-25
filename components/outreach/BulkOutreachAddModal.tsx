@@ -196,7 +196,7 @@ const BulkOutreachAddModal: React.FC<Props> = ({ isOpen, onClose, bacentaId, bac
           <>
             <div className="bg-green-50 border border-green-200 rounded-xl p-4">
               <h4 className="font-medium text-green-800 mb-1">Ready to Add {editableContacts.length} Contact{editableContacts.length!==1?'s':''}</h4>
-              <p className="text-sm text-green-700">They will be added to {bacentaName || 'selected bacenta'} for week starting {new Date(weekStart).toLocaleDateString()}.</p>
+              <p className="text-sm text-green-700">They will be added to {bacentaName || 'selected bacenta'} for week starting {new Date(weekStart || new Date()).toLocaleDateString()}.</p>
             </div>
 
             <div className="max-h-96 overflow-y-auto space-y-3">

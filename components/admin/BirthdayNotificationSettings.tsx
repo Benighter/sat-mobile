@@ -46,7 +46,6 @@ const BirthdayNotificationSettings: React.FC<BirthdayNotificationSettingsProps> 
   const [groupDigestSent, setGroupDigestSent] = useState(false);
   const [triggeredNow, setTriggeredNow] = useState(false);
 
-  const [brevoApiKey, setBrevoApiKey] = useState(() => (typeof window !== 'undefined' ? window.localStorage.getItem('sat-mobile-brevo-api-key') || '' : ''));
   const [brevoSenderEmail, setBrevoSenderEmail] = useState(() => (typeof window !== 'undefined' ? window.localStorage.getItem('sat-mobile-brevo-sender-email') || 'notifications@sat-mobile.app' : 'notifications@sat-mobile.app'));
   const [brevoSenderName, setBrevoSenderName] = useState(() => (typeof window !== 'undefined' ? window.localStorage.getItem('sat-mobile-brevo-sender-name') || 'SAT Mobile' : 'SAT Mobile'));
 

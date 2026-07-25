@@ -6,7 +6,6 @@ import Checkbox from '../ui/Checkbox';
 import Button from '../ui/Button';
 import { OutreachMember } from '../../types';
 import { useAppContext } from '../../contexts/FirebaseAppContext';
-import { membersFirebaseService } from '../../services/firebaseService';
 import { getUpcomingSunday } from '../../utils/dateUtils';
 
 interface Props {
@@ -20,7 +19,7 @@ interface Props {
 const normalizePhone = (p: string) => p.replace(/\s+/g, '').replace(/^\+?233/, '0');
 
 const EditOutreachMemberModal: React.FC<Props> = ({ isOpen, onClose, member, bacentaName }) => {
-  const { updateOutreachMemberHandler, showToast, sonsOfGod } = useAppContext();
+  const { updateOutreachMemberHandler, showToast } = useAppContext();
 
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
