@@ -31,7 +31,9 @@ overrides:
   vite@<=6.4.2: 6.4.3
 
 patchedDependencies:
-  '@capacitor/cli@7.4.5': 36178e8362f4184e94212e486c47dfadc1998e6b60da9171b668fec51df9af0f
+  '@capacitor/cli@7.4.5':
+    hash: 36178e8362f4184e94212e486c47dfadc1998e6b60da9171b668fec51df9af0f
+    path: patches/@capacitor__cli@7.4.5.patch
 
 importers:
 
