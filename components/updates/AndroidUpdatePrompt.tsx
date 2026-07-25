@@ -7,6 +7,8 @@ import {
   announceAndroidUpdate,
   androidUpdater,
   isSelfHostedAndroidApp,
+  recordAndroidUpdateCheckError,
+  recordAndroidUpdateCheckResult,
   type AndroidUpdateInfo,
 } from '../../services/androidUpdater';
 
@@ -36,10 +38,12 @@ const AndroidUpdatePrompt: React.FC = () => {
     const timeout = window.setTimeout(async () => {
       try {
         const result = await androidUpdater.checkForUpdate();
+        recordAndroidUpdateCheckResult(result);
         if (active && result.available) {
           announceAndroidUpdate(result);
         }
       } catch {
+        recordAndroidUpdateCheckError();
         // Update checks are deliberately silent when offline or when no release channel exists yet.
       }
     }, 2_500);

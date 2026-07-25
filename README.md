@@ -150,7 +150,7 @@ https://github.com/Benighter/sat-mobile/releases/download/android-updates/androi
 
 The native updater only accepts HTTPS, requires package name `com.benighter.satmobile`, compares Android `versionCode` (not the display version string), limits download size, verifies the manifest SHA-256, verifies the APK package/version and installed signing certificate, and then hands the cache-only APK to Android's standard package installer through `FileProvider`. The user can always choose **Later**. On Android 8+, Android may first ask the user to allow SAT Mobile as an install source.
 
-The Android app checks this channel automatically shortly after each app start. A signed-in user can also run the same check manually from **Settings → Help & Updates → Check for updates**. The Help & Updates section is native-only and does not alter the browser-based Vercel app.
+The Android app checks this channel automatically shortly after each app start. A signed-in user can also run the same check manually from **Settings → Help & Updates → Check for updates**. That screen shows the installed app version plus the last automatic or manual check time and result. The Help & Updates section is native-only and does not alter the browser-based Vercel app.
 
 GitHub Actions performs Android builds because a normal Vercel Vite deployment does not provide the Android SDK, release keystore, or a durable place for a generated native artifact. A normal push to `main` continues to deploy the browser app through Vercel exactly as before. An explicit `android-v*` tag on the same commit starts `.github/workflows/android-release.yml`, creates an immutable signed APK release, and updates only the rolling manifest asset used by installed apps.
 
@@ -181,8 +181,8 @@ Local `assembleRelease` builds deliberately fail unless the equivalent `SAT_ANDR
 3. Create and push a matching tag, for example:
 
    ```powershell
-   git tag android-v2.0.2
-   git push origin android-v2.0.2
+   git tag android-v2.0.3
+   git push origin android-v2.0.3
    ```
 
 4. Confirm the **Android self-hosted release** workflow succeeds. It checks version consistency and signing secrets, runs the Vite/Capacitor build, produces a signed APK, generates `android-update.json`, and publishes both as GitHub Release assets. It uploads the immutable versioned assets before changing the rolling manifest, so clients never receive metadata for an unpublished APK.

@@ -1,5 +1,8 @@
 import path from 'path';
+import { readFileSync } from 'node:fs';
 import { defineConfig, loadEnv } from 'vite';
+
+const appVersion = (JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as { version: string }).version;
 
 export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, '.', '');
@@ -8,6 +11,7 @@ export default defineConfig(({ mode }) => {
     return {
       base: isDesktopBuild ? './' : '/',
       define: {
+        '__APP_VERSION__': JSON.stringify(appVersion),
         'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
         'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY)
       },
