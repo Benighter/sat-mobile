@@ -107,7 +107,7 @@ jobs:
           mkdir -p release-assets
           cp android/app/build/outputs/apk/release/app-release.apk release-assets/sat-mobile-android.apk
           NOTES="${RELEASE_NOTES:-SAT Mobile ${RELEASE_TAG#android-v}}"
-          PUBLISHED_AT="$(git show -s --format=%cI "$RELEASE_TAG")"
+          PUBLISHED_AT="$(git show -s --format=%cI "${RELEASE_TAG}^{commit}")"
           node scripts/create-android-update-manifest.mjs \
             --apk release-assets/sat-mobile-android.apk \
             --output release-assets/android-update.json \
