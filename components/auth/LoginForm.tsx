@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
 import ForgotPasswordModal from './ForgotPasswordModal';
 import { appLogoUrl } from '../../utils/publicAssets';
+import { getFirebaseAuthErrorMessage } from '../../utils/firebaseAuthErrors';
 
 interface LoginFormProps {
   onSignIn: (email: string, password: string, rememberLogin: boolean) => Promise<void>;
@@ -16,43 +17,6 @@ interface LoginFormProps {
   onEmailChange?: (email: string) => void; // bubble up for contextual support
   onContactSupport?: () => void; // opens Contact with context
 }
-
-// Utility: map Firebase codes to friendly messages, otherwise pass through the given text
-const getErrorMessage = (error: string): string => {
-  const raw = error || '';
-  const err = raw.toLowerCase();
-
-  if (err.includes('auth/invalid-credential') || err.includes('auth/wrong-password')) {
-    return 'Invalid email or password. Please check your credentials and try again.';
-  }
-  if (err.includes('auth/user-not-found')) {
-    return 'No account found with this email address. Please check your email or create a new account.';
-  }
-  if (err.includes('auth/invalid-email')) {
-    return 'Please enter a valid email address.';
-  }
-  if (err.includes('auth/user-disabled')) {
-    return 'This account has been disabled. Please contact support for assistance.';
-  }
-  if (err.includes('auth/too-many-requests')) {
-    return 'Too many failed attempts. Please wait a few minutes before trying again.';
-  }
-  if (err.includes('auth/network-request-failed')) {
-    return 'Network error. Please check your internet connection and try again.';
-  }
-  if (err.includes('auth/operation-not-allowed')) {
-    return 'Email/password sign-in is not enabled. Please contact support.';
-  }
-  if (err.includes('auth/weak-password')) {
-    return 'Password is too weak. Please choose a stronger password.';
-  }
-  if (err.includes('auth/email-already-in-use')) {
-    return 'An account with this email already exists. Please sign in instead.';
-  }
-
-  // If it's not a known Firebase code, assume it's already user-friendly
-  return raw;
-};
 
 export const LoginForm: React.FC<LoginFormProps> = ({
   onSignIn,
@@ -255,8 +219,8 @@ export const LoginForm: React.FC<LoginFormProps> = ({
         {/* Error Message */}
         {error && (
           <div role="alert" className="mb-6 p-3 bg-red-50 border border-red-200 rounded-xl">
-            <p className="text-sm text-red-600 text-center">{getErrorMessage(error)}</p>
-            {onContactSupport && /contact support/i.test(getErrorMessage(error)) && (
+            <p className="text-sm text-red-600 text-center">{getFirebaseAuthErrorMessage(error, 'login', { ministryMode })}</p>
+            {onContactSupport && /contact support/i.test(getFirebaseAuthErrorMessage(error, 'login', { ministryMode })) && (
               <button
                 type="button"
                 onClick={onContactSupport}

@@ -12,7 +12,7 @@ import {
 
 // Development environment detection
 const isDevelopment = process.env.NODE_ENV === 'development' || window.location.hostname === 'localhost';
-import { db } from '../firebase.config';
+import { auth, db } from '../firebase.config';
 import { User, Church } from '../types';
 import {
   cleanupStoredImage,
@@ -70,13 +70,20 @@ export const userService = {
   // Update user profile
   updateUserProfile: async (uid: string, updates: Partial<User>): Promise<void> => {
     try {
+      // Storage rules only allow a user to write inside the folder named after
+      // their active Firebase Auth UID. Prefer it over any cached profile UID.
+      const authenticatedUid = auth.currentUser?.uid;
+      const targetUid = authenticatedUid || uid;
+      if (!targetUid) {
+        throw new Error('Please sign in again before updating your profile.');
+      }
       const payload = sanitizeFirestoreValue({ ...updates });
       if (Object.prototype.hasOwnProperty.call(payload, 'profilePicture')) {
-        const existingUserDoc = await getDoc(doc(db, 'users', uid));
+        const existingUserDoc = await getDoc(doc(db, 'users', targetUid));
         const existingProfilePicture = existingUserDoc.exists() ? (existingUserDoc.data().profilePicture as string | undefined) : undefined;
 
         if (existingProfilePicture === payload.profilePicture) {
-          await updateDoc(doc(db, 'users', uid), {
+          await updateDoc(doc(db, 'users', targetUid), {
             ...payload,
             lastUpdated: new Date().toISOString()
           });
@@ -85,11 +92,11 @@ export const userService = {
 
         payload.profilePicture = await persistImageValue({
           imageValue: payload.profilePicture,
-          path: `users/${uid}/profile-picture/${storageVersionId()}`,
+          path: `users/${targetUid}/profile-picture/${storageVersionId()}`,
           processingErrorMessage: 'Failed to upload profile picture.',
           oversizeErrorMessage: 'Please select a valid profile picture.'
         });
-        await updateDoc(doc(db, 'users', uid), {
+        await updateDoc(doc(db, 'users', targetUid), {
           ...payload,
           lastUpdated: new Date().toISOString()
         });
@@ -99,7 +106,7 @@ export const userService = {
         return;
       }
 
-      await updateDoc(doc(db, 'users', uid), {
+      await updateDoc(doc(db, 'users', targetUid), {
         ...payload,
         lastUpdated: new Date().toISOString()
       });

@@ -28,10 +28,10 @@ import {
   sendPasswordResetEmail,
   updatePassword,
   reauthenticateWithCredential,
-  EmailAuthProvider,
-  fetchSignInMethodsForEmail
+  EmailAuthProvider
 } from 'firebase/auth';
-import { db, auth } from '../firebase.config';
+import { httpsCallable } from 'firebase/functions';
+import { db, auth, functions } from '../firebase.config';
 import { Member, Bacenta, AttendanceRecord, NewBeliever, SundayConfirmation, Guest, MemberDeletionRequest, DeletionRequestStatus, OutreachBacenta, OutreachMember, PrayerRecord, PrayerSchedule, MeetingRecord, TitheRecord, BussingRecord, TransportRecord, SonOfGod, CustomPrayer, CustomPrayerRecord, SundayOfferingRecord, ProofAttachment } from '../types';
 import { applyLeadershipFirstTimerRule, withLeadershipFirstTimerRule } from '../utils/memberStatus';
 import { cleanupStoredImage, persistImageValue } from './imageStorageService';
@@ -443,18 +443,6 @@ export const authService = {
         throw err;
       }
 
-      // Avoid Identity Toolkit 400s by pre-checking for existing accounts
-      try {
-        const methods = await fetchSignInMethodsForEmail(auth, trimmedEmail);
-        if (methods && methods.length > 0) {
-          const err: any = new Error('auth/email-already-in-use');
-          err.code = 'auth/email-already-in-use';
-          throw err;
-        }
-      } catch (precheckErr: any) {
-        // If pre-check fails due to network/key issues, proceed to create and let SDK surface precise error
-      }
-
       const userCredential = await createUserWithEmailAndPassword(auth, trimmedEmail, password);
       const user = userCredential.user;
 
@@ -500,46 +488,13 @@ export const authService = {
     try {
       const trimmedEmail = email.trim().toLowerCase();
       const displayName = `${profile.firstName} ${profile.lastName}`;
-      let userAuth = null as any;
-      let userUid = '';
-
-      // Pre-check if email exists in Firebase Auth to avoid sign-up 400s
-      const methods = await fetchSignInMethodsForEmail(auth, trimmedEmail);
-      if (methods && methods.length > 0) {
-        // Email already in Auth; verify password by signing in
-        try {
-          const cred = await signInWithEmailAndPassword(auth, trimmedEmail, password);
-          userAuth = cred.user;
-        } catch (err: any) {
-          if (err?.code === 'auth/wrong-password' || err?.code === 'auth/invalid-credential') {
-            throw new Error('auth/wrong-password');
-          }
-          throw err;
-        }
-      } else {
-        // Not in Auth; create new (guard for late email-in-use)
-        try {
-          const cred = await createUserWithEmailAndPassword(auth, trimmedEmail, password);
-          userAuth = cred.user;
-        } catch (createErr: any) {
-          if (createErr?.code === 'auth/email-already-in-use') {
-            // Fallback to sign-in verification
-            try {
-              const cred = await signInWithEmailAndPassword(auth, trimmedEmail, password);
-              userAuth = cred.user;
-            } catch (err: any) {
-              if (err?.code === 'auth/wrong-password' || err?.code === 'auth/invalid-credential') {
-                throw new Error('auth/wrong-password');
-              }
-              throw err;
-            }
-          } else {
-            throw createErr;
-          }
-        }
-      }
-
-      userUid = userAuth.uid;
+      // This is the new-account flow. Do not turn an email-already-in-use
+      // response into a sign-in attempt: fetchSignInMethodsForEmail can return
+      // an empty list when Firebase email-enumeration protection is enabled.
+      // The ministry attach flow has its own explicit sign-in fallback below.
+      const credential = await createUserWithEmailAndPassword(auth, trimmedEmail, password);
+      const userAuth = credential.user;
+      const userUid = userAuth.uid;
       const usersDocRef = doc(db, 'users', userUid);
       const usersDocSnap = await getDoc(usersDocRef);
 
@@ -766,21 +721,23 @@ export const authService = {
     return null;
   },
 
-  // Check if email already exists in the system (pre-auth safe)
+  // Check if email already exists using a server-side Admin Auth lookup.
+  // fetchSignInMethodsForEmail is not suitable when email enumeration
+  // protection is enabled because it intentionally returns an empty list.
   checkEmailExists: async (email: string, opts?: { ministry?: boolean }): Promise<boolean> => {
-    try {
-      const trimmedEmail = email.trim().toLowerCase();
-      if (!trimmedEmail) return false;
+    const trimmedEmail = email.trim().toLowerCase();
+    if (!trimmedEmail) return false;
 
-      // Use Firebase Auth only. Avoid Firestore reads before authentication (blocked by rules).
-      const target = opts?.ministry ? toMinistryAuthEmail(trimmedEmail) : trimmedEmail;
-      const methods = await fetchSignInMethodsForEmail(auth, target);
-      return Array.isArray(methods) && methods.length > 0;
-    } catch (error: any) {
-      // If Auth check fails, treat as non-existent but do not block login attempts
-      console.warn('checkEmailExists (Auth) failed:', error?.message || String(error));
-      return false;
+    const target = opts?.ministry ? toMinistryAuthEmail(trimmedEmail) : trimmedEmail;
+    const checkAvailability = httpsCallable<{ email: string }, { available: boolean }>(
+      functions,
+      'checkEmailAvailability'
+    );
+    const result = await checkAvailability({ email: target });
+    if (typeof result.data?.available !== 'boolean') {
+      throw new Error('Email availability service returned an invalid response');
     }
+    return !result.data.available;
   }
 };
 

@@ -19,6 +19,40 @@ if (!admin.apps.length) {
   admin.initializeApp();
 }
 
+// Pre-auth signup availability check. Firebase's client-side
+// fetchSignInMethodsForEmail intentionally becomes non-enumerating when email
+// enumeration protection is enabled, so this check must use the Admin SDK.
+// Keep a small per-IP limit to reduce automated address enumeration.
+const emailAvailabilityRequests = new Map();
+exports.checkEmailAvailability = functions
+  .runWith({ invoker: 'public' })
+  .https.onCall(async (data, context) => {
+    const email = String(data?.email || '').trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) {
+      throw new functions.https.HttpsError('invalid-argument', 'A valid email address is required');
+    }
+
+    const ip = context.rawRequest?.ip || 'unknown';
+    const now = Date.now();
+    const windowMs = 60 * 1000;
+    const previous = emailAvailabilityRequests.get(ip) || [];
+    const recent = previous.filter((timestamp) => now - timestamp < windowMs);
+    if (recent.length >= 20) {
+      throw new functions.https.HttpsError('resource-exhausted', 'Too many availability checks. Please wait a minute.');
+    }
+    recent.push(now);
+    emailAvailabilityRequests.set(ip, recent);
+
+    try {
+      await admin.auth().getUserByEmail(email);
+      return { available: false };
+    } catch (error) {
+      if (error?.code === 'auth/user-not-found') return { available: true };
+      console.error('Email availability lookup failed:', error);
+      throw new functions.https.HttpsError('internal', 'Could not check email availability');
+    }
+  });
+
 // Send push notification function
 exports.sendPushNotification = functions
   .runWith({ invoker: 'public' })
@@ -2293,7 +2327,9 @@ exports.onAdminNotificationCreated = functions.firestore
 // Deletion requests are their own Firestore records, so create the normal admin
 // notification server-side when a request is created. The notification trigger
 // above then sends the real FCM push for closed-app delivery.
-exports.onMemberDeletionRequestCreated = functions.firestore
+exports.onMemberDeletionRequestCreated = functions
+  .runWith({ secrets: [RESEND_API_KEY, BREVO_API_KEY] })
+  .firestore
   .document('churches/{churchId}/memberDeletionRequests/{requestId}')
   .onCreate(async (snap, context) => {
     const { churchId, requestId } = context.params;
@@ -2307,13 +2343,13 @@ exports.onMemberDeletionRequestCreated = functions.firestore
     const db = admin.firestore();
     const requesterId = request.requestedBy || request.requesterId || null;
     const requesterName = request.requestedByName || request.leaderName || 'Unknown Leader';
-    const memberName = request.memberName || 'a member';
+    const memberName = request.memberName || (request.target === 'account' ? 'a user account' : 'a member');
     const reason = request.reason || '';
     const description = `${requesterName} requested deletion for ${memberName}${reason ? `: ${reason}` : ''}`;
 
     try {
       const adminIds = await getDeletionRequestAdminRecipients(db, churchId, requesterId);
-      if (adminIds.length === 0) {
+      if (adminIds.length === 0 && request.target !== 'account') {
         console.warn('No admins found for deletion request notification', { churchId, requestId, requesterId });
         await snap.ref.set({ notificationError: 'No admin recipients found' }, { merge: true });
         return;
@@ -2354,6 +2390,56 @@ exports.onMemberDeletionRequestCreated = functions.firestore
 
       await batch.commit();
       console.log('Deletion request notifications created', { churchId, requestId, adminIds });
+
+      // Email the same verified admin recipients. Email failures are recorded on
+      // the request but do not undo the request or its in-app notification.
+      const adminDocs = await Promise.all(adminIds.map(adminId => db.doc(`users/${adminId}`).get()));
+      const adminEmails = [...new Set(adminDocs
+        .filter(docSnap => docSnap.exists)
+        .map(docSnap => (docSnap.data() || {}).email)
+        .filter(email => typeof email === 'string' && email.includes('@')))];
+      if (request.target === 'account') {
+        adminEmails.splice(0, adminEmails.length, 'bennet.nkolele1998@gmail.com');
+      }
+
+      if (adminEmails.length === 0) {
+        await snap.ref.set({ emailNotificationError: 'No admin email addresses found' }, { merge: true });
+      } else {
+        const churchSnap = await db.doc(`churches/${churchId}`).get();
+        const churchName = churchSnap.exists ? ((churchSnap.data() || {}).name || 'your church') : 'your church';
+        const reviewUrl = 'https://sat-mobile.app';
+        const safe = value => String(value || '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[char]));
+        const subject = `Deletion request: ${memberName}`;
+        const text = `${requesterName} requested deletion for ${memberName} in ${churchName}.${reason ? `\nReason: ${reason}` : ''}\n\nReview the request: ${reviewUrl}`;
+        const html = `
+          <div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;color:#172033">
+            <div style="background:#1d4ed8;padding:24px;border-radius:14px 14px 0 0;color:white">
+              <div style="font-size:13px;opacity:.85">SAT MOBILE · ACTION REQUIRED</div>
+              <h1 style="font-size:24px;margin:8px 0 0">New deletion request</h1>
+            </div>
+            <div style="padding:24px;border:1px solid #dbe3ef;border-top:0;border-radius:0 0 14px 14px">
+              <p style="margin-top:0">A deletion request is waiting for your review.</p>
+              <table style="width:100%;background:#f8fafc;border-radius:10px;padding:8px 16px;line-height:1.7">
+                <tr><td style="color:#64748b">Member</td><td style="font-weight:600">${safe(memberName)}</td></tr>
+                <tr><td style="color:#64748b">Requested by</td><td>${safe(requesterName)}</td></tr>
+                <tr><td style="color:#64748b">Church</td><td>${safe(churchName)}</td></tr>
+                ${reason ? `<tr><td style="color:#64748b;vertical-align:top">Reason</td><td>${safe(reason)}</td></tr>` : ''}
+              </table>
+              <p style="margin:24px 0 8px"><a href="${reviewUrl}" style="display:inline-block;background:#1d4ed8;color:white;text-decoration:none;padding:12px 18px;border-radius:8px;font-weight:600">Review request</a></p>
+              <p style="font-size:12px;color:#64748b">No account is deleted until an administrator approves this request.</p>
+            </div>
+          </div>`;
+        const emailResults = await Promise.allSettled(adminEmails.map(to => sendEmailWithProviders({
+          to, subject, html, text, from: DEFAULT_EMAIL_FROM
+        })));
+        const sentCount = emailResults.filter(result => result.status === 'fulfilled').length;
+        const failures = emailResults.filter(result => result.status === 'rejected');
+        await snap.ref.set({
+          emailNotificationSentAt: sentCount > 0 ? admin.firestore.FieldValue.serverTimestamp() : null,
+          emailNotificationRecipientCount: sentCount,
+          ...(failures.length ? { emailNotificationError: failures.map(result => result.reason?.message || 'Email failed').join('; ') } : {})
+        }, { merge: true });
+      }
     } catch (error) {
       console.error('Failed to create deletion request notifications', { churchId, requestId, error });
       await snap.ref.set({

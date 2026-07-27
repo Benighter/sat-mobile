@@ -9,10 +9,9 @@ import {
   ChevronDownIcon,
   PlusIcon,
   ClipboardIcon,
-  ExclamationTriangleIcon,
   InformationCircleIcon
 } from '../icons';
-import { hasLeaderPrivileges, hasAdminPrivileges, isPromotedCampusAdmin } from '../../utils/permissionUtils';
+import { hasLeaderPrivileges, hasAdminPrivileges } from '../../utils/permissionUtils';
 import AboutModal from '../modals/general/AboutModal';
 import { 
   getViewportSize, 
@@ -447,34 +446,6 @@ const EnhancedProfileDropdown: React.FC<EnhancedProfileDropdownProps> = ({
               <InformationCircleIcon className="w-5 h-5 text-indigo-500 group-hover:text-blue-600" />
               <span className="text-sm font-medium text-indigo-600 group-hover:text-blue-700">About</span>
             </button>
-
-            {/* My Deletion Requests - Leaders only (but not admins) */}
-            {hasLeaderPrivileges(userProfile) && !hasAdminPrivileges(userProfile) && (
-              <button
-                onClick={() => {
-                  switchTab({ id: TabKeys.MY_DELETION_REQUESTS, name: 'My Deletion Requests' });
-                  setIsOpen(false);
-                }}
-                className="w-full flex items-center space-x-3 px-4 py-3 rounded-lg hover:bg-orange-50 transition-colors duration-200 group touch-manipulation mobile-dropdown-item"
-              >
-                <ClipboardIcon className="w-5 h-5 text-orange-500 group-hover:text-orange-700" />
-                <span className="text-sm font-medium text-orange-600 group-hover:text-orange-800">My Deletion Requests</span>
-              </button>
-            )}
-
-            {/* Admin Deletion Requests - Admins only */}
-            {hasAdminPrivileges(userProfile) && !isPromotedCampusAdmin(userProfile) && (
-              <button
-                onClick={() => {
-                  switchTab({ id: TabKeys.ADMIN_DELETION_REQUESTS, name: 'Admin Deletion Requests' });
-                  setIsOpen(false);
-                }}
-                className="w-full flex items-center space-x-3 px-4 py-3 rounded-lg hover:bg-red-50 transition-colors duration-200 group touch-manipulation mobile-dropdown-item"
-              >
-                <ExclamationTriangleIcon className="w-5 h-5 text-red-500 group-hover:text-red-700" />
-                <span className="text-sm font-medium text-red-600 group-hover:text-red-800">Admin Deletion Requests</span>
-              </button>
-            )}
 
             {/* Contact Support */}
             <button

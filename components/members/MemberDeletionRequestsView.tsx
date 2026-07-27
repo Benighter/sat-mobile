@@ -16,7 +16,8 @@ import {
   CalendarIcon,
   SearchIcon,
   UserGroupIcon,
-  InformationCircleIcon
+  InformationCircleIcon,
+  EnvelopeIcon
 } from '../icons';
 
 interface MemberDeletionRequestsViewProps {
@@ -179,7 +180,7 @@ const MemberDeletionRequestsView: React.FC<MemberDeletionRequestsViewProps> = ()
   return (
     <div className="flex flex-col h-full bg-gray-50">
       {/* Header / Hero */}
-      <div className="bg-white border-b border-gray-200 px-6 py-8">
+      <div className="bg-gradient-to-b from-white to-slate-50 border-b border-gray-200 px-6 py-8">
         <div className="max-w-6xl mx-auto relative text-center">
           {/* Desktop: Clear Completed button in the top-right */}
           {completedCount > 0 && (
@@ -205,12 +206,12 @@ const MemberDeletionRequestsView: React.FC<MemberDeletionRequestsViewProps> = ()
           )}
 
           {/* Centered Hero Icon */}
-          <div className="mx-auto w-16 h-16 bg-gradient-to-br from-rose-50 to-rose-100 rounded-full flex items-center justify-center shadow-md">
-            <ExclamationTriangleIcon className="w-8 h-8 text-rose-600" />
+          <div className="mx-auto w-16 h-16 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-200">
+            <TrashIcon className="w-8 h-8 text-white" />
           </div>
           {/* Centered Heading */}
-          <h1 className="mt-4 text-3xl sm:text-4xl font-extrabold text-gray-900 tracking-tight">Member Deletion Requests</h1>
-          <p className="mt-2 text-base text-gray-600 max-w-2xl mx-auto">Review and manage member deletion requests submitted by leaders. Use filters and search to quickly find requests.</p>
+          <h1 className="mt-4 text-3xl sm:text-4xl font-extrabold text-gray-900 tracking-tight">Deletion Requests</h1>
+          <p className="mt-2 text-base text-gray-600 max-w-2xl mx-auto">Review account and member deletion requests in one place. Approving a request permanently removes the member record.</p>
 
           {/* Badges and Mobile Button */}
           <div className="mt-4 flex items-center justify-center gap-3">
@@ -241,6 +242,18 @@ const MemberDeletionRequestsView: React.FC<MemberDeletionRequestsViewProps> = ()
                 )}
               </Button>
             )}
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-blue-50 border-b border-blue-100 px-4 sm:px-6 py-3">
+        <div className="max-w-6xl mx-auto flex items-start sm:items-center gap-3 text-sm text-blue-900">
+          <span className="w-9 h-9 rounded-full bg-white border border-blue-200 flex items-center justify-center flex-shrink-0">
+            <EnvelopeIcon className="w-4 h-4 text-blue-600" />
+          </span>
+          <div>
+            <p className="font-semibold">Email alerts are enabled</p>
+            <p className="text-blue-700">When someone submits a deletion request, the app owner receives an email with the requester, member, reason and a link to review it.</p>
           </div>
         </div>
       </div>

@@ -32,11 +32,14 @@ import {
   BellIcon,
   CakeIcon,
   ArrowLeftIcon,
-  XMarkIcon
+  XMarkIcon,
+  TrashIcon,
+  ExclamationTriangleIcon
 } from '../icons';
 import { collection, doc, getDocs, query, Timestamp, updateDoc, where } from 'firebase/firestore';
 import { db } from '../../firebase.config';
 import { crossTenantService } from '../../services/crossTenantService';
+import { memberDeletionRequestService } from '../../services/firebaseService';
 
 interface ProfileFormData {
   firstName: string;
@@ -158,6 +161,40 @@ const ProfileSettingsView: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [imagePreview, setImagePreview] = useState<string>(userProfile?.profilePicture || '');
   const [isChangePasswordModalOpen, setIsChangePasswordModalOpen] = useState(false);
+  const [deleteAccountStep, setDeleteAccountStep] = useState<0 | 1 | 2>(0);
+  const [deleteConfirmation, setDeleteConfirmation] = useState('');
+  const [isRequestingAccountDeletion, setIsRequestingAccountDeletion] = useState(false);
+
+  const handleAccountDeletionRequest = async () => {
+    if (deleteConfirmation !== 'Delete' || !userProfile?.uid) return;
+    try {
+      setIsRequestingAccountDeletion(true);
+      if (await memberDeletionRequestService.hasPendingRequest(userProfile.uid)) {
+        throw new Error('You already have a pending account deletion request.');
+      }
+      const displayName = `${userProfile.firstName || ''} ${userProfile.lastName || ''}`.trim()
+        || userProfile.displayName || user?.email || 'SAT Mobile user';
+      await memberDeletionRequestService.create({
+        memberId: userProfile.uid,
+        memberName: displayName,
+        requestedBy: userProfile.uid,
+        requestedByName: displayName,
+        requestedAt: new Date().toISOString(),
+        status: 'pending',
+        reason: 'The user requested permanent deletion of their SAT Mobile account.',
+        churchId: userProfile.churchId || '',
+        target: 'account',
+        requesterEmail: user?.email || userProfile.email || ''
+      });
+      setDeleteAccountStep(0);
+      setDeleteConfirmation('');
+      showToast('success', 'Deletion request sent', 'Your account remains active while the owner reviews your request.');
+    } catch (error: any) {
+      showToast('error', 'Could not send request', error?.message || 'Please try again.');
+    } finally {
+      setIsRequestingAccountDeletion(false);
+    }
+  };
 
   const [isConstituencyManagerOpen, setIsConstituencyManagerOpen] = useState(false);
   const [isSavingCampusShepherd, setIsSavingCampusShepherd] = useState(false);
@@ -1316,6 +1353,23 @@ const ProfileSettingsView: React.FC = () => {
                           </Button>
                         </div>
                       </div>
+
+                      <div className="rounded-2xl border border-red-200 bg-red-50/70 p-6 dark:border-red-900/60 dark:bg-red-950/10">
+                        <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2 text-red-700 dark:text-red-300">
+                              <ExclamationTriangleIcon className="h-5 w-5" />
+                              <h3 className="font-bold">Danger zone</h3>
+                            </div>
+                            <p className="mt-2 text-sm font-semibold text-slate-900 dark:text-dark-100">Permanently delete your account</p>
+                            <p className="mt-1 max-w-2xl text-sm leading-relaxed text-slate-600 dark:text-dark-400">Send a permanent deletion request to the SAT Mobile owner. Your account stays active until the request is reviewed.</p>
+                          </div>
+                          <Button type="button" variant="danger" onClick={() => setDeleteAccountStep(1)} className="h-12 shrink-0 rounded-2xl bg-red-600 px-6 text-white hover:bg-red-700">
+                            <TrashIcon className="mr-2 h-5 w-5" />
+                            Delete Account
+                          </Button>
+                        </div>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -1348,6 +1402,45 @@ const ProfileSettingsView: React.FC = () => {
         isOpen={isChangePasswordModalOpen}
         onClose={() => setIsChangePasswordModalOpen(false)}
       />
+
+      {deleteAccountStep > 0 && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="delete-account-title">
+          <button className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" aria-label="Close dialog" onClick={() => !isRequestingAccountDeletion && setDeleteAccountStep(0)} />
+          <div className="relative w-full max-w-md overflow-hidden rounded-3xl bg-white shadow-2xl dark:bg-dark-800">
+            <div className="h-1.5 bg-red-600" />
+            <div className="p-6 sm:p-8">
+              <div className="mb-6 flex items-start justify-between gap-4">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-red-100 text-red-600"><TrashIcon className="h-6 w-6" /></div>
+                <button type="button" onClick={() => setDeleteAccountStep(0)} disabled={isRequestingAccountDeletion} className="rounded-full p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="Close"><XMarkIcon className="h-5 w-5" /></button>
+              </div>
+
+              {deleteAccountStep === 1 ? (
+                <>
+                  <p className="text-xs font-bold uppercase tracking-[0.18em] text-red-600">Step 1 of 2</p>
+                  <h2 id="delete-account-title" className="mt-2 text-2xl font-extrabold text-slate-900 dark:text-dark-100">Delete your account permanently?</h2>
+                  <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-dark-300">This sends a deletion request to the app owner. Once approved, your account, access and associated profile data may be permanently removed.</p>
+                  <div className="mt-5 rounded-2xl border border-red-100 bg-red-50 p-4 text-sm text-red-800">This cannot be undone after the owner completes the deletion.</div>
+                  <div className="mt-7 flex gap-3">
+                    <Button type="button" variant="secondary" onClick={() => setDeleteAccountStep(0)} className="h-12 flex-1 rounded-xl">Keep Account</Button>
+                    <Button type="button" variant="danger" onClick={() => setDeleteAccountStep(2)} className="h-12 flex-1 rounded-xl bg-red-600 text-white hover:bg-red-700">Continue</Button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <p className="text-xs font-bold uppercase tracking-[0.18em] text-red-600">Step 2 of 2</p>
+                  <h2 id="delete-account-title" className="mt-2 text-2xl font-extrabold text-slate-900 dark:text-dark-100">Final confirmation</h2>
+                  <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-dark-300">To confirm, type <strong className="text-slate-900 dark:text-white">Delete</strong> exactly as shown.</p>
+                  <input autoFocus value={deleteConfirmation} onChange={event => setDeleteConfirmation(event.target.value)} placeholder="Type Delete" className="mt-5 h-12 w-full rounded-xl border border-slate-300 px-4 text-slate-900 outline-none transition focus:border-red-500 focus:ring-4 focus:ring-red-100 dark:border-dark-600 dark:bg-dark-700 dark:text-white" />
+                  <div className="mt-7 flex gap-3">
+                    <Button type="button" variant="secondary" onClick={() => { setDeleteAccountStep(1); setDeleteConfirmation(''); }} disabled={isRequestingAccountDeletion} className="h-12 flex-1 rounded-xl">Back</Button>
+                    <Button type="button" variant="danger" onClick={handleAccountDeletionRequest} disabled={deleteConfirmation !== 'Delete' || isRequestingAccountDeletion} className="h-12 flex-1 rounded-xl bg-red-600 text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50">{isRequestingAccountDeletion ? 'Sending…' : 'Request Deletion'}</Button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
 
 

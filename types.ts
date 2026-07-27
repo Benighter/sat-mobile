@@ -665,6 +665,8 @@ export interface MemberDeletionRequest {
   adminNotes?: string; // Optional notes from admin during review
   churchId: string; // Church context for the request
   expiresAt?: string; // Optional expiration timestamp (auto-reject after 7 days)
+  target?: 'member' | 'outreach' | 'account';
+  requesterEmail?: string;
 }
 
 // Admin Notification System Types

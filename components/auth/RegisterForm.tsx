@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { sendEmailVerification } from 'firebase/auth';
 import { auth } from '../../firebase.config';
 import { authService } from '../../services/firebaseService';
@@ -7,6 +7,7 @@ import { contextService } from '../../services/firebaseService';
 import { setActiveContext } from '../../services/firebaseService';
 import { EyeIcon, EyeSlashIcon } from '../icons/index';
 import { MINISTRY_OPTIONS } from '../../constants';
+import { getFirebaseAuthErrorCode, getFirebaseAuthErrorMessage } from '../../utils/firebaseAuthErrors';
 
 const VERIFICATION_SENT_KEY_PREFIX = 'sat-email-verification-last-sent-';
 const SIGNUP_VERIFICATION_GATE_KEY_PREFIX = 'sat-signup-email-verification-required-';
@@ -23,39 +24,6 @@ const rememberSignupVerificationRequired = (uid: string) => {
   try {
     window.localStorage.setItem(`${SIGNUP_VERIFICATION_GATE_KEY_PREFIX}${uid}`, 'true');
   } catch {}
-};
-
-// Utility: map Firebase registration errors to friendly messages; otherwise pass through
-const getErrorMessage = (error: string, ministryMode: boolean): string => {
-  const raw = error || '';
-  const err = raw.toLowerCase();
-
-  if (err.includes('auth/email-already-in-use')) {
-    return 'An account with this email already exists. Please sign in instead.';
-  }
-  if (err.includes('auth/weak-password')) {
-    return 'Password is too weak. Please choose a stronger password (at least 8 characters, with a mix of letters and numbers).';
-  }
-  if (err.includes('auth/wrong-password') || err.includes('auth/invalid-credential')) {
-    if (ministryMode) {
-      return 'This email already has an account. Enter the existing password to attach your ministry account, or reset your password.';
-    }
-    return 'Invalid email or password. Please check your credentials and try again.';
-  }
-  if (err.includes('auth/invalid-email')) {
-    return 'Please enter a valid email address.';
-  }
-  if (err.includes('auth/operation-not-allowed')) {
-    return 'Account creation is not enabled. Please contact support.';
-  }
-  if (err.includes('auth/network-request-failed')) {
-    return 'Network error. Please check your internet connection and try again.';
-  }
-  if (err.includes('auth/too-many-requests')) {
-    return 'Too many attempts. Please wait a few minutes before trying again.';
-  }
-
-  return raw;
 };
 
 interface RegisterFormProps {
@@ -77,6 +45,8 @@ interface RegisterFormData {
   ministry?: string;
 }
 
+type EmailAvailability = 'idle' | 'checking' | 'available' | 'unavailable' | 'error';
+
 const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, onVerificationRequired, onSwitchToLogin: _onSwitchToLogin, showToast, ministryMode = false }) => {
   const [formData, setFormData] = useState<RegisterFormData>({
     firstName: '',
@@ -93,13 +63,16 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, onVerificationRe
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [isCheckingEmail, setIsCheckingEmail] = useState(false);
+  const [emailAvailability, setEmailAvailability] = useState<EmailAvailability>('idle');
+  const emailCheckRequestRef = useRef(0);
   const [showResetHint, setShowResetHint] = useState(false);
   const [verificationEmail, setVerificationEmail] = useState<string | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
+    setSubmitError(null);
 
     // Clear error when user starts typing
     if (errors[name]) {
@@ -110,6 +83,7 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, onVerificationRe
   const handleSelectChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
+    setSubmitError(null);
     if (errors[name]) {
       setErrors(prev => ({ ...prev, [name]: '' }));
     }
@@ -258,23 +232,28 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, onVerificationRe
   };
 
   // Live email existence check
-  const checkEmailExists = async (email: string): Promise<void> => {
+  const checkEmailExists = async (email: string): Promise<boolean | null> => {
     const trimmed = email.trim();
 
     // Only check if email format is valid
     if (!trimmed || validateEmail(trimmed)) {
-      return;
+      setEmailAvailability('idle');
+      return null;
     }
 
-    setIsCheckingEmail(true);
+    const requestId = ++emailCheckRequestRef.current;
+    setEmailAvailability('checking');
     try {
       const exists = await authService.checkEmailExists(trimmed);
+      if (requestId !== emailCheckRequestRef.current) return null;
       if (exists) {
+        setEmailAvailability('unavailable');
         setErrors(prev => ({
           ...prev,
           email: 'This email address is already registered. Please use a different email or sign in instead.'
         }));
       } else {
+        setEmailAvailability('available');
         // Clear email error if it was about email existence
         setErrors(prev => {
           const newErrors = { ...prev };
@@ -284,13 +263,34 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, onVerificationRe
           return newErrors;
         });
       }
+      return exists;
     } catch (error) {
+      if (requestId !== emailCheckRequestRef.current) return null;
       console.error('Error checking email existence:', error);
-      // Don't show error to user, just log it
-    } finally {
-      setIsCheckingEmail(false);
+      setEmailAvailability('error');
+      setErrors(prev => ({
+        ...prev,
+        email: 'We could not check this email right now. Please try the availability check again.'
+      }));
+      return null;
     }
   };
+
+  // Check a valid address shortly after the user stops typing. Incrementing the
+  // request counter invalidates any older response so stale results cannot win.
+  useEffect(() => {
+    emailCheckRequestRef.current += 1;
+    if (ministryMode || validateEmail(formData.email)) {
+      setEmailAvailability('idle');
+      return;
+    }
+
+    setEmailAvailability('checking');
+    const timeoutId = window.setTimeout(() => {
+      void checkEmailExists(formData.email);
+    }, 600);
+    return () => window.clearTimeout(timeoutId);
+  }, [formData.email, ministryMode]);
 
   const validatePassword = (value: string): string => {
     if (!value) {
@@ -407,9 +407,11 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, onVerificationRe
     } else if (!ministryMode) {
       // Only block duplicates in normal mode; ministry mode can attach to existing email
       try {
-        const emailExists = await authService.checkEmailExists(formData.email);
-        if (emailExists) {
+        const emailExists = await checkEmailExists(formData.email);
+        if (emailExists === true) {
           newErrors.email = 'This email address is already registered. Please use a different email or sign in instead.';
+        } else if (emailExists === null) {
+          newErrors.email = 'We could not verify that this email is available. Please retry the availability check.';
         }
       } catch (error) {
         console.error('Error checking email existence during form validation:', error);
@@ -440,6 +442,7 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, onVerificationRe
     e.preventDefault();
 
     setIsLoading(true);
+    setSubmitError(null);
 
     // Validate form including email existence check
     const isValid = await validateForm();
@@ -502,9 +505,16 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, onVerificationRe
       showToast('info', 'Verify Your Email', 'Your account is ready. Verify your email and SAT Mobile will open automatically.');
       onSuccess();
     } catch (error: any) {
-      const msg = getErrorMessage(error.message || error.code || error.toString(), ministryMode);
+      const code = getFirebaseAuthErrorCode(error);
+      const msg = getFirebaseAuthErrorMessage(error, 'signup', { ministryMode });
+      setSubmitError(msg);
+      if (code === 'auth/email-already-in-use') {
+        setErrors(prev => ({ ...prev, email: msg }));
+      } else if (code === 'auth/weak-password' || code === 'auth/missing-password') {
+        setErrors(prev => ({ ...prev, password: msg }));
+      }
       showToast('error', 'Registration Failed', msg);
-      if (ministryMode && (String(error?.code || '').includes('auth/wrong-password') || String(error?.code || '').includes('auth/invalid-credential'))) {
+      if (ministryMode && (code === 'auth/wrong-password' || code === 'auth/invalid-credential')) {
         setShowResetHint(true);
       }
     } finally {
@@ -538,6 +548,12 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, onVerificationRe
   return (
     <div className="space-y-6">
       <form onSubmit={handleSubmit} className="space-y-5">
+
+        {submitError && (
+          <div role="alert" aria-live="polite" className="p-3 bg-red-50 border border-red-200 rounded-xl">
+            <p className="text-sm text-red-700 text-center">{submitError}</p>
+          </div>
+        )}
 
         {/* Name Fields */}
         <div className="grid grid-cols-2 gap-3">
@@ -602,7 +618,7 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, onVerificationRe
               autoComplete="email"
               spellCheck="false"
             />
-            {isCheckingEmail && (
+            {emailAvailability === 'checking' && (
               <div className="absolute right-3 sm:right-4 top-1/2 transform -translate-y-1/2">
                 <div className="w-4 h-4 border-2 border-green-500 border-t-transparent rounded-full animate-spin"></div>
               </div>
@@ -611,8 +627,20 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, onVerificationRe
           {errors.email && (
                 <p className="text-red-500 text-xs mt-1">{errors.email}</p>
           )}
-          {isCheckingEmail && !errors.email && (
+          {emailAvailability === 'checking' && !errors.email && (
             <p className="text-blue-500 text-xs mt-1">Checking email availability...</p>
+          )}
+          {!ministryMode && emailAvailability === 'available' && !errors.email && (
+            <p className="text-green-600 text-xs mt-1" role="status">This email is available.</p>
+          )}
+          {!ministryMode && emailAvailability === 'error' && (
+            <button
+              type="button"
+              onClick={() => void checkEmailExists(formData.email)}
+              className="text-blue-600 text-xs mt-1 underline hover:text-blue-700"
+            >
+              Try availability check again
+            </button>
           )}
         </div>
 
@@ -747,7 +775,7 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, onVerificationRe
         {/* Submit Button */}
         <button
           type="submit"
-          disabled={isLoading}
+          disabled={isLoading || (!ministryMode && emailAvailability !== 'available')}
           className={`w-full py-3.5 text-white font-semibold rounded-xl transition-colors duration-200 mt-5 border ${
             ministryMode
               ? 'bg-gradient-to-r from-rose-500/95 to-fuchsia-600/95 border-white/50 focus:ring-rose-400/60'

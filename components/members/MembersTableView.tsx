@@ -8,7 +8,7 @@ import { canDeleteMemberWithRole, hasAdminPrivileges } from '../../utils/permiss
 import { SmartTextParser } from '../../utils/smartTextParser';
 import useCurrencyFormatter from '../../hooks/useCurrencyFormatter';
 import { memberDeletionRequestService, ministryExclusionsService } from '../../services/firebaseService';
-import { UserIcon, TrashIcon, PhoneIcon, CalendarIcon, ChevronLeftIcon, ChevronRightIcon, EllipsisVerticalIcon, CheckIcon, ClockIcon, ClipboardIcon, ArrowRightIcon, CogIcon, SearchIcon, UserPlusIcon, ExclamationTriangleIcon } from '../icons';
+import { UserIcon, TrashIcon, PhoneIcon, CalendarIcon, ChevronLeftIcon, ChevronRightIcon, EllipsisVerticalIcon, CheckIcon, ClockIcon, ClipboardIcon, ArrowRightIcon, CogIcon, SearchIcon, UserPlusIcon } from '../icons';
 import ConstituencyTransferModal from '../modals/ConstituencyTransferModal';
 // Removed unused UI imports
 import { getMinistryRoleLabels } from '../../constants';
@@ -82,7 +82,6 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
   displayedSundays,
   navigateToPreviousMonth,
   navigateToNextMonth,
-  cleanupDuplicateMembers,
   } = useAppContext();
 
   const isAdmin = hasAdminPrivileges(userProfile);
@@ -97,21 +96,6 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
     }
     return pending;
   }, [memberDeletionRequests]);
-
-  const [isCleaningDuplicates, setIsCleaningDuplicates] = useState(false);
-  const handleCleanupDuplicates = async () => {
-    const proceed = window.confirm('Remove duplicate members in this church? This keeps the earliest record and cleans linked confirmations/attendance/prayer.');
-    if (!proceed) return;
-    try {
-      setIsCleaningDuplicates(true);
-      await cleanupDuplicateMembers();
-    } catch (e: any) {
-      showToast('error', 'Cleanup failed', e?.message || 'Could not complete cleanup');
-    } finally {
-      setIsCleaningDuplicates(false);
-    }
-  };
-
 
   const [searchTerm, setSearchTerm] = useState('');
   // Use global displayedDate from context for consistent month across the app
@@ -1297,18 +1281,6 @@ const MembersTableView: React.FC<MembersTableViewProps> = ({ bacentaFilter }) =>
                 <span>Copy Absentees</span>
               </button>
               )}
-              {isAdmin && !isTithe && (
-                <button
-                  onClick={handleCleanupDuplicates}
-                  disabled={isCleaningDuplicates}
-                  className="w-full sm:w-auto flex items-center justify-center space-x-2 px-4 py-3 sm:py-2 bg-yellow-100 hover:bg-yellow-200 text-yellow-900 border border-yellow-300 rounded-lg shadow-sm transition-colors text-base sm:text-sm font-medium disabled:opacity-60 disabled:cursor-not-allowed"
-                  title="Remove duplicate members in this church"
-                >
-                  <ExclamationTriangleIcon className="w-4 h-4" />
-                  <span>{isCleaningDuplicates ? 'Cleaning...' : 'Remove Duplicates'}</span>
-                </button>
-              )}
-
             </div>
           </div>
           {statusFilter === 'went_home' && (
