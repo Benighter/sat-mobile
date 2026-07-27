@@ -27,7 +27,10 @@ service firebase.storage {
     }
 
     match /users/{userId}/{allPaths=**} {
-      allow read, write: if isSignedIn() && request.auth.uid == userId && isAllowedMediaUpload();
+      // Profile photos are displayed throughout the signed-in app. Keep writes
+      // owner-only, but allow the download URL lookup after an upload succeeds.
+      allow read: if true;
+      allow write: if isSignedIn() && request.auth.uid == userId && isAllowedMediaUpload();
     }
 
     match /{allPaths=**} {

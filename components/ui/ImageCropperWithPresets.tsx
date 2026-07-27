@@ -122,7 +122,7 @@ const ImageCropperWithPresets: React.FC<ImageCropperWithPresetsProps> = ({
               <img
                 src={image}
                 alt="Preview"
-                className="w-full h-48 sm:h-56 object-cover"
+                className="w-full h-64 sm:h-80 object-contain bg-slate-950"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
             </div>

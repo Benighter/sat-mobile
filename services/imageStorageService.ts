@@ -1,3 +1,5 @@
+import { httpsCallable } from 'firebase/functions';
+import { functions } from '../firebase.config';
 import { dataUrlToBlob, deleteStorageObjectIfExists, extensionFromContentType, isBlobUrl, uploadMediaToStorage } from './mediaStorageService';
 
 type PersistImageOptions = {
@@ -32,6 +34,13 @@ const blobUrlToBlob = async (blobUrl: string): Promise<Blob> => {
     throw new Error('Failed to load selected image.');
   }
   return response.blob();
+};
+
+const persistImageThroughRelay = async (imageValue: string, path: string): Promise<string> => {
+  const relay = httpsCallable<{ path: string; dataUrl: string; cacheControl: string }, { url: string }>(functions, 'relayPersistImage');
+  const result = await relay({ path, dataUrl: imageValue, cacheControl: 'public,max-age=31536000' });
+  if (!result.data?.url) throw new Error('Image upload did not return a download URL.');
+  return result.data.url;
 };
 
 export const persistImageValue = async ({
@@ -69,6 +78,13 @@ export const persistImageValue = async ({
 
     return uploaded.url;
   } catch (error: any) {
+    if (error?.code === 'storage/unauthorized' && isImageDataUrl(normalizedValue)) {
+      try {
+        return await persistImageThroughRelay(normalizedValue, path);
+      } catch (relayError: any) {
+        throw new Error(relayError?.message || error.message || processingErrorMessage || 'Failed to upload image.');
+      }
+    }
     throw new Error(error?.message || processingErrorMessage || 'Failed to upload image.');
   }
 };

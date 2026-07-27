@@ -214,11 +214,11 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
       {/* Full Screen Modal */}
       {isFullScreen && value && (
         <div className="fixed inset-0 bg-black bg-opacity-90 z-50 flex items-center justify-center p-4">
-          <div className="relative max-w-4xl max-h-full">
+          <div className="relative flex h-full w-full max-w-4xl items-center justify-center">
             <img
               src={value}
               alt="Profile Full Screen"
-              className="max-w-full max-h-full object-contain rounded-lg"
+              className="max-h-full max-w-full object-contain rounded-lg"
             />
             <button
               onClick={() => setIsFullScreen(false)}
