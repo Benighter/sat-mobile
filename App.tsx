@@ -46,6 +46,7 @@ import { addNativeBackButtonListener, dispatchBackIntercept, exitNativeApp } fro
 import { userService } from './services/userService';
 import { appLogoUrl } from './utils/publicAssets';
 import AndroidUpdatePrompt from './components/updates/AndroidUpdatePrompt';
+import WhatsNewModal from './components/updates/WhatsNewModal';
 
 import { DeleteMemberModal, DeleteBacentaModal, DeleteNewBelieverModal, ClearAllDataModal, ClearSelectedDataModal, CreateDeletionRequestModal, ClearAllNewBelieversModal } from './components/modals/confirmations/ConfirmationModal';
 import ErrorBoundary from './components/common/ErrorBoundary';
@@ -976,6 +977,8 @@ const AppContent: React.FC = memo(() => {
           </div>
         </div>
       </Modal>
+
+      <WhatsNewModal enabled={Boolean(user) && !isLoading} />
 
       {/* Swipe Indicator */}
       <SwipeIndicator />
