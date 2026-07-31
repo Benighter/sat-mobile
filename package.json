@@ -16,6 +16,7 @@
     "build:desktop": "vite build --mode desktop",
     "prepare:desktop": "node scripts/generate-desktop-icon.cjs",
     "dist:win": "node scripts/package-windows.cjs",
+    "release:desktop": "pnpm run dist:win -- --publish never",
     "release:win": "pnpm run dist:win",
     "preview": "vite preview",
     "build:mobile": "vite build --mode production && node scripts/optimize-build.js",
@@ -47,6 +48,7 @@
     "chartjs-to-image": "^1.2.2",
     "cli-cursor": "^5.0.0",
     "date-fns": "^4.1.0",
+    "electron-updater": "^6.8.9",
     "emoji-picker-element": "^1.26.3",
     "exceljs": "^4.4.0",
     "firebase": "^11.9.1",
@@ -117,10 +119,8 @@
     },
     "publish": [
       {
-        "provider": "github",
-        "owner": "Benighter",
-        "repo": "sat-mobile",
-        "releaseType": "release"
+        "provider": "generic",
+        "url": "https://github.com/Benighter/sat-mobile/releases/download/desktop-updates"
       }
     ]
   }

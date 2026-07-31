@@ -1,0 +1,60 @@
+name: Windows desktop release
+
+on:
+  push:
+    tags:
+      - 'desktop-v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing desktop-v tag to release
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    env:
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.34.5
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Validate matching desktop tag
+        shell: pwsh
+        run: |
+          $version = (Get-Content package.json | ConvertFrom-Json).version
+          if ($env:RELEASE_TAG -ne "desktop-v$version") { throw "Release tag must match package version." }
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Windows installer and update metadata
+        run: pnpm run release:desktop
+
+      - name: Publish immutable desktop release
+        shell: pwsh
+        run: |
+          gh release create $env:RELEASE_TAG release/*.exe release/latest.yml release/*.blockmap --verify-tag --title "SAT Mobile Desktop $($env:RELEASE_TAG -replace '^desktop-v', '')" --generate-notes
+
+      - name: Update rolling desktop channel
+        shell: pwsh
+        run: |
+          if (-not (gh release view desktop-updates 2>$null)) {
+            gh release create desktop-updates --prerelease --title 'SAT Mobile Desktop update channel' --notes 'Machine-readable update channel for installed SAT Mobile desktop apps.'
+          }
+          gh release upload desktop-updates release/*.exe release/latest.yml release/*.blockmap --clobber
