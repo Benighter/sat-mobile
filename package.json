@@ -16,7 +16,7 @@
     "build:desktop": "vite build --mode desktop",
     "prepare:desktop": "node scripts/generate-desktop-icon.cjs",
     "dist:win": "node scripts/package-windows.cjs",
-    "release:desktop": "pnpm run dist:win -- --publish never",
+    "release:desktop": "node scripts/package-windows.cjs --publish never",
     "release:win": "pnpm run dist:win",
     "preview": "vite preview",
     "build:mobile": "vite build --mode production && node scripts/optimize-build.js",
@@ -90,8 +90,9 @@
     },
     "afterPack": "scripts/after-pack.cjs",
     "files": [
-      "dist/**/*",
-      "electron/**/*",
+        "dist/**/*",
+        "electron/main.cjs",
+        "electron/preload.cjs",
       "build/icon.ico",
       "package.json"
     ],
