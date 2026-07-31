@@ -84,7 +84,11 @@ function createWindow() {
     return;
   }
 
-  mainWindow.loadFile(path.join(__dirname, '..', 'dist', 'index.html'));
+  const rendererDirectory = app.isPackaged
+    ? path.join(process.resourcesPath, 'dist')
+    : path.join(__dirname, '..', 'dist');
+
+  mainWindow.loadFile(path.join(rendererDirectory, 'index.html'));
 }
 
 app.setAppUserModelId(appUserModelId);

@@ -2,7 +2,7 @@
   "name": "sat-mobile",
   "private": true,
   "packageManager": "pnpm@10.34.5",
-  "version": "2.0.7",
+  "version": "2.0.8",
   "type": "module",
   "description": "SAT Mobile - A mobile-first church membership management application",
   "author": "SAT Mobile Team",
@@ -89,6 +89,12 @@
     "directories": {
       "output": "release"
     },
+    "extraResources": [
+      {
+        "from": "dist",
+        "to": "dist"
+      }
+    ],
     "afterPack": "scripts/after-pack.cjs",
     "files": [
         "dist/**/*",
