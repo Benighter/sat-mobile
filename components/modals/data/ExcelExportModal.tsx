@@ -73,6 +73,7 @@ const ExcelExportModal: React.FC<ExcelExportModalProps> = ({ isOpen, onClose }) 
 
   const canIncludeIncomeSheet = isCampusShepherd(userProfile) && !isMinistryContext;
   const canIncludeTitheTransportSheets = userProfile?.role === 'admin' && !isCampusShepherd(userProfile) && !isMinistryContext;
+  const canIncludeTitheSheet = (isCampusShepherd(userProfile) || canIncludeTitheTransportSheets) && !isMinistryContext;
 
   const handleExport = async () => {
     setIsExporting(true);
@@ -84,10 +85,10 @@ const ExcelExportModal: React.FC<ExcelExportModalProps> = ({ isOpen, onClose }) 
 
     try {
       const constituencyName = getConstituencyName();
-      const [exportTitheRecords, exportTransportRecords] = canIncludeTitheTransportSheets
+      const [exportTitheRecords, exportTransportRecords] = (canIncludeTitheSheet || canIncludeTitheTransportSheets)
         ? await Promise.all([
           titheFirebaseService.getAll(),
-          transportFirebaseService.getAll()
+          canIncludeTitheTransportSheets ? transportFirebaseService.getAll() : Promise.resolve(transportRecords)
         ])
         : [titheRecords, transportRecords];
 

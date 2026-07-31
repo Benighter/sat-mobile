@@ -211,9 +211,15 @@ const getPaidFinancialRecords = (
       if (!record.memberId || !memberIds.has(record.memberId)) return false;
       if (record.paid !== true) return false;
 
-      const { date } = getPaymentDateInfo(record);
-      if (startDate && date && date < startDate) return false;
-      if (endDate && date && date > endDate) return false;
+      // Tithe and transport are monthly records.  Filter by the payment month
+      // rather than the day the record was captured, so a July tithe edited in
+      // August still appears in a July export.
+      const monthDate = getMonthStartDate(record.month);
+      const startMonth = startDate?.slice(0, 7);
+      const endMonth = endDate?.slice(0, 7);
+      const paymentMonth = record.month || monthDate.slice(0, 7);
+      if (startMonth && paymentMonth && paymentMonth < startMonth) return false;
+      if (endMonth && paymentMonth && paymentMonth > endMonth) return false;
       return true;
     })
     .sort((a, b) => {
@@ -281,10 +287,11 @@ export const getHierarchyExportPreview = (data: HierarchyExcelData): HierarchyEx
   const newBelieversCount = activeMembers.filter(m => m.isNewBeliever === true).length;
   const ministriesCount = new Set(activeMembers.filter(m => m.ministry).map(m => m.ministry!.trim().toLowerCase())).size;
   const shouldIncludeIncomeSheet = Boolean(data.options?.isCampusShepherd) && !Boolean(data.options?.isMinistryContext);
-  const shouldIncludeTitheTransportSheets = !Boolean(data.options?.isCampusShepherd) && !Boolean(data.options?.isMinistryContext);
+  const shouldIncludeTitheSheet = !Boolean(data.options?.isMinistryContext);
+  const shouldIncludeTransportSheet = !Boolean(data.options?.isCampusShepherd) && !Boolean(data.options?.isMinistryContext);
 
   return {
-    totalTabs: 7 + (shouldIncludeIncomeSheet ? 1 : 0) + (shouldIncludeTitheTransportSheets ? 2 : 0),
+    totalTabs: 7 + (shouldIncludeIncomeSheet ? 1 : 0) + (shouldIncludeTitheSheet ? 1 : 0) + (shouldIncludeTransportSheet ? 1 : 0),
     bacentaCount: uniqueBacentas.size,
     memberCount: activeMembers.length,
     servicesCount: dates.length,
@@ -300,10 +307,8 @@ export const getHierarchyExportPreview = (data: HierarchyExcelData): HierarchyEx
       `Tab 6 — New Believers: ${newBelieversCount} member${newBelieversCount !== 1 ? 's' : ''} (grouped by leader)`,
       `Tab 7 — First Timers: ${firstTimersCount} member${firstTimersCount !== 1 ? 's' : ''} (grouped by leader)`,
       ...(shouldIncludeIncomeSheet ? ['Tab 8 — Income & Tithe: Sunday offering, tithe, channel totals, and weekly summary'] : []),
-      ...(shouldIncludeTitheTransportSheets ? [
-        'Tithe tab: paid people, amounts, monthly totals, and overall totals',
-        'Transport tab: paid people, amounts, monthly totals, and overall totals'
-      ] : []),
+      ...(shouldIncludeTitheSheet ? ['Tithe tab: paid people only, amounts, monthly totals, and overall totals'] : []),
+      ...(shouldIncludeTransportSheet ? ['Transport tab: paid people, amounts, monthly totals, and overall totals'] : []),
       'Color-coded rows by role',
       'Attendance history for the selected date range (or full history)'
     ]
@@ -787,8 +792,11 @@ export const exportHierarchyExcel = async (
       };
     };
 
-    if (!options?.isCampusShepherd && !options?.isMinistryContext) {
+    if (!options?.isMinistryContext) {
       createFinancialPaymentSheet('Tithe', data.titheRecords || []);
+    }
+
+    if (!options?.isCampusShepherd && !options?.isMinistryContext) {
       createFinancialPaymentSheet('Transport', data.transportRecords || []);
     }
 
