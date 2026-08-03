@@ -13,6 +13,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../firebase.config';
 import { AdminInvite, User } from '../types';
+import { getSupabaseClient } from './supabase/client';
 
 /**
  * Helper: given multiple user records sharing the same email (normal + ministry accounts)
@@ -108,6 +109,16 @@ export const inviteService = {
       const trimmed = (email || '').trim();
       if (!trimmed) return null;
       const normalized = trimmed.toLowerCase();
+
+      if (import.meta.env.VITE_DATA_BACKEND !== 'firebase') {
+        const { data, error } = await getSupabaseClient().rpc('sat_search_admin_by_email', {
+          target_email: normalized,
+          inviter_is_ministry: opts?.inviterIsMinistry === true,
+        });
+        if (error) throw error;
+        return data ? data as User : null;
+      }
+
       // Collect all potential matches (cannot use OR queries easily; perform sequential fallbacks)
       const candidates: any[] = [];
 

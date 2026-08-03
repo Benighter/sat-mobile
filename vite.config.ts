@@ -5,8 +5,18 @@ import { defineConfig, loadEnv } from 'vite';
 const appVersion = (JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as { version: string }).version;
 
 export default defineConfig(({ mode }) => {
-    const env = loadEnv(mode, '.', '');
+    const env = { ...process.env, ...loadEnv(mode, '.', '') };
     const isDesktopBuild = mode === 'desktop';
+    const useSupabaseBackend = env.VITE_DATA_BACKEND !== 'firebase';
+    const aliases: Record<string, string> = {
+      '@': path.resolve(__dirname, '.'),
+    };
+    if (useSupabaseBackend) {
+      aliases['firebase/firestore'] = path.resolve(__dirname, 'services/supabase/firestoreCompat.ts');
+      aliases['firebase/storage'] = path.resolve(__dirname, 'services/supabase/storageCompat.ts');
+      aliases['sat-firebase-firestore-original'] = path.resolve(__dirname, 'node_modules/firebase/firestore/dist/esm/index.esm.js');
+      aliases['sat-firebase-storage-original'] = path.resolve(__dirname, 'node_modules/firebase/storage/dist/esm/index.esm.js');
+    }
 
     return {
       base: isDesktopBuild ? './' : '/',
@@ -16,9 +26,7 @@ export default defineConfig(({ mode }) => {
         'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY)
       },
       resolve: {
-        alias: {
-          '@': path.resolve(__dirname, '.'),
-  }
+        alias: aliases
       },
       build: {
         outDir: 'dist',

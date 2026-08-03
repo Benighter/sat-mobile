@@ -19,6 +19,76 @@ if (!admin.apps.length) {
   admin.initializeApp();
 }
 
+// Supabase accepts the existing Firebase ID token through its Firebase
+// third-party Auth integration. New accounts need the Postgres role claim,
+// but Firebase's setter replaces the complete claims object, so always merge.
+exports.ensureSupabaseAuthenticatedRole = functions.auth.user().onCreate(async (user) => {
+  const existingClaims = user.customClaims && typeof user.customClaims === 'object'
+    ? user.customClaims
+    : {};
+
+  if (existingClaims.role === 'authenticated') {
+    return null;
+  }
+
+  await admin.auth().setCustomUserClaims(user.uid, {
+    ...existingClaims,
+    role: 'authenticated'
+  });
+
+  return null;
+});
+
+const SUPABASE_MANAGED_CLAIMS = [
+  'sat_church_id',
+  'sat_app_role',
+  'sat_super_admin',
+  'sat_ministry_church_id',
+  'sat_ministry_approved',
+  'sat_ministry_name'
+];
+
+const claimsForSupabaseUserDocument = (data) => {
+  const claims = {};
+  if (typeof data?.churchId === 'string' && data.churchId) claims.sat_church_id = data.churchId;
+  if (typeof data?.role === 'string' && data.role) claims.sat_app_role = data.role;
+  if (data?.superAdmin === true) claims.sat_super_admin = true;
+  if (typeof data?.contexts?.ministryChurchId === 'string' && data.contexts.ministryChurchId) {
+    claims.sat_ministry_church_id = data.contexts.ministryChurchId;
+  }
+  if (data?.isMinistryAccount === true && data?.ministryAccess?.status === 'approved') {
+    claims.sat_ministry_approved = true;
+  }
+  if (typeof data?.preferences?.ministryName === 'string' && data.preferences.ministryName) {
+    claims.sat_ministry_name = data.preferences.ministryName;
+  }
+  return claims;
+};
+
+// Keep only authorization facts in the token. Every update merges unrelated
+// claims and clears only keys owned by this migration.
+exports.syncSupabaseAuthorizationClaims = functions.firestore
+  .document('users/{uid}')
+  .onWrite(async (change, context) => {
+    const authUser = await admin.auth().getUser(context.params.uid);
+    const existingClaims = authUser.customClaims && typeof authUser.customClaims === 'object'
+      ? { ...authUser.customClaims }
+      : {};
+    for (const key of SUPABASE_MANAGED_CLAIMS) delete existingClaims[key];
+
+    const documentClaims = change.after.exists
+      ? claimsForSupabaseUserDocument(change.after.data())
+      : {};
+
+    await admin.auth().setCustomUserClaims(context.params.uid, {
+      ...existingClaims,
+      ...documentClaims,
+      role: 'authenticated'
+    });
+
+    return null;
+  });
+
 // Pre-auth signup availability check. Firebase's client-side
 // fetchSignInMethodsForEmail intentionally becomes non-enumerating when email
 // enumeration protection is enabled, so this check must use the Admin SDK.

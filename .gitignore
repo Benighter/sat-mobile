@@ -31,6 +31,17 @@ dist-ssr
 !.env.example
 functions/.env
 
+# Backend migration artifacts and credentials must never be committed
+migration-artifacts/
+supabase/.temp/
+supabase/.branches/
+**/firebase-service*.json
+**/supabase-service*.json
+**/*auth-export*.json
+**/*firestore-export*.json
+**/*storage-manifest*.json
+**/*storage-manifest*.csv
+
 # Firebase emulator debug logs (optional noise)
 firebase-debug.log
 

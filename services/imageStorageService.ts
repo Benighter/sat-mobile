@@ -1,6 +1,5 @@
-import { httpsCallable } from 'firebase/functions';
-import { functions } from '../firebase.config';
 import { dataUrlToBlob, deleteStorageObjectIfExists, extensionFromContentType, isBlobUrl, uploadMediaToStorage } from './mediaStorageService';
+import { invokeBackendFunction } from './backendFunctionService';
 
 type PersistImageOptions = {
   imageValue?: string | null;
@@ -10,6 +9,7 @@ type PersistImageOptions = {
 };
 
 const DATA_URL_PREFIX = 'data:image/';
+const USE_SUPABASE_DATA_BACKEND = import.meta.env.VITE_DATA_BACKEND !== 'firebase';
 
 export const isImageDataUrl = (value?: string | null): value is string =>
   typeof value === 'string' && value.startsWith(DATA_URL_PREFIX);
@@ -37,10 +37,12 @@ const blobUrlToBlob = async (blobUrl: string): Promise<Blob> => {
 };
 
 const persistImageThroughRelay = async (imageValue: string, path: string): Promise<string> => {
-  const relay = httpsCallable<{ path: string; dataUrl: string; cacheControl: string }, { url: string }>(functions, 'relayPersistImage');
-  const result = await relay({ path, dataUrl: imageValue, cacheControl: 'public,max-age=31536000' });
-  if (!result.data?.url) throw new Error('Image upload did not return a download URL.');
-  return result.data.url;
+  const result = await invokeBackendFunction<{ path: string; dataUrl: string; cacheControl: string }, { url: string }>(
+    'relayPersistImage',
+    { path, dataUrl: imageValue, cacheControl: 'public,max-age=31536000' }
+  );
+  if (!result?.url) throw new Error('Image upload did not return a download URL.');
+  return result.url;
 };
 
 export const persistImageValue = async ({
@@ -78,7 +80,7 @@ export const persistImageValue = async ({
 
     return uploaded.url;
   } catch (error: any) {
-    if (error?.code === 'storage/unauthorized' && isImageDataUrl(normalizedValue)) {
+    if (!USE_SUPABASE_DATA_BACKEND && error?.code === 'storage/unauthorized' && isImageDataUrl(normalizedValue)) {
       try {
         return await persistImageThroughRelay(normalizedValue, path);
       } catch (relayError: any) {

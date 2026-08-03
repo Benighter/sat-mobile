@@ -18,6 +18,7 @@ import {
   cleanupStoredImage,
   persistImageValue
 } from './imageStorageService';
+import { invokeBackendFunction } from './backendFunctionService';
 
 const sanitizeFirestoreValue = <T>(value: T): T => {
   if (Array.isArray(value)) {
@@ -224,13 +225,11 @@ export const userService = {
   // gracefully fall back to a direct Firestore update so the UI keeps working without CORS.
   setUserActiveStatus: async (uid: string, active: boolean): Promise<void> => {
     try {
-      const { getFunctions, httpsCallable } = await import('firebase/functions');
-      const functions = getFunctions(undefined as any, 'us-central1');
-      const fn = httpsCallable(functions, 'setUserActiveStatus');
-      const res: any = await fn({ uid, active });
-      if (!res?.data?.success) throw new Error('Callable failed');
+      const result: any = await invokeBackendFunction('setUserActiveStatus', { uid, active });
+      if (!result?.success) throw new Error('Callable failed');
       return;
     } catch (error: any) {
+      if (import.meta.env.VITE_DATA_BACKEND !== 'firebase') throw error;
       // Fallback path: update Firestore directly (no CORS for Firestore client SDK)
       console.warn(`[userService.setUserActiveStatus] Cloud Function failed${isDevelopment ? ' (development CORS)' : ''}; applying Firestore fallback:`, error?.message || error);
       try {
@@ -256,12 +255,10 @@ export const userService = {
   // Hard delete user account and related data (admin only)
   hardDeleteUser: async (uid: string): Promise<void> => {
     try {
-      const { getFunctions, httpsCallable } = await import('firebase/functions');
-      const functions = getFunctions(undefined as any, 'us-central1');
-      const fn = httpsCallable(functions, 'hardDeleteUserAccount');
-      const res: any = await fn({ uid });
-      if (!res?.data?.success) throw new Error('Callable failed');
+      const result: any = await invokeBackendFunction('hardDeleteUserAccount', { uid });
+      if (!result?.success) throw new Error('Callable failed');
     } catch (error: any) {
+      if (import.meta.env.VITE_DATA_BACKEND !== 'firebase') throw error;
       // Development fallback: soft delete in Firestore (CORS-free)
       console.warn(`[userService.hardDeleteUser] Cloud Function failed${isDevelopment ? ' (development CORS)' : ''}; applying development fallback (soft delete):`, error?.message || error);
       try {

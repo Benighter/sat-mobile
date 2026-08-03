@@ -30,12 +30,12 @@ import {
   reauthenticateWithCredential,
   EmailAuthProvider
 } from 'firebase/auth';
-import { httpsCallable } from 'firebase/functions';
-import { db, auth, functions } from '../firebase.config';
+import { db, auth } from '../firebase.config';
 import { Member, Bacenta, AttendanceRecord, NewBeliever, SundayConfirmation, Guest, MemberDeletionRequest, DeletionRequestStatus, OutreachBacenta, OutreachMember, PrayerRecord, PrayerSchedule, MeetingRecord, TitheRecord, BussingRecord, TransportRecord, SonOfGod, CustomPrayer, CustomPrayerRecord, SundayOfferingRecord, ProofAttachment } from '../types';
 import { applyLeadershipFirstTimerRule, withLeadershipFirstTimerRule } from '../utils/memberStatus';
 import { cleanupStoredImage, persistImageValue } from './imageStorageService';
 import { dataUrlToBlob, deleteStorageObjectIfExists, ensureFileExtension, getDataUrlContentType, isBlobUrl, isDataUrl, uploadMediaToStorage } from './mediaStorageService';
+import { invokeBackendFunction } from './backendFunctionService';
 // Lightweight inline type to avoid circular heavy imports for new feature (kept local to service)
 export interface HeadCountRecord {
   id: string; // `${date}_${section}`
@@ -729,15 +729,11 @@ export const authService = {
     if (!trimmedEmail) return false;
 
     const target = opts?.ministry ? toMinistryAuthEmail(trimmedEmail) : trimmedEmail;
-    const checkAvailability = httpsCallable<{ email: string }, { available: boolean }>(
-      functions,
-      'checkEmailAvailability'
-    );
-    const result = await checkAvailability({ email: target });
-    if (typeof result.data?.available !== 'boolean') {
+    const result = await invokeBackendFunction<{ email: string }, { available: boolean }>('checkEmailAvailability', { email: target });
+    if (typeof result?.available !== 'boolean') {
       throw new Error('Email availability service returned an invalid response');
     }
-    return !result.data.available;
+    return !result.available;
   }
 };
 

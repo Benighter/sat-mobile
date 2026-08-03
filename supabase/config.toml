@@ -1,0 +1,34 @@
+project_id = "sat-mobile-supabase-test-local"
+
+[api]
+enabled = true
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+major_version = 17
+
+[realtime]
+enabled = true
+
+# Keep the isolated migration environment independent of Docker's optional
+# unauthenticated TCP API. Analytics is not needed for schema/data validation.
+[analytics]
+enabled = false
+
+[storage]
+enabled = true
+file_size_limit = "100MiB"
+
+[auth]
+enabled = true
+site_url = "http://127.0.0.1:5173"
+additional_redirect_urls = ["http://localhost:5173"]
+enable_signup = false
+
+# Disabled until a separate Supabase test project exists and the user approves
+# the production Firebase custom-claim update needed by Supabase Third-Party Auth.
+[auth.third_party.firebase]
+enabled = false
+project_id = "sat-mobile-de6f1"

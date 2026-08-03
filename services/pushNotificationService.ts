@@ -8,6 +8,7 @@ import { Capacitor } from '@capacitor/core';
 import { doc, setDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../firebase.config';
 import { User, AdminNotification } from '../types';
+import { invokeBackendFunction } from './backendFunctionService';
 
 // Device token storage interface
 interface DeviceToken {
@@ -663,18 +664,15 @@ class PushNotificationService {
 
       // Use callable Cloud Function
       try {
-        const { getFunctions, httpsCallable } = await import('firebase/functions');
-        const functions = getFunctions();
-        const fn = httpsCallable(functions, 'sendPushNotification');
-        const result: any = await fn({ tokens, payload, churchId: this.currentChurchId });
-        if (result?.data?.success) {
-          console.log(`✅ Push notification sent: success=${result.data.successCount}, failed=${result.data.failureCount}`);
-          if (result.data.failureCount > 0) {
-            console.warn('Some tokens failed:', result.data.failed);
+        const result: any = await invokeBackendFunction('sendPushNotification', { tokens, payload, churchId: this.currentChurchId });
+        if (result?.success) {
+          console.log(`✅ Push notification sent: success=${result.successCount}, failed=${result.failureCount}`);
+          if (result.failureCount > 0) {
+            console.warn('Some tokens failed:', result.failed);
           }
           return true;
         } else {
-          console.error('Failed to send push notification (callable returned error):', result?.data?.error);
+          console.error('Failed to send push notification (callable returned error):', result?.error);
           return false;
         }
       } catch (fnErr) {

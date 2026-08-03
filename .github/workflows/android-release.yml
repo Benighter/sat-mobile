@@ -30,6 +30,10 @@ jobs:
       SAT_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
       SAT_ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
       SAT_ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+      VITE_SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+      VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+      VITE_SUPABASE_STORAGE_BUCKET: sat-mobile-media
+      VITE_FIREBASE_ROLLBACK_WRITES: 'true'
 
     steps:
       - name: Check out release tag
@@ -65,6 +69,8 @@ jobs:
           test -n "$SAT_ANDROID_KEYSTORE_PASSWORD"
           test -n "$SAT_ANDROID_KEY_ALIAS"
           test -n "$SAT_ANDROID_KEY_PASSWORD"
+          test -n "$VITE_SUPABASE_URL"
+          test -n "$VITE_SUPABASE_PUBLISHABLE_KEY"
           git show-ref --verify --quiet "refs/tags/$RELEASE_TAG"
           node --input-type=module <<'NODE'
           import { readFileSync } from 'node:fs';

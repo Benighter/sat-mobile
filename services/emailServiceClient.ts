@@ -1,6 +1,7 @@
 import { EmailNotificationService } from './emailNotificationService';
 import { getPrimaryEmailApiUrl } from '../constants';
 import { Member, NotificationRecipient, Bacenta } from '../types';
+import { invokeBackendFunction } from './backendFunctionService';
 
 const FIREBASE_FUNCTIONS_REGION = 'us-central1';
 const FIREBASE_PROJECT_ID = 'sat-mobile-de6f1';
@@ -121,16 +122,13 @@ export const emailServiceClient = {
     // Prefer Firebase callable in production
     try {
       log('Routing through Firebase Cloud Function Callable...');
-      const { getFunctions, httpsCallable } = await import('firebase/functions');
-      const appFunctions = getFunctions(undefined as any, FIREBASE_FUNCTIONS_REGION);
-      const fn = httpsCallable(appFunctions, 'sendBirthdayEmail');
       log('Calling cloud function "sendBirthdayEmail"...');
-      const res: any = await fn({ to, subject, html, text, from: fromField });
-      log(`Cloud function response: ${JSON.stringify(res?.data)}`);
-      if (res?.data?.success) {
-        return { success: true, messageId: res?.data?.messageId || undefined, debugLogs };
+      const result: any = await invokeBackendFunction('sendBirthdayEmail', { to, subject, html, text, from: fromField });
+      log(`Cloud function response: ${JSON.stringify(result)}`);
+      if (result?.success) {
+        return { success: true, messageId: result?.messageId || undefined, debugLogs };
       }
-      log(`Cloud function returned failure: ${res?.data?.error || 'Unknown'}`);
+      log(`Cloud function returned failure: ${result?.error || 'Unknown'}`);
     } catch (callableErr) {
       log(`Firebase callable failed: ${callableErr}`);
     }

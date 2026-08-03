@@ -20,6 +20,10 @@ jobs:
     env:
       RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
       GH_TOKEN: ${{ github.token }}
+      VITE_SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+      VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+      VITE_SUPABASE_STORAGE_BUCKET: sat-mobile-media
+      VITE_FIREBASE_ROLLBACK_WRITES: 'true'
     steps:
       - uses: actions/checkout@v4
         with:
@@ -37,6 +41,7 @@ jobs:
       - name: Validate matching desktop tag
         shell: pwsh
         run: |
+          if (-not $env:VITE_SUPABASE_URL -or -not $env:VITE_SUPABASE_PUBLISHABLE_KEY) { throw "Supabase release configuration is missing." }
           $version = (Get-Content package.json | ConvertFrom-Json).version
           if ($env:RELEASE_TAG -ne "desktop-v$version") { throw "Release tag must match package version." }
 
