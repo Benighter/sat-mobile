@@ -102,11 +102,11 @@ interface AppContextType {
   // Confirmation Modal
   confirmationModal: {
     isOpen: boolean;
-    type: 'deleteMember' | 'deleteBacenta' | 'deleteNewBeliever' | 'clearData' | 'clearSelectedData' | 'createDeletionRequest' | 'clearAllNewBelievers' | null;
+    type: 'deleteMember' | 'deactivateAccount' | 'deleteBacenta' | 'deleteNewBeliever' | 'clearData' | 'clearSelectedData' | 'createDeletionRequest' | 'clearAllNewBelievers' | null;
     data: any;
     onConfirm: () => void;
   };
-  showConfirmation: (type: 'deleteMember' | 'deleteBacenta' | 'deleteNewBeliever' | 'clearData' | 'clearSelectedData' | 'createDeletionRequest' | 'clearAllNewBelievers', data: any, onConfirm: () => void) => void;
+  showConfirmation: (type: 'deleteMember' | 'deactivateAccount' | 'deleteBacenta' | 'deleteNewBeliever' | 'clearData' | 'clearSelectedData' | 'createDeletionRequest' | 'clearAllNewBelievers', data: any, onConfirm: () => void) => void;
   closeConfirmation: () => void;
 
   // Toasts
@@ -342,7 +342,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
   // Confirmation modal
   const [confirmationModal, setConfirmationModal] = useState<{
     isOpen: boolean;
-    type: 'deleteMember' | 'deleteBacenta' | 'deleteNewBeliever' | 'clearData' | 'clearSelectedData' | 'createDeletionRequest' | 'clearAllNewBelievers' | null;
+    type: 'deleteMember' | 'deactivateAccount' | 'deleteBacenta' | 'deleteNewBeliever' | 'clearData' | 'clearSelectedData' | 'createDeletionRequest' | 'clearAllNewBelievers' | null;
     data: any;
     onConfirm: () => void;
   }>({
@@ -1237,7 +1237,7 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
   }, [userProfile]);
 
   // Confirmation modal functions
-  const showConfirmation = useCallback((type: 'deleteMember' | 'deleteBacenta' | 'deleteNewBeliever' | 'clearData' | 'clearSelectedData' | 'createDeletionRequest' | 'clearAllNewBelievers', data: any, onConfirm: () => void) => {
+  const showConfirmation = useCallback((type: 'deleteMember' | 'deactivateAccount' | 'deleteBacenta' | 'deleteNewBeliever' | 'clearData' | 'clearSelectedData' | 'createDeletionRequest' | 'clearAllNewBelievers', data: any, onConfirm: () => void) => {
     setConfirmationModal({
       isOpen: true,
       type,
@@ -3711,25 +3711,26 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
       if (!request) {
         throw new Error('Deletion request not found');
       }
+      const isAccountRequest = request.target === 'account';
+      if (isAccountRequest && request.requestedBy === userProfile.uid) {
+        throw new Error('Account deletion requests must be reviewed by another administrator');
+      }
       const requestedMember = members.find(m => m.id === request.memberId);
-      if (requestedMember) {
+      if (!isAccountRequest && requestedMember) {
         ensureCanAccessBacenta(requestedMember.bacentaId, 'member');
       }
-
-      // Update the request status
-      await memberDeletionRequestService.update(requestId, {
-        status: 'approved',
-        reviewedBy: userProfile.uid,
-        reviewedByName: `${userProfile.firstName || ''} ${userProfile.lastName || ''}`.trim(),
-        reviewedAt: new Date().toISOString()
-      });
 
       // Decide which collection the target belongs to
       const outreachExists = outreachMembers.some(o => o.id === request.memberId);
       const memberExists = members.some(m => m.id === request.memberId);
       const isOutreach = outreachExists || (request as any).target === 'outreach';
 
-      if (isOutreach && outreachExists) {
+      if (isAccountRequest) {
+        // Preserve the profile, UID, tenant history, and audit trail. Disable
+        // both the active Firebase identity and any linked native identity;
+        // final erasure remains a separate explicitly reviewed operation.
+        await userService.setUserActiveStatus(request.memberId, false);
+      } else if (isOutreach && outreachExists) {
         // Use the outreach delete handler (admin path will cascade properly)
         await deleteOutreachMemberHandler(request.memberId);
       } else if (memberExists) {
@@ -3740,6 +3741,17 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
         console.warn('Approve requested for non-existent target; marking approved without deletion', request.memberId);
       }
 
+      // Record approval only after the requested action has succeeded. This
+      // makes interrupted reviews safely retryable instead of reporting a
+      // completed deletion while the identity is still active.
+      await memberDeletionRequestService.update(requestId, {
+        status: 'approved',
+        reviewedBy: userProfile.uid,
+        reviewedByName: `${userProfile.firstName || ''} ${userProfile.lastName || ''}`.trim(),
+        reviewedAt: new Date().toISOString(),
+        ...(isAccountRequest ? { adminNotes: 'Account disabled; historical records retained pending final erasure review.' } : {})
+      });
+
       try {
         const { createNotificationHelpers } = await import('../services/notificationService');
         const reviewerName = userProfile.displayName || `${userProfile.firstName || ''} ${userProfile.lastName || ''}`.trim() || 'Administrator';
@@ -3748,8 +3760,13 @@ export const FirebaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
         console.warn('⚠️ Failed to send deletion approval notification:', notifyErr);
       }
 
-      showToast('success', 'Request Approved',
-        `Deletion request for ${request.memberName} has been approved and the member has been deleted.`);
+      showToast(
+        'success',
+        'Request Approved',
+        isAccountRequest
+          ? `The account for ${request.memberName} has been disabled. Its history is retained until final erasure is separately approved.`
+          : `Deletion request for ${request.memberName} has been approved and the member has been deleted.`
+      );
     } catch (error: any) {
       console.error('❌ Failed to approve deletion request:', error);
       setError(error.message);

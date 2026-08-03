@@ -1053,6 +1053,19 @@ const AppContent: React.FC = memo(() => {
         />
       )}
 
+      {confirmationModal.type === 'deactivateAccount' && (
+        <ConfirmationModal
+          isOpen={confirmationModal.isOpen}
+          onClose={closeConfirmationModal}
+          onConfirm={confirmationModal.onConfirm}
+          title="Approve account deletion request"
+          message={`Disable ${confirmationModal.data?.member?.name || 'this account'} now? The account will be signed out and blocked, while its UID, church history, and records remain retained for a separate final-erasure review.`}
+          confirmText="Approve & Disable"
+          cancelText="Cancel"
+          type="warning"
+        />
+      )}
+
       {confirmationModal.type === 'deleteBacenta' && (
         <DeleteBacentaModal
           isOpen={confirmationModal.isOpen}

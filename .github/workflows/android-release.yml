@@ -33,6 +33,9 @@ jobs:
       VITE_SUPABASE_URL: ${{ vars.SUPABASE_URL }}
       VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
       VITE_SUPABASE_STORAGE_BUCKET: sat-mobile-media
+      VITE_DATA_BACKEND: supabase
+      VITE_AUTH_BACKEND: firebase
+      VITE_REQUIRE_NATIVE_AUTH_ENROLLMENT: 'true'
       VITE_FIREBASE_ROLLBACK_WRITES: 'true'
 
     steps:

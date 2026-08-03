@@ -49,3 +49,4 @@ firebase-debug.log
 release/
 tsc_output.txt
 antigravity-memory-export.md
+.env*

@@ -20,12 +20,15 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 // SuperAdmin credentials
-const SUPERADMIN_EMAIL = 'admin@gmail.com';
-const SUPERADMIN_PASSWORD = 'Admin@123';
+const SUPERADMIN_EMAIL = String(process.env.SAT_SUPERADMIN_EMAIL || '').trim().toLowerCase();
+const SUPERADMIN_PASSWORD = String(process.env.SAT_SUPERADMIN_PASSWORD || '');
 const SUPERADMIN_DISPLAY_NAME = 'Super Administrator';
 
 async function setupSuperAdmin() {
   try {
+    if (!SUPERADMIN_EMAIL || !SUPERADMIN_PASSWORD) {
+      throw new Error('SAT_SUPERADMIN_EMAIL and SAT_SUPERADMIN_PASSWORD are required');
+    }
     console.log('🔧 Setting up SuperAdmin user...');
 
     // Initialize Firebase Admin SDK
@@ -96,8 +99,6 @@ async function setupSuperAdmin() {
     console.log('🎉 SuperAdmin setup complete!');
     console.log('');
     console.log('📋 SuperAdmin credentials:');
-    console.log(`   Email: ${SUPERADMIN_EMAIL}`);
-    console.log(`   Password: ${SUPERADMIN_PASSWORD}`);
     console.log('');
     console.log('🔐 The SuperAdmin user now has:');
     console.log('   ✓ Firebase Auth account');

@@ -2,6 +2,7 @@ import { EmailNotificationService } from './emailNotificationService';
 import { getPrimaryEmailApiUrl } from '../constants';
 import { Member, NotificationRecipient, Bacenta } from '../types';
 import { invokeBackendFunction } from './backendFunctionService';
+import { getSupabaseClient } from './supabase/client';
 
 const FIREBASE_FUNCTIONS_REGION = 'us-central1';
 const FIREBASE_PROJECT_ID = 'sat-mobile-de6f1';
@@ -68,23 +69,21 @@ export const emailServiceClient = {
 
     const fromField = `${senderName} <${senderEmail}>`;
 
-    const localApiKey = typeof window !== 'undefined' ? window.localStorage.getItem('sat-mobile-brevo-api-key') : null;
-    const hasCustomApiKey = localApiKey && localApiKey.startsWith('xkeysib-');
-
-    if (deliveryMethod === 'brevo') {
-      if (hasCustomApiKey) {
-        log('Custom Brevo v3 API Key detected. Routing directly from browser...');
-        const brevoRes = await this.sendViaBrevo(to, subject, html, text, log);
-        
-        if (brevoRes.success) {
-          log('Brevo SMTP API delivery completed successfully!');
-          return { success: true, messageId: brevoRes.messageId, debugLogs };
+    if (deliveryMethod === 'brevo' && import.meta.env.VITE_DATA_BACKEND !== 'firebase') {
+      try {
+        log('Routing transactional email through the authenticated Supabase Edge Function...');
+        const { data, error } = await getSupabaseClient().functions.invoke('sat-transactional-email', {
+          body: { to, subject, html, text, kind: 'birthday' },
+        });
+        if (error) throw error;
+        if (data?.ok === true) {
+          return { success: true, messageId: data.requestId || undefined, debugLogs };
         }
-        
-        log(`Brevo direct delivery failed: ${brevoRes.error}`);
-        return { success: false, error: brevoRes.error, debugLogs };
-      } else {
-        log('No custom Brevo API Key found on browser. Routing email transaction securely through backend Firebase Cloud Functions...');
+        throw new Error(data?.code || 'Supabase email function returned an unknown response');
+      } catch (edgeError) {
+        // Firebase remains an explicit rollback until the Edge Function has a
+        // verified provider secret and the native-auth cutover is released.
+        log(`Supabase email path unavailable; retaining authenticated rollback: ${(edgeError as any)?.message || edgeError}`);
       }
     }
 
@@ -223,126 +222,4 @@ export const emailServiceClient = {
     return this.sendBirthdayEmail(currentUser.email, digest.subject, digest.htmlContent, digest.textContent);
   },
 
-  /**
-   * Sends an email directly from the browser using the free Brevo SMTP API.
-   */
-  async sendViaBrevo(to: string, subject: string, html: string, text?: string, externalLog?: (msg: string) => void) {
-    const logs: string[] = [];
-    const log = (msg: string) => {
-      if (externalLog) externalLog(msg);
-      logs.push(`[${new Date().toLocaleTimeString()}] ${msg}`);
-    };
-
-    try {
-      log('Resolving Brevo API configuration...');
-      const apiKey = typeof window !== 'undefined' ? window.localStorage.getItem('sat-mobile-brevo-api-key') : null;
-
-      if (!apiKey) {
-        log('Error: API Key is not configured.');
-        return { success: false, error: 'Brevo API Key not configured.', debugLogs: logs };
-      }
-
-      const maskedKey = `${apiKey.substring(0, 12)}...${apiKey.substring(apiKey.length - 8)}`;
-      log(`API Key resolved: ${maskedKey} (Custom local storage)`);
-
-      let currentUserEmail = '';
-      let currentDisplayName = '';
-      if (typeof window !== 'undefined') {
-        try {
-          const { auth } = await import('../firebase.config');
-          if (auth.currentUser) {
-            currentUserEmail = auth.currentUser.email || '';
-            currentDisplayName = auth.currentUser.displayName || '';
-          }
-        } catch (e) {
-          log(`Failed to resolve current authenticated user: ${e}`);
-        }
-      }
-
-      const localSenderEmail = typeof window !== 'undefined' ? window.localStorage.getItem('sat-mobile-brevo-sender-email') : null;
-      const senderEmail = (localSenderEmail && localSenderEmail !== 'notifications@sat-mobile.app')
-        ? localSenderEmail
-        : (currentUserEmail || 'notifications@sat-mobile.app');
-      log(`Sender Email: ${senderEmail} (${localSenderEmail && localSenderEmail !== 'notifications@sat-mobile.app' ? 'Custom local storage' : currentUserEmail ? 'Current user' : 'Default'})`);
-
-      const localSenderName = typeof window !== 'undefined' ? window.localStorage.getItem('sat-mobile-brevo-sender-name') : null;
-      const senderName = (localSenderName && localSenderName !== 'SAT Mobile')
-        ? localSenderName
-        : (currentDisplayName || 'SAT Mobile');
-      log(`Sender Name: ${senderName} (${localSenderName && localSenderName !== 'SAT Mobile' ? 'Custom local storage' : currentDisplayName ? 'Current user' : 'Default'})`);
-
-      log('Constructing email payload parameters...');
-      const payload = {
-        sender: { name: senderName, email: senderEmail },
-        to: [{ email: to }],
-        subject: subject,
-        htmlContent: html,
-        textContent: text || html.replace(/<[^>]*>/g, '')
-      };
-
-      // Default to the local proxy endpoint in all browser environments to bypass CORS and Content Security Policy (CSP)
-      let targetUrl = '/api-brevo/v3/smtp/email';
-      let isUsingProxy = true;
-      if (typeof window === 'undefined') {
-        targetUrl = 'https://api.brevo.com/v3/smtp/email';
-        isUsingProxy = false;
-      } else {
-        log(`Browser context detected. Pre-routing through proxy endpoint to satisfy CORS and Content Security Policy: ${targetUrl}`);
-      }
-
-      log(`Sending transaction request to ${targetUrl}...`);
-      let response: Response;
-      try {
-        response = await fetch(targetUrl, {
-          method: 'POST',
-          headers: {
-            'accept': 'application/json',
-            'api-key': apiKey,
-            'content-type': 'application/json'
-          },
-          body: JSON.stringify(payload)
-        });
-
-        // If proxy is not configured or fails with standard web server gateway codes (404, 502, 504), retry directly
-        if (isUsingProxy && (response.status === 404 || response.status === 502 || response.status === 504)) {
-          log(`Proxy endpoint returned HTTP ${response.status}. Retrying via direct Brevo connection...`);
-          throw new Error(`Proxy returned ${response.status}`);
-        }
-      } catch (fetchErr: any) {
-        if (isUsingProxy) {
-          log(`Proxy request failed: ${fetchErr.message || fetchErr}. Retrying via direct Brevo connection as a fallback...`);
-          targetUrl = 'https://api.brevo.com/v3/smtp/email';
-          isUsingProxy = false;
-          response = await fetch(targetUrl, {
-            method: 'POST',
-            headers: {
-              'accept': 'application/json',
-              'api-key': apiKey,
-              'content-type': 'application/json'
-            },
-            body: JSON.stringify(payload)
-          });
-        } else {
-          throw fetchErr;
-        }
-      }
-
-      log(`HTTP Response Status: ${response.status} ${response.statusText}`);
-      const data = await response.json().catch(() => ({}));
-      log(`HTTP Response Body: ${JSON.stringify(data)}`);
-
-      if (!response.ok) {
-        const errorMsg = data?.message || data?.error || `HTTP error ${response.status}`;
-        log(`Brevo API Error: ${errorMsg}`);
-        throw new Error(errorMsg);
-      }
-
-      log('Email successfully accepted by Brevo SMTP gateway!');
-      return { success: true, messageId: data?.messageId || 'brevo-success', debugLogs: logs };
-    } catch (err: any) {
-      const errorMsg = err?.message || 'Brevo sending failed';
-      log(`Brevo Client Exception: ${errorMsg}`);
-      return { success: false, error: errorMsg, debugLogs: logs };
-    }
-  }
 };

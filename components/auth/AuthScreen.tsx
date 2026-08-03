@@ -17,6 +17,8 @@ import Modal from '../ui/Modal';
 import ContactView from '../views/ContactView';
 import { appLogoUrl } from '../../utils/publicAssets';
 import { getFirebaseAuthErrorMessage } from '../../utils/firebaseAuthErrors';
+import NativeAuthEnrollmentGate from './NativeAuthEnrollmentGate';
+import { isNativeAuthEnrollmentRequired } from '../../services/supabase/nativeAuthEnrollmentService';
 
 interface AuthScreenProps {
   children: ReactNode;
@@ -25,7 +27,6 @@ interface AuthScreenProps {
 
 interface RememberedLoginDetails {
   email: string;
-  password: string;
   ministryMode: boolean;
 }
 
@@ -97,16 +98,19 @@ const getRememberedLoginDetails = (): RememberedLoginDetails | null => {
     }
 
     const parsed = JSON.parse(raw) as Partial<RememberedLoginDetails>;
-    if (typeof parsed.email !== 'string' || typeof parsed.password !== 'string') {
+    if (typeof parsed.email !== 'string') {
       localStorage.removeItem(REMEMBERED_LOGIN_KEY);
       return null;
     }
 
-    return {
+    const sanitized = {
       email: parsed.email,
-      password: parsed.password,
       ministryMode: parsed.ministryMode === true,
     };
+    // Migrate legacy remembered-login entries without retaining plaintext
+    // passwords. Auth session persistence handles "remember me" securely.
+    localStorage.setItem(REMEMBERED_LOGIN_KEY, JSON.stringify(sanitized));
+    return sanitized;
   } catch {
     try { localStorage.removeItem(REMEMBERED_LOGIN_KEY); } catch {}
     return null;
@@ -345,7 +349,8 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ children, showToast }) =
   const [ministryMode, setMinistryMode] = useState<boolean>(false);
   const [rememberedLogin, setRememberedLogin] = useState<RememberedLoginDetails | null>(null);
   const [signupVerificationGateUid, setSignupVerificationGateUid] = useState<string | null>(null);
-  // Super Admin prototype state (bypasses firebase auth when using hardcoded credentials)
+  const [nativeEnrollmentCompletedUid, setNativeEnrollmentCompletedUid] = useState<string | null>(null);
+  // Super Admin access is derived only from the authenticated server-backed profile.
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   // Must come before any conditional return (Rules of Hooks)
   const { isImpersonating, stopImpersonation, switchTab } = useAppContext();
@@ -403,16 +408,6 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ children, showToast }) =
   }, []);
 
   useEffect(() => {
-    // Restore Super Admin prototype session (if previously set)
-    try {
-      const persisted = localStorage.getItem('superadmin_session');
-      if (persisted === 'true') {
-        setIsSuperAdmin(true);
-        setLoading(false);
-        return; // Skip Firebase listener until user signs out
-      }
-    } catch {}
-
     // Listen to authentication state changes
     const unsubscribe = authService.onAuthStateChanged((user) => {
       // Select data context based on toggle
@@ -424,7 +419,9 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ children, showToast }) =
         // The FirebaseAppContext will automatically handle cross-church data fetching
       }
       setSignupVerificationGateUid(user && readSignupVerificationGate(user.uid) ? user.uid : null);
+      setIsSuperAdmin(user?.superAdmin === true);
       setUser(user);
+      if (!user) setNativeEnrollmentCompletedUid(null);
       setLoading(false);
     });
 
@@ -436,32 +433,6 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ children, showToast }) =
       setError(null);
       setLoading(true);
       const normalizedEmail = email.trim().toLowerCase();
-      // Hardcoded Super Admin credentials - now properly authenticate with Firebase
-      if (email.trim().toLowerCase() === 'admin@gmail.com' && password === 'Admin@123') {
-        try {
-          // Try to sign in with Firebase Auth first
-          const user = await authService.signIn(email, password);
-          if (rememberLoginDetails) {
-            const details = { email: normalizedEmail, password, ministryMode };
-            saveRememberedLoginDetails(details);
-            setRememberedLogin(details);
-          } else {
-            clearRememberedLoginDetails();
-            setRememberedLogin(null);
-          }
-          setUser(user);
-          setIsSuperAdmin(true);
-          try { localStorage.setItem('superadmin_session', 'true'); } catch {}
-          showToast('success', 'Super Admin', 'Signed in as Super Admin');
-          return;
-        } catch (authError: any) {
-          // If auth fails, it means the SuperAdmin user doesn't exist yet
-          console.log('SuperAdmin user not found, will need to be created manually');
-          setError('SuperAdmin user not found. Please create the admin@gmail.com user with superAdmin flag in Firestore.');
-          showToast('error', 'SuperAdmin Setup Required', 'Please create the admin@gmail.com user with superAdmin: true in Firestore users collection.');
-          return;
-        }
-      }
       // Attempt sign-in directly; rely on Auth errors to guide UX
 
       const user = ministryMode
@@ -501,7 +472,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ children, showToast }) =
       }
 
       if (rememberLoginDetails) {
-        const details = { email: normalizedEmail, password, ministryMode };
+        const details = { email: normalizedEmail, ministryMode };
         saveRememberedLoginDetails(details);
         setRememberedLogin(details);
       } else {
@@ -510,6 +481,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ children, showToast }) =
       }
 
       setSignupVerificationGateUid(readSignupVerificationGate(user.uid) ? user.uid : null);
+      setIsSuperAdmin(user.superAdmin === true);
       setUser(user);
       if (user.emailVerified) {
         showToast('success', 'Welcome Back!', `Signed in as ${user.displayName || user.email}`);
@@ -530,19 +502,14 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ children, showToast }) =
   const handleSignOut = async () => {
     try {
       await authService.signOut();
+      setIsSuperAdmin(false);
+      setNativeEnrollmentCompletedUid(null);
       setUser(null);
       showToast('success', 'Signed Out', 'You have been signed out successfully');
     } catch (error: any) {
       setError(error.message);
       showToast('error', 'Sign Out Failed', error.message);
     }
-  };
-
-  const handleSuperAdminSignOut = () => {
-    setIsSuperAdmin(false);
-  try { localStorage.removeItem('superadmin_session'); } catch {}
-    setAuthMode('login');
-    showToast('success', 'Signed Out', 'Super Admin session ended');
   };
 
   const handleRegisterSuccess = () => {
@@ -580,24 +547,6 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ children, showToast }) =
     );
   }
 
-  if (isSuperAdmin && !isImpersonating) {
-    return <SuperAdminDashboard onSignOut={handleSuperAdminSignOut} />;
-  }
-
-  if (isSuperAdmin && isImpersonating) {
-    return (
-      <div className="relative min-h-screen">
-        {/* App (children) runs under impersonated context */}
-        {children}
-        {/* Fallback floating exit (in case header not rendered yet) */}
-        <button
-          onClick={stopImpersonation}
-          className="fixed bottom-4 right-4 z-50 px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold shadow-lg"
-        >Exit Impersonation</button>
-      </div>
-    );
-  }
-
   const shouldGateUnverifiedSignup = Boolean(
     user &&
     !user.emailVerified &&
@@ -623,6 +572,38 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ children, showToast }) =
         }}
         onSignOut={handleSignOut}
       />
+    );
+  }
+
+  if (
+    user
+    && isNativeAuthEnrollmentRequired()
+    && nativeEnrollmentCompletedUid !== user.uid
+  ) {
+    return (
+      <NativeAuthEnrollmentGate
+        onComplete={() => setNativeEnrollmentCompletedUid(user.uid)}
+        onSignOut={handleSignOut}
+        showToast={showToast}
+      />
+    );
+  }
+
+  if (isSuperAdmin && !isImpersonating) {
+    return <SuperAdminDashboard onSignOut={() => void handleSignOut()} />;
+  }
+
+  if (isSuperAdmin && isImpersonating) {
+    return (
+      <div className="relative min-h-screen">
+        {/* App (children) runs under impersonated context */}
+        {children}
+        {/* Fallback floating exit (in case header not rendered yet) */}
+        <button
+          onClick={stopImpersonation}
+          className="fixed bottom-4 right-4 z-50 px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold shadow-lg"
+        >Exit Impersonation</button>
+      </div>
     );
   }
 
@@ -741,7 +722,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ children, showToast }) =
                 showToast={showToast}
                 ministryMode={ministryMode}
                 initialEmail={rememberedLogin?.email || ''}
-                initialPassword={rememberedLogin?.password || ''}
+                initialPassword=""
                 initialRememberLogin={rememberedLogin !== null}
                 onEmailChange={(em) => {
                   try { localStorage.setItem('last_known_email', em); } catch {}

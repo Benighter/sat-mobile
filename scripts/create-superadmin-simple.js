@@ -24,11 +24,14 @@ const firebaseConfig = {
 };
 
 // SuperAdmin credentials
-const SUPERADMIN_EMAIL = 'admin@gmail.com';
-const SUPERADMIN_PASSWORD = 'Admin@123';
+const SUPERADMIN_EMAIL = String(process.env.SAT_SUPERADMIN_EMAIL || '').trim().toLowerCase();
+const SUPERADMIN_PASSWORD = String(process.env.SAT_SUPERADMIN_PASSWORD || '');
 
 async function createSuperAdmin() {
   try {
+    if (!SUPERADMIN_EMAIL || !SUPERADMIN_PASSWORD) {
+      throw new Error('SAT_SUPERADMIN_EMAIL and SAT_SUPERADMIN_PASSWORD are required');
+    }
     console.log('🔧 Creating SuperAdmin user...');
 
     // Initialize Firebase
@@ -76,9 +79,6 @@ async function createSuperAdmin() {
     console.log('🎉 SuperAdmin setup complete!');
     console.log('');
     console.log('📋 SuperAdmin credentials:');
-    console.log(`   Email: ${SUPERADMIN_EMAIL}`);
-    console.log(`   Password: ${SUPERADMIN_PASSWORD}`);
-    console.log(`   UID: ${user.uid}`);
     console.log('');
     console.log('🔐 The SuperAdmin user now has:');
     console.log('   ✓ Firebase Auth account');
@@ -94,7 +94,7 @@ async function createSuperAdmin() {
       console.log('');
       console.log('ℹ️  The email is already in use. This might mean:');
       console.log('   1. SuperAdmin user already exists');
-      console.log('   2. Try signing in with admin@gmail.com / Admin@123');
+      console.log('   2. Verify the credentials supplied through the environment');
       console.log('   3. If login fails, the Firestore document might be missing');
     }
     

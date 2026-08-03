@@ -56,6 +56,7 @@ export interface FirebaseUser {
   displayName: string | null;
   emailVerified: boolean;
   churchId?: string;
+  superAdmin?: boolean;
   // Indicates this user registered when Ministry Mode was enabled
   isMinistryAccount?: boolean;
   // Multi-context support: map of context church IDs
@@ -367,6 +368,7 @@ export const authService = {
         displayName: (userData?.displayName as string | null) || user.displayName,
         emailVerified: user.emailVerified,
         churchId: userData?.churchId,
+        superAdmin: userData?.superAdmin === true,
         isMinistryAccount: userData?.isMinistryAccount === true,
         contexts: userData?.contexts
       };
@@ -683,6 +685,7 @@ export const authService = {
           displayName: (userData?.displayName as string | null) || user.displayName,
           emailVerified: user.emailVerified,
           churchId: userData?.churchId,
+          superAdmin: userData?.superAdmin === true,
           isMinistryAccount: userData?.isMinistryAccount === true,
           contexts: userData?.contexts
         };
@@ -711,6 +714,7 @@ export const authService = {
         displayName: (userData?.displayName as string | null) || user.displayName,
         emailVerified: user.emailVerified,
         churchId: userData?.churchId,
+        superAdmin: userData?.superAdmin === true,
         isMinistryAccount: userData?.isMinistryAccount === true,
         contexts: userData?.contexts
       };

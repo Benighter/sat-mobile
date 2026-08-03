@@ -66,7 +66,7 @@ const MemberDeletionRequestsView: React.FC<MemberDeletionRequestsViewProps> = ()
     }
 
     showConfirmation(
-      'deleteMember',
+      request.target === 'account' ? 'deactivateAccount' : 'deleteMember',
       { member: { name: request.memberName } },
       async () => {
         try {
@@ -74,8 +74,13 @@ const MemberDeletionRequestsView: React.FC<MemberDeletionRequestsViewProps> = ()
           
           await approveDeletionRequestHandler(request.id);
           
-          showToast('success', 'Request Approved', 
-            `Deletion request for ${request.memberName} has been approved and the member has been deleted.`);
+          showToast(
+            'success',
+            'Request Approved',
+            request.target === 'account'
+              ? `The account for ${request.memberName} has been disabled while its history is retained for final review.`
+              : `Deletion request for ${request.memberName} has been approved and the member has been deleted.`
+          );
         } catch (error: any) {
           console.error('Error approving deletion request:', error);
           showToast('error', 'Approval Failed', 
@@ -437,7 +442,7 @@ const RequestCard: React.FC<RequestCardProps> = ({
               </div>
               <div>
                 <h3 className="text-lg font-semibold text-gray-900">{request.memberName}</h3>
-                <p className="text-sm text-gray-600">Member deletion request</p>
+                <p className="text-sm text-gray-600">{request.target === 'account' ? 'Account deletion request' : 'Member deletion request'}</p>
               </div>
             </div>
             <Badge
@@ -525,7 +530,7 @@ const RequestCard: React.FC<RequestCardProps> = ({
                   className="flex items-center space-x-2 bg-green-600 hover:bg-green-700 text-white border-green-600 hover:border-green-700"
                 >
                   <CheckIcon className="w-4 h-4" />
-                  <span>Approve & Delete</span>
+                  <span>{request.target === 'account' ? 'Approve & Disable' : 'Approve & Delete'}</span>
                 </Button>
                 <Button
                   onClick={() => setShowRejectModal(true)}

@@ -32,3 +32,18 @@ enable_signup = false
 [auth.third_party.firebase]
 enabled = false
 project_id = "sat-mobile-de6f1"
+
+[functions.sat-transactional-email]
+verify_jwt = true
+
+[functions.sat-admin-user-status]
+verify_jwt = true
+
+[functions.sat-native-auth-enroll]
+# Firebase Third-Party Auth tokens are not signed by Supabase Auth, so the
+# platform's legacy JWT pre-check rejects them before this function can run.
+# The handler still fails closed: it forwards the caller token to the secured
+# sat_begin_native_auth_enrollment RPC, which verifies the exact Firebase
+# issuer, audience, authenticated role, UID, and existing SAT profile before
+# any service-role operation occurs.
+verify_jwt = false

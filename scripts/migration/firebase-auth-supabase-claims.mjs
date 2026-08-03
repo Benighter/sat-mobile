@@ -123,8 +123,36 @@ async function main() {
   let conflictingRole = 0;
   let usersWithOtherClaims = 0;
   let maxMergedClaimBytes = 0;
+  let uuidShapedUids = 0;
+  let minimumUidLength = Number.POSITIVE_INFINITY;
+  let maximumUidLength = 0;
+  const providerCounts = new Map();
+  const lastSignInCounts = { last24Hours: 0, last7Days: 0, last30Days: 0, never: 0 };
+  const nowMs = Date.now();
 
   for (const user of users) {
+    const uid = String(user.localId ?? '');
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(uid)) {
+      uuidShapedUids += 1;
+    }
+    minimumUidLength = Math.min(minimumUidLength, uid.length);
+    maximumUidLength = Math.max(maximumUidLength, uid.length);
+    const providersForUser = new Set(
+      (user.providerUserInfo ?? []).map((provider) => String(provider.providerId ?? 'unknown')),
+    );
+    if (user.passwordHash) providersForUser.add('password');
+    for (const providerId of providersForUser) {
+      providerCounts.set(providerId, (providerCounts.get(providerId) ?? 0) + 1);
+    }
+    const lastSignInMs = Number(user.lastLoginAt ?? 0);
+    if (!Number.isFinite(lastSignInMs) || lastSignInMs <= 0) {
+      lastSignInCounts.never += 1;
+    } else {
+      const ageMs = Math.max(0, nowMs - lastSignInMs);
+      if (ageMs <= 24 * 60 * 60 * 1_000) lastSignInCounts.last24Hours += 1;
+      if (ageMs <= 7 * 24 * 60 * 60 * 1_000) lastSignInCounts.last7Days += 1;
+      if (ageMs <= 30 * 24 * 60 * 60 * 1_000) lastSignInCounts.last30Days += 1;
+    }
     const claims = parseClaims(user.customAttributes);
     if (Object.keys(withoutManagedClaims(claims)).length > 0) usersWithOtherClaims += 1;
     if (claims.role === 'authenticated') alreadyAuthenticated += 1;
@@ -179,6 +207,14 @@ async function main() {
     usersWithOtherClaims,
     userDocumentsWithScope: userScopes.size,
     maxMergedClaimBytes,
+    uidShape: {
+      uuidShaped: uuidShapedUids,
+      nonUuidShaped: users.length - uuidShapedUids,
+      minimumLength: Number.isFinite(minimumUidLength) ? minimumUidLength : 0,
+      maximumLength: maximumUidLength,
+    },
+    providerCounts: Object.fromEntries([...providerCounts.entries()].sort(([a], [b]) => a.localeCompare(b))),
+    lastSignInCounts,
     verifiedAuthenticated: APPLY ? verifiedAuthenticated : alreadyAuthenticated,
     nonRoleClaimsPreserved: preservedMismatch === 0,
     firebaseUsersDeleted: 0,

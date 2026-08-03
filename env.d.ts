@@ -4,6 +4,8 @@ declare const __APP_VERSION__: string;
 
 interface ImportMetaEnv {
   readonly VITE_DATA_BACKEND?: 'firebase' | 'supabase';
+  readonly VITE_AUTH_BACKEND?: 'firebase' | 'supabase';
+  readonly VITE_REQUIRE_NATIVE_AUTH_ENROLLMENT?: 'true' | 'false';
   readonly VITE_SUPABASE_URL?: string;
   readonly VITE_SUPABASE_PUBLISHABLE_KEY?: string;
   readonly VITE_SUPABASE_STORAGE_BUCKET?: string;

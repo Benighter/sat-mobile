@@ -1,5 +1,6 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { getAuth } from 'firebase/auth';
+import { getNativeSupabaseAccessToken, isNativeSupabaseAuthEnabled } from './nativeAuthService';
 
 let client: SupabaseClient | null = null;
 let lastForcedClaimsRefreshAt = 0;
@@ -26,6 +27,11 @@ const firebaseAccessToken = async (): Promise<string | null> => {
   throw new Error('Your account authorization is still being prepared. Please sign in again in a moment.');
 };
 
+const backendAccessToken = async (): Promise<string | null> => {
+  if (isNativeSupabaseAuthEnabled()) return getNativeSupabaseAccessToken();
+  return firebaseAccessToken();
+};
+
 const requiredEnvironment = (name: 'VITE_SUPABASE_URL' | 'VITE_SUPABASE_PUBLISHABLE_KEY'): string => {
   const value = String(import.meta.env[name] || '').trim();
   if (!value) throw new Error(`${name} is required for the Supabase backend`);
@@ -38,7 +44,7 @@ export const getSupabaseClient = (): SupabaseClient => {
     requiredEnvironment('VITE_SUPABASE_URL'),
     requiredEnvironment('VITE_SUPABASE_PUBLISHABLE_KEY'),
     {
-      accessToken: firebaseAccessToken,
+      accessToken: backendAccessToken,
       auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
     }
   );

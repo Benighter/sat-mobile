@@ -35,6 +35,17 @@ export const invokeBackendFunction = async <TRequest, TResponse>(
     if (error) throw error;
     return data as TResponse;
   }
+  if (
+    import.meta.env.VITE_DATA_BACKEND !== 'firebase'
+    && import.meta.env.VITE_AUTH_BACKEND === 'supabase'
+    && name === 'setUserActiveStatus'
+  ) {
+    const { data, error } = await getSupabaseClient().functions.invoke('sat-admin-user-status', {
+      body: payload as Record<string, unknown>,
+    });
+    if (error || data?.ok !== true) throw new Error(error?.message || data?.code || 'Supabase account status update failed');
+    return { success: true } as TResponse;
+  }
 
   // Firebase remains the identity and FCM provider during Third-Party Auth.
   // Auth administration, email-secret custody, and push delivery therefore
